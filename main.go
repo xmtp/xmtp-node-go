@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	logging "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
-	"github.com/status-im/go-waku/waku"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/xmtp/xmtp-node-go/server"
 )
 
-var options waku.Options
+var options server.Options
 
 var parser = flags.NewParser(&options, flags.Default)
 
@@ -33,5 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	waku.Execute(options)
+	if options.GenerateKey {
+		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
+			log.Fatalf(err.Error())
+		}
+		return
+	}
+
+	server.New(options)
 }
