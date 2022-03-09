@@ -78,32 +78,13 @@ func New(options Options) (server *Server) {
 		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
 	}
 
-	if options.AdvertiseAddress != "" {
-		advertiseAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.AdvertiseAddress, options.Port))
-		failOnErr(err, "Invalid advertise address")
-
-		if advertiseAddr.Port == 0 {
-			for {
-				p, err := freePort()
-				if err == nil {
-					advertiseAddr.Port = p
-					break
-				}
-			}
-		}
-
-		nodeOpts = append(nodeOpts, node.WithAdvertiseAddress(advertiseAddr, options.EnableWS, options.WSPort))
-	}
-
 	if options.EnableWS {
 		wsMa, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d/ws", options.WSAddress, options.WSPort))
 		nodeOpts = append(nodeOpts, node.WithMultiaddress([]multiaddr.Multiaddr{wsMa}))
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
-	if options.AdvertiseAddress == "" {
-		libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)
-	}
+	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)
 
 	// Create persistent peerstore
 	queries, err := sqlite.NewQueries("peerstore", server.db)
