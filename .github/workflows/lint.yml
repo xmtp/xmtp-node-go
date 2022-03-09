@@ -7,8 +7,8 @@ on:
 permissions:
   contents: read
 jobs:
-  build:
-    name: Build
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v2

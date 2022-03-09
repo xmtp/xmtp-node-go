@@ -1,0 +1,29 @@
+name: Push to Registry
+on:
+  push:
+    branches:
+      - main
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Provide doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Login to Digital Ocean Registry
+        run: doctl registry login --expiry-seconds 1000
+
+      - name: Git Checkout
+        uses: actions/checkout@v1
+
+      - name: Push to Digital Ocean Registry
+        run: make docker-image-multiarch

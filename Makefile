@@ -1,3 +1,8 @@
+
+DOCKER_IMAGE_TAG ?= latest
+DOCKER_IMAGE_NAME ?= registry.digitalocean.com/xmtp-staging/xmtp-node-go:$(DOCKER_IMAGE_TAG)
+GIT_COMMIT = $(shell git rev-parse HEAD)
+
 .PHONY: all build lint test coverage
 
 all: build
@@ -21,9 +26,17 @@ lint:
 test:
 	go test
 
-# build a docker image for the fleet
-docker-image: DOCKER_IMAGE_TAG ?= latest
-docker-image: DOCKER_IMAGE_NAME ?= registry.digitalocean.com/xmtp-staging/go-waku:$(DOCKER_IMAGE_TAG)
+# build a docker image
 docker-image:
 	docker build --tag $(DOCKER_IMAGE_NAME) \
-		--build-arg="GIT_COMMIT=$(shell git rev-parse HEAD)" .
+		--build-arg="GIT_COMMIT=${GIT_COMMIT}" .
+
+# Build for multiarch to support Apple Silicon.
+# Assumes Docker Buildx is configured on the machine
+# Also worth mentioning this is painfully slow due to QEMU
+docker-image-multiarch:
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		--tag ${DOCKER_IMAGE_NAME} \
+		--build-arg="GIT_COMMIT=${GIT_COMMIT}" \
+		--push .
