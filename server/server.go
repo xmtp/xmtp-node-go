@@ -20,7 +20,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p/config"
 
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
@@ -99,11 +98,6 @@ func New(options Options) (server *Server) {
 	if options.EnableWS {
 		wsMa, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d/ws", options.WSAddress, options.WSPort))
 		nodeOpts = append(nodeOpts, node.WithMultiaddress([]multiaddr.Multiaddr{wsMa}))
-	}
-
-	if options.ShowAddresses {
-		printListeningAddresses(nodeOpts, options)
-		return
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
@@ -310,39 +304,6 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 		}
 	}
 	return prvKey, nil
-}
-
-func printListeningAddresses(nodeOpts []node.WakuNodeOption, options Options) {
-	params := new(node.WakuNodeParameters)
-	for _, opt := range nodeOpts {
-		err := opt(params)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	var libp2pOpts []config.Option
-	libp2pOpts = append(libp2pOpts,
-		params.Identity(),
-		libp2p.ListenAddrs(params.MultiAddresses()...),
-	)
-
-	addrFactory := params.AddressFactory()
-	if addrFactory != nil {
-		libp2pOpts = append(libp2pOpts, libp2p.AddrsFactory(addrFactory))
-	}
-
-	h, err := libp2p.New(libp2pOpts...)
-	if err != nil {
-		panic(err)
-	}
-
-	hostInfo, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", h.ID().Pretty()))
-
-	for _, addr := range h.Addrs() {
-		fmt.Println(addr.Encapsulate(hostInfo))
-	}
-
 }
 
 func failOnErr(err error, msg string) {
