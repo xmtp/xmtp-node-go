@@ -102,7 +102,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.ShowAddresses {
-		printListeningAddresses(server.ctx, nodeOpts, options)
+		printListeningAddresses(nodeOpts, options)
 		return
 	}
 
@@ -312,9 +312,7 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func printListeningAddresses(ctx context.Context, nodeOpts []node.WakuNodeOption, options Options) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+func printListeningAddresses(nodeOpts []node.WakuNodeOption, options Options) {
 	params := new(node.WakuNodeParameters)
 	for _, opt := range nodeOpts {
 		err := opt(params)
