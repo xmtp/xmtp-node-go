@@ -1,4 +1,3 @@
-
 .PHONY: all build lint test coverage docker-image docker-image-multiarch
 
 all: build
