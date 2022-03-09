@@ -66,7 +66,9 @@ type Options struct {
 	AdvertiseAddress string   `long:"advertise-address" default:"" description:"External address to advertise to other nodes (overrides --address and --ws-address flags)"`
 	ShowAddresses    bool     `long:"show-addresses" description:"Display listening addresses according to current configuration"`
 	LogLevel         string   `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
-	LogEncoding      string   `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
+	//nolint:staticcheck
+	LogEncoding string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
 
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     StoreOptions     `group:"Store Options"`
