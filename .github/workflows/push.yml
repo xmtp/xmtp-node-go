@@ -20,7 +20,7 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Login to Digital Ocean Registry
-        run: doctl registry login --expiry-seconds 1000
+        run: doctl registry login --expiry-seconds 10000
 
       - name: Git Checkout
         uses: actions/checkout@v1
