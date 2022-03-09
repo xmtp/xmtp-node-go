@@ -9,7 +9,7 @@ type RelayOptions struct {
 }
 
 type FilterOptions struct {
-	Enable  bool     `long:"filter" description:"Enable filter protocol" default:"true"`
+	Enable  bool     `long:"filter" description:"Enable filter protocol"`
 	Nodes   []string `long:"filter-node" description:"Multiaddr of a peer that supports filter protocol. Option may be repeated"`
 	Timeout int      `long:"filter-timeout" description:"Timeout for filter node in seconds" default:"14400"`
 }
@@ -21,7 +21,7 @@ type FilterOptions struct {
 // broadcast the message and return a confirmation that the message was
 // broadcasted
 type LightpushOptions struct {
-	Enable bool     `long:"lightpush" description:"Enable lightpush protocol" default:"true"`
+	Enable bool     `long:"lightpush" description:"Enable lightpush protocol"`
 	Nodes  []string `long:"lightpush-node" description:"Multiaddr of a peer that supports lightpush protocol. Option may be repeated"`
 }
 
@@ -29,7 +29,7 @@ type LightpushOptions struct {
 // retrieve message history from other nodes as well as acting as a store
 // node and provide message history to nodes that ask for it.
 type StoreOptions struct {
-	Enable               bool     `long:"store" description:"Enable store protocol" default:"true"`
+	Enable               bool     `long:"store" description:"Enable store protocol"`
 	ShouldResume         bool     `long:"resume" description:"fix the gap in message history"`
 	RetentionMaxDays     int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
 	RetentionMaxMessages int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`

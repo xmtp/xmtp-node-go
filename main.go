@@ -17,6 +17,7 @@ var parser = flags.NewParser(&options, flags.Default)
 
 func main() {
 	if _, err := parser.Parse(); err != nil {
+		log.Fatal("Could not parse options", err)
 		os.Exit(1)
 	}
 
@@ -41,5 +42,7 @@ func main() {
 		return
 	}
 
-	server.New(options)
+	s := server.New(options)
+	log.Println("Got a server", s)
+	s.WaitForShutdown()
 }

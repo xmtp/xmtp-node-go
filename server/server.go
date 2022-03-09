@@ -48,11 +48,12 @@ type Server struct {
 
 // Create a new Server
 func New(options Options) (server *Server) {
-	server.logger = utils.InitLogger(options.LogEncoding)
+	server = new(Server)
+	var err error
 
-	hostAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
+	server.logger = utils.InitLogger(options.LogEncoding)
+	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
-	server.hostAddr = hostAddr
 
 	prvKey, err := getPrivKey(options)
 	failOnErr(err, "nodekey error")
@@ -74,7 +75,7 @@ func New(options Options) (server *Server) {
 	nodeOpts := []node.WakuNodeOption{
 		node.WithLogger(server.logger),
 		node.WithPrivateKey(prvKey),
-		node.WithHostAddress(hostAddr),
+		node.WithHostAddress(server.hostAddr),
 		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
 	}
 
@@ -178,12 +179,10 @@ func New(options Options) (server *Server) {
 		}(n)
 	}
 
-	go server.waitForShutdown()
-
 	return server
 }
 
-func (server *Server) waitForShutdown() {
+func (server *Server) WaitForShutdown() {
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
