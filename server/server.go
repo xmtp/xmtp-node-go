@@ -295,23 +295,3 @@ func failOnErr(err error, msg string) {
 		utils.Logger().Fatal(msg, zap.Error(err))
 	}
 }
-
-func freePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-
-	port := l.Addr().(*net.TCPAddr).Port
-	err = l.Close()
-	if err != nil {
-		return 0, err
-	}
-
-	return port, nil
-}
