@@ -25,5 +25,5 @@ jobs:
       - name: Login to Digital Ocean Registry
         run: doctl registry login --expiry-seconds 10000
 
-      - name: Push to Digital Ocean Registry
+      - name: Build and Push to Digital Ocean Registry
         run: make docker-image-multiarch
