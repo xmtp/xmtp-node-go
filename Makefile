@@ -19,7 +19,7 @@ lint:
 	@golangci-lint --exclude=SA1019 run ./... --deadline=5m
 
 test:
-	go test
+	go test ./...
 
 # Set target-specific variables for docker images
 docker-image docker-image-multiarch: DOCKER_IMAGE_TAG ?= latest

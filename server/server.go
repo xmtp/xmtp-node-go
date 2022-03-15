@@ -114,6 +114,11 @@ func New(options Options) (server *Server) {
 		dbStore, err := persistence.NewDBStore(server.logger.Sugar(), persistence.WithDB(server.db), persistence.WithRetentionPolicy(options.Store.RetentionMaxMessages, options.Store.RetentionMaxDaysDuration()))
 		failOnErr(err, "DBStore")
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
+		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
+
+		// nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
+		// 	return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger)
+		// }))
 	}
 
 	if options.LightPush.Enable {
@@ -124,7 +129,7 @@ func New(options Options) (server *Server) {
 
 	failOnErr(err, "Wakunode")
 
-	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta3)
+	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
 	addPeers(server.wakuNode, options.LightPush.Nodes, lightpush.LightPushID_v20beta1)
 	addPeers(server.wakuNode, options.Filter.Nodes, filter.FilterID_v20beta1)
 
