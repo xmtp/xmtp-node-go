@@ -146,7 +146,7 @@ func TestQueryTimeAndTopic(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, len(resultNoHits.Messages), 0)
+	require.Len(t, resultNoHits.Messages, 0)
 
 	resultWithHits, err := FindMessages(db, &pb.HistoryQuery{
 		ContentFilters: []*pb.ContentFilter{
@@ -169,7 +169,7 @@ func TestQueryPubsubTopic(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, len(result.Messages), 3)
+	require.Len(t, result.Messages, 3)
 
 	result, err = FindMessages(db, &pb.HistoryQuery{
 		PubsubTopic: "foo",
