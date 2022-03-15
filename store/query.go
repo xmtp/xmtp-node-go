@@ -37,9 +37,9 @@ func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, 
 func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{}, err error) {
 	sb := sqlBuilder.SQLite.NewSelectBuilder()
 
-	contentTopics := getContentTopics(query.ContentFilters)
 	sb.Select("*").From("message")
 
+	contentTopics := getContentTopics(query.ContentFilters)
 	if len(contentTopics) > 0 {
 		sb.Where(sb.In("contentTopic", contentTopics))
 	}
