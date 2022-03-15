@@ -63,9 +63,7 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	querySql, args = sb.Build()
 	// Use SQLX to convert IN statements to multiple arguments. Only way I could find to make IN statements work with SQLite
 	querySql, args, err = sqlx.In(querySql, args...)
-	if err != nil {
-		return
-	}
+
 	return
 }
 
