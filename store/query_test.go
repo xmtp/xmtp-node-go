@@ -122,13 +122,13 @@ func TestQueryTimeWindow(t *testing.T) {
 	db := createAndFillDb(t)
 
 	result, err := FindMessages(db, &pb.HistoryQuery{
-		StartTime: 3,
-		EndTime:   4,
+		StartTime: 2,
+		EndTime:   3,
 	})
 
 	require.NoError(t, err)
-	require.Len(t, result.Messages, 1)
-	require.Equal(t, result.Messages[0].Timestamp, int64(3))
+	require.Len(t, result.Messages, 2)
+	require.Equal(t, result.Messages[0].Timestamp, int64(2))
 }
 
 func TestQueryTimeAndTopic(t *testing.T) {

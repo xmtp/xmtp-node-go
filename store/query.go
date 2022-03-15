@@ -9,14 +9,6 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 )
 
-func getContentTopics(filters []*pb.ContentFilter) []string {
-	out := make([]string, len(filters))
-	for i := 0; i < len(filters); i++ {
-		out[i] = filters[i].ContentTopic
-	}
-	return out
-}
-
 func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
 	var rows *sql.Rows
 	sql, args, err := buildSqlQuery(query)
@@ -32,6 +24,14 @@ func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, 
 	res, err = buildResponse(rows, query)
 
 	return
+}
+
+func getContentTopics(filters []*pb.ContentFilter) []string {
+	out := make([]string, len(filters))
+	for i, filter := range filters {
+		out[i] = filter.ContentTopic
+	}
+	return out
 }
 
 func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{}, err error) {
