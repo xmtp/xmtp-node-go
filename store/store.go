@@ -15,7 +15,6 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
-	"github.com/status-im/go-waku/waku/v2/protocol/swap"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"go.uber.org/zap"
 )
@@ -34,7 +33,6 @@ type XmtpStore struct {
 
 	msgProvider store.MessageProvider
 	h           host.Host
-	swap        *swap.WakuSwap
 }
 
 func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetentionDuration time.Duration, log *zap.SugaredLogger) *XmtpStore {

@@ -44,18 +44,21 @@ func createAndFillDb(t *testing.T) *sql.DB {
 		"test",
 		tests.CreateWakuMessage("test1", 1),
 	)
+	require.NoError(t, err)
 
 	err = store.Put(
 		createIndex([]byte("digest"), 2),
 		"test",
 		tests.CreateWakuMessage("test2", 2),
 	)
+	require.NoError(t, err)
 
 	err = store.Put(
 		createIndex([]byte("digest"), 3),
 		"test",
 		tests.CreateWakuMessage("test3", 3),
 	)
+	require.NoError(t, err)
 
 	return db
 }
