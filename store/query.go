@@ -56,8 +56,6 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 		sb.Where(sb.LessEqualThan("senderTimestamp", query.EndTime))
 	}
 
-	sb.Limit(10)
-
 	addPagination(sb, query.PagingInfo)
 
 	querySql, args = sb.Build()
