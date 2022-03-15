@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
@@ -21,7 +20,9 @@ func getContentTopics(filters []*pb.ContentFilter) []string {
 func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
 	var rows *sql.Rows
 	sql, args, err := buildSqlQuery(query)
-	fmt.Println(sql, "args:", args)
+	if err != nil {
+		return
+	}
 
 	rows, err = db.Query(sql, args...)
 	if err != nil {
