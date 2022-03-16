@@ -342,5 +342,4 @@ func TestLastPage(t *testing.T) {
 	// Not sure why the existing behaviour includes the previous cursor on the last page.
 	// Would be more sensible to just return a null cursor. But I'm replicating the behaviour anyways
 	require.Equal(t, response.PagingInfo.Cursor.SenderTime, idx.SenderTime)
-
 }
