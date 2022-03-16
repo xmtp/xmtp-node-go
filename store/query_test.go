@@ -22,14 +22,6 @@ func NewMock() *sql.DB {
 	return db
 }
 
-func createIndex(digest []byte, receiverTime int64) *pb.Index {
-	return &pb.Index{
-		Digest:       digest,
-		ReceiverTime: receiverTime,
-		SenderTime:   1.0,
-	}
-}
-
 func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 	idx, _ := computeIndex(protocol.NewEnvelope(msg, topic))
 	return idx
