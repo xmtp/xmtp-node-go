@@ -179,10 +179,15 @@ func buildResponse(rows *sql.Rows, query *pb.HistoryQuery) (*pb.HistoryResponse,
 // We will leave it intact, as we do not have that information on hand.
 // Clients may be relying on this behaviour to know when to stop paginating
 func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.PagingInfo) (*pb.PagingInfo, error) {
-	newPageSize := minOf(getPageSize(pagingInfo), maxPageSize)
+	currentPageSize := getPageSize(pagingInfo)
+	newPageSize := minOf(currentPageSize, maxPageSize)
 	direction := getDirection(pagingInfo)
-	newCursor, err := findNextCursor(messages)
 
+	if len(messages) < currentPageSize {
+		return &pb.PagingInfo{PageSize: uint64(0), Cursor: getCursor(pagingInfo), Direction: direction}, nil
+	}
+
+	newCursor, err := findNextCursor(messages)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +197,13 @@ func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.Paging
 		Cursor:    newCursor,
 		Direction: direction,
 	}, nil
+}
+
+func getCursor(pagingInfo *pb.PagingInfo) *pb.Index {
+	if pagingInfo == nil {
+		return nil
+	}
+	return pagingInfo.Cursor
 }
 
 func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
@@ -205,7 +217,7 @@ func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 }
 
 func getPageSize(pagingInfo *pb.PagingInfo) int {
-	if pagingInfo == nil {
+	if pagingInfo == nil || pagingInfo.PageSize == 0 {
 		return maxPageSize
 	}
 	return int(pagingInfo.PageSize)
