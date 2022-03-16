@@ -40,21 +40,21 @@ func createAndFillDb(t *testing.T) *sql.DB {
 	require.Empty(t, res)
 
 	err = store.Put(
-		createIndex([]byte("digest"), 1),
+		createIndex([]byte("digest1"), 1),
 		"test",
 		tests.CreateWakuMessage("test1", 1),
 	)
 	require.NoError(t, err)
 
 	err = store.Put(
-		createIndex([]byte("digest"), 2),
+		createIndex([]byte("digest2"), 2),
 		"test",
 		tests.CreateWakuMessage("test2", 2),
 	)
 	require.NoError(t, err)
 
 	err = store.Put(
-		createIndex([]byte("digest"), 3),
+		createIndex([]byte("digest3"), 3),
 		"test",
 		tests.CreateWakuMessage("test3", 3),
 	)
@@ -176,4 +176,100 @@ func TestQueryPubsubTopic(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Messages, 0)
+}
+
+func TestDirectionSingleField(t *testing.T) {
+	db := createAndFillDb(t)
+
+	result, err := FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Direction: pb.PagingInfo_FORWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 3)
+	require.Equal(t, result.Messages[0].Timestamp, int64(1))
+
+	result, err = FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Direction: pb.PagingInfo_BACKWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 3)
+	require.Equal(t, result.Messages[0].Timestamp, int64(3))
+}
+
+func TestDirectionWithTie(t *testing.T) {
+	db := createAndFillDb(t)
+
+	option := persistence.WithDB(db)
+	store, err := persistence.NewDBStore(tests.Logger(), option)
+
+	// This message will be a tie with the first on timestamp, but should be sorted before because of the digest
+	err = store.Put(
+		createIndex([]byte("a"), 1),
+		"test",
+		tests.CreateWakuMessage("earliest", 1),
+	)
+	require.NoError(t, err)
+
+	result, err := FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Direction: pb.PagingInfo_FORWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, result.Messages[0].ContentTopic, "earliest")
+}
+
+func TestCursorTimestamp(t *testing.T) {
+	db := createAndFillDb(t)
+	result, err := FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Cursor: &pb.Index{
+				SenderTime:  int64(2),
+				Digest:      []byte("digest2"),
+				PubsubTopic: "test",
+			},
+			Direction: pb.PagingInfo_FORWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, result.Messages[0].Timestamp, int64(3))
+}
+
+func TestCursorTimestampBackwards(t *testing.T) {
+	db := createAndFillDb(t)
+	result, err := FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Cursor: &pb.Index{
+				SenderTime:  int64(2),
+				Digest:      []byte("digest2"),
+				PubsubTopic: "test",
+			},
+			Direction: pb.PagingInfo_BACKWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, result.Messages[0].Timestamp, int64(1))
+}
+
+func TestCursorTimestampTie(t *testing.T) {
+	db := createAndFillDb(t)
+	result, err := FindMessages(db, &pb.HistoryQuery{
+		PagingInfo: &pb.PagingInfo{
+			Cursor: &pb.Index{
+				SenderTime:  int64(1),
+				Digest:      []byte("digest2"),
+				PubsubTopic: "test",
+			},
+			Direction: pb.PagingInfo_FORWARD,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 2)
+	require.Equal(t, result.Messages[0].Timestamp, int64(2))
 }
