@@ -119,7 +119,7 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 	switch direction {
 	case pb.PagingInfo_FORWARD:
 		if cursor.SenderTime != 0 && cursor.Digest != nil && cursor.PubsubTopic != "" {
-			// This is tricky. The current implementation does a complex sort by senderTimestamp, digest, and pubsub topic
+			// This is tricky. The current implementation does a complex sort by senderTimestamp, digest (id), pubsub topic, and receiverTimestamp
 			// This is also used for cursor based pagination
 			// I am going for 1:1 parity right now, and not worried about performance.
 			// But this, and the sort, is going to be a real performance issue without indexing.
