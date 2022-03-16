@@ -161,6 +161,9 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 
 func buildResponse(rows *sql.Rows, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
 	storedMessages, err := rowsToMessages(rows)
+	if err != nil {
+		return nil, err
+	}
 	messages := messagesFromStoredMessages(storedMessages)
 	pagingInfo, err := buildPagingInfo(storedMessages, query.PagingInfo)
 	if err != nil {
