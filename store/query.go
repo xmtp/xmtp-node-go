@@ -148,7 +148,7 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
-		} else if cursor.Digest != nil {
+		} else if cursor.Digest != nil && cursor.PubsubTopic != "" {
 			sb.Where(
 				sb.Or(
 					sb.GreaterThan("id", cursor.Digest),
