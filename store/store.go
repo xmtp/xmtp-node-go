@@ -101,7 +101,7 @@ func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.
 	return nil, errors.New("XmtpStore.Query not implemented!")
 }
 
-// Next is used with to retrieve the next page of rows from a query response.
+// Next is used to retrieve the next page of rows from a query response.
 // If no more records are found, the result will not contain any messages.
 // This function is useful for iterating over results without having to manually
 // specify the cursor and pagination order and max number of results
