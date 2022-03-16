@@ -20,6 +20,7 @@ import (
 )
 
 const bufferSize = 1024
+const maxPageSize = 100
 
 type XmtpStore struct {
 	ctx  context.Context
