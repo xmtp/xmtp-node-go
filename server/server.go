@@ -34,6 +34,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
 type Server struct {
@@ -116,9 +117,9 @@ func New(options Options) (server *Server) {
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
-		// nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-		// 	return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger)
-		// }))
+		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
+			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger.Sugar())
+		}))
 	}
 
 	if options.LightPush.Enable {
