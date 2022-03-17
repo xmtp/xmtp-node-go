@@ -91,7 +91,7 @@ func addPagination(sb *sqlBuilder.SelectBuilder, pagination *pb.PagingInfo) {
 
 func getDirection(pagingInfo *pb.PagingInfo) (direction pb.PagingInfo_Direction) {
 	if pagingInfo == nil {
-		direction = pb.PagingInfo_FORWARD
+		direction = pb.PagingInfo_BACKWARD
 	} else {
 		direction = pagingInfo.Direction
 	}
@@ -118,7 +118,7 @@ func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
 func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.PagingInfo_Direction) {
 	switch direction {
 	case pb.PagingInfo_FORWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil && cursor.PubsubTopic != "" {
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
 			// This is tricky. The current implementation does a complex sort by senderTimestamp, digest (id), pubsub topic, and receiverTimestamp
 			// This is also used for cursor based pagination
 			// I am going for 1:1 parity right now, and not worried about performance.
@@ -128,31 +128,31 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 				sb.Or(
 					sb.GreaterThan("senderTimestamp", cursor.SenderTime),
 					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.GreaterThan("id", cursor.Digest)),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
+					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
-		} else if cursor.Digest != nil && cursor.PubsubTopic != "" {
+		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.GreaterThan("id", cursor.Digest),
-					sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
+					// sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
 	case pb.PagingInfo_BACKWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil && cursor.PubsubTopic != "" {
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.LessThan("senderTimestamp", cursor.SenderTime),
 					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.LessThan("id", cursor.Digest)),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
+					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
-		} else if cursor.Digest != nil && cursor.PubsubTopic != "" {
+		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
-					sb.GreaterThan("id", cursor.Digest),
-					sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
+					sb.LessThan("id", cursor.Digest),
+					// sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
@@ -187,7 +187,7 @@ func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.Paging
 	direction := getDirection(pagingInfo)
 
 	if len(messages) < currentPageSize {
-		return &pb.PagingInfo{PageSize: uint64(0), Cursor: getCursor(pagingInfo), Direction: direction}, nil
+		return &pb.PagingInfo{PageSize: uint64(0), Cursor: nil, Direction: direction}, nil
 	}
 
 	newCursor, err := findNextCursor(messages)
@@ -202,12 +202,12 @@ func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.Paging
 	}, nil
 }
 
-func getCursor(pagingInfo *pb.PagingInfo) *pb.Index {
-	if pagingInfo == nil {
-		return nil
-	}
-	return pagingInfo.Cursor
-}
+// func getCursor(pagingInfo *pb.PagingInfo) *pb.Index {
+// 	if pagingInfo == nil {
+// 		return nil
+// 	}
+// 	return pagingInfo.Cursor
+// }
 
 func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 	if len(messages) == 0 {

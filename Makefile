@@ -23,7 +23,7 @@ test:
 
 # Set target-specific variables for docker images
 docker-image docker-image-multiarch: DOCKER_IMAGE_TAG ?= latest
-docker-image docker-image-multiarch: DOCKER_IMAGE_NAME ?= registry.digitalocean.com/xmtp-staging/xmtp-node-go:$(DOCKER_IMAGE_TAG)
+docker-image docker-image-multiarch: DOCKER_IMAGE_NAME ?= xmtp/node-go:$(DOCKER_IMAGE_TAG)
 docker-image docker-image-multiarch: GIT_COMMIT = $(shell git rev-parse HEAD)
 
 # build a docker image

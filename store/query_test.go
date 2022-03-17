@@ -135,7 +135,7 @@ func TestQueryTimeWindow(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, result.Messages, 2)
-	require.Equal(t, result.Messages[0].Timestamp, int64(2))
+	require.Equal(t, result.Messages[0].Timestamp, int64(3))
 }
 
 func TestQueryTimeAndTopic(t *testing.T) {
@@ -339,7 +339,33 @@ func TestLastPage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, response.Messages, 1)
 	require.Equal(t, response.PagingInfo.PageSize, uint64(0))
-	// Not sure why the existing behaviour includes the previous cursor on the last page.
-	// Would be more sensible to just return a null cursor. But I'm replicating the behaviour anyways
-	require.Equal(t, response.PagingInfo.Cursor.SenderTime, idx.SenderTime)
+	require.Nil(t, response.PagingInfo.Cursor)
+}
+
+func TestPageSizeOne(t *testing.T) {
+	db := createAndFillDb(t)
+	var cursor *pb.Index
+	loops := 0
+	for {
+		response, err := FindMessages(db, &pb.HistoryQuery{
+			ContentFilters: []*pb.ContentFilter{
+				{
+					ContentTopic: "test1",
+				},
+			},
+			PagingInfo: &pb.PagingInfo{
+				PageSize:  1,
+				Cursor:    cursor,
+				Direction: pb.PagingInfo_FORWARD,
+			},
+		})
+		cursor = response.PagingInfo.Cursor
+		require.NoError(t, err)
+		if loops == 1 {
+			require.Len(t, response.Messages, 0)
+			require.Equal(t, response.PagingInfo.PageSize, uint64(0))
+			break
+		}
+		loops++
+	}
 }
