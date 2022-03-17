@@ -239,8 +239,8 @@ func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candi
 
 	resultChan := make(chan *pb.HistoryResponse, len(candidateList))
 
-	for _, peer := range candidateList {
-		func() {
+	for _, candidate := range candidateList {
+		go func(peer peer.ID) {
 			defer queryWg.Done()
 			result, err := s.queryFrom(ctx, query, peer, protocol.GenerateRequestId())
 			if err == nil {
@@ -248,7 +248,7 @@ func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candi
 				return
 			}
 			s.log.Error(fmt.Errorf("resume history with peer %s failed: %w", peer, err))
-		}()
+		}(candidate)
 	}
 
 	queryWg.Wait()
@@ -278,7 +278,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 
 	err := reader.ReadMsg(historyRPCRequest)
 	if err != nil {
-		s.log.Error("error reading request", err)
+		s.log.Error("error reading request ", err)
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
 		return
 	}
