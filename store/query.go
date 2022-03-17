@@ -131,11 +131,11 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
-		} else if cursor.Digest != nil && cursor.PubsubTopic != "" {
+		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.GreaterThan("id", cursor.Digest),
-					sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
+					// sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
@@ -148,11 +148,11 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
-		} else if cursor.Digest != nil && cursor.PubsubTopic != "" {
+		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.LessThan("id", cursor.Digest),
-					sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
+					// sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
