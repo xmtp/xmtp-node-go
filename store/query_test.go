@@ -339,8 +339,6 @@ func TestLastPage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, response.Messages, 1)
 	require.Equal(t, response.PagingInfo.PageSize, uint64(0))
-	// Not sure why the existing behaviour includes the previous cursor on the last page.
-	// Would be more sensible to just return a null cursor. But I'm replicating the behaviour anyways
 	require.Nil(t, response.PagingInfo.Cursor)
 }
 
