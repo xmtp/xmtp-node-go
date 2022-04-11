@@ -17,6 +17,8 @@ require (
 	github.com/multiformats/go-multiaddr v0.4.1
 	github.com/status-im/go-waku v0.0.0-20220310221450-e7098efcff73
 	github.com/stretchr/testify v1.7.0
+	github.com/uptrace/bun v1.1.3
+	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
 	go.uber.org/zap v1.19.0
 )
@@ -134,8 +136,6 @@ require (
 	github.com/status-im/go-waku-rendezvous v0.0.0-20211018070416-a93f3b70c432 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
-	github.com/uptrace/bun v1.1.3 // indirect
-	github.com/uptrace/bun/dialect/pgdialect v1.1.3 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
