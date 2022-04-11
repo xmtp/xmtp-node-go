@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -19,9 +18,6 @@ type DBStore struct {
 	persistence.MessageProvider
 	db  *sql.DB
 	log *zap.SugaredLogger
-
-	maxMessages int
-	maxDuration time.Duration
 }
 
 // DBOption is an optional setting that can be used to configure the DBStore
@@ -91,53 +87,4 @@ func (d *DBStore) Put(cursor *pb.Index, pubsubTopic string, message *pb.WakuMess
 	}
 
 	return nil
-}
-
-// Returns all the stored WakuMessages
-func (d *DBStore) GetAll() ([]persistence.StoredMessage, error) {
-	rows, err := d.db.Query("SELECT id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version FROM message ORDER BY senderTimestamp ASC")
-	if err != nil {
-		return nil, err
-	}
-
-	var result []persistence.StoredMessage
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var id []byte
-		var receiverTimestamp int64
-		var senderTimestamp int64
-		var contentTopic string
-		var payload []byte
-		var version uint32
-		var pubsubTopic string
-
-		err = rows.Scan(&id, &receiverTimestamp, &senderTimestamp, &contentTopic, &pubsubTopic, &payload, &version)
-		if err != nil {
-			d.log.Fatal(err)
-		}
-
-		msg := new(pb.WakuMessage)
-		msg.ContentTopic = contentTopic
-		msg.Payload = payload
-		msg.Timestamp = senderTimestamp
-		msg.Version = version
-
-		record := persistence.StoredMessage{
-			ID:           id,
-			PubsubTopic:  pubsubTopic,
-			ReceiverTime: receiverTimestamp,
-			Message:      msg,
-		}
-
-		result = append(result, record)
-	}
-
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
