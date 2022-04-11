@@ -1,11 +1,16 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
 	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/migrations"
 	"go.uber.org/zap"
 )
 
@@ -53,21 +58,20 @@ func NewDBStore(log *zap.SugaredLogger, options ...DBOption) (*DBStore, error) {
 }
 
 func (d *DBStore) migrate() error {
-	sqlStmt := `CREATE TABLE IF NOT EXISTS message (
-		id BLOB,
-		receiverTimestamp INTEGER NOT NULL,
-		senderTimestamp INTEGER NOT NULL,
-		contentTopic BLOB NOT NULL,
-		pubsubTopic BLOB NOT NULL,
-		payload BLOB,
-		version INTEGER NOT NULL DEFAULT 0,
-		CONSTRAINT messageIndex PRIMARY KEY (senderTimestamp, id, pubsubTopic)
-	) WITHOUT ROWID;`
-	_, err := d.db.Exec(sqlStmt)
+	ctx := context.Background()
+	db := bun.NewDB(d.db, pgdialect.New())
+	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	err := migrator.Init(ctx)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	group, err := migrator.Migrate(ctx)
+	if group.IsZero() {
+		d.log.Info("No new migrations to run")
+	}
+
+	return err
 }
 
 // Closes a DB connection
@@ -77,7 +81,7 @@ func (d *DBStore) Stop() {
 
 // Inserts a WakuMessage into the DB
 func (d *DBStore) Put(cursor *pb.Index, pubsubTopic string, message *pb.WakuMessage) error {
-	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version) VALUES ($1, $2, $3, $4, $5, $6, $7)")
 	if err != nil {
 		return err
 	}
