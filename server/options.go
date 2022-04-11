@@ -34,6 +34,7 @@ type StoreOptions struct {
 	RetentionMaxDays     int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
 	RetentionMaxMessages int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
 	Nodes                []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
+	DbConnectionString   string   `long:"db-connection-string" description:"A Postgres database connection string"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
