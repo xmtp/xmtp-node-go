@@ -20,7 +20,6 @@ lint:
 
 postgres:
 	docker-compose up -d postgres
-	sleep 2
 
 test: postgres
 	go test ./...
