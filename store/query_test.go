@@ -40,9 +40,6 @@ func createAndFillDb(t *testing.T) *sql.DB {
 	store := createStore(t, db)
 	_, err := db.Exec("TRUNCATE TABLE message;")
 	require.NoError(t, err)
-	res, err := store.GetAll()
-	require.NoError(t, err)
-	require.Empty(t, res)
 
 	msg1 := tests.CreateWakuMessage("test1", 1)
 	msg2 := tests.CreateWakuMessage("test2", 2)
