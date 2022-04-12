@@ -67,7 +67,8 @@ type Options struct {
 	LogLevel    string   `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
 	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
 	//nolint:staticcheck
-	LogEncoding string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	LogEncoding     string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	CreateMigration string `long:"create-migration" default:"" description:"Create a migration. Must provide a name"`
 
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     StoreOptions     `group:"Store Options"`

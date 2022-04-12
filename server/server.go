@@ -33,7 +33,11 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/migrations"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
@@ -300,4 +304,15 @@ func failOnErr(err error, msg string) {
 		}
 		utils.Logger().Fatal(msg, zap.Error(err))
 	}
+}
+
+func CreateMigration(migrationName, dbConnectionString string) error {
+	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
+	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
 }
