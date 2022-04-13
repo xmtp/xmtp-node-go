@@ -42,6 +42,13 @@ func main() {
 		return
 	}
 
+	if options.CreateMigration != "" && options.Store.DbConnectionString != "" {
+		if err := server.CreateMigration(options.CreateMigration, options.Store.DbConnectionString); err != nil {
+			log.Fatalf(err.Error())
+		}
+		return
+	}
+
 	s := server.New(options)
 	log.Println("Got a server", s)
 	s.WaitForShutdown()

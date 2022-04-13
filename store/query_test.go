@@ -2,22 +2,23 @@ package store
 
 import (
 	"database/sql"
+	"os"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Blank import to register the sqlite3 driver
-
 	"github.com/status-im/go-waku/tests"
-	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 func NewMock() *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		tests.Logger().Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	dsn, hasDsn := os.LookupEnv("POSTGRES_CONNECTION_STRING")
+	if !hasDsn {
+		dsn = "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable"
 	}
+	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 
 	return db
 }
@@ -27,9 +28,9 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 	return idx
 }
 
-func createStore(t *testing.T, db *sql.DB) *persistence.DBStore {
-	option := persistence.WithDB(db)
-	store, err := persistence.NewDBStore(tests.Logger(), option)
+func createStore(t *testing.T, db *sql.DB) *DBStore {
+	option := WithDB(db)
+	store, err := NewDBStore(tests.Logger(), option)
 	require.NoError(t, err)
 	return store
 }
@@ -37,9 +38,8 @@ func createStore(t *testing.T, db *sql.DB) *persistence.DBStore {
 func createAndFillDb(t *testing.T) *sql.DB {
 	db := NewMock()
 	store := createStore(t, db)
-	res, err := store.GetAll()
+	_, err := db.Exec("TRUNCATE TABLE message;")
 	require.NoError(t, err)
-	require.Empty(t, res)
 
 	msg1 := tests.CreateWakuMessage("test1", 1)
 	msg2 := tests.CreateWakuMessage("test2", 2)

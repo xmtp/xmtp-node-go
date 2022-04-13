@@ -4,7 +4,6 @@ import (
 	"database/sql"
 
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
-	"github.com/jmoiron/sqlx"
 	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -39,13 +38,13 @@ func getContentTopics(filters []*pb.ContentFilter) []string {
 }
 
 func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{}, err error) {
-	sb := sqlBuilder.SQLite.NewSelectBuilder()
+	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
 
 	sb.Select("*").From("message")
 
 	contentTopics := getContentTopics(query.ContentFilters)
 	if len(contentTopics) > 0 {
-		sb.Where(sb.In("contentTopic", contentTopics))
+		sb.Where(sb.In("contentTopic", sqlBuilder.Flatten(contentTopics)...))
 	}
 
 	if query.PubsubTopic != "" {
@@ -67,8 +66,6 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	addSort(sb, direction)
 
 	querySql, args = sb.Build()
-	// Use SQLX to convert IN statements to multiple arguments. Only way I could find to make IN statements work with SQLite
-	querySql, args, err = sqlx.In(querySql, args...)
 
 	return
 }

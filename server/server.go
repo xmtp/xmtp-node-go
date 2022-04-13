@@ -18,7 +18,7 @@ import (
 	dssql "github.com/ipfs/go-ds-sql"
 	"go.uber.org/zap"
 
-	"github.com/libp2p/go-libp2p"
+	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -26,7 +26,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/status-im/go-waku/waku/metrics"
-	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/persistence/sqlite"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
@@ -34,6 +33,11 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/migrations"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
@@ -62,8 +66,7 @@ func New(options Options) (server *Server) {
 		failOnErr(errors.New("dbpath can't be null"), "")
 	}
 
-	server.db, err = sqlite.NewDB(options.DBPath)
-	failOnErr(err, "Could not connect to DB")
+	server.db = sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(options.Store.DbConnectionString)))
 
 	server.ctx = context.Background()
 
@@ -88,6 +91,7 @@ func New(options Options) (server *Server) {
 	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)
 
 	// Create persistent peerstore
+	// This uses the "sqlite" package from go-waku, but with the Postgres powered store. The queries all work regardless of underlying datastore
 	queries, err := sqlite.NewQueries("peerstore", server.db)
 	failOnErr(err, "Peerstore")
 
@@ -112,7 +116,7 @@ func New(options Options) (server *Server) {
 
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
-		dbStore, err := persistence.NewDBStore(server.logger.Sugar(), persistence.WithDB(server.db), persistence.WithRetentionPolicy(options.Store.RetentionMaxMessages, options.Store.RetentionMaxDaysDuration()))
+		dbStore, err := xmtpStore.NewDBStore(server.logger.Sugar(), xmtpStore.WithDB(server.db))
 		failOnErr(err, "DBStore")
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
@@ -300,4 +304,15 @@ func failOnErr(err error, msg string) {
 		}
 		utils.Logger().Fatal(msg, zap.Error(err))
 	}
+}
+
+func CreateMigration(migrationName, dbConnectionString string) error {
+	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
+	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
 }

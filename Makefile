@@ -1,4 +1,4 @@
-.PHONY: all build lint test coverage docker-image docker-image-multiarch
+.PHONY: all build lint test coverage docker-image docker-image-multiarch postgres
 
 all: build
 
@@ -18,7 +18,10 @@ lint:
 	@echo "lint"
 	@golangci-lint --exclude=SA1019 run ./... --deadline=5m
 
-test:
+postgres:
+	docker-compose up -d postgres
+
+test: postgres
 	go test ./...
 
 # Set target-specific variables for docker images
