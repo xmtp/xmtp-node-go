@@ -25,6 +25,10 @@ var (
 	ErrNoPeersAvailable = errors.New("no suitable remote peers")
 )
 
+const (
+	CHANNEL_SIZE = 32
+)
+
 type (
 	Filter struct {
 		PeerID         peer.ID
@@ -59,7 +63,7 @@ type (
 // NOTE This is just a start, the design of this protocol isn't done yet. It
 // should be direct payload exchange (a la req-resp), not be coupled with the
 // relay protocol.
-const FilterID_v20beta1 = libp2pProtocol.ID("/vac/waku/filter/2.0.0-beta1")
+const FilterID_v10beta1 = libp2pProtocol.ID("/xmtp/filter/1.0.0-beta1")
 
 func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *zap.SugaredLogger, opts ...Option) (*WakuFilter, error) {
 	wf := new(WakuFilter)
@@ -86,7 +90,7 @@ func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *za
 	wf.filters = NewFilterMap()
 	wf.subscribers = NewSubscribers(params.timeout)
 
-	wf.h.SetStreamHandlerMatch(FilterID_v20beta1, protocol.PrefixTextMatch(string(FilterID_v20beta1)), wf.onRequest)
+	wf.h.SetStreamHandlerMatch(FilterID_v10beta1, protocol.PrefixTextMatch(string(FilterID_v10beta1)), wf.onRequest)
 
 	wf.wg.Add(1)
 	go wf.FilterListener()
@@ -101,8 +105,6 @@ func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *za
 }
 
 func (wf *WakuFilter) onRequest(s network.Stream) {
-	defer s.Close()
-
 	filterRPCRequest := &pb.FilterRPC{}
 
 	reader := protoio.NewDelimitedReader(s, math.MaxInt32)
@@ -128,11 +130,13 @@ func (wf *WakuFilter) onRequest(s network.Stream) {
 		// We're on a full node.
 		// This is a filter request coming from a light node.
 		if filterRPCRequest.Request.Subscribe {
-			subscriber := Subscriber{peer: s.Conn().RemotePeer(), requestId: filterRPCRequest.RequestId, filter: *filterRPCRequest.Request}
+			subscriber := Subscriber{peer: s.Conn().RemotePeer(), requestId: filterRPCRequest.RequestId, filter: *filterRPCRequest.Request, ch: make(chan *protocol.Envelope, CHANNEL_SIZE)}
 			len := wf.subscribers.Append(subscriber)
 
 			wf.log.Info("filter full node, add a filter subscriber: ", subscriber.peer)
 			stats.Record(wf.ctx, metrics.FilterSubscriptions.M(int64(len)))
+
+			// go wf.streamMessagesToClient(s, subscriber)
 		} else {
 			peerId := s.Conn().RemotePeer()
 			wf.subscribers.RemoveContentFilters(peerId, filterRPCRequest.Request.ContentFilters)
@@ -146,6 +150,10 @@ func (wf *WakuFilter) onRequest(s network.Stream) {
 	}
 }
 
+// func (wf *WakuFilter) streamMessagesToClient(stream network.Stream, subscriber Subscriber) {
+
+// }
+
 func (wf *WakuFilter) pushMessage(subscriber Subscriber, msg *pb.WakuMessage) error {
 	pushRPC := &pb.FilterRPC{RequestId: subscriber.requestId, Push: &pb.MessagePush{Messages: []*pb.WakuMessage{msg}}}
 
@@ -157,7 +165,7 @@ func (wf *WakuFilter) pushMessage(subscriber Subscriber, msg *pb.WakuMessage) er
 		return err
 	}
 
-	conn, err := wf.h.NewStream(wf.ctx, subscriber.peer, FilterID_v20beta1)
+	conn, err := wf.h.NewStream(wf.ctx, subscriber.peer, FilterID_v10beta1)
 	if err != nil {
 		wf.subscribers.FlagAsFailure(subscriber.peer)
 
@@ -254,7 +262,7 @@ func (wf *WakuFilter) requestSubscription(ctx context.Context, filter ContentFil
 	}
 
 	var conn network.Stream
-	conn, err = wf.h.NewStream(ctx, params.selectedPeer, FilterID_v20beta1)
+	conn, err = wf.h.NewStream(ctx, params.selectedPeer, FilterID_v10beta1)
 	if err != nil {
 		return
 	}
@@ -287,7 +295,7 @@ func (wf *WakuFilter) Unsubscribe(ctx context.Context, contentFilter ContentFilt
 		return err
 	}
 
-	conn, err := wf.h.NewStream(ctx, peer, FilterID_v20beta1)
+	conn, err := wf.h.NewStream(ctx, peer, FilterID_v10beta1)
 	if err != nil {
 		return err
 	}
@@ -321,7 +329,7 @@ func (wf *WakuFilter) Unsubscribe(ctx context.Context, contentFilter ContentFilt
 func (wf *WakuFilter) Stop() {
 	close(wf.MsgC)
 
-	wf.h.RemoveStreamHandler(FilterID_v20beta1)
+	wf.h.RemoveStreamHandler(FilterID_v10beta1)
 	wf.filters.RemoveAll()
 	wf.wg.Wait()
 }
