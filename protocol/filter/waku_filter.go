@@ -10,7 +10,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-msgio/protoio"
 	"github.com/status-im/go-waku/waku/v2/metrics"
@@ -203,44 +202,6 @@ func (wf *WakuFilter) FilterListener() {
 	}
 }
 
-func (wf *WakuFilter) Unsubscribe(ctx context.Context, contentFilter goWakuFilter.ContentFilter, peer peer.ID) error {
-	// We connect first so dns4 addresses are resolved (NewStream does not do it)
-	err := wf.h.Connect(ctx, wf.h.Peerstore().PeerInfo(peer))
-	if err != nil {
-		return err
-	}
-
-	conn, err := wf.h.NewStream(ctx, peer, FilterID_v10beta1)
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
-	// This is the only successful path to subscription
-	id := protocol.GenerateRequestId()
-
-	var contentFilters []*pb.FilterRequest_ContentFilter
-	for _, ct := range contentFilter.ContentTopics {
-		contentFilters = append(contentFilters, &pb.FilterRequest_ContentFilter{ContentTopic: ct})
-	}
-
-	request := pb.FilterRequest{
-		Subscribe:      false,
-		Topic:          contentFilter.Topic,
-		ContentFilters: contentFilters,
-	}
-
-	writer := protoio.NewDelimitedWriter(conn)
-	filterRPC := &pb.FilterRPC{RequestId: hex.EncodeToString(id), Request: &request}
-	err = writer.WriteMsg(filterRPC)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (wf *WakuFilter) Stop() {
 	close(wf.MsgC)
 
@@ -342,74 +303,9 @@ func (wf *WakuFilter) Subscribe(ctx context.Context, f goWakuFilter.ContentFilte
 	return
 }
 
-// UnsubscribeFilterByID removes a subscription to a filter node completely
-// using the filterID returned when the subscription was created
-func (wf *WakuFilter) UnsubscribeFilterByID(ctx context.Context, filterID string) error {
-
-	var f goWakuFilter.Filter
-	var ok bool
-
-	if f, ok = wf.filters.Get(filterID); !ok {
-		return errors.New("filter not found")
-	}
-
-	cf := goWakuFilter.ContentFilter{
-		Topic:         f.Topic,
-		ContentTopics: f.ContentFilters,
-	}
-
-	err := wf.Unsubscribe(ctx, cf, f.PeerID)
-	if err != nil {
-		return err
-	}
-
-	wf.filters.Delete(filterID)
-
-	return nil
-}
-
-// Unsubscribe filter removes content topics from a filter subscription. If all
-// the contentTopics are removed the subscription is dropped completely
+// This function is required to maintain compatibility with the existing interface, but is otherwise unusubed
+// Unsubscribe can be accomplished by disconnecting
 func (wf *WakuFilter) UnsubscribeFilter(ctx context.Context, cf goWakuFilter.ContentFilter) error {
-	// Remove local filter
-	var idsToRemove []string
-	for filterMapItem := range wf.filters.Items() {
-		f := filterMapItem.Value
-		id := filterMapItem.Key
-
-		if f.Topic != cf.Topic {
-			continue
-		}
-
-		// Send message to full node in order to unsubscribe
-		err := wf.Unsubscribe(ctx, cf, f.PeerID)
-		if err != nil {
-			return err
-		}
-
-		// Iterate filter entries to remove matching content topics
-		// make sure we delete the content filter
-		// if no more topics are left
-		for _, cfToDelete := range cf.ContentTopics {
-			for i, cf := range f.ContentFilters {
-				if cf == cfToDelete {
-					l := len(f.ContentFilters) - 1
-					f.ContentFilters[l], f.ContentFilters[i] = f.ContentFilters[i], f.ContentFilters[l]
-					f.ContentFilters = f.ContentFilters[:l]
-					break
-				}
-
-			}
-			if len(f.ContentFilters) == 0 {
-				idsToRemove = append(idsToRemove, id)
-			}
-		}
-	}
-
-	for _, rId := range idsToRemove {
-		wf.filters.Delete(rId)
-	}
-
 	return nil
 }
 
