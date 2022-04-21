@@ -132,7 +132,9 @@ func (wf *WakuFilter) streamMessagesToClient(stream network.Stream, subscriber S
 	writer := protoio.NewDelimitedWriter(stream)
 	// As soon as connection has an error close the stream on our end and remove the filter
 	defer stream.Close()
+	defer close(subscriber.ch)
 	defer wf.subscribers.RemoveContentFilters(subscriber.peer, subscriber.filter.ContentFilters)
+
 	for {
 		select {
 		case <-wf.ctx.Done():
