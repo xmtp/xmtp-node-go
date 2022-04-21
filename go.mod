@@ -20,6 +20,7 @@ require (
 	github.com/uptrace/bun v1.1.3
 	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
+	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.19.0
 )
 
@@ -140,7 +141,6 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
-	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
@@ -157,4 +157,4 @@ require (
 	mellium.im/sasl v0.2.1 // indirect
 )
 
-replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220315155846-c57a45958af7
+replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220421143336-e8ffcc4903fe

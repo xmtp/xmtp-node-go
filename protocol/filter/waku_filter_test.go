@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/status-im/go-waku/tests"
 	v2 "github.com/status-im/go-waku/waku/v2"
+	goWakuFilter "github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +44,20 @@ func makeWakuFilter(t *testing.T) (*WakuFilter, host.Host) {
 	return filter, host
 }
 
+func setupNodes(t *testing.T, topic string, ctx context.Context) (*WakuFilter, *WakuFilter, *relay.WakuRelay) {
+	filter1, host1 := makeWakuFilter(t)
+	broadcaster := v2.NewBroadcaster(10)
+	relay, _, host2 := makeWakuRelay(t, topic, broadcaster)
+	filter2, _ := NewWakuFilter(ctx, host2, true, tests.Logger())
+	broadcaster.Register(filter2.MsgC)
+
+	host1.Peerstore().AddAddr(host2.ID(), tests.GetHostAddress(host2), peerstore.PermanentAddrTTL)
+	err := host1.Peerstore().AddProtocols(host2.ID(), string(FilterID_v10beta1))
+	require.NoError(t, err)
+
+	return filter1, filter2, relay
+}
+
 // Node1: Filter subscribed to content topic A
 // Node2: Relay + Filter
 //
@@ -60,42 +75,38 @@ func TestWakuFilter(t *testing.T) {
 	testTopic := "/waku/2/go/filter/test"
 	testContentTopic := "TopicA"
 
-	node1, host1 := makeWakuFilter(t)
-	defer node1.Stop()
+	filter1, filter2, node2Relay := setupNodes(t, testTopic, ctx)
 
-	broadcaster := v2.NewBroadcaster(10)
-	node2, sub2, host2 := makeWakuRelay(t, testTopic, broadcaster)
-	defer node2.Stop()
-	defer sub2.Unsubscribe()
-
-	node2Filter, _ := NewWakuFilter(ctx, host2, true, tests.Logger())
-	broadcaster.Register(node2Filter.MsgC)
-
-	host1.Peerstore().AddAddr(host2.ID(), tests.GetHostAddress(host2), peerstore.PermanentAddrTTL)
-	err := host1.Peerstore().AddProtocols(host2.ID(), string(FilterID_v10beta1))
-	require.NoError(t, err)
-
-	contentFilter := &ContentFilter{
+	contentFilter := &goWakuFilter.ContentFilter{
 		Topic:         string(testTopic),
 		ContentTopics: []string{testContentTopic},
 	}
 
-	_, f, err := node1.Subscribe(ctx, *contentFilter, WithPeer(node2Filter.h.ID()))
+	_, f, err := filter1.Subscribe(ctx, *contentFilter, goWakuFilter.WithPeer(filter2.h.ID()))
 	require.NoError(t, err)
 
 	// Sleep to make sure the filter is subscribed
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
+	wg.Add(2)
 	go func() {
-		defer wg.Done()
-		env := <-f.Chan
-		require.Equal(t, contentFilter.ContentTopics[0], env.Message().GetContentTopic())
+		numRead := 0
+		for env := range f.Chan {
+			numRead += 1
+			require.Equal(t, contentFilter.ContentTopics[0], env.Message().GetContentTopic())
+			t.Log("Received message from the channel")
+			wg.Done()
+			if numRead == 2 {
+				break
+			}
+		}
 	}()
 
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 0), testTopic)
+	_, err = node2Relay.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 0), testTopic)
+	require.NoError(t, err)
+	_, err = node2Relay.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 1), testTopic)
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -112,116 +123,122 @@ func TestWakuFilter(t *testing.T) {
 		}
 	}()
 
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage("TopicB", 1), testTopic)
+	// Send to the wrong topic. Should not have anything in the channel
+	_, err = node2Relay.PublishToTopic(ctx, tests.CreateWakuMessage("TopicB", 1), testTopic)
 	require.NoError(t, err)
 
-	wg.Wait()
-
-	wg.Add(1)
-	go func() {
-		select {
-		case <-f.Chan:
-			require.Fail(t, "should not receive another message")
-		case <-time.After(1 * time.Second):
-			defer wg.Done()
-		case <-ctx.Done():
-			require.Fail(t, "test exceeded allocated time")
-		}
-	}()
-
-	err = node1.Unsubscribe(ctx, *contentFilter, node2Filter.h.ID())
-	require.NoError(t, err)
-
-	time.Sleep(1 * time.Second)
-
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 2), testTopic)
-	require.NoError(t, err)
 	wg.Wait()
 }
 
-func TestWakuFilterPeerFailure(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Test can't exceed 10 seconds
-	defer cancel()
+// func TestCancel(t *testing.T) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Test can't exceed 10 seconds
 
-	testTopic := "/waku/2/go/filter/test"
-	testContentTopic := "TopicA"
+// 	testTopic := "/waku/2/go/filter/test"
+// 	testContentTopic := "TopicA"
 
-	node1, host1 := makeWakuFilter(t)
+// 	filter1, filter2, _ := setupNodes(t, testTopic, ctx)
 
-	broadcaster := v2.NewBroadcaster(10)
-	node2, sub2, host2 := makeWakuRelay(t, testTopic, broadcaster)
-	defer node2.Stop()
-	defer sub2.Unsubscribe()
+// 	contentFilter := &goWakuFilter.ContentFilter{
+// 		Topic:         string(testTopic),
+// 		ContentTopics: []string{testContentTopic},
+// 	}
 
-	node2Filter, _ := NewWakuFilter(ctx, host2, true, tests.Logger(), WithTimeout(3*time.Second))
-	broadcaster.Register(node2Filter.MsgC)
+// 	_, f, err := filter1.Subscribe(ctx, *contentFilter, goWakuFilter.WithPeer(filter2.h.ID()))
+// 	require.NoError(t, err)
 
-	host1.Peerstore().AddAddr(host2.ID(), tests.GetHostAddress(host2), peerstore.PermanentAddrTTL)
-	err := host1.Peerstore().AddProtocols(host2.ID(), string(FilterID_v10beta1))
-	require.NoError(t, err)
+// 	cancel()
+// 	// Sleep to make sure the filter is subscribed
+// 	time.Sleep(1 * time.Second)
 
-	contentFilter := &ContentFilter{
-		Topic:         string(testTopic),
-		ContentTopics: []string{testContentTopic},
-	}
+// 	_, more := <-f.Chan
+// 	if more {
+// 		t.Error("Channel should be closed")
+// 	}
+// }
 
-	_, f, err := node1.Subscribe(ctx, *contentFilter, WithPeer(node2Filter.h.ID()))
-	require.NoError(t, err)
+// func TestWakuFilterPeerFailure(t *testing.T) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Test can't exceed 10 seconds
+// 	defer cancel()
 
-	// Simulate there's been a failure before
-	node2Filter.subscribers.FlagAsFailure(host1.ID())
+// 	testTopic := "/waku/2/go/filter/test"
+// 	testContentTopic := "TopicA"
 
-	// Sleep to make sure the filter is subscribed
-	time.Sleep(2 * time.Second)
+// 	node1, host1 := makeWakuFilter(t)
 
-	_, ok := node2Filter.subscribers.failedPeers[host1.ID()]
-	require.True(t, ok)
+// 	broadcaster := v2.NewBroadcaster(10)
+// 	node2, sub2, host2 := makeWakuRelay(t, testTopic, broadcaster)
+// 	defer node2.Stop()
+// 	defer sub2.Unsubscribe()
 
-	var wg sync.WaitGroup
+// 	node2Filter, _ := NewWakuFilter(ctx, host2, true, tests.Logger(), WithTimeout(3*time.Second))
+// 	broadcaster.Register(node2Filter.MsgC)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		env := <-f.Chan
-		require.Equal(t, contentFilter.ContentTopics[0], env.Message().GetContentTopic())
+// 	host1.Peerstore().AddAddr(host2.ID(), tests.GetHostAddress(host2), peerstore.PermanentAddrTTL)
+// 	err := host1.Peerstore().AddProtocols(host2.ID(), string(FilterID_v10beta1))
+// 	require.NoError(t, err)
 
-		// Failure is removed
-		_, ok := node2Filter.subscribers.failedPeers[host1.ID()]
-		require.False(t, ok)
+// 	contentFilter := &goWakuFilter.ContentFilter{
+// 		Topic:         string(testTopic),
+// 		ContentTopics: []string{testContentTopic},
+// 	}
 
-	}()
+// 	_, f, err := node1.Subscribe(ctx, *contentFilter, goWakuFilter.WithPeer(node2Filter.h.ID()))
+// 	require.NoError(t, err)
 
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 0), testTopic)
-	require.NoError(t, err)
+// 	// Simulate there's been a failure before
+// 	node2Filter.subscribers.FlagAsFailure(host1.ID())
 
-	wg.Wait()
+// 	// Sleep to make sure the filter is subscribed
+// 	time.Sleep(2 * time.Second)
 
-	// Kill the subscriber
-	host1.Close()
+// 	_, ok := node2Filter.subscribers.failedPeers[host1.ID()]
+// 	require.True(t, ok)
 
-	time.Sleep(1 * time.Second)
+// 	var wg sync.WaitGroup
 
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 1), testTopic)
-	require.NoError(t, err)
+// 	wg.Add(1)
+// 	go func() {
+// 		defer wg.Done()
+// 		env := <-f.Chan
+// 		require.Equal(t, contentFilter.ContentTopics[0], env.Message().GetContentTopic())
 
-	// TODO: find out how to eliminate this sleep
-	time.Sleep(1 * time.Second)
-	_, ok = node2Filter.subscribers.failedPeers[host1.ID()]
-	require.True(t, ok)
+// 		// Failure is removed
+// 		_, ok := node2Filter.subscribers.failedPeers[host1.ID()]
+// 		require.False(t, ok)
 
-	time.Sleep(3 * time.Second)
+// 	}()
 
-	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 2), testTopic)
-	require.NoError(t, err)
+// 	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 0), testTopic)
+// 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
-	_, ok = node2Filter.subscribers.failedPeers[host1.ID()]
-	require.False(t, ok) // Failed peer has been removed
+// 	wg.Wait()
 
-	for subscriber := range node2Filter.subscribers.Items() {
-		if subscriber.peer == node1.h.ID() {
-			require.Fail(t, "Subscriber should not exist")
-		}
-	}
+// 	// Kill the subscriber
+// 	host1.Close()
 
-}
+// 	time.Sleep(1 * time.Second)
+
+// 	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 1), testTopic)
+// 	require.NoError(t, err)
+
+// 	// TODO: find out how to eliminate this sleep
+// 	time.Sleep(1 * time.Second)
+// 	_, ok = node2Filter.subscribers.failedPeers[host1.ID()]
+// 	require.True(t, ok)
+
+// 	time.Sleep(3 * time.Second)
+
+// 	_, err = node2.PublishToTopic(ctx, tests.CreateWakuMessage(testContentTopic, 2), testTopic)
+// 	require.NoError(t, err)
+
+// 	time.Sleep(1 * time.Second)
+// 	_, ok = node2Filter.subscribers.failedPeers[host1.ID()]
+// 	require.False(t, ok) // Failed peer has been removed
+
+// 	for subscriber := range node2Filter.subscribers.Items() {
+// 		if subscriber.peer == node1.h.ID() {
+// 			require.Fail(t, "Subscriber should not exist")
+// 		}
+// 	}
+
+// }

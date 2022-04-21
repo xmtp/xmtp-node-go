@@ -28,7 +28,7 @@ import (
 	"github.com/status-im/go-waku/waku/metrics"
 	"github.com/status-im/go-waku/waku/persistence/sqlite"
 	"github.com/status-im/go-waku/waku/v2/node"
-	"github.com/status-im/go-waku/waku/v2/protocol/filter"
+	wakuFilter "github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
@@ -38,6 +38,7 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/migrations"
+	"github.com/xmtp/xmtp-node-go/protocol/filter"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
@@ -111,7 +112,10 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.Filter.Enable {
-		nodeOpts = append(nodeOpts, node.WithWakuFilter(true, filter.WithTimeout(time.Duration(options.Filter.Timeout)*time.Second)))
+		nodeOpts = append(nodeOpts, node.WithFilterFactory(func(w *node.WakuNode) (wakuFilter.IFilter, error) {
+			return filter.NewWakuFilter(server.ctx, w.Host(), true, server.logger.Sugar())
+		}))
+		nodeOpts = append(nodeOpts, node.WithWakuFilter(true, wakuFilter.WithTimeout(time.Duration(options.Filter.Timeout)*time.Second)))
 	}
 
 	if options.Store.Enable {
@@ -136,7 +140,7 @@ func New(options Options) (server *Server) {
 
 	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
 	addPeers(server.wakuNode, options.LightPush.Nodes, lightpush.LightPushID_v20beta1)
-	addPeers(server.wakuNode, options.Filter.Nodes, filter.FilterID_v20beta1)
+	addPeers(server.wakuNode, options.Filter.Nodes, filter.FilterID_v10beta1)
 
 	if err = server.wakuNode.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())

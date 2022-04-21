@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 )
 
@@ -13,7 +12,7 @@ type Subscriber struct {
 	peer      peer.ID
 	requestId string
 	filter    pb.FilterRequest // @TODO MAKE THIS A SEQUENCE AGAIN?
-	ch        chan *protocol.Envelope
+	ch        chan *pb.WakuMessage
 }
 
 type Subscribers struct {

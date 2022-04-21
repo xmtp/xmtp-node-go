@@ -68,7 +68,7 @@ type Options struct {
 	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
 	//nolint:staticcheck
 	LogEncoding     string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
-	CreateMigration string `long:"create-migration" default:"" description:"Create a migration. Must provide a name"`
+	CreateMigration string `long:"create-migration" default:"" description:"Create a migration. Must be used in conjunction with --db-connection-string"`
 
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     StoreOptions     `group:"Store Options"`
