@@ -49,7 +49,7 @@ type (
 // relay protocol.
 const FilterID_v10beta1 = libp2pProtocol.ID("/xmtp/filter/1.0.0-beta1")
 
-func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *zap.SugaredLogger, opts ...Option) (*WakuFilter, error) {
+func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *zap.SugaredLogger, opts ...goWakuFilter.Option) (*WakuFilter, error) {
 	wf := new(WakuFilter)
 	wf.log = log.Named("filter")
 
@@ -59,8 +59,8 @@ func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *za
 		return nil, errors.New("could not start waku filter")
 	}
 
-	params := new(FilterParameters)
-	optList := DefaultOptions()
+	params := new(goWakuFilter.FilterParameters)
+	optList := goWakuFilter.DefaultOptions()
 	optList = append(optList, opts...)
 	for _, opt := range optList {
 		opt(params)
@@ -72,7 +72,7 @@ func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *za
 	wf.h = host
 	wf.isFullNode = isFullNode
 	wf.filters = goWakuFilter.NewFilterMap()
-	wf.subscribers = NewSubscribers(params.timeout)
+	wf.subscribers = NewSubscribers(params.Timeout)
 
 	wf.h.SetStreamHandlerMatch(FilterID_v10beta1, protocol.PrefixTextMatch(string(FilterID_v10beta1)), wf.onRequest)
 	wf.log.Info("Registered stream for protocol", FilterID_v10beta1)
