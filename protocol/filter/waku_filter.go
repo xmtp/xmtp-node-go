@@ -31,23 +31,6 @@ const (
 )
 
 type (
-	Filter struct {
-		PeerID         peer.ID
-		Topic          string
-		ContentFilters []string
-		Chan           chan *protocol.Envelope
-	}
-
-	ContentFilter struct {
-		Topic         string
-		ContentTopics []string
-	}
-
-	FilterSubscription struct {
-		RequestID string
-		Peer      peer.ID
-	}
-
 	WakuFilter struct {
 		ctx        context.Context
 		h          host.Host
@@ -56,7 +39,7 @@ type (
 		wg         *sync.WaitGroup
 		log        *zap.SugaredLogger
 
-		filters     *FilterMap
+		filters     *goWakuFilter.FilterMap
 		subscribers *Subscribers
 	}
 )
@@ -88,7 +71,7 @@ func NewWakuFilter(ctx context.Context, host host.Host, isFullNode bool, log *za
 	wf.MsgC = make(chan *protocol.Envelope, 1024)
 	wf.h = host
 	wf.isFullNode = isFullNode
-	wf.filters = NewFilterMap()
+	wf.filters = goWakuFilter.NewFilterMap()
 	wf.subscribers = NewSubscribers(params.timeout)
 
 	wf.h.SetStreamHandlerMatch(FilterID_v10beta1, protocol.PrefixTextMatch(string(FilterID_v10beta1)), wf.onRequest)
@@ -359,7 +342,7 @@ func (wf *WakuFilter) Subscribe(ctx context.Context, f goWakuFilter.ContentFilte
 // using the filterID returned when the subscription was created
 func (wf *WakuFilter) UnsubscribeFilterByID(ctx context.Context, filterID string) error {
 
-	var f Filter
+	var f goWakuFilter.Filter
 	var ok bool
 
 	if f, ok = wf.filters.Get(filterID); !ok {
