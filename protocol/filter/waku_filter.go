@@ -115,6 +115,8 @@ func (wf *WakuFilter) onRequest(s network.Stream) {
 
 			go wf.streamMessagesToClient(s, subscriber)
 		} else {
+			// Technically I still support "unsubscribe" requests on the server for compatibility with the Spec and the possibility of needing it later (it was already there)
+			// In practice, the only way the client can currently unsubscribe is to close the connection
 			peerId := s.Conn().RemotePeer()
 			wf.subscribers.RemoveContentFilters(peerId, filterRPCRequest.Request.ContentFilters)
 
@@ -134,6 +136,8 @@ func (wf *WakuFilter) streamMessagesToClient(stream network.Stream, subscriber S
 	defer wf.subscribers.RemoveContentFilters(subscriber.peer, subscriber.filter.ContentFilters)
 	for {
 		select {
+		case <-wf.ctx.Done():
+			return
 		case msg := <-subscriber.ch:
 			wf.log.Info("Sending message to remote peer", subscriber.peer.String())
 
