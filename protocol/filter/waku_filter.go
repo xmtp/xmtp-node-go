@@ -100,8 +100,6 @@ func (wf *WakuFilter) onRequest(s network.Stream) {
 
 	wf.log.Info(fmt.Sprintf("%s: received request from %s", s.Conn().LocalPeer(), s.Conn().RemotePeer()))
 
-	// We're on a light node.
-	// This is a message push coming from a full node.
 	if filterRPCRequest.Request != nil && wf.isFullNode {
 		// We're on a full node.
 		// This is a filter request coming from a light node.
