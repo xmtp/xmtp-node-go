@@ -8,9 +8,9 @@ import (
 	"go.uber.org/zap"
 )
 
-type Permission int64
-
 const REFRESH_INTERVAL_MINUTES = 5
+
+type Permission int64
 
 const (
 	Allowed     Permission = 0
