@@ -1,7 +1,13 @@
 services:
-  postgres:
+  message-db:
     image: postgres:13
     environment:
       POSTGRES_PASSWORD: xmtp
     ports:
       - 5432:5432
+  authz-db:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: xmtp
+    ports:
+      - 6543:5432

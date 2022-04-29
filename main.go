@@ -15,11 +15,25 @@ var options server.Options
 
 var parser = flags.NewParser(&options, flags.Default)
 
+// Avoiding replacing the flag parser with something fancier like Viper or urfave/cli
+// This hack will work up to a point.
+func addEnvVars() {
+	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_CONNECTION_STRING"); hasConnstr {
+		options.Store.DbConnectionString = connStr
+	}
+
+	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
+		options.Authz.DbConnectionString = connStr
+	}
+}
+
 func main() {
 	if _, err := parser.Parse(); err != nil {
 		log.Fatal("Could not parse options", err)
 		os.Exit(1)
 	}
+
+	addEnvVars()
 
 	// for go-libp2p loggers
 	lvl, err := logging.LevelFromString(options.LogLevel)
@@ -42,8 +56,15 @@ func main() {
 		return
 	}
 
-	if options.CreateMigration != "" && options.Store.DbConnectionString != "" {
-		if err := server.CreateMigration(options.CreateMigration, options.Store.DbConnectionString); err != nil {
+	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
+		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString); err != nil {
+			log.Fatalf(err.Error())
+		}
+		return
+	}
+
+	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
+		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString); err != nil {
 			log.Fatalf(err.Error())
 		}
 		return
