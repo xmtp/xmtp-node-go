@@ -1,5 +1,5 @@
 CREATE TABLE authz_addresses (
-    id SERIAL PRIMARY KEY, -- Maybe I should just do UUID PKs
+    id SERIAL PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,
     wallet_address TEXT NOT NULL,

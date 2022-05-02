@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/migrations/authz"
 	"go.uber.org/zap"
 )
 
@@ -83,7 +85,11 @@ func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 	newCtx, cancel := context.WithCancel(ctx)
 	d.ctx = newCtx
 	d.cancelFunc = cancel
-	err := d.loadPermissions()
+	err := d.migrate(ctx)
+	if err != nil {
+		return err
+	}
+	err = d.loadPermissions()
 	if err != nil {
 		return err
 	}
@@ -111,6 +117,21 @@ func (d *DatabaseWalletAuthorizer) loadPermissions() error {
 	d.log.Info("Updated allow/deny lists from the database", zap.Int("num_values", len(newPermissionMap)))
 
 	return nil
+}
+
+func (d *DatabaseWalletAuthorizer) migrate(ctx context.Context) error {
+	migrator := migrate.NewMigrator(d.db, authz.Migrations)
+	err := migrator.Init(ctx)
+	if err != nil {
+		return err
+	}
+
+	group, err := migrator.Migrate(ctx)
+	if group.IsZero() {
+		d.log.Info("No new migrations to run")
+	}
+
+	return err
 }
 
 func mapPermission(permission string) Permission {
