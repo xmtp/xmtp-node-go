@@ -13,6 +13,10 @@ XMTP Node software
 
 1. `make docker-image`
 
+### Run the tests
+
+1. `make test`
+
 ### Create a migration for the message database
 
 1. `docker-compose up -d`
