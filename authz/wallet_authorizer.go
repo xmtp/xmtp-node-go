@@ -128,7 +128,7 @@ func (d *DatabaseWalletAuthorizer) migrate(ctx context.Context) error {
 
 	group, err := migrator.Migrate(ctx)
 	if group.IsZero() {
-		d.log.Info("No new migrations to run")
+		d.log.Info("No new migrations to run for DatabaseWalletAuthorizer")
 	}
 
 	return err
