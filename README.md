@@ -13,13 +13,13 @@ XMTP Node software
 
 1. `make docker-image`
 
-### Create a migration for the message table
+### Create a migration for the message database
 
 1. `docker-compose up -d`
 2. `make build`
 3. `./build/xmtp --message-db-connection-string "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable" --create-message-migration $MIGRATION_NAME`
 
-### Create a migration for the authz table
+### Create a migration for the authz database
 
 1. `docker-compose up -d`
 2. `make build`
