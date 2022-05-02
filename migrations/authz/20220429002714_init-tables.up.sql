@@ -8,7 +8,7 @@ CREATE TABLE authz_addresses (
 
 --bun:split
 
-CREATE UNIQUE INDEX unique_wallet_address ON authz_addresses (wallet_address) WHERE (deleted_at is NOT null);
+CREATE UNIQUE INDEX unique_wallet_address ON authz_addresses (wallet_address) WHERE (deleted_at is null);
 
 --bun:split
 
