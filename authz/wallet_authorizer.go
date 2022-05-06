@@ -54,7 +54,7 @@ type DatabaseWalletAuthorizer struct {
 func NewDatabaseWalletAuthorizer(db *bun.DB, log *zap.Logger) *DatabaseWalletAuthorizer {
 	result := new(DatabaseWalletAuthorizer)
 	result.db = db
-	result.log = log
+	result.log = log.Named("wauthz")
 	result.permissions = make(map[string]Permission)
 	result.refreshInterval = time.Minute * REFRESH_INTERVAL_MINUTES
 
