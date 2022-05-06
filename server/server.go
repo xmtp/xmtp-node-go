@@ -37,7 +37,8 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations"
+	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
+	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
@@ -306,9 +307,20 @@ func failOnErr(err error, msg string) {
 	}
 }
 
-func CreateMigration(migrationName, dbConnectionString string) error {
+func CreateMessageMigration(migrationName, dbConnectionString string) error {
 	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
+}
+
+func CreateAuthzMigration(migrationName, dbConnectionString string) error {
+	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
+	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
 		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)

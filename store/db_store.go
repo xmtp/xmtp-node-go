@@ -9,7 +9,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations"
+	"github.com/xmtp/xmtp-node-go/migrations/messages"
 	"go.uber.org/zap"
 )
 
@@ -56,7 +56,7 @@ func NewDBStore(log *zap.SugaredLogger, options ...DBOption) (*DBStore, error) {
 func (d *DBStore) migrate() error {
 	ctx := context.Background()
 	db := bun.NewDB(d.db, pgdialect.New())
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	migrator := migrate.NewMigrator(db, messages.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
 		return err

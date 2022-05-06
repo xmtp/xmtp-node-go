@@ -14,7 +14,7 @@ import (
 )
 
 func NewMock() *sql.DB {
-	dsn, hasDsn := os.LookupEnv("POSTGRES_CONNECTION_STRING")
+	dsn, hasDsn := os.LookupEnv("MESSAGE_POSTGRES_CONNECTION_STRING")
 	if !hasDsn {
 		dsn = "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable"
 	}
