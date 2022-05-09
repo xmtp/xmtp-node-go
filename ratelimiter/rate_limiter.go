@@ -23,6 +23,7 @@ type RateLimiter interface {
 
 // Entry represents a single wallet entry in the rate limiter
 type Entry struct {
+	// Time that the entry was last spent against. Updated at most once per minute
 	LastSeen time.Time
 	// This is more memory efficient but limits us to MaxTokens < 65535
 	Tokens uint16
@@ -78,7 +79,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 	now := time.Now()
 	minutesSinceLastSeen := now.Sub(currentVal.LastSeen).Minutes()
 	if minutesSinceLastSeen > 0 {
-		// Only update the lastSeen if it has been > 1 minute
+		// Only update the lastSeen if it has been >= 1 minute
 		// This allows for continuously sending nodes to still get credits
 		currentVal.LastSeen = now
 		// Convert to ints so that we can check if above MAX_UINT_16
@@ -102,7 +103,7 @@ func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool
 	}
 
 	entry.Tokens = entry.Tokens - 1
-	rl.log.Debug("Wallet is under rate timit", zap.String("wallet_address", walletAddress), zap.Int("tokens_remaining", int(entry.Tokens)))
+	rl.log.Debug("Spend allowed. Wallet is under threshold", zap.String("wallet_address", walletAddress), zap.Int("tokens_remaining", int(entry.Tokens)))
 
 	return nil
 }
