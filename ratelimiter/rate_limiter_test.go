@@ -17,7 +17,7 @@ func TestSpend(t *testing.T) {
 	rl.wallets[walletAddress] = &Entry{
 		lastSeen: time.Now(),
 		tokens:   uint16(1),
-		lock:     sync.Mutex{},
+		mutex:    sync.Mutex{},
 	}
 
 	err1 := rl.Spend(walletAddress, false)
@@ -45,7 +45,7 @@ func TestSpendWithTime(t *testing.T) {
 		// Set the last seen to 1 minute ago
 		lastSeen: time.Now().Add(-1 * time.Minute),
 		tokens:   uint16(0),
-		lock:     sync.Mutex{},
+		mutex:    sync.Mutex{},
 	}
 	err1 := rl.Spend(walletAddress, false)
 	require.NoError(t, err1)
@@ -61,7 +61,7 @@ func TestSpendMaxBucket(t *testing.T) {
 		// Set last seen to 500 minutes ago
 		lastSeen: time.Now().Add(-500 * time.Minute),
 		tokens:   uint16(0),
-		lock:     sync.Mutex{},
+		mutex:    sync.Mutex{},
 	}
 	entry := rl.fillAndReturnEntry(walletAddress, false)
 	require.Equal(t, entry.tokens, REGULAR_MAX_TOKENS)
@@ -75,7 +75,7 @@ func TestSpendAllowListed(t *testing.T) {
 		// Set last seen to 500 minutes ago
 		lastSeen: time.Now().Add(-500 * time.Minute),
 		tokens:   uint16(0),
-		lock:     sync.Mutex{},
+		mutex:    sync.Mutex{},
 	}
 	entry := rl.fillAndReturnEntry(walletAddress, true)
 	require.Equal(t, entry.tokens, uint16(500*ALLOW_LISTED_RATE_PER_MINUTE))
@@ -88,7 +88,7 @@ func TestMaxUint16(t *testing.T) {
 		// Set last seen to 1 million minutes ago
 		lastSeen: time.Now().Add(-1000000 * time.Minute),
 		tokens:   uint16(0),
-		lock:     sync.Mutex{},
+		mutex:    sync.Mutex{},
 	}
 
 	entry := rl.fillAndReturnEntry(walletAddress, true)

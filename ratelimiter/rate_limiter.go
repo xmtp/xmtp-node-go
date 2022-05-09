@@ -28,7 +28,7 @@ type Entry struct {
 	// This is more memory efficient but limits us to MaxTokens < 65535
 	tokens uint16
 	// Lock
-	lock sync.Mutex
+	mutex sync.Mutex
 }
 
 // TokenBucketRateLimiter implements the RateLimiter interface
@@ -71,7 +71,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 		currentVal = &Entry{
 			tokens:   uint16(maxTokens),
 			lastSeen: time.Now(),
-			lock:     sync.Mutex{},
+			mutex:    sync.Mutex{},
 		}
 		rl.wallets[walletAddress] = currentVal
 		rl.mutex.Unlock()
@@ -84,7 +84,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 	now := time.Now()
 	minutesSinceLastSeen := now.Sub(currentVal.lastSeen).Minutes()
 	if minutesSinceLastSeen > 0 {
-		currentVal.lock.Lock()
+		currentVal.mutex.Lock()
 		// Only update the lastSeen if it has been >= 1 minute
 		// This allows for continuously sending nodes to still get credits
 		currentVal.lastSeen = now
@@ -95,7 +95,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 			additionalTokens = MAX_UINT_16 - int(currentVal.tokens)
 		}
 		currentVal.tokens = minUint16(currentVal.tokens+uint16(additionalTokens), maxTokens)
-		currentVal.lock.Unlock()
+		currentVal.mutex.Unlock()
 	}
 
 	return currentVal
@@ -104,8 +104,8 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 // The Spend function takes a WalletAddress and a boolean asserting whether to apply the AllowListed rate limits or the regular rate limits
 func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool) error {
 	entry := rl.fillAndReturnEntry(walletAddress, isAllowListed)
-	entry.lock.Lock()
-	defer entry.lock.Unlock()
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
 	if entry.tokens <= 0 {
 		rl.log.Info("Rate limit exceeded", zap.String("wallet_address", walletAddress))
 		return errors.New("rate_limit_exceeded")
