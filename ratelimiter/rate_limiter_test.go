@@ -90,6 +90,7 @@ func TestMaxUint16(t *testing.T) {
 	require.Equal(t, entry.Tokens, uint16(ALLOW_LISTED_MAX_TOKENS))
 }
 
+// Ensures that the map can be accessed concurrently
 func TestSpendConcurrent(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
