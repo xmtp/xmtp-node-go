@@ -37,18 +37,20 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/authz"
 	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
 	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
 type Server struct {
-	logger        *zap.Logger
-	hostAddr      *net.TCPAddr
-	db            *sql.DB
-	metricsServer *metrics.Server
-	wakuNode      *node.WakuNode
-	ctx           context.Context
+	logger           *zap.Logger
+	hostAddr         *net.TCPAddr
+	db               *sql.DB
+	metricsServer    *metrics.Server
+	wakuNode         *node.WakuNode
+	ctx              context.Context
+	walletAuthorizer authz.WalletAuthorizer
 }
 
 // Create a new Server
@@ -74,6 +76,15 @@ func New(options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger.Sugar())
 		go server.metricsServer.Start()
+	}
+
+	if options.Authz.DbConnectionString != "" {
+		sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(options.Authz.DbConnectionString)))
+		db := bun.NewDB(sqldb, pgdialect.New())
+
+		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
+		err = server.walletAuthorizer.Start(server.ctx)
+		failOnErr(err, "wallet authorizer error")
 	}
 
 	nodeOpts := []node.WakuNodeOption{
@@ -312,7 +323,7 @@ func CreateMessageMigration(migrationName, dbConnectionString string) error {
 	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
-		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
+		fmt.Printf("created message migration %s (%s)\n", mf.Name, mf.Path)
 	}
 
 	return err
@@ -323,7 +334,7 @@ func CreateAuthzMigration(migrationName, dbConnectionString string) error {
 	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
-		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
+		fmt.Printf("created authz migration %s (%s)\n", mf.Name, mf.Path)
 	}
 
 	return err
