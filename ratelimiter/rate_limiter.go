@@ -14,6 +14,7 @@ const (
 	ALLOW_LISTED_MAX_TOKENS      = uint16(10000)
 	REGULAR_RATE_PER_MINUTE      = uint16(1)
 	REGULAR_MAX_TOKENS           = uint16(100)
+	MAX_UINT_16                  = 65535
 )
 
 type RateLimiter interface {
@@ -80,8 +81,12 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 		// Only update the lastSeen if it has been > 1 minute
 		// This allows for continuously sending nodes to still get credits
 		currentVal.LastSeen = now
-		additionalTokens := uint16(ratePerMinute * uint16(minutesSinceLastSeen))
-		currentVal.Tokens = minUint16(currentVal.Tokens+additionalTokens, maxTokens)
+		additionalTokens := int(ratePerMinute) * int(minutesSinceLastSeen)
+		// Avoid overflows of UINT16 when near limit
+		if additionalTokens+int(currentVal.Tokens) > MAX_UINT_16 {
+			additionalTokens = MAX_UINT_16 - int(currentVal.Tokens)
+		}
+		currentVal.Tokens = minUint16(currentVal.Tokens+uint16(additionalTokens), maxTokens)
 	}
 
 	return currentVal

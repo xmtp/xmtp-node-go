@@ -28,6 +28,7 @@ func TestSpend(t *testing.T) {
 	}
 }
 
+// Ensure that new entries are created for previously unseen wallets
 func TestSpendInitialize(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
@@ -35,6 +36,7 @@ func TestSpendInitialize(t *testing.T) {
 	require.Equal(t, entry.Tokens, REGULAR_MAX_TOKENS)
 }
 
+// Set the clock back 1 minute and ensure that 1 item has been added to the bucket
 func TestSpendWithTime(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
@@ -75,19 +77,33 @@ func TestSpendAllowListed(t *testing.T) {
 	require.Equal(t, entry.Tokens, uint16(500*ALLOW_LISTED_RATE_PER_MINUTE))
 }
 
+func TestMaxUint16(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	rl := NewTokenBucketRateLimiter(logger)
+	rl.wallets[walletAddress] = &Entry{
+		// Set last seen to 1 million minutes ago
+		LastSeen: time.Now().Add(-1000000 * time.Minute),
+		Tokens:   uint16(0),
+	}
+
+	entry := rl.fillAndReturnEntry(walletAddress, true)
+	require.Equal(t, entry.Tokens, uint16(ALLOW_LISTED_MAX_TOKENS))
+}
+
 func TestSpendConcurrent(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
 	wg := sync.WaitGroup{}
-	for i := 0; i < 99; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_ = rl.Spend(walletAddress, false)
 		}()
 	}
+
 	wg.Wait()
 
 	entry := rl.fillAndReturnEntry(walletAddress, false)
-	require.Equal(t, entry.Tokens, uint16(1))
+	require.Equal(t, entry.Tokens, uint16(0))
 }
