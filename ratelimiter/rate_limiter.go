@@ -81,8 +81,9 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 		// Only update the lastSeen if it has been > 1 minute
 		// This allows for continuously sending nodes to still get credits
 		currentVal.LastSeen = now
+		// Convert to ints so that we can check if above MAX_UINT_16
 		additionalTokens := int(ratePerMinute) * int(minutesSinceLastSeen)
-		// Avoid overflows of UINT16 when near limit
+		// Avoid overflows of UINT16 when new balance is above limit
 		if additionalTokens+int(currentVal.Tokens) > MAX_UINT_16 {
 			additionalTokens = MAX_UINT_16 - int(currentVal.Tokens)
 		}
