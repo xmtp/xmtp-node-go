@@ -83,7 +83,7 @@ func New(options Options) (server *Server) {
 		db := bun.NewDB(sqldb, pgdialect.New())
 
 		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
-		err := server.walletAuthorizer.Start(server.ctx)
+		err = server.walletAuthorizer.Start(server.ctx)
 		failOnErr(err, "wallet authorizer error")
 	}
 
