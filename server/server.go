@@ -50,7 +50,7 @@ type Server struct {
 	metricsServer    *metrics.Server
 	wakuNode         *node.WakuNode
 	ctx              context.Context
-	walletAuthorizer WalletAuthorizer
+	walletAuthorizer authz.WalletAuthorizer
 }
 
 // Create a new Server
