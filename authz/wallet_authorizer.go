@@ -35,7 +35,7 @@ func (p Permission) String() string {
 
 // WalletAuthorizer interface
 type WalletAuthorizer interface {
-	Start() error
+	Start(ctx context.Context) error
 	Stop()
 	IsAllowListed(walletAddress string) bool
 	IsDenyListed(walletAddress string) bool
