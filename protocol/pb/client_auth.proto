@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package="../pb";
+
+// ------------------------------------------------------------------------------------------------
+// These objects are copied from xmtpjs.
+// Compile failure occurs with GoGo protobuf as optional fields are not supported.
+// Migrating to go
+// ------------------------------------------------------------------------------------------------
+
+// Signature represents a generalized public key signature,
+// defined as a union to support cryptographic algorithm agility.
+message Signature {
+  message ECDSACompact {
+    bytes bytes = 1; // compact representation [ R || S ], 64 bytes
+    uint32 recovery = 2; // recovery bit
+  }
+  oneof union {
+    ECDSACompact ecdsaCompact = 1;
+  }
+}
+
+// PublicKey represents a generalized public key,
+// defined as a union to support cryptographic algorithm agility.
+message PublicKey {
+  message Secp256k1Uncompresed {
+    bytes bytes = 1; // uncompressed point with prefix (0x04) [ P || X || Y ], 65 bytes
+  }
+  uint64 timestamp = 1;
+  optional Signature signature = 2;
+  oneof union {
+    Secp256k1Uncompresed secp256k1Uncompressed = 3;
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+message ClientAuthRequest {
+//  PublicKey identityKey = 1;
+  string authDigest = 1;
+//  Signature authSig = 3;
+}
+
+message ClientAuthResponse{
+  bool authSuccessful = 1;
+}
