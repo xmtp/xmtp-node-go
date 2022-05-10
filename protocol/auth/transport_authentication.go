@@ -2,14 +2,15 @@ package auth
 
 import (
 	"context"
+	"math"
+
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-msgio/protoio"
 	"github.com/status-im/go-waku/waku/v2/protocol"
+	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/protocol/pb"
 	"go.uber.org/zap"
-	"math"
 )
 
 const TransportAuthID_v00beta1 = libp2pProtocol.ID("/xmtplabs/xmtpv1/clientauth/0.0.0-beta1")
