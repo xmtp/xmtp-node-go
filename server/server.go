@@ -208,10 +208,6 @@ func (server *Server) WaitForShutdown() {
 	}
 }
 
-func (server *Server) Logger() *zap.Logger {
-	return server.logger
-}
-
 func addPeers(wakuNode *node.WakuNode, addresses []string, protocol protocol.ID) {
 	for _, addrString := range addresses {
 		if addrString == "" {
