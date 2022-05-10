@@ -21,6 +21,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -38,6 +39,7 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/authz"
+	"github.com/xmtp/xmtp-node-go/logging"
 	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
 	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
@@ -59,11 +61,20 @@ func New(options Options) (server *Server) {
 	var err error
 
 	server.logger = utils.InitLogger(options.LogEncoding)
+	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
+		server.logger.Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
+	}
+
 	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
 
 	prvKey, err := getPrivKey(options)
 	failOnErr(err, "nodekey error")
+
+	p2pPrvKey := libp2pcrypto.Secp256k1PrivateKey(*prvKey)
+	id, err := peer.IDFromPublicKey((&p2pPrvKey).GetPublic())
+	failOnErr(err, "deriving peer ID from private key")
+	server.logger = server.logger.With(logging.HostID("node", id))
 
 	if options.DBPath == "" {
 		failOnErr(errors.New("dbpath can't be null"), "")
@@ -128,13 +139,13 @@ func New(options Options) (server *Server) {
 
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
-		dbStore, err := xmtpStore.NewDBStore(server.logger.Sugar(), xmtpStore.WithDB(server.db))
+		dbStore, err := xmtpStore.NewDBStore(server.logger, xmtpStore.WithDB(server.db))
 		failOnErr(err, "DBStore")
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
 		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger.Sugar())
+			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger)
 		}))
 	}
 
@@ -143,7 +154,6 @@ func New(options Options) (server *Server) {
 	}
 
 	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
-
 	failOnErr(err, "Wakunode")
 
 	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
@@ -176,6 +186,9 @@ func New(options Options) (server *Server) {
 		}(n)
 	}
 
+	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
+	failOnErr(err, "getting listen addresses")
+	server.logger.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 	return server
 }
 
