@@ -2,7 +2,6 @@ package ratelimiter
 
 import (
 	"errors"
-	"math"
 	"sync"
 	"time"
 
@@ -64,9 +63,8 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
 	rl.mutex.RLock()
 	currentVal, exists := rl.wallets[walletAddress]
+	rl.mutex.RUnlock()
 	if !exists {
-		// Unlock the read lock so we can get a new write lock to create a new entry
-		rl.mutex.RUnlock()
 		rl.mutex.Lock()
 		currentVal = &Entry{
 			tokens:   uint16(maxTokens),
@@ -77,8 +75,6 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 		rl.mutex.Unlock()
 
 		return currentVal
-	} else {
-		rl.mutex.RUnlock()
 	}
 
 	now := time.Now()
@@ -110,12 +106,17 @@ func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool
 		rl.log.Info("Rate limit exceeded", zap.String("wallet_address", walletAddress))
 		return errors.New("rate_limit_exceeded")
 	}
-	entry.tokens = entry.tokens - 1
+
 	rl.log.Debug("Spend allowed. Wallet is under threshold", zap.String("wallet_address", walletAddress), zap.Int("tokens_remaining", int(entry.tokens)))
+
+	entry.tokens = entry.tokens - 1
 
 	return nil
 }
 
 func minUint16(x, y uint16) uint16 {
-	return uint16(math.Min(float64(x), float64(y)))
+	if x <= y {
+		return x
+	}
+	return y
 }

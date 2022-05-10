@@ -90,9 +90,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(options.Authz.DbConnectionString)))
-		db := bun.NewDB(sqldb, pgdialect.New())
-
+		db := createBunDb(options.Authz.DbConnectionString)
 		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
 		err = server.walletAuthorizer.Start(server.ctx)
 		failOnErr(err, "wallet authorizer error")
@@ -322,17 +320,8 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func failOnErr(err error, msg string) {
-	if err != nil {
-		if msg != "" {
-			msg = msg + ": "
-		}
-		utils.Logger().Fatal(msg, zap.Error(err))
-	}
-}
-
 func CreateMessageMigration(migrationName, dbConnectionString string) error {
-	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
+	db := createBunDb(dbConnectionString)
 	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -343,7 +332,7 @@ func CreateMessageMigration(migrationName, dbConnectionString string) error {
 }
 
 func CreateAuthzMigration(migrationName, dbConnectionString string) error {
-	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
+	db := createBunDb(dbConnectionString)
 	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -351,4 +340,17 @@ func CreateAuthzMigration(migrationName, dbConnectionString string) error {
 	}
 
 	return err
+}
+
+func failOnErr(err error, msg string) {
+	if err != nil {
+		if msg != "" {
+			msg = msg + ": "
+		}
+		utils.Logger().Fatal(msg, zap.Error(err))
+	}
+}
+
+func createBunDb(dsn string) *bun.DB {
+	return bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn))), pgdialect.New())
 }

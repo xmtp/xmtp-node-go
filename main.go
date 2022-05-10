@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -40,9 +39,6 @@ func main() {
 		log.Fatalf("Could not parse log level: %s", err)
 	}
 	logging.SetAllLoggers(lvl)
-
-	// go-waku logger
-	fmt.Println(options.LogLevel)
 	err = utils.SetLogLevel(options.LogLevel)
 	if err != nil {
 		log.Fatalf("Could not set log level: %s", err)
