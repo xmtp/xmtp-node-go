@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -30,7 +29,6 @@ func addEnvVars() {
 func main() {
 	if _, err := parser.Parse(); err != nil {
 		log.Fatal("Could not parse options", err)
-		os.Exit(1)
 	}
 
 	addEnvVars()
@@ -38,39 +36,35 @@ func main() {
 	// for go-libp2p loggers
 	lvl, err := logging.LevelFromString(options.LogLevel)
 	if err != nil {
-		os.Exit(1)
+		log.Fatal("Invalid log level")
 	}
 	logging.SetAllLoggers(lvl)
-
-	// go-waku logger
-	fmt.Println(options.LogLevel)
 	err = utils.SetLogLevel(options.LogLevel)
 	if err != nil {
-		os.Exit(1)
+		log.Fatal("Failed to set log level")
 	}
 
 	if options.GenerateKey {
 		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err.Error())
 		}
 		return
 	}
 
 	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
 		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString); err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err.Error())
 		}
 		return
 	}
 
 	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
 		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString); err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err.Error())
 		}
 		return
 	}
 
 	s := server.New(options)
-	log.Println("Got a server", s)
 	s.WaitForShutdown()
 }

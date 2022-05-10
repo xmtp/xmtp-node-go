@@ -24,6 +24,7 @@ import (
 
 const bufferSize = 1024
 const maxPageSize = 100
+const maxPeersToResume = 5
 
 type XmtpStore struct {
 	ctx  context.Context
@@ -145,13 +146,11 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	}
 
 	if len(peerList) == 0 {
-		p, err := utils.SelectPeer(s.h, string(store.StoreID_v20beta4), s.log)
+		peerList, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
-			s.log.Info("Error selecting peer: ", err)
+			s.log.Error("Error selecting peer: ", err)
 			return -1, store.ErrNoPeersAvailable
 		}
-
-		peerList = append(peerList, *p)
 	}
 
 	messages, err := s.queryLoop(ctx, rpc, peerList)
@@ -344,4 +343,30 @@ func max(x, y int64) int64 {
 		return x
 	}
 	return y
+}
+
+// Selects multiple peers with store protocol instead of the default of just 1
+func selectPeers(host host.Host, protocolId string, maxPeers int, log *zap.SugaredLogger) ([]peer.ID, error) {
+	var peers peer.IDSlice
+	for _, peer := range host.Peerstore().Peers() {
+		protocols, err := host.Peerstore().SupportsProtocols(peer, protocolId)
+		if err != nil {
+			log.Error("error obtaining the protocols supported by peers", err)
+			return nil, err
+		}
+
+		if len(protocols) > 0 {
+			peers = append(peers, peer)
+		}
+
+		if len(peers) == maxPeers {
+			break
+		}
+	}
+
+	if len(peers) >= 1 {
+		return peers, nil
+	}
+
+	return nil, utils.ErrNoPeersAvailable
 }
