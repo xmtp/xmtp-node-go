@@ -351,7 +351,7 @@ func selectPeers(host host.Host, protocolId string, maxPeers int, log *zap.Sugar
 	for _, peer := range host.Peerstore().Peers() {
 		protocols, err := host.Peerstore().SupportsProtocols(peer, protocolId)
 		if err != nil {
-			log.Error("error obtaining the protocols supported by peers", err)
+			log.Error("error obtaining the protocols supported by peers", zap.Error(err))
 			return nil, err
 		}
 
