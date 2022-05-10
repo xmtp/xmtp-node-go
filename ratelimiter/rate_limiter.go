@@ -27,7 +27,7 @@ type Entry struct {
 	lastSeen time.Time
 	// This is more memory efficient but limits us to MaxTokens < 65535
 	tokens uint16
-	// Lock
+	// Add a per-entry mutex to avoid lock contention on the list as a whole
 	mutex sync.Mutex
 }
 
@@ -106,7 +106,7 @@ func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool
 	entry := rl.fillAndReturnEntry(walletAddress, isAllowListed)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
-	if entry.tokens <= 0 {
+	if entry.tokens == 0 {
 		rl.log.Info("Rate limit exceeded", zap.String("wallet_address", walletAddress))
 		return errors.New("rate_limit_exceeded")
 	}
