@@ -346,12 +346,12 @@ func max(x, y int64) int64 {
 }
 
 // Selects multiple peers with store protocol instead of the default of just 1
-func selectPeers(host host.Host, protocolId string, maxPeers int, log *zap.SugaredLogger) ([]peer.ID, error) {
+func selectPeers(host host.Host, protocolId string, maxPeers int, log *zap.Logger) ([]peer.ID, error) {
 	var peers peer.IDSlice
 	for _, peer := range host.Peerstore().Peers() {
 		protocols, err := host.Peerstore().SupportsProtocols(peer, protocolId)
 		if err != nil {
-			log.Error("error obtaining the protocols supported by peers", err)
+			log.Error("error obtaining the protocols supported by peers", zap.Error(err))
 			return nil, err
 		}
 
