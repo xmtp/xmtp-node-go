@@ -315,7 +315,7 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	index, err := computeIndex(env)
 	if err != nil {
-		s.log.Error("calculating message index", zap.Error(err))
+		s.log.Error("creating message index", zap.Error(err))
 		return err
 	}
 	err = s.msgProvider.Put(index, env.PubsubTopic(), env.Message()) // Should the index be stored?
