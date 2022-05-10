@@ -32,7 +32,7 @@ func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.SugaredLog
 }
 
 func (xmtpAuth *XmtpAuthentication) Start() error {
-	xmtpAuth.h.SetStreamHandlerMatch(TransportAuthID_v00beta1, protocol.PrefixTextMatch(string(TransportAuthID_v00beta1)), xmtpAuth.onRequest)
+	xmtpAuth.h.SetStreamHandlerMatch(TransportAuthID_v00beta1, protocol.FulltextMatch(string(TransportAuthID_v00beta1)), xmtpAuth.onRequest)
 	xmtpAuth.log.Info("Auth protocol started")
 	xmtpAuth.started = true
 
@@ -55,7 +55,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	// TODO: Save PeerId to walletAddress map
 
-	xmtpAuth.WriteAuthResponse(stream, true)
+	err = xmtpAuth.WriteAuthResponse(stream, true)
 	if err != nil {
 		xmtpAuth.log.Error("could not write request", err)
 		return
