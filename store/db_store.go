@@ -17,7 +17,7 @@ import (
 type DBStore struct {
 	persistence.MessageProvider
 	db  *sql.DB
-	log *zap.SugaredLogger
+	log *zap.Logger
 }
 
 // DBOption is an optional setting that can be used to configure the DBStore
@@ -34,7 +34,7 @@ func WithDB(db *sql.DB) DBOption {
 // Creates a new DB store using the db specified via options.
 // It will create a messages table if it does not exist and
 // clean up records according to the retention policy used
-func NewDBStore(log *zap.SugaredLogger, options ...DBOption) (*DBStore, error) {
+func NewDBStore(log *zap.Logger, options ...DBOption) (*DBStore, error) {
 	result := new(DBStore)
 	result.log = log.Named("dbstore")
 
