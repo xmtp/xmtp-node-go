@@ -8,8 +8,11 @@
 package logging
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -38,3 +41,36 @@ func HostID(key string, id peer.ID) zapcore.Field {
 }
 
 func (id hostID) String() string { return peer.Encode(peer.ID(id)) }
+
+// Time - looks like Waku is using Microsecond Unix Time
+
+type timestamp int64
+
+func Time(key string, time int64) zapcore.Field {
+	return zap.Stringer(key, timestamp(time))
+}
+
+func (t timestamp) String() string {
+	return time.UnixMicro(int64(t)).Format(time.RFC3339)
+}
+
+// History Query Filters
+
+type historyFilters []*pb.ContentFilter
+
+func Filters(key string, filters []*pb.ContentFilter) zapcore.Field {
+	return zap.Array(key, historyFilters(filters))
+}
+
+func (filters historyFilters) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
+	for _, filter := range filters {
+		encoder.AppendString(filter.ContentTopic)
+	}
+	return nil
+}
+
+// Wallet Address
+
+func WalletAddress(address string) zapcore.Field {
+	return zap.String("wallet_address", address)
+}
