@@ -89,7 +89,7 @@ func TestRetryError(t *testing.T) {
 func TestRetryContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	mockFetcher := NewMockFetcher()
-	fetcher := NewRetryTransactionHistoryFetcher(mockFetcher, 3, 100*time.Millisecond)
+	fetcher := NewRetryTransactionHistoryFetcher(mockFetcher, 3, 500*time.Millisecond)
 	var wg sync.WaitGroup
 	var err error
 	wg.Add(1)
@@ -98,6 +98,7 @@ func TestRetryContextCanceled(t *testing.T) {
 		_, err = fetcher.Fetch(ctx, ERROR_WALLET_ADDRESS)
 	}()
 	time.Sleep(50 * time.Millisecond)
+	// Cancel the context between the first and second iteration
 	cancel()
 	wg.Wait()
 	require.Error(t, err)
