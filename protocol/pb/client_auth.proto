@@ -39,8 +39,8 @@ message PublicKey {
 
 message V1ClientAuthRequest {
   PublicKey identityKey = 1;
-  bytes peerId = 2;
-  bytes walletAddr = 3;
+  string peerId = 2;
+  string walletAddr = 3;
   Signature authSig = 4;
 }
 

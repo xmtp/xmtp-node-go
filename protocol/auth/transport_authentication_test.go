@@ -81,16 +81,9 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId peer.I
 		return false, err
 	}
 
-	// Generate Wallet Address for testing
-	bytes := make([]byte, 40)
-	_, err = rand.Read(bytes)
-	if err != nil {
-		log.Error("Error generating random byte data", zap.Error(err))
-	}
-
 	// Generates a random signature
 	signature := pb2.Signature_EcdsaCompact{EcdsaCompact: &pb2.Signature_ECDSACompact{
-		Bytes:    bytes,
+		Bytes:    []byte("This is an invalid signature"),
 		Recovery: 0,
 	}}
 
@@ -99,17 +92,15 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId peer.I
 	pk2 := pb2.PublicKey{
 		Timestamp: 0,
 		Signature: &s2,
-		Union:     &pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &pb2.PublicKey_Secp256K1Uncompresed{Bytes: bytes}},
+		Union:     &pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &pb2.PublicKey_Secp256K1Uncompresed{Bytes: []byte("This is an invalid publicKey")}},
 	}
-
-	peerIdBytes, _ := h.ID().MarshalBinary()
 
 	authReqRPC := &pb2.ClientAuthRequest{
 		Version: &pb2.ClientAuthRequest_V1{
 			V1: &pb2.V1ClientAuthRequest{
 				IdentityKey: &pk2,
-				PeerId:      peerIdBytes,
-				WalletAddr:  bytes,
+				PeerId:      h.ID().String(),
+				WalletAddr:  "0x1234567890",
 				AuthSig:     &s2,
 			},
 		},
