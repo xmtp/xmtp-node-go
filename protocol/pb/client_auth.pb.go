@@ -172,20 +172,91 @@ type PublicKey_Secp256K1Uncompressed struct {
 
 func (*PublicKey_Secp256K1Uncompressed) isPublicKey_Union() {}
 
-type ClientAuthRequest struct {
+type V1ClientAuthRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	IdentityKey *PublicKey `protobuf:"bytes,1,opt,name=identityKey,proto3" json:"identityKey,omitempty"`
-	AuthDigest  string     `protobuf:"bytes,2,opt,name=authDigest,proto3" json:"authDigest,omitempty"`
-	AuthSig     *Signature `protobuf:"bytes,3,opt,name=authSig,proto3" json:"authSig,omitempty"`
+	PeerId      []byte     `protobuf:"bytes,2,opt,name=peerId,proto3" json:"peerId,omitempty"`
+	WalletAddr  []byte     `protobuf:"bytes,3,opt,name=walletAddr,proto3" json:"walletAddr,omitempty"`
+	AuthSig     *Signature `protobuf:"bytes,4,opt,name=authSig,proto3" json:"authSig,omitempty"`
+}
+
+func (x *V1ClientAuthRequest) Reset() {
+	*x = V1ClientAuthRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_client_auth_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *V1ClientAuthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*V1ClientAuthRequest) ProtoMessage() {}
+
+func (x *V1ClientAuthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_auth_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use V1ClientAuthRequest.ProtoReflect.Descriptor instead.
+func (*V1ClientAuthRequest) Descriptor() ([]byte, []int) {
+	return file_client_auth_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *V1ClientAuthRequest) GetIdentityKey() *PublicKey {
+	if x != nil {
+		return x.IdentityKey
+	}
+	return nil
+}
+
+func (x *V1ClientAuthRequest) GetPeerId() []byte {
+	if x != nil {
+		return x.PeerId
+	}
+	return nil
+}
+
+func (x *V1ClientAuthRequest) GetWalletAddr() []byte {
+	if x != nil {
+		return x.WalletAddr
+	}
+	return nil
+}
+
+func (x *V1ClientAuthRequest) GetAuthSig() *Signature {
+	if x != nil {
+		return x.AuthSig
+	}
+	return nil
+}
+
+type ClientAuthRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Version:
+	//	*ClientAuthRequest_V1
+	Version isClientAuthRequest_Version `protobuf_oneof:"version"`
 }
 
 func (x *ClientAuthRequest) Reset() {
 	*x = ClientAuthRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_client_auth_proto_msgTypes[2]
+		mi := &file_client_auth_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -198,7 +269,7 @@ func (x *ClientAuthRequest) String() string {
 func (*ClientAuthRequest) ProtoMessage() {}
 
 func (x *ClientAuthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_auth_proto_msgTypes[2]
+	mi := &file_client_auth_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,42 +282,46 @@ func (x *ClientAuthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientAuthRequest.ProtoReflect.Descriptor instead.
 func (*ClientAuthRequest) Descriptor() ([]byte, []int) {
-	return file_client_auth_proto_rawDescGZIP(), []int{2}
+	return file_client_auth_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *ClientAuthRequest) GetIdentityKey() *PublicKey {
-	if x != nil {
-		return x.IdentityKey
+func (m *ClientAuthRequest) GetVersion() isClientAuthRequest_Version {
+	if m != nil {
+		return m.Version
 	}
 	return nil
 }
 
-func (x *ClientAuthRequest) GetAuthDigest() string {
-	if x != nil {
-		return x.AuthDigest
-	}
-	return ""
-}
-
-func (x *ClientAuthRequest) GetAuthSig() *Signature {
-	if x != nil {
-		return x.AuthSig
+func (x *ClientAuthRequest) GetV1() *V1ClientAuthRequest {
+	if x, ok := x.GetVersion().(*ClientAuthRequest_V1); ok {
+		return x.V1
 	}
 	return nil
 }
+
+type isClientAuthRequest_Version interface {
+	isClientAuthRequest_Version()
+}
+
+type ClientAuthRequest_V1 struct {
+	V1 *V1ClientAuthRequest `protobuf:"bytes,1,opt,name=v1,proto3,oneof"`
+}
+
+func (*ClientAuthRequest_V1) isClientAuthRequest_Version() {}
 
 type ClientAuthResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	AuthSuccessful bool `protobuf:"varint,1,opt,name=authSuccessful,proto3" json:"authSuccessful,omitempty"`
+	AuthSuccessful bool   `protobuf:"varint,1,opt,name=authSuccessful,proto3" json:"authSuccessful,omitempty"`
+	ErrorStr       string `protobuf:"bytes,2,opt,name=errorStr,proto3" json:"errorStr,omitempty"`
 }
 
 func (x *ClientAuthResponse) Reset() {
 	*x = ClientAuthResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_client_auth_proto_msgTypes[3]
+		mi := &file_client_auth_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -259,7 +334,7 @@ func (x *ClientAuthResponse) String() string {
 func (*ClientAuthResponse) ProtoMessage() {}
 
 func (x *ClientAuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_auth_proto_msgTypes[3]
+	mi := &file_client_auth_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -272,7 +347,7 @@ func (x *ClientAuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientAuthResponse.ProtoReflect.Descriptor instead.
 func (*ClientAuthResponse) Descriptor() ([]byte, []int) {
-	return file_client_auth_proto_rawDescGZIP(), []int{3}
+	return file_client_auth_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ClientAuthResponse) GetAuthSuccessful() bool {
@@ -280,6 +355,13 @@ func (x *ClientAuthResponse) GetAuthSuccessful() bool {
 		return x.AuthSuccessful
 	}
 	return false
+}
+
+func (x *ClientAuthResponse) GetErrorStr() string {
+	if x != nil {
+		return x.ErrorStr
+	}
+	return ""
 }
 
 type Signature_ECDSACompact struct {
@@ -294,7 +376,7 @@ type Signature_ECDSACompact struct {
 func (x *Signature_ECDSACompact) Reset() {
 	*x = Signature_ECDSACompact{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_client_auth_proto_msgTypes[4]
+		mi := &file_client_auth_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -307,7 +389,7 @@ func (x *Signature_ECDSACompact) String() string {
 func (*Signature_ECDSACompact) ProtoMessage() {}
 
 func (x *Signature_ECDSACompact) ProtoReflect() protoreflect.Message {
-	mi := &file_client_auth_proto_msgTypes[4]
+	mi := &file_client_auth_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +430,7 @@ type PublicKey_Secp256K1Uncompresed struct {
 func (x *PublicKey_Secp256K1Uncompresed) Reset() {
 	*x = PublicKey_Secp256K1Uncompresed{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_client_auth_proto_msgTypes[5]
+		mi := &file_client_auth_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -361,7 +443,7 @@ func (x *PublicKey_Secp256K1Uncompresed) String() string {
 func (*PublicKey_Secp256K1Uncompresed) ProtoMessage() {}
 
 func (x *PublicKey_Secp256K1Uncompresed) ProtoReflect() protoreflect.Message {
-	mi := &file_client_auth_proto_msgTypes[5]
+	mi := &file_client_auth_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -414,20 +496,29 @@ var file_client_auth_proto_rawDesc = []byte{
 	0x65, 0x73, 0x65, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x01, 0x20,
 	0x01, 0x28, 0x0c, 0x52, 0x05, 0x62, 0x79, 0x74, 0x65, 0x73, 0x42, 0x07, 0x0a, 0x05, 0x75, 0x6e,
 	0x69, 0x6f, 0x6e, 0x42, 0x0c, 0x0a, 0x0a, 0x5f, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72,
-	0x65, 0x22, 0x8d, 0x01, 0x0a, 0x11, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x41, 0x75, 0x74, 0x68,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2f, 0x0a, 0x0b, 0x69, 0x64, 0x65, 0x6e, 0x74,
-	0x69, 0x74, 0x79, 0x4b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x70,
-	0x62, 0x2e, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x4b, 0x65, 0x79, 0x52, 0x0b, 0x69, 0x64, 0x65,
-	0x6e, 0x74, 0x69, 0x74, 0x79, 0x4b, 0x65, 0x79, 0x12, 0x1e, 0x0a, 0x0a, 0x61, 0x75, 0x74, 0x68,
-	0x44, 0x69, 0x67, 0x65, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x61, 0x75,
-	0x74, 0x68, 0x44, 0x69, 0x67, 0x65, 0x73, 0x74, 0x12, 0x27, 0x0a, 0x07, 0x61, 0x75, 0x74, 0x68,
-	0x53, 0x69, 0x67, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x70, 0x62, 0x2e, 0x53,
-	0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x52, 0x07, 0x61, 0x75, 0x74, 0x68, 0x53, 0x69,
-	0x67, 0x22, 0x3c, 0x0a, 0x12, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x41, 0x75, 0x74, 0x68, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x26, 0x0a, 0x0e, 0x61, 0x75, 0x74, 0x68, 0x53,
-	0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x66, 0x75, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52,
-	0x0e, 0x61, 0x75, 0x74, 0x68, 0x53, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x66, 0x75, 0x6c, 0x42,
-	0x07, 0x5a, 0x05, 0x2e, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x22, 0xa7, 0x01, 0x0a, 0x13, 0x56, 0x31, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x41, 0x75,
+	0x74, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2f, 0x0a, 0x0b, 0x69, 0x64, 0x65,
+	0x6e, 0x74, 0x69, 0x74, 0x79, 0x4b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d,
+	0x2e, 0x70, 0x62, 0x2e, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x4b, 0x65, 0x79, 0x52, 0x0b, 0x69,
+	0x64, 0x65, 0x6e, 0x74, 0x69, 0x74, 0x79, 0x4b, 0x65, 0x79, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x65,
+	0x65, 0x72, 0x49, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x65, 0x65, 0x72,
+	0x49, 0x64, 0x12, 0x1e, 0x0a, 0x0a, 0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x41, 0x64, 0x64, 0x72,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x0a, 0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x41, 0x64,
+	0x64, 0x72, 0x12, 0x27, 0x0a, 0x07, 0x61, 0x75, 0x74, 0x68, 0x53, 0x69, 0x67, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x70, 0x62, 0x2e, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75,
+	0x72, 0x65, 0x52, 0x07, 0x61, 0x75, 0x74, 0x68, 0x53, 0x69, 0x67, 0x22, 0x49, 0x0a, 0x11, 0x43,
+	0x6c, 0x69, 0x65, 0x6e, 0x74, 0x41, 0x75, 0x74, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x29, 0x0a, 0x02, 0x76, 0x31, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x70,
+	0x62, 0x2e, 0x56, 0x31, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x41, 0x75, 0x74, 0x68, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52, 0x02, 0x76, 0x31, 0x42, 0x09, 0x0a, 0x07, 0x76,
+	0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0x58, 0x0a, 0x12, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74,
+	0x41, 0x75, 0x74, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x26, 0x0a, 0x0e,
+	0x61, 0x75, 0x74, 0x68, 0x53, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x66, 0x75, 0x6c, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x0e, 0x61, 0x75, 0x74, 0x68, 0x53, 0x75, 0x63, 0x63, 0x65, 0x73,
+	0x73, 0x66, 0x75, 0x6c, 0x12, 0x1a, 0x0a, 0x08, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x53, 0x74, 0x72,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x53, 0x74, 0x72,
+	0x42, 0x07, 0x5a, 0x05, 0x2e, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -442,26 +533,28 @@ func file_client_auth_proto_rawDescGZIP() []byte {
 	return file_client_auth_proto_rawDescData
 }
 
-var file_client_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_client_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_client_auth_proto_goTypes = []interface{}{
 	(*Signature)(nil),                      // 0: pb.Signature
 	(*PublicKey)(nil),                      // 1: pb.PublicKey
-	(*ClientAuthRequest)(nil),              // 2: pb.ClientAuthRequest
-	(*ClientAuthResponse)(nil),             // 3: pb.ClientAuthResponse
-	(*Signature_ECDSACompact)(nil),         // 4: pb.Signature.ECDSACompact
-	(*PublicKey_Secp256K1Uncompresed)(nil), // 5: pb.PublicKey.Secp256k1Uncompresed
+	(*V1ClientAuthRequest)(nil),            // 2: pb.V1ClientAuthRequest
+	(*ClientAuthRequest)(nil),              // 3: pb.ClientAuthRequest
+	(*ClientAuthResponse)(nil),             // 4: pb.ClientAuthResponse
+	(*Signature_ECDSACompact)(nil),         // 5: pb.Signature.ECDSACompact
+	(*PublicKey_Secp256K1Uncompresed)(nil), // 6: pb.PublicKey.Secp256k1Uncompresed
 }
 var file_client_auth_proto_depIdxs = []int32{
-	4, // 0: pb.Signature.ecdsaCompact:type_name -> pb.Signature.ECDSACompact
+	5, // 0: pb.Signature.ecdsaCompact:type_name -> pb.Signature.ECDSACompact
 	0, // 1: pb.PublicKey.signature:type_name -> pb.Signature
-	5, // 2: pb.PublicKey.secp256k1Uncompressed:type_name -> pb.PublicKey.Secp256k1Uncompresed
-	1, // 3: pb.ClientAuthRequest.identityKey:type_name -> pb.PublicKey
-	0, // 4: pb.ClientAuthRequest.authSig:type_name -> pb.Signature
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6, // 2: pb.PublicKey.secp256k1Uncompressed:type_name -> pb.PublicKey.Secp256k1Uncompresed
+	1, // 3: pb.V1ClientAuthRequest.identityKey:type_name -> pb.PublicKey
+	0, // 4: pb.V1ClientAuthRequest.authSig:type_name -> pb.Signature
+	2, // 5: pb.ClientAuthRequest.v1:type_name -> pb.V1ClientAuthRequest
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_client_auth_proto_init() }
@@ -495,7 +588,7 @@ func file_client_auth_proto_init() {
 			}
 		}
 		file_client_auth_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientAuthRequest); i {
+			switch v := v.(*V1ClientAuthRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -507,7 +600,7 @@ func file_client_auth_proto_init() {
 			}
 		}
 		file_client_auth_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientAuthResponse); i {
+			switch v := v.(*ClientAuthRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -519,7 +612,7 @@ func file_client_auth_proto_init() {
 			}
 		}
 		file_client_auth_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Signature_ECDSACompact); i {
+			switch v := v.(*ClientAuthResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -531,6 +624,18 @@ func file_client_auth_proto_init() {
 			}
 		}
 		file_client_auth_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Signature_ECDSACompact); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_client_auth_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PublicKey_Secp256K1Uncompresed); i {
 			case 0:
 				return &v.state
@@ -549,13 +654,16 @@ func file_client_auth_proto_init() {
 	file_client_auth_proto_msgTypes[1].OneofWrappers = []interface{}{
 		(*PublicKey_Secp256K1Uncompressed)(nil),
 	}
+	file_client_auth_proto_msgTypes[3].OneofWrappers = []interface{}{
+		(*ClientAuthRequest_V1)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_client_auth_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

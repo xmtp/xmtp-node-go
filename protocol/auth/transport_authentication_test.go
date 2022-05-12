@@ -3,8 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
@@ -80,7 +78,6 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 	// Generate Wallet Address for testing
 	bytes := make([]byte, 40)
 	rand.Read(bytes)
-	walletAddr := hex.EncodeToString(bytes)
 
 	// Generates a random signature
 	signature := pb2.Signature_EcdsaCompact{EcdsaCompact: &pb2.Signature_ECDSACompact{
@@ -88,20 +85,25 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 		Recovery: 0,
 	}}
 
-	ucomp := pb2.PublicKey_Secp256K1Uncompresed{Bytes: bytes}
-	pk := pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &ucomp}
 	s2 := pb2.Signature{Union: &signature}
 
 	pk2 := pb2.PublicKey{
 		Timestamp: 0,
 		Signature: &s2,
-		Union:     &pk,
+		Union:     &pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &pb2.PublicKey_Secp256K1Uncompresed{Bytes: bytes}},
 	}
 
+	peerIdBytes, _ := h.ID().MarshalBinary()
+
 	authReqRPC := &pb2.ClientAuthRequest{
-		IdentityKey: &pk2,
-		AuthDigest:  fmt.Sprintf("%s|%s", h.ID(), walletAddr),
-		AuthSig:     &s2,
+		Version: &pb2.ClientAuthRequest_V1{
+			V1: &pb2.V1ClientAuthRequest{
+				IdentityKey: &pk2,
+				PeerId:      peerIdBytes,
+				WalletAddr:  bytes,
+				AuthSig:     &s2,
+			},
+		},
 	}
 
 	writer := protoio.NewDelimitedWriter(stream)
@@ -153,12 +155,6 @@ func TestRoundTrip(t *testing.T) {
 		dest := node.h.Addrs()[0]
 
 		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
-		require.NoError(t, err)
-		require.True(t, didSucceed)
-		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
-		require.NoError(t, err)
-		require.True(t, didSucceed)
-		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
 		require.NoError(t, err)
 		require.True(t, didSucceed)
 		cancel()

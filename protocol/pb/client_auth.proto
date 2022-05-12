@@ -37,12 +37,20 @@ message PublicKey {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-message ClientAuthRequest {
+message V1ClientAuthRequest {
   PublicKey identityKey = 1;
-  string authDigest = 2;
-  Signature authSig = 3;
+  bytes peerId = 2;
+  bytes walletAddr = 3;
+  Signature authSig = 4;
+}
+
+message ClientAuthRequest {
+  oneof version {
+    V1ClientAuthRequest v1 = 1;
+  }
 }
 
 message ClientAuthResponse{
   bool authSuccessful = 1;
+  string errorStr = 2;
 }

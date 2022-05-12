@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"math"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -50,6 +51,8 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		return
 	}
 
+	authenticatingPeerID, _ := peer.IDFromBytes(authReqRPC.GetV1().PeerId)
+
 	// TODO: Verify Signature
 
 	// TODO: Save PeerId to walletAddress map
@@ -59,6 +62,8 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		xmtpAuth.log.Error("could not write request", err)
 		return
 	}
+
+	xmtpAuth.log.Infof("Peer:%s successfully authenticated", authenticatingPeerID.Pretty())
 }
 
 func (xmtpAuth *XmtpAuthentication) WriteAuthResponse(stream network.Stream, isAuthenticated bool) error {
