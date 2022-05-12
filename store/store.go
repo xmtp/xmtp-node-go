@@ -330,7 +330,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 		return err
 	}
 	s.log.Info("message stored",
-		zap.String("topic", env.Message().ContentTopic),
+		zap.String("content_topic", env.Message().ContentTopic),
 		zap.Int("size", env.Size()),
 		logging.Time("sent", index.SenderTime))
 	// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now

@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var logKey = struct{}{}
+var logKey = &struct{}{}
 
 // Get allows to retrieve the Logger from a Context
 func Get(ctx context.Context) zap.Logger {

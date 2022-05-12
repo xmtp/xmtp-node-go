@@ -194,18 +194,7 @@ func (server *Server) WaitForShutdown() {
 	// Wait for a SIGINT or SIGTERM signal
 	termChannel := make(chan os.Signal, 1)
 	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
-	debugChannel := make(chan os.Signal, 1)
-	signal.Notify(debugChannel, syscall.SIGUSR1)
-LOOP:
-	for {
-		select {
-		case <-termChannel:
-			break LOOP
-		case <-debugChannel:
-			server.logger.Info("toggling log level")
-			logging.ToggleDebugLevel()
-		}
-	}
+	<-termChannel
 	server.logger.Info("shutting down...")
 
 	// shut the node down
