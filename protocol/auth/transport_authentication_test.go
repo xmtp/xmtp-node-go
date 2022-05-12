@@ -32,32 +32,38 @@ func CreateClient(ctx context.Context, log *zap.SugaredLogger) (host.Host, error
 		}
 		l, err := net.ListenTCP("tcp", addr)
 		if err != nil {
-			l.Close()
 			log.Debugf("unable to listen on addr %q: %v", addr, err)
+			err := l.Close()
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
 
 		port = l.Addr().(*net.TCPAddr).Port
-		l.Close()
+		err = l.Close()
+		if err != nil {
+			return nil, err
+		}
 
 	}
 
-	host, err := tests.MakeHost(ctx, port, rand.Reader)
+	libP2pHost, err := tests.MakeHost(ctx, port, rand.Reader)
 	if err != nil {
 		return nil, err
 	}
 
-	return host, nil
+	return libP2pHost, nil
 }
 
 func CreateNode(ctx context.Context, log *zap.SugaredLogger) (*XmtpAuthentication, error) {
 
-	host, err := CreateClient(ctx, log)
+	libP2pHost, err := CreateClient(ctx, log)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewXmtpAuthentication(ctx, host, log), nil
+	return NewXmtpAuthentication(ctx, libP2pHost, log), nil
 }
 
 func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId peer.ID, dest multiaddr.Multiaddr, protoId protocol.ID) (bool, error) {
@@ -77,7 +83,10 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 
 	// Generate Wallet Address for testing
 	bytes := make([]byte, 40)
-	rand.Read(bytes)
+	_, err = rand.Read(bytes)
+	if err != nil {
+		log.Error("Error generating random byte data", err)
+	}
 
 	// Generates a random signature
 	signature := pb2.Signature_EcdsaCompact{EcdsaCompact: &pb2.Signature_ECDSACompact{
@@ -125,9 +134,6 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 	return authResponseRPC.AuthSuccessful, nil
 }
 
-// convert types take an int and return a string value.
-type AuthReqGenerator func(int) string
-
 func TestNoop(t *testing.T) {
 	require.True(t, true)
 }
@@ -141,17 +147,19 @@ func TestRoundTrip(t *testing.T) {
 	node, err := CreateNode(ctx, log)
 	if err != nil {
 		log.Error(err)
+		cancel()
 		return
 	}
 	client, err := CreateClient(ctx, log)
 	if err != nil {
 		log.Error(err)
+		cancel()
 		return
 	}
 
 	go func() {
-		node.Start()
-
+		err := node.Start()
+		require.NoError(t, err)
 		dest := node.h.Addrs()[0]
 
 		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
