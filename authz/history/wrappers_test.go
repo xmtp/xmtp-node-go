@@ -59,7 +59,7 @@ func TestCacheError(t *testing.T) {
 
 	_, err = fetcher.Fetch(ctx, ERROR_WALLET_ADDRESS)
 	require.Error(t, err)
-	// Ensure that the underlying fetcher has been called twice in case of error
+	// Ensure that the underlying fetcher has been called twice since the first attempt failed
 	require.Equal(t, mockFetcher.NumFetches, 2)
 }
 
@@ -81,6 +81,6 @@ func TestRetryError(t *testing.T) {
 	result, err := fetcher.Fetch(ctx, ERROR_WALLET_ADDRESS)
 	require.Error(t, err)
 	require.Nil(t, result)
-	// Ensure that the mockFetcher was only called once
+	// Ensure that the mockFetcher was called 3X
 	require.Equal(t, mockFetcher.NumFetches, 3)
 }
