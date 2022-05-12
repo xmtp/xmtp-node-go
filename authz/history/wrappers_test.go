@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,4 +84,24 @@ func TestRetryError(t *testing.T) {
 	require.Nil(t, result)
 	// Ensure that the mockFetcher was called 3X
 	require.Equal(t, mockFetcher.NumFetches, 3)
+}
+
+func TestRetryContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	mockFetcher := NewMockFetcher()
+	fetcher := NewRetryTransactionHistoryFetcher(mockFetcher, 3, 100*time.Millisecond)
+	var wg sync.WaitGroup
+	var err error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err = fetcher.Fetch(ctx, ERROR_WALLET_ADDRESS)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	wg.Wait()
+	require.Error(t, err)
+	require.Equal(t, err.Error(), "context canceled")
+	require.Equal(t, mockFetcher.NumFetches, 1)
+
 }
