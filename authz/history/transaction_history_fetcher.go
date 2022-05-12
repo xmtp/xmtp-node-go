@@ -15,6 +15,7 @@ type TransactionHistoryResult interface {
 	HasTransactions() bool
 }
 
+// NewDefaultTransactionHistory fetcher returns a cacheing, retrying, alchemy transaction history fetcher
 func NewDefaultTransactionHistoryFetcher(apiUrl string, log *zap.Logger) TransactionHistoryFetcher {
 	return NewCacheingTransactionHistoryFetcher(
 		NewRetryTransactionHistoryFetcher(
