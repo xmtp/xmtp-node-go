@@ -62,7 +62,7 @@ func (f *RetryTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddres
 		default:
 			res, err = f.fetcher.Fetch(ctx, walletAddress)
 			if err == nil {
-				return res, err
+				return res, nil
 			}
 			time.Sleep(f.retrySleepTime)
 		}
