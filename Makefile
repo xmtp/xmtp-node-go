@@ -8,7 +8,8 @@ build:
 	go build -o build/xmtp main.go
 
 generate:
-	go generate ./protocol/pb/generate.go
+	go generate ./...
+
 vendor:
 	go mod tidy
 
