@@ -152,13 +152,13 @@ func TestRoundTrip(t *testing.T) {
 
 		dest := node.h.Addrs()[0]
 
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
+		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
 		require.NoError(t, err)
 		require.True(t, didSucceed)
-		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
+		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
 		require.NoError(t, err)
 		require.True(t, didSucceed)
-		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
+		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1)
 		require.NoError(t, err)
 		require.True(t, didSucceed)
 		cancel()
