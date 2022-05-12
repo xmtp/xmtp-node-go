@@ -9,7 +9,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations"
+	"github.com/xmtp/xmtp-node-go/migrations/messages"
 	"go.uber.org/zap"
 )
 
@@ -17,7 +17,7 @@ import (
 type DBStore struct {
 	persistence.MessageProvider
 	db  *sql.DB
-	log *zap.SugaredLogger
+	log *zap.Logger
 }
 
 // DBOption is an optional setting that can be used to configure the DBStore
@@ -34,7 +34,7 @@ func WithDB(db *sql.DB) DBOption {
 // Creates a new DB store using the db specified via options.
 // It will create a messages table if it does not exist and
 // clean up records according to the retention policy used
-func NewDBStore(log *zap.SugaredLogger, options ...DBOption) (*DBStore, error) {
+func NewDBStore(log *zap.Logger, options ...DBOption) (*DBStore, error) {
 	result := new(DBStore)
 	result.log = log.Named("dbstore")
 
@@ -56,7 +56,7 @@ func NewDBStore(log *zap.SugaredLogger, options ...DBOption) (*DBStore, error) {
 func (d *DBStore) migrate() error {
 	ctx := context.Background()
 	db := bun.NewDB(d.db, pgdialect.New())
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
+	migrator := migrate.NewMigrator(db, messages.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
 		return err

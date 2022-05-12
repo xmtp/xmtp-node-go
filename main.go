@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -15,41 +14,56 @@ var options server.Options
 
 var parser = flags.NewParser(&options, flags.Default)
 
+// Avoiding replacing the flag parser with something fancier like Viper or urfave/cli
+// This hack will work up to a point.
+func addEnvVars() {
+	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_CONNECTION_STRING"); hasConnstr {
+		options.Store.DbConnectionString = connStr
+	}
+
+	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
+		options.Authz.DbConnectionString = connStr
+	}
+}
+
 func main() {
 	if _, err := parser.Parse(); err != nil {
-		log.Fatal("Could not parse options", err)
-		os.Exit(1)
+		log.Fatalf("Could not parse options: %s", err)
 	}
+
+	addEnvVars()
 
 	// for go-libp2p loggers
 	lvl, err := logging.LevelFromString(options.LogLevel)
 	if err != nil {
-		os.Exit(1)
+		log.Fatalf("Could not parse log level: %s", err)
 	}
 	logging.SetAllLoggers(lvl)
-
-	// go-waku logger
-	fmt.Println(options.LogLevel)
 	err = utils.SetLogLevel(options.LogLevel)
 	if err != nil {
-		os.Exit(1)
+		log.Fatalf("Could not set log level: %s", err)
 	}
 
 	if options.GenerateKey {
 		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatalf(err.Error())
+			log.Fatalf("Could not write private key file: %s", err)
 		}
 		return
 	}
 
-	if options.CreateMigration != "" && options.Store.DbConnectionString != "" {
-		if err := server.CreateMigration(options.CreateMigration, options.Store.DbConnectionString); err != nil {
-			log.Fatalf(err.Error())
+	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
+		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString); err != nil {
+			log.Fatalf("Could not create message migration: %s", err)
 		}
 		return
 	}
 
-	s := server.New(options)
-	log.Println("Got a server", s)
-	s.WaitForShutdown()
+	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
+		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString); err != nil {
+			log.Fatalf("Could not create authz migration: %s", err)
+		}
+		return
+	}
+
+	server.New(options).WaitForShutdown()
 }

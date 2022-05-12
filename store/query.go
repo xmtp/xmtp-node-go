@@ -67,7 +67,7 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 
 	querySql, args = sb.Build()
 
-	return
+	return querySql, args, err
 }
 
 func addPagination(sb *sqlBuilder.SelectBuilder, pagination *pb.PagingInfo) {

@@ -34,7 +34,7 @@ type StoreOptions struct {
 	RetentionMaxDays     int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
 	RetentionMaxMessages int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
 	Nodes                []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
-	DbConnectionString   string   `long:"db-connection-string" description:"A Postgres database connection string"`
+	DbConnectionString   string   `long:"message-db-connection-string" description:"A Postgres database connection string"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
@@ -47,6 +47,10 @@ type MetricsOptions struct {
 	Enable  bool   `long:"metrics" description:"Enable the metrics server"`
 	Address string `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
 	Port    int    `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
+}
+
+type AuthzOptions struct {
+	DbConnectionString string `long:"authz-db-connection-string" description:"Connection string for the authz DB"`
 }
 
 // Options contains all the available features and settings that can be
@@ -67,9 +71,11 @@ type Options struct {
 	LogLevel    string   `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
 	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
 	//nolint:staticcheck
-	LogEncoding     string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
-	CreateMigration string `long:"create-migration" default:"" description:"Create a migration. Must provide a name"`
+	LogEncoding            string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	CreateMessageMigration string `long:"create-message-migration" default:"" description:"Create a migration. Must provide a name"`
+	CreateAuthzMigration   string `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
 
+	Authz     AuthzOptions     `group:"Authz Options"`
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     StoreOptions     `group:"Store Options"`
 	Filter    FilterOptions    `group:"Filter Options"`

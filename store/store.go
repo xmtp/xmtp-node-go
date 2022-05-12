@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -19,11 +18,13 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/xmtp/xmtp-node-go/logging"
 	"go.uber.org/zap"
 )
 
 const bufferSize = 1024
 const maxPageSize = 100
+const maxPeersToResume = 5
 
 type XmtpStore struct {
 	ctx  context.Context
@@ -31,7 +32,7 @@ type XmtpStore struct {
 	wg   *sync.WaitGroup
 	db   *sql.DB
 
-	log *zap.SugaredLogger
+	log *zap.Logger
 
 	started bool
 
@@ -39,7 +40,7 @@ type XmtpStore struct {
 	h           host.Host
 }
 
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetentionDuration time.Duration, log *zap.SugaredLogger) *XmtpStore {
+func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetentionDuration time.Duration, log *zap.Logger) *XmtpStore {
 	if log == nil {
 		panic("No logger provided in store initialization")
 	}
@@ -70,7 +71,7 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	}
 	s.started = true
 	s.ctx = ctx
-	s.h.SetStreamHandlerMatch(store.StoreID_v20beta4, protocol.PrefixTextMatch(string(store.StoreID_v20beta4)), s.onRequest)
+	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	s.wg.Add(1)
 	go s.storeIncomingMessages(ctx)
@@ -145,18 +146,16 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	}
 
 	if len(peerList) == 0 {
-		p, err := utils.SelectPeer(s.h, string(store.StoreID_v20beta4), s.log)
+		peerList, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
-			s.log.Info("Error selecting peer: ", err)
+			s.log.Error("Error selecting peer: ", zap.Error(err))
 			return -1, store.ErrNoPeersAvailable
 		}
-
-		peerList = append(peerList, *p)
 	}
 
 	messages, err := s.queryLoop(ctx, rpc, peerList)
 	if err != nil {
-		s.log.Error("failed to resume history", err)
+		s.log.Error("resuming history", zap.Error(err))
 		return -1, store.ErrFailedToResumeHistory
 	}
 
@@ -167,7 +166,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 		}
 	}
 
-	s.log.Info("Retrieved messages since the last online time: ", len(messages))
+	s.log.Info("Retrieved messages since the last online time", zap.Int("count", msgCount))
 
 	return msgCount, nil
 }
@@ -187,7 +186,7 @@ func (s *XmtpStore) findLastSeen() (int64, error) {
 }
 
 func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedPeer peer.ID, requestId []byte) (*pb.HistoryResponse, error) {
-	s.log.Info(fmt.Sprintf("Querying message history with peer %s", selectedPeer))
+	s.log.Info("querying message history", logging.HostID("peer", selectedPeer))
 
 	// We connect first so dns4 addresses are resolved (NewStream does not do it)
 	err := s.h.Connect(ctx, s.h.Peerstore().PeerInfo(selectedPeer))
@@ -197,7 +196,7 @@ func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedP
 
 	connOpt, err := s.h.NewStream(ctx, selectedPeer, store.StoreID_v20beta4)
 	if err != nil {
-		s.log.Error("Failed to connect to remote peer", err)
+		s.log.Error("connecting to peer", zap.Error(err))
 		return nil, err
 	}
 
@@ -213,14 +212,14 @@ func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedP
 
 	err = writer.WriteMsg(historyRequest)
 	if err != nil {
-		s.log.Error("could not write request", err)
+		s.log.Error("writing request", zap.Error(err))
 		return nil, err
 	}
 
 	historyResponseRPC := &pb.HistoryRPC{}
 	err = reader.ReadMsg(historyResponseRPC)
 	if err != nil {
-		s.log.Error("could not read response", err)
+		s.log.Error("reading response", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
 		return nil, err
 	}
@@ -247,7 +246,7 @@ func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candi
 				resultChan <- result
 				return
 			}
-			s.log.Error(fmt.Errorf("resume history with peer %s failed: %w", peer, err))
+			s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
 		}(candidate)
 	}
 
@@ -278,12 +277,12 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 
 	err := reader.ReadMsg(historyRPCRequest)
 	if err != nil {
-		s.log.Error("error reading request ", err)
+		s.log.Error("reading request", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
 		return
 	}
 
-	s.log.Info(fmt.Sprintf("%s: Received query from %s", stream.Conn().LocalPeer(), stream.Conn().RemotePeer()))
+	s.log.Info("received query", logging.HostID("peer", stream.Conn().RemotePeer()))
 
 	historyResponseRPC := &pb.HistoryRPC{}
 	historyResponseRPC.RequestId = historyRPCRequest.RequestId
@@ -298,10 +297,10 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 
 	err = writer.WriteMsg(historyResponseRPC)
 	if err != nil {
-		s.log.Error("error writing response", err)
+		s.log.Error("writing response", zap.Error(err))
 		_ = stream.Reset()
 	} else {
-		s.log.Info(fmt.Sprintf("%s: Response sent  to %s", stream.Conn().LocalPeer().String(), stream.Conn().RemotePeer().String()))
+		s.log.Info("response sent", logging.HostID("peer", stream.Conn().RemotePeer()))
 	}
 }
 
@@ -315,12 +314,12 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	index, err := computeIndex(env)
 	if err != nil {
-		s.log.Error("could not calculate message index", err)
+		s.log.Error("creating message index", zap.Error(err))
 		return err
 	}
 	err = s.msgProvider.Put(index, env.PubsubTopic(), env.Message()) // Should the index be stored?
 	if err != nil {
-		s.log.Error("could not store message", err)
+		s.log.Error("storing message", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "store_failure")
 		return err
 	}
@@ -344,4 +343,30 @@ func max(x, y int64) int64 {
 		return x
 	}
 	return y
+}
+
+// Selects multiple peers with store protocol instead of the default of just 1
+func selectPeers(host host.Host, protocolId string, maxPeers int, log *zap.Logger) ([]peer.ID, error) {
+	var peers peer.IDSlice
+	for _, peer := range host.Peerstore().Peers() {
+		protocols, err := host.Peerstore().SupportsProtocols(peer, protocolId)
+		if err != nil {
+			log.Error("error obtaining the protocols supported by peers", zap.Error(err))
+			return nil, err
+		}
+
+		if len(protocols) > 0 {
+			peers = append(peers, peer)
+		}
+
+		if len(peers) == maxPeers {
+			break
+		}
+	}
+
+	if len(peers) >= 1 {
+		return peers, nil
+	}
+
+	return nil, utils.ErrNoPeersAvailable
 }

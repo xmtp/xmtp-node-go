@@ -22,7 +22,7 @@ lint:
 	@golangci-lint --exclude=SA1019 run ./... --deadline=5m
 
 postgres:
-	docker-compose up -d postgres
+	docker-compose up -d
 
 test: postgres
 	go test ./...

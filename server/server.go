@@ -21,6 +21,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -37,17 +38,21 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations"
+	"github.com/xmtp/xmtp-node-go/authz"
+	"github.com/xmtp/xmtp-node-go/logging"
+	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
+	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
 )
 
 type Server struct {
-	logger        *zap.Logger
-	hostAddr      *net.TCPAddr
-	db            *sql.DB
-	metricsServer *metrics.Server
-	wakuNode      *node.WakuNode
-	ctx           context.Context
+	logger           *zap.Logger
+	hostAddr         *net.TCPAddr
+	db               *sql.DB
+	metricsServer    *metrics.Server
+	wakuNode         *node.WakuNode
+	ctx              context.Context
+	walletAuthorizer authz.WalletAuthorizer
 }
 
 // Create a new Server
@@ -56,11 +61,20 @@ func New(options Options) (server *Server) {
 	var err error
 
 	server.logger = utils.InitLogger(options.LogEncoding)
+	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
+		server.logger.Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
+	}
+
 	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
 
 	prvKey, err := getPrivKey(options)
 	failOnErr(err, "nodekey error")
+
+	p2pPrvKey := libp2pcrypto.Secp256k1PrivateKey(*prvKey)
+	id, err := peer.IDFromPublicKey((&p2pPrvKey).GetPublic())
+	failOnErr(err, "deriving peer ID from private key")
+	server.logger = server.logger.With(logging.HostID("node", id))
 
 	if options.DBPath == "" {
 		failOnErr(errors.New("dbpath can't be null"), "")
@@ -73,6 +87,13 @@ func New(options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger.Sugar())
 		go server.metricsServer.Start()
+	}
+
+	if options.Authz.DbConnectionString != "" {
+		db := createBunDb(options.Authz.DbConnectionString)
+		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
+		err = server.walletAuthorizer.Start(server.ctx)
+		failOnErr(err, "wallet authorizer error")
 	}
 
 	nodeOpts := []node.WakuNodeOption{
@@ -116,13 +137,13 @@ func New(options Options) (server *Server) {
 
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
-		dbStore, err := xmtpStore.NewDBStore(server.logger.Sugar(), xmtpStore.WithDB(server.db))
+		dbStore, err := xmtpStore.NewDBStore(server.logger, xmtpStore.WithDB(server.db))
 		failOnErr(err, "DBStore")
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
 		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger.Sugar())
+			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger)
 		}))
 	}
 
@@ -131,7 +152,6 @@ func New(options Options) (server *Server) {
 	}
 
 	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
-
 	failOnErr(err, "Wakunode")
 
 	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
@@ -164,6 +184,9 @@ func New(options Options) (server *Server) {
 		}(n)
 	}
 
+	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
+	failOnErr(err, "getting listen addresses")
+	server.logger.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 	return server
 }
 
@@ -297,6 +320,28 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
+func CreateMessageMigration(migrationName, dbConnectionString string) error {
+	db := createBunDb(dbConnectionString)
+	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created message migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
+}
+
+func CreateAuthzMigration(migrationName, dbConnectionString string) error {
+	db := createBunDb(dbConnectionString)
+	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created authz migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
+}
+
 func failOnErr(err error, msg string) {
 	if err != nil {
 		if msg != "" {
@@ -306,13 +351,6 @@ func failOnErr(err error, msg string) {
 	}
 }
 
-func CreateMigration(migrationName, dbConnectionString string) error {
-	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbConnectionString))), pgdialect.New())
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
-	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
-	for _, mf := range files {
-		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
-	}
-
-	return err
+func createBunDb(dsn string) *bun.DB {
+	return bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn))), pgdialect.New())
 }

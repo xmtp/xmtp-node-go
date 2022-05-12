@@ -14,7 +14,7 @@ import (
 )
 
 func NewMock() *sql.DB {
-	dsn, hasDsn := os.LookupEnv("POSTGRES_CONNECTION_STRING")
+	dsn, hasDsn := os.LookupEnv("MESSAGE_POSTGRES_CONNECTION_STRING")
 	if !hasDsn {
 		dsn = "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable"
 	}
@@ -30,7 +30,7 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {
 	option := WithDB(db)
-	store, err := NewDBStore(tests.Logger(), option)
+	store, err := NewDBStore(tests.Logger().Desugar(), option)
 	require.NoError(t, err)
 	return store
 }
