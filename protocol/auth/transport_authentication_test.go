@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-func CreateClient(ctx context.Context, log *zap.SugaredLogger) (host.Host, error) {
+func CreateClient(ctx context.Context, log *zap.Logger) (host.Host, error) {
 	maxAttempts := 5
 	hostStr := "localhost"
 	port := 0
@@ -27,12 +27,12 @@ func CreateClient(ctx context.Context, log *zap.SugaredLogger) (host.Host, error
 	for i := 0; i < maxAttempts; i++ {
 		addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(hostStr, "0"))
 		if err != nil {
-			log.Debugf("unable to resolve tcp addr: %v", err)
+			log.Error("unable to resolve tcp addr: %v", zap.Error(err))
 			continue
 		}
 		l, err := net.ListenTCP("tcp", addr)
 		if err != nil {
-			log.Debugf("unable to listen on addr %q: %v", addr, err)
+			log.Error("unable to listen on addr %q: %v", zap.String("ipaddr", addr.String()), zap.Error(err))
 			err := l.Close()
 			if err != nil {
 				return nil, err
@@ -56,7 +56,7 @@ func CreateClient(ctx context.Context, log *zap.SugaredLogger) (host.Host, error
 	return libP2pHost, nil
 }
 
-func CreateNode(ctx context.Context, log *zap.SugaredLogger) (*XmtpAuthentication, error) {
+func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, error) {
 
 	libP2pHost, err := CreateClient(ctx, log)
 	if err != nil {
@@ -66,18 +66,18 @@ func CreateNode(ctx context.Context, log *zap.SugaredLogger) (*XmtpAuthenticatio
 	return NewXmtpAuthentication(ctx, libP2pHost, log), nil
 }
 
-func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId peer.ID, dest multiaddr.Multiaddr, protoId protocol.ID) (bool, error) {
+func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId peer.ID, dest multiaddr.Multiaddr, protoId protocol.ID) (bool, error) {
 	h.Peerstore().AddAddr(peerId, dest, peerstore.PermanentAddrTTL)
 
 	err := h.Connect(ctx, h.Peerstore().PeerInfo(peerId))
 	if err != nil {
-		log.Info(err)
+		log.Error("host could not connect", zap.Error(err))
 		return false, err
 	}
 
 	stream, err := h.NewStream(ctx, peerId, protoId)
 	if err != nil {
-		log.Info(err)
+		log.Info("", zap.Error(err))
 		return false, err
 	}
 
@@ -85,7 +85,7 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 	bytes := make([]byte, 40)
 	_, err = rand.Read(bytes)
 	if err != nil {
-		log.Error("Error generating random byte data", err)
+		log.Error("Error generating random byte data", zap.Error(err))
 	}
 
 	// Generates a random signature
@@ -120,14 +120,14 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 
 	err = writer.WriteMsg(authReqRPC)
 	if err != nil {
-		log.Error("could not write request", err)
+		log.Error("could not write request", zap.Error(err))
 		return false, err
 	}
 
 	authResponseRPC := &pb2.ClientAuthResponse{}
 	err = reader.ReadMsg(authResponseRPC)
 	if err != nil {
-		log.Error("could not read response", err)
+		log.Error("could not read response", zap.Error(err))
 		return false, err
 	}
 
@@ -137,18 +137,18 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 // This test uses random signatures and will fail in the future when signatures are validated correctly
 func TestRoundTrip(t *testing.T) {
 
-	log := tests.Logger()
+	log, _ := zap.NewDevelopment()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	node, err := CreateNode(ctx, log)
 	if err != nil {
-		log.Error(err)
+		log.Error("Test node could not be created", zap.Error(err))
 		cancel()
 		return
 	}
 	client, err := CreateClient(ctx, log)
 	if err != nil {
-		log.Error(err)
+		log.Error("Test client could not be created", zap.Error(err))
 		cancel()
 		return
 	}

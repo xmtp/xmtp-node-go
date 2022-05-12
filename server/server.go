@@ -164,7 +164,7 @@ func New(options Options) (server *Server) {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
 	}
 
-	server.authenticator = auth.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger.Sugar())
+	server.authenticator = auth.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger)
 	if err = server.authenticator.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start xmtp:authentication protocol, %w", err).Error())
 	}

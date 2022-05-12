@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/xmtp/xmtp-node-go/logging"
 	"math"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -18,10 +19,10 @@ const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtpv1/clientauth/
 type XmtpAuthentication struct {
 	h   host.Host
 	ctx context.Context
-	log *zap.SugaredLogger
+	log *zap.Logger
 }
 
-func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.SugaredLogger) *XmtpAuthentication {
+func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.Logger) *XmtpAuthentication {
 	xmtpAuth := new(XmtpAuthentication)
 	xmtpAuth.ctx = ctx
 	xmtpAuth.h = h
@@ -40,12 +41,12 @@ func (xmtpAuth *XmtpAuthentication) Start() error {
 func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 	defer stream.Close()
 
-	xmtpAuth.log.Debugf("AuthStream established with %s", stream.Conn().RemotePeer())
+	xmtpAuth.log.Debug("AuthStream established with", logging.HostID("peer", stream.Conn().RemotePeer()))
 
 	authReqRPC := &pb.ClientAuthRequest{}
 	err := xmtpAuth.ReadAuthRequest(authReqRPC, stream)
 	if err != nil {
-		xmtpAuth.log.Error("could not read request", err)
+		xmtpAuth.log.Error("could not read request", zap.Error(err))
 		return
 	}
 
@@ -57,11 +58,11 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	err = xmtpAuth.WriteAuthResponse(stream, true)
 	if err != nil {
-		xmtpAuth.log.Error("could not write request", err)
+		xmtpAuth.log.Error("could not write request", zap.Error(err))
 		return
 	}
 
-	xmtpAuth.log.Infof("Peer:%s successfully authenticated", authenticatingPeerID.Pretty())
+	xmtpAuth.log.Info("Peer:%s successfully authenticated", logging.HostID("peer", authenticatingPeerID))
 }
 
 func (xmtpAuth *XmtpAuthentication) WriteAuthResponse(stream network.Stream, isAuthenticated bool) error {
