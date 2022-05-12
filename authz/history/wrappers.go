@@ -55,8 +55,7 @@ func NewRetryTransactionHistoryFetcher(fetcher TransactionHistoryFetcher, numRet
 }
 
 func (f *RetryTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddress string) (res TransactionHistoryResult, err error) {
-	i := 0
-	for i < f.numRetries {
+	for i := 0; i < f.numRetries; i++ {
 		select {
 		case <-ctx.Done():
 			return res, ctx.Err()
@@ -67,8 +66,6 @@ func (f *RetryTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddres
 			}
 			time.Sleep(f.retrySleepTime)
 		}
-
-		i++
 	}
 	return res, err
 }
