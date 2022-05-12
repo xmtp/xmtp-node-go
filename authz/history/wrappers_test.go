@@ -89,7 +89,7 @@ func TestRetryError(t *testing.T) {
 func TestRetryContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	mockFetcher := NewMockFetcher()
-	fetcher := NewRetryTransactionHistoryFetcher(mockFetcher, 3, 500*time.Millisecond)
+	fetcher := NewRetryTransactionHistoryFetcher(mockFetcher, 3, 250*time.Millisecond)
 	var wg sync.WaitGroup
 	var err error
 	wg.Add(1)
@@ -104,5 +104,4 @@ func TestRetryContextCanceled(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "context canceled")
 	require.Equal(t, mockFetcher.NumFetches, 1)
-
 }
