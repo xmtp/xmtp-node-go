@@ -32,6 +32,6 @@ func ToggleDebugLevel() {
 		levelWaku = "INFO"
 		levelLibP2P = libp2p.LevelInfo
 	}
-	waku.SetLogLevel(levelWaku)
+	_ = waku.SetLogLevel(levelWaku)
 	libp2p.SetAllLoggers(levelLibP2P)
 }
