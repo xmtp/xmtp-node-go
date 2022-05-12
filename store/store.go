@@ -282,10 +282,10 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
 		return
 	}
-	log = log.With(
-		logging.Filters("filters", historyRPCRequest.Query.GetContentFilters()),
-		zap.String("id", historyRPCRequest.RequestId),
-	)
+	log = log.With(zap.String("id", historyRPCRequest.RequestId))
+	if query := historyRPCRequest.Query; query != nil {
+		log = log.With(logging.Filters("filters", query.GetContentFilters()))
+	}
 	log.Info("received query")
 
 	historyResponseRPC := &pb.HistoryRPC{}
