@@ -134,10 +134,6 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 	return authResponseRPC.AuthSuccessful, nil
 }
 
-func TestNoop(t *testing.T) {
-	require.True(t, true)
-}
-
 // This test uses random signatures and will fail in the future when signatures are validated correctly
 func TestRoundTrip(t *testing.T) {
 

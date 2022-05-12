@@ -16,10 +16,9 @@ import (
 const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtpv1/clientauth/0.1.0-beta1")
 
 type XmtpAuthentication struct {
-	h       host.Host
-	ctx     context.Context
-	log     *zap.SugaredLogger
-	started bool
+	h   host.Host
+	ctx context.Context
+	log *zap.SugaredLogger
 }
 
 func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.SugaredLogger) *XmtpAuthentication {
@@ -34,7 +33,6 @@ func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.SugaredLog
 func (xmtpAuth *XmtpAuthentication) Start() error {
 	xmtpAuth.h.SetStreamHandler(TransportAuthID_v01beta1, xmtpAuth.onRequest)
 	xmtpAuth.log.Info("Auth protocol started")
-	xmtpAuth.started = true
 
 	return nil
 }
