@@ -91,40 +91,40 @@ func (fetcher AlchemyTransactionHistoryFetcher) Fetch(ctx context.Context, walle
 	response, err = fetcher.alchemyRequest(ctx, walletAddress, From)
 	if err != nil {
 		fetcher.log.Error("Error fetching from Alchemy", zap.Error(err))
-		return
+		return res, err
 	}
 	hasTransactions := verifyTransactions(response)
 	res = AlchemyTokenDataResult{hasTransactions: hasTransactions}
 	fetcher.log.Info("Got Alchemy data for wallet", zap.String("wallet_address", walletAddress), zap.Bool("has_transactions", hasTransactions))
-	return
+	return res, err
 }
 
 func (fetcher AlchemyTransactionHistoryFetcher) alchemyRequest(ctx context.Context, walletAddress string, direction AssetTransferDirection) (res AlchemyResult, err error) {
 	transferRequest := buildGetAssetTransfersRequest(walletAddress, direction)
 	requestPayload, err := json.Marshal(transferRequest)
 	if err != nil {
-		return
+		return res, err
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, fetcher.apiUrl, bytes.NewBuffer(requestPayload))
 	if err != nil {
-		return
+		return res, err
 	}
 	request.Header.Add("Content-Type", "application/json")
 
 	response, err := fetcher.client.Do(request)
 	if err != nil {
-		return
+		return res, err
 	}
 	defer response.Body.Close()
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return
+		return res, err
 	}
 
 	err = json.Unmarshal(responseBody, &res)
-	return
+	return res, err
 }
 
 func verifyTransactions(result AlchemyResult) (hasTransactions bool) {
@@ -145,6 +145,7 @@ func (r AlchemyTokenDataResult) HasTransactions() bool {
 
 func buildGetAssetTransfersRequest(walletAddress string, direction AssetTransferDirection) GetAssetTransfersRequest {
 	param := GetAssetTransferParam{
+		// Need to set an early FromBlock as the default behaviour is to search latest -> latest apparently
 		FromBlock: "0x1",
 		MaxCount:  fmt.Sprintf("0x%x", PAGE_SIZE),
 		Category:  []string{"token", "erc20", "erc721", "erc1155"},
