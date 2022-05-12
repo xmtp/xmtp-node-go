@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/xmtp/xmtp-node-go/protocol/auth"
 	"io/ioutil"
 	"net"
 	"os"
@@ -53,6 +54,7 @@ type Server struct {
 	wakuNode         *node.WakuNode
 	ctx              context.Context
 	walletAuthorizer authz.WalletAuthorizer
+	authenticator    *auth.XmtpAuthentication
 }
 
 // Create a new Server
@@ -160,6 +162,11 @@ func New(options Options) (server *Server) {
 
 	if err = server.wakuNode.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
+	}
+
+	server.authenticator = auth.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger.Sugar())
+	if err = server.authenticator.Start(); err != nil {
+		server.logger.Fatal(fmt.Errorf("could not start xmtp:authentication protocol, %w", err).Error())
 	}
 
 	if len(options.Relay.Topics) == 0 {

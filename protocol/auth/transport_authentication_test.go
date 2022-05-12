@@ -9,10 +9,10 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-msgio/protoio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/status-im/go-waku/tests"
 	"github.com/stretchr/testify/require"
+	"github.com/xmtp/go-msgio/protoio"
 	pb2 "github.com/xmtp/xmtp-node-go/protocol/pb"
 	"go.uber.org/zap"
 	"math"
@@ -82,25 +82,26 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 	rand.Read(bytes)
 	walletAddr := hex.EncodeToString(bytes)
 
-	//signature := pb2.Signature_EcdsaCompact{EcdsaCompact: &pb2.Signature_ECDSACompact{
-	//	Bytes:    bytes,
-	//	Recovery: 0,
-	//}}
+	// Generates a random signature
+	signature := pb2.Signature_EcdsaCompact{EcdsaCompact: &pb2.Signature_ECDSACompact{
+		Bytes:    bytes,
+		Recovery: 0,
+	}}
 
-	//ucomp := pb2.PublicKey_Secp256K1Uncompresed{Bytes: bytes}
-	//pk := pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &ucomp}
-	//s2 := pb2.Signature{Union: &signature}
+	ucomp := pb2.PublicKey_Secp256K1Uncompresed{Bytes: bytes}
+	pk := pb2.PublicKey_Secp256K1Uncompressed{Secp256K1Uncompressed: &ucomp}
+	s2 := pb2.Signature{Union: &signature}
 
-	//pk2 := pb2.PublicKey{
-	//	Timestamp: 0,
-	//	Signature: &s2,
-	//	Union:     &pk,
-	//}
+	pk2 := pb2.PublicKey{
+		Timestamp: 0,
+		Signature: &s2,
+		Union:     &pk,
+	}
 
 	authReqRPC := &pb2.ClientAuthRequest{
-		//IdentityKey: &pk2,
-		AuthDigest: "", //fmt.Sprintf("%s|%s", h.ID(), walletAddr),      // <<-------- Simplified example to show the Error
-		//AuthSig:     &s2,
+		IdentityKey: &pk2,
+		AuthDigest:  fmt.Sprintf("%s|%s", h.ID(), walletAddr),
+		AuthSig:     &s2,
 	}
 
 	writer := protoio.NewDelimitedWriter(stream)
@@ -119,7 +120,6 @@ func ClientAuth(ctx context.Context, log *zap.SugaredLogger, h host.Host, peerId
 		return false, err
 	}
 
-	log.Info("Stream Resp", authResponseRPC.AuthSuccessful, fmt.Sprintf("%s|%s", h.ID(), walletAddr))
 	return authResponseRPC.AuthSuccessful, nil
 }
 
@@ -130,6 +130,7 @@ func TestNoop(t *testing.T) {
 	require.True(t, true)
 }
 
+// This test uses random signatures and will fail in the future when signatures are validated correctly
 func TestRoundTrip(t *testing.T) {
 
 	log := tests.Logger()
@@ -158,42 +159,6 @@ func TestRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, didSucceed)
 		ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
-		require.NoError(t, err)
-		require.True(t, didSucceed)
-		cancel()
-	}()
-	<-ctx.Done()
-
-}
-
-func TestDevBadProtocol(t *testing.T) {
-
-	log := tests.Logger()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	node, err := CreateNode(ctx, log)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	client, err := CreateClient(ctx, log)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	go func() {
-		node.Start()
-
-		dest := node.h.Addrs()[0]
-
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
-		require.NoError(t, err)
-		require.True(t, didSucceed)
-		didSucceed, err = ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, "/xmtplabs/xmtpv1/clientauth/1.0.0-beta1")
-		require.Error(t, err)
-		require.False(t, didSucceed)
-		didSucceed, err = ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v00beta1)
 		require.NoError(t, err)
 		require.True(t, didSucceed)
 		cancel()

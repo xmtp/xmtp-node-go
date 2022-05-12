@@ -7,13 +7,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/protocol/pb"
 	"go.uber.org/zap"
 )
 
-const TransportAuthID_v00beta1 = libp2pProtocol.ID("/xmtplabs/xmtpv1/clientauth/0.0.0-beta1")
+const TransportAuthID_v00beta1 = libp2pProtocol.ID("/xmtplabs/xmtpv1/clientauth/0.1.0-beta1")
 
 type XmtpAuthentication struct {
 	h       host.Host
@@ -32,7 +31,7 @@ func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.SugaredLog
 }
 
 func (xmtpAuth *XmtpAuthentication) Start() error {
-	xmtpAuth.h.SetStreamHandlerMatch(TransportAuthID_v00beta1, protocol.FulltextMatch(string(TransportAuthID_v00beta1)), xmtpAuth.onRequest)
+	xmtpAuth.h.SetStreamHandler(TransportAuthID_v00beta1, xmtpAuth.onRequest)
 	xmtpAuth.log.Info("Auth protocol started")
 	xmtpAuth.started = true
 
