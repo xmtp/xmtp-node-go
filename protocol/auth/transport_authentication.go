@@ -45,7 +45,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 	authReqRPC := &pb.ClientAuthRequest{}
 	err := xmtpAuth.ReadAuthRequest(authReqRPC, stream)
 	if err != nil {
-		xmtpAuth.log.Error("could not read request", zap.Error(err))
+		xmtpAuth.log.Error("reading request", zap.Error(err))
 		return
 	}
 
