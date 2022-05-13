@@ -18,15 +18,14 @@ func TestGetSet(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	store := NewMemoryPeerIdStore(logger)
 
-	store.Set(PEER_ID, WALLET_ADDRESS, true)
+	store.Set(PEER_ID, WALLET_ADDRESS)
 
 	entry := store.Get(PEER_ID)
 	require.Equal(t, entry.WalletAddress, WALLET_ADDRESS)
-	require.Equal(t, entry.IsAllowed, true)
 	// Test overwriting the existing entry
-	store.Set(PEER_ID, WALLET_ADDRESS, false)
+	store.Set(PEER_ID, "0xfoo")
 	entry = store.Get(PEER_ID)
-	require.Equal(t, entry.IsAllowed, false)
+	require.Equal(t, entry.WalletAddress, "0xfoo")
 }
 
 func TestNil(t *testing.T) {
@@ -45,7 +44,7 @@ func TestConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			store.Set(fmt.Sprintf("peer-%d", idx), WALLET_ADDRESS, true)
+			store.Set(fmt.Sprintf("peer-%d", idx), WALLET_ADDRESS)
 		}(i)
 	}
 	wg.Wait()

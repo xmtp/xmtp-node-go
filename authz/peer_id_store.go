@@ -8,12 +8,12 @@ import (
 
 type PeerWallet struct {
 	WalletAddress string
-	IsAllowed     bool
 }
 
 type PeerIdStore interface {
 	Get(peerId string) *PeerWallet
 	Set(peerId, walletAddress string, allowed bool)
+	Delete(peerId string)
 }
 
 type MemoryPeerIdStore struct {
@@ -39,16 +39,20 @@ func (s *MemoryPeerIdStore) Get(peerId string) *PeerWallet {
 	return nil
 }
 
-func (s *MemoryPeerIdStore) Set(peerId, walletAddress string, allowed bool) {
+func (s *MemoryPeerIdStore) Set(peerId, walletAddress string) {
 	s.mutex.Lock()
 	s.peers[peerId] = PeerWallet{
 		WalletAddress: walletAddress,
-		IsAllowed:     allowed,
 	}
 	s.log.Debug("stored peer",
 		zap.String("peer_id", peerId),
 		zap.String("wallet_address", walletAddress),
-		zap.Bool("allowed", allowed),
 	)
+	s.mutex.Unlock()
+}
+
+func (s *MemoryPeerIdStore) Delete(peerId string) {
+	s.mutex.Lock()
+	delete(s.peers, peerId)
 	s.mutex.Unlock()
 }
