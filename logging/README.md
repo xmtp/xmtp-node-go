@@ -10,7 +10,7 @@
 * Use logging.IfDebug() to include fields in DEBUG mode only, this is useful for values that are usually not interesting or possibly expensive to emit
 
 # Log value helpers
-* Make the field creation do as little as possible, i.e. just capture the existing value/object. Postpone any transformation to log emission time by employing generic zap.Stringer, zap.Array, zap.Object fields.
+* Make the field creation do as little as possible, i.e. just capture the existing value/object. Postpone any transformation to log emission time by employing generic zap.Stringer, zap.Array, zap.Object fields (see logging.go).
 
 ## Logger management
 * adorn the logger with fields and reuse the adorned logger rather than repeatedly create fields with each log entry
