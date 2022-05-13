@@ -284,7 +284,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	}
 	log = log.With(zap.String("id", historyRPCRequest.RequestId))
 	if query := historyRPCRequest.Query; query != nil {
-		log = log.With(logging.Filters("filters", query.GetContentFilters()))
+		log = log.With(logging.Filters(query.GetContentFilters()))
 	}
 	log.Info("received query")
 
@@ -300,6 +300,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	historyResponseRPC.Response = res
 	log = log.With(
 		zap.Int("messages", len(res.Messages)),
+		logging.IfDebug(logging.PagingInfo(res.PagingInfo)),
 	)
 	err = writer.WriteMsg(historyResponseRPC)
 	if err != nil {
