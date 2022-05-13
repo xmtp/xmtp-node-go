@@ -55,7 +55,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	err = xmtpAuth.WriteAuthResponse(stream, true)
 	if err != nil {
-		xmtpAuth.log.Error("could not write request", zap.Error(err))
+		xmtpAuth.log.Error("writing response", zap.Error(err))
 		return
 	}
 
