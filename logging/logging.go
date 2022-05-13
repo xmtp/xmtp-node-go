@@ -82,7 +82,7 @@ func (pi *pagingInfo) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint64("page_size", pi.PageSize)
 	encoder.AddString("direction", pi.Direction.String())
 	if pi.Cursor != nil {
-		encoder.AddObject("cursor", (*index)(pi.Cursor))
+		return encoder.AddObject("cursor", (*index)(pi.Cursor))
 	}
 	return nil
 }
