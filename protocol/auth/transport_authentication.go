@@ -40,11 +40,12 @@ func (xmtpAuth *XmtpAuthentication) Start() error {
 func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 	defer stream.Close()
 
-	xmtpAuth.log.Debug("AuthStream established with", logging.HostID("peer", stream.Conn().RemotePeer()))
+	log := xmtpAuth.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
+	log.Debug("stream established")
 
 	_, err := xmtpAuth.ReadAuthRequest(stream)
 	if err != nil {
-		xmtpAuth.log.Error("reading request", zap.Error(err))
+		log.Error("reading request", zap.Error(err))
 		return
 	}
 
@@ -54,7 +55,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	err = xmtpAuth.WriteAuthResponse(stream, true)
 	if err != nil {
-		xmtpAuth.log.Error("writing response", zap.Error(err))
+		log.Error("writing response", zap.Error(err))
 		return
 	}
 
