@@ -42,8 +42,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	xmtpAuth.log.Debug("AuthStream established with", logging.HostID("peer", stream.Conn().RemotePeer()))
 
-	authReqRPC := &pb.ClientAuthRequest{}
-	err := xmtpAuth.ReadAuthRequest(authReqRPC, stream)
+	_, err := xmtpAuth.ReadAuthRequest(stream)
 	if err != nil {
 		xmtpAuth.log.Error("reading request", zap.Error(err))
 		return
@@ -67,7 +66,9 @@ func (xmtpAuth *XmtpAuthentication) WriteAuthResponse(stream network.Stream, isA
 	return writer.WriteMsg(authRespRPC)
 }
 
-func (xmtpAuth *XmtpAuthentication) ReadAuthRequest(authReqRPC *pb.ClientAuthRequest, stream network.Stream) error {
+func (xmtpAuth *XmtpAuthentication) ReadAuthRequest(stream network.Stream) (*pb.ClientAuthRequest, error) {
 	reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
-	return reader.ReadMsg(authReqRPC)
+	authReqRPC := &pb.ClientAuthRequest{}
+	err := reader.ReadMsg(authReqRPC)
+	return authReqRPC, err
 }
