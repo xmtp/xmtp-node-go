@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -53,4 +54,30 @@ func TestConcurrent(t *testing.T) {
 		require.NotNil(t, val)
 		require.Equal(t, val.WalletAddress, WALLET_ADDRESS)
 	}
+}
+
+func TestPurge(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	store := NewMemoryPeerIdStore(logger)
+	shouldDeletePeerId := "should_delete"
+	shouldNotDeletePeerId := "should_not_delete"
+
+	store.peers[shouldDeletePeerId] = PeerWallet{
+		WalletAddress: WALLET_ADDRESS,
+		// Set the created at before the cutoff
+		createdAt: time.Now().Add(-100 * time.Hour),
+	}
+	store.peers[shouldNotDeletePeerId] = PeerWallet{
+		WalletAddress: WALLET_ADDRESS,
+		// Set the created at before the cutoff
+		createdAt: time.Now(),
+	}
+
+	store.purgeExpired()
+
+	shouldExist := store.Get(shouldNotDeletePeerId)
+	require.NotNil(t, shouldExist)
+
+	shouldNotExist := store.Get(shouldDeletePeerId)
+	require.Nil(t, shouldNotExist)
 }
