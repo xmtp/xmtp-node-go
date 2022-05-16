@@ -8,8 +8,11 @@
 package logging
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -38,3 +41,61 @@ func HostID(key string, id peer.ID) zapcore.Field {
 }
 
 func (id hostID) String() string { return peer.Encode(peer.ID(id)) }
+
+// Time - looks like Waku is using Microsecond Unix Time
+
+type timestamp int64
+
+func Time(key string, time int64) zapcore.Field {
+	return zap.Stringer(key, timestamp(time))
+}
+
+func (t timestamp) String() string {
+	return time.UnixMicro(int64(t)).Format(time.RFC3339)
+}
+
+// History Query Filters
+
+type historyFilters []*pb.ContentFilter
+
+func Filters(filters []*pb.ContentFilter) zapcore.Field {
+	return zap.Array("filters", historyFilters(filters))
+}
+
+func (filters historyFilters) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
+	for _, filter := range filters {
+		encoder.AppendString(filter.ContentTopic)
+	}
+	return nil
+}
+
+// History Paging Info
+
+type pagingInfo pb.PagingInfo
+type index pb.Index
+
+func PagingInfo(pi *pb.PagingInfo) zapcore.Field {
+	return zap.Object("paging_info", (*pagingInfo)(pi))
+}
+
+func (pi *pagingInfo) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddUint64("page_size", pi.PageSize)
+	encoder.AddString("direction", pi.Direction.String())
+	if pi.Cursor != nil {
+		return encoder.AddObject("cursor", (*index)(pi.Cursor))
+	}
+	return nil
+}
+
+func (i *index) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddBinary("digest", i.Digest)
+	encoder.AddTime("sent", time.UnixMicro(i.SenderTime))
+	encoder.AddTime("received", time.UnixMicro(i.ReceiverTime))
+	return nil
+}
+
+// Wallet Address
+
+func WalletAddress(address string) zapcore.Field {
+	return zap.String("wallet_address", address)
+}

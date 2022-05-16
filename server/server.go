@@ -192,17 +192,17 @@ func New(options Options) (server *Server) {
 
 func (server *Server) WaitForShutdown() {
 	// Wait for a SIGINT or SIGTERM signal
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
-	server.logger.Info("Received signal, shutting down...")
+	termChannel := make(chan os.Signal, 1)
+	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
+	<-termChannel
+	server.logger.Info("shutting down...")
 
 	// shut the node down
 	server.wakuNode.Stop()
 
 	if server.metricsServer != nil {
 		err := server.metricsServer.Stop(server.ctx)
-		failOnErr(err, "MetricsClose")
+		failOnErr(err, "metrics stop")
 	}
 }
 
