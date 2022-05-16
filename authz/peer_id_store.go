@@ -84,7 +84,7 @@ func (s *MemoryPeerIdStore) purgeExpired() {
 		}
 	}
 
-	s.log.Info("purged records from peer store", zap.Int("num_records_purged", numPurged))
+	s.log.Info("record purge complete", zap.Int("num_records_purged", numPurged))
 	s.mutex.RUnlock()
 }
 
