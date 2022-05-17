@@ -52,14 +52,14 @@ func main() {
 	}
 
 	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
-		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString); err != nil {
+		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB); err != nil {
 			log.Fatalf("Could not create message migration: %s", err)
 		}
 		return
 	}
 
 	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
-		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString); err != nil {
+		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB); err != nil {
 			log.Fatalf("Could not create authz migration: %s", err)
 		}
 		return

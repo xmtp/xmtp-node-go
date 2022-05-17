@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -76,12 +75,7 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
 
-	if options.DBPath == "" {
-		failOnErr(errors.New("dbpath can't be null"), "")
-	}
-
-	server.db = sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(options.Store.DbConnectionString)))
-
+	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
 	server.ctx = context.Background()
 
 	if options.Metrics.Enable {
@@ -90,7 +84,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db := createBunDb(options.Authz.DbConnectionString)
+		db := createBunDbOrFail(options.Authz.DbConnectionString, options.WaitForDB)
 		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
 		err = server.walletAuthorizer.Start(server.ctx)
 		failOnErr(err, "wallet authorizer error")
@@ -320,8 +314,8 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func CreateMessageMigration(migrationName, dbConnectionString string) error {
-	db := createBunDb(dbConnectionString)
+func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
+	db := createBunDbOrFail(dbConnectionString, waitForDb)
 	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -331,8 +325,8 @@ func CreateMessageMigration(migrationName, dbConnectionString string) error {
 	return err
 }
 
-func CreateAuthzMigration(migrationName, dbConnectionString string) error {
-	db := createBunDb(dbConnectionString)
+func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
+	db := createBunDbOrFail(dbConnectionString, waitForDb)
 	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -351,6 +345,20 @@ func failOnErr(err error, msg string) {
 	}
 }
 
-func createBunDb(dsn string) *bun.DB {
-	return bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn))), pgdialect.New())
+func createBunDbOrFail(dsn string, waitForDB time.Duration) *bun.DB {
+	return bun.NewDB(createDbOrFail(dsn, waitForDB), pgdialect.New())
+}
+
+func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
+	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	waitUntil := time.Now().Add(waitForDB)
+	err := db.Ping()
+	for err != nil && time.Now().Before(waitUntil) {
+		time.Sleep(3 * time.Second)
+		err = db.Ping()
+	}
+	if err != nil {
+		failOnErr(err, "timeout waiting for DB")
+	}
+	return db
 }

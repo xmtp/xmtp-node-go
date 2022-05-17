@@ -67,13 +67,13 @@ type Options struct {
 	Overwrite   bool     `long:"overwrite" description:"When generating a keyfile, overwrite the nodekey file if it already exists"`
 	StaticNodes []string `long:"static-node" description:"Multiaddr of peer to directly connect with. Option may be repeated"`
 	KeepAlive   int      `long:"keep-alive" default:"20" description:"Interval in seconds for pinging peers to keep the connection alive."`
-	DBPath      string   `long:"dbpath" default:"./store.db" description:"Path to DB file"`
 	LogLevel    string   `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
 	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
 	//nolint:staticcheck
-	LogEncoding            string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
-	CreateMessageMigration string `long:"create-message-migration" default:"" description:"Create a migration. Must provide a name"`
-	CreateAuthzMigration   string `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
+	LogEncoding            string        `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	CreateMessageMigration string        `long:"create-message-migration" default:"" description:"Create a migration. Must provide a name"`
+	CreateAuthzMigration   string        `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
+	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
 
 	Authz     AuthzOptions     `group:"Authz Options"`
 	Relay     RelayOptions     `group:"Relay Options"`
