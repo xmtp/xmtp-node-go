@@ -21,7 +21,6 @@ import (
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
@@ -98,8 +97,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.EnableWS {
-		wsMa, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d/ws", options.WSAddress, options.WSPort))
-		nodeOpts = append(nodeOpts, node.WithMultiaddress([]multiaddr.Multiaddr{wsMa}))
+		nodeOpts = append(nodeOpts, node.WithWebsockets(options.WSAddress, options.WSPort))
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
@@ -148,9 +146,9 @@ func New(options Options) (server *Server) {
 	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
 	failOnErr(err, "Wakunode")
 
-	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
-	addPeers(server.wakuNode, options.LightPush.Nodes, lightpush.LightPushID_v20beta1)
-	addPeers(server.wakuNode, options.Filter.Nodes, filter.FilterID_v20beta1)
+	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
+	addPeers(server.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
+	addPeers(server.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
 
 	if err = server.wakuNode.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
@@ -162,10 +160,11 @@ func New(options Options) (server *Server) {
 
 	if !options.Relay.Disable {
 		for _, nodeTopic := range options.Relay.Topics {
+			nodeTopic := nodeTopic
 			sub, err := server.wakuNode.Relay().SubscribeToTopic(server.ctx, nodeTopic)
 			failOnErr(err, "Error subscring to topic")
 			// Unregister from broadcaster. Otherwise this channel will fill until it blocks publishing
-			server.wakuNode.Broadcaster().Unregister(sub.C)
+			server.wakuNode.Broadcaster().Unregister(&nodeTopic, sub.C)
 		}
 	}
 
@@ -200,7 +199,7 @@ func (server *Server) WaitForShutdown() {
 	}
 }
 
-func addPeers(wakuNode *node.WakuNode, addresses []string, protocol protocol.ID) {
+func addPeers(wakuNode *node.WakuNode, addresses []string, protocols ...string) {
 	for _, addrString := range addresses {
 		if addrString == "" {
 			continue
@@ -209,7 +208,7 @@ func addPeers(wakuNode *node.WakuNode, addresses []string, protocol protocol.ID)
 		addr, err := multiaddr.NewMultiaddr(addrString)
 		failOnErr(err, "invalid multiaddress")
 
-		_, err = wakuNode.AddPeer(addr, protocol)
+		_, err = wakuNode.AddPeer(addr, protocols...)
 		failOnErr(err, "error adding peer")
 	}
 }
