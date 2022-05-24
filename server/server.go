@@ -97,8 +97,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.EnableWS {
-		wsMa, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d/ws", options.WSAddress, options.WSPort))
-		nodeOpts = append(nodeOpts, node.WithMultiaddress([]multiaddr.Multiaddr{wsMa}))
+		nodeOpts = append(nodeOpts, node.WithWebsockets(options.WSAddress, options.WSPort))
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
