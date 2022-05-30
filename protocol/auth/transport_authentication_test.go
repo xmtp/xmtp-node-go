@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
@@ -13,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/go-msgio/protoio"
 	pb2 "github.com/xmtp/xmtp-node-go/protocol/pb"
+	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"math"
@@ -87,16 +87,16 @@ func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, erro
 	return NewXmtpAuthentication(ctx, libP2pHost, log), nil
 }
 
-func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId peer.ID, dest multiaddr.Multiaddr, protoId protocol.ID, serializedRequest string) (bool, error) {
-	h.Peerstore().AddAddr(peerId, dest, peerstore.PermanentAddrTTL)
+func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.PeerId, dest multiaddr.Multiaddr, protoId protocol.ID, serializedRequest string) (bool, error) {
+	h.Peerstore().AddAddr(peerId.Raw(), dest, peerstore.PermanentAddrTTL)
 
-	err := h.Connect(ctx, h.Peerstore().PeerInfo(peerId))
+	err := h.Connect(ctx, h.Peerstore().PeerInfo(peerId.Raw()))
 	if err != nil {
 		log.Error("host could not connect", zap.Error(err))
 		return false, err
 	}
 
-	stream, err := h.NewStream(ctx, peerId, protoId)
+	stream, err := h.NewStream(ctx, peerId.Raw(), protoId)
 	if err != nil {
 		log.Info("", zap.Error(err))
 		return false, err
@@ -156,7 +156,7 @@ func TestRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		dest := node.h.Addrs()[0]
 
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, node.h.ID(), dest, TransportAuthID_v01beta1, sampleAuthReq002)
+		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, types.PeerId(node.h.ID()), dest, TransportAuthID_v01beta1, sampleAuthReq002)
 		require.NoError(t, err)
 		require.False(t, didSucceed)
 
@@ -169,7 +169,7 @@ func TestRoundTrip(t *testing.T) {
 func TestV1_Nominal(t *testing.T) {
 	log, _ := zap.NewDevelopment()
 
-	connectingPeerId := peer.ID("TestPeerID")
+	connectingPeerId := types.PeerId("TestPeerID")
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
 
@@ -182,7 +182,7 @@ func TestV1_Nominal(t *testing.T) {
 func TestV1_BadAuthSig(t *testing.T) {
 	log, _ := zap.NewDevelopment()
 
-	connectingPeerId := peer.ID("TestPeerID")
+	connectingPeerId := types.PeerId("TestPeerID")
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
 
@@ -197,7 +197,7 @@ func TestV1_PeerIdSpoof(t *testing.T) {
 
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
-	connectingPeerId := peer.ID("InvalidPeerID")
+	connectingPeerId := types.PeerId("InvalidPeerID")
 
 	_, _, err = validateRequest(req, connectingPeerId, log)
 	require.Error(t, err)
@@ -211,18 +211,18 @@ func TestV1_SignatureMismatch(t *testing.T) {
 	req2, err := LoadSerializedAuthReq(sampleAuthReq002)
 	require.NoError(t, err)
 
-	_, _, err = validateRequest(req1, peer.ID(req1.PeerId), log)
+	_, _, err = validateRequest(req1, types.PeerId(req1.PeerId), log)
 	require.NoError(t, err)
 
-	_, _, err = validateRequest(req2, peer.ID(req2.PeerId), log)
+	_, _, err = validateRequest(req2, types.PeerId(req2.PeerId), log)
 	require.NoError(t, err)
 
 	req1.WalletSig = req2.WalletSig
 	req2.AuthSig = req1.AuthSig
 
-	_, _, err = validateRequest(req1, peer.ID(req1.PeerId), log)
+	_, _, err = validateRequest(req1, types.PeerId(req1.PeerId), log)
 	require.Error(t, err)
 
-	_, _, err = validateRequest(req2, peer.ID(req2.PeerId), log)
+	_, _, err = validateRequest(req2, types.PeerId(req2.PeerId), log)
 	require.Error(t, err)
 }
