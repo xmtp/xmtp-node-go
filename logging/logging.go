@@ -15,19 +15,18 @@ import (
 
 var (
 	// Re-export relevant go-waku helpers
-
 	MultiAddrs = logging.MultiAddrs
 	HostID     = logging.HostID
 	Time       = logging.Time
 	Filters    = logging.Filters
 	PagingInfo = logging.PagingInfo
 	HexBytes   = logging.HexBytes
+	ENode      = logging.ENode
 	TCPAddr    = logging.TCPAddr
 	UDPAddr    = logging.UDPAddr
 )
 
-// Wallet Address
-
+// WalletAddress creates a field for a wallet address.
 func WalletAddress(address string) zapcore.Field {
 	return zap.String("wallet_address", address)
 }

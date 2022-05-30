@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	// Re-export the go-waku helpers.
 	With = logging.With
 	From = logging.From
 )
