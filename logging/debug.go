@@ -8,7 +8,7 @@ import (
 
 // IsDebugLevel returns true if the Waku loggers are set to DEBUG level.
 func IsDebugLevel() bool {
-	return waku.Logger().Desugar().Core().Enabled(zap.DebugLevel)
+	return waku.Logger().Core().Enabled(zap.DebugLevel)
 }
 
 // IfDebug aides conditional addition of logging fields.

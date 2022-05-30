@@ -78,7 +78,7 @@ func New(options Options) (server *Server) {
 	server.ctx = context.Background()
 
 	if options.Metrics.Enable {
-		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger.Sugar())
+		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		go server.metricsServer.Start()
 	}
 
