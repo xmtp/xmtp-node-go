@@ -40,7 +40,7 @@ func LoadSerializedAuthReq(str string) (*pb2.V1ClientAuthRequest, error) {
 	return req, nil
 }
 
-func CreateClient(ctx context.Context, log *zap.Logger) (host.Host, error) {
+func CreateHost(ctx context.Context, log *zap.Logger) (host.Host, error) {
 	maxAttempts := 5
 	hostStr := "localhost"
 	port := 0
@@ -79,7 +79,7 @@ func CreateClient(ctx context.Context, log *zap.Logger) (host.Host, error) {
 
 func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, error) {
 
-	libP2pHost, err := CreateClient(ctx, log)
+	libP2pHost, err := CreateHost(ctx, log)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func TestRoundTrip(t *testing.T) {
 		cancel()
 		return
 	}
-	client, err := CreateClient(ctx, log)
+	client, err := CreateHost(ctx, log)
 	if err != nil {
 		log.Error("Test client could not be created", zap.Error(err))
 		cancel()
