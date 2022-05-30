@@ -22,12 +22,12 @@ message Signature {
   }
 }
 
+message Secp256k1Uncompresed {
+  bytes bytes = 1; // uncompressed point with prefix (0x04) [ P || X || Y ], 65 bytes
+}
 // PublicKey represents a generalized public key,
 // defined as a union to support cryptographic algorithm agility.
 message PublicKey {
-  message Secp256k1Uncompresed {
-    bytes bytes = 1; // uncompressed point with prefix (0x04) [ P || X || Y ], 65 bytes
-  }
   uint64 timestamp = 1;
   optional Signature signature = 2;
   oneof union {
@@ -38,10 +38,11 @@ message PublicKey {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 message V1ClientAuthRequest {
-  PublicKey identityKey = 1;
-  string peerId = 2;
-  string walletAddr = 3;
-  Signature authSig = 4;
+  bytes identityKeyBytes = 1;
+  Signature walletSig = 2;
+  string peerId = 3;
+  string walletAddr = 4;
+  Signature authSig = 5;
 }
 
 message ClientAuthRequest {
@@ -53,4 +54,10 @@ message ClientAuthRequest {
 message ClientAuthResponse{
   bool authSuccessful = 1;
   string errorStr = 2;
+}
+
+
+message ByteSigning {
+  uint64 timestamp = 1;
+  Secp256k1Uncompresed signature = 2;
 }
