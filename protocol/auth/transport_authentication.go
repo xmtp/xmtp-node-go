@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/crypto"
@@ -50,18 +51,19 @@ func (xmtpAuth *XmtpAuthentication) Start() error {
 }
 
 func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
+
+	log := xmtpAuth.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
+	log.Info("stream established")
 	defer func() {
 		if err := stream.Close(); err != nil {
-			xmtpAuth.log.Error("closing stream", zap.Error(err))
+			log.Error("closing stream", zap.Error(err))
 		}
 	}()
 
-	log := xmtpAuth.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
-	log.Debug("stream established")
-
 	authenticatedPeerId, authenticatedWalletAddr, err := xmtpAuth.handleRequest(stream, log)
-
 	isAuthenticated := (err == nil) && authenticatedPeerId != types.InvalidPeerId() && authenticatedWalletAddr != types.InvalidWalletAddr()
+
+	// TODO: Save PeerId to walletAddress map
 
 	errStr := ""
 	if err != nil {
@@ -74,8 +76,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		return
 	}
 
-	log.Info("Auth Result", zap.Any("peerId", authenticatedPeerId), zap.Any("walletAddr", authenticatedWalletAddr))
-	// TODO: Save PeerId to walletAddress map
+	log.Info("Auth Result", logging.WalletAddressLabelled("walletAddr", authenticatedWalletAddr))
 
 }
 
@@ -113,26 +114,26 @@ func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.Pee
 	// Validate WalletSignature
 	signingWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
 	if err != nil {
-		log.Error("verifying wallet signature", zap.Error(err), zap.Any("AuthRequest", request))
+		log.Error("verifying wallet signature", zap.Error(err))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
 	}
 
 	// Validate AuthSignature
 	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact(), log)
 	if err != nil {
-		log.Error("verifying auth signature", zap.Error(err), zap.Any("AuthRequest", request))
+		log.Error("verifying auth signature", zap.Error(err))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
 	}
 
 	// To protect against spoofing, ensure the walletAddresses match in both signatures
 	if signingWalletAddress != suppliedWalletAddress {
-		log.Error("wallet address mismatch", zap.Error(err), zap.Any("AuthRequest", request))
+		log.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", signingWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), ErrWalletMismatch
 	}
 
 	// To protect against spoofing, ensure the AuthRequest originated from the same peerID that was authenticated.
 	if connectingPeerId != suppliedPeerId {
-		log.Error("peerId Mismatch", zap.Error(err), zap.String("expected", connectingPeerId.String()), zap.String("supplied", suppliedPeerId.String()))
+		log.Error("peerId Mismatch", zap.Error(err), logging.HostID("supplied", peer.ID(suppliedPeerId)))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), ErrWrongPeerId
 	}
 

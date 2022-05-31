@@ -9,6 +9,7 @@ package logging
 
 import (
 	"github.com/status-im/go-waku/logging"
+	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -29,4 +30,8 @@ var (
 // WalletAddress creates a field for a wallet address.
 func WalletAddress(address string) zapcore.Field {
 	return zap.String("wallet_address", address)
+}
+
+func WalletAddressLabelled(label string, address types.WalletAddr) zapcore.Field {
+	return zap.String(label, string(address))
 }

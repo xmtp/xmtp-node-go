@@ -158,7 +158,7 @@ func New(options Options) (server *Server) {
 
 	server.authenticator = auth.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger)
 	if err = server.authenticator.Start(); err != nil {
-		server.logger.Fatal(fmt.Errorf("could not start xmtp:authentication protocol, %w", err).Error())
+		server.logger.Fatal("starting the authentication protocol", zap.Error(err))
 	}
 
 	if len(options.Relay.Topics) == 0 {
