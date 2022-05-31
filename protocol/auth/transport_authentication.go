@@ -108,9 +108,6 @@ func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *za
 	return suppliedPeerId, walletAddr, nil
 }
 
-type RequestValidatorV1 struct {
-}
-
 func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId, log *zap.Logger) (types.PeerId, types.WalletAddr, error) {
 
 	// Validate WalletSignature

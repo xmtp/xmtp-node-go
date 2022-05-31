@@ -1,3 +1,4 @@
+// Package crypto provides wrappers functions for cryptographic primitives along with various helper functions
 package crypto
 
 import (
@@ -42,6 +43,9 @@ func Sign(privateKey PrivateKey, msg Message) (Signature, uint8, error) {
 	return signature, recovery, nil
 }
 
+// Verify evalutes a Secp256k1 signature to determine if the message provided was signed by the given publics
+// corresponding private key. It returns true if the message was signed by the corresponding keypair, as
+//well as any errors generated in the process
 func Verify(pub PublicKey, msg Message, sig Signature) (bool, error) {
 	digest := sha256.Sum256(msg)
 	isValid := secp256k1.VerifySignature((*[65]byte)(pub)[:], digest[:], (*[64]byte)(sig)[:])
@@ -49,12 +53,15 @@ func Verify(pub PublicKey, msg Message, sig Signature) (bool, error) {
 	return isValid, nil
 }
 
-// EtherHash implements the Ethereum hashing standard used to create signatures
+// EtherHash implements the Ethereum hashing standard used to create signatures. Uses an Ethereum specific prefix and
+// the Keccak256 Hashing algorithm
 func EtherHash(msg Message) []byte {
 	decoratedBytes := []byte(fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(msg), msg))
 	return ethcrypto.Keccak256(decoratedBytes)
 }
 
+// RecoverWalletAddress calculates the WalletAddress of the identity which was used to sign the given message. A value
+// is always returned and needs to verified before it can be trusted.
 func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (types.WalletAddr, error) {
 
 	digest := EtherHash(msg)
@@ -69,6 +76,7 @@ func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (typ
 	return types.WalletAddr(addr.String()), nil
 }
 
+// PrivateKeyFromBytes converts from a byte slice to a PrivateKey Type
 func PrivateKeyFromBytes(bytes []byte) (PrivateKey, error) {
 	if len(bytes) != 32 {
 		return nil, ErrInvalidSignatureLen
@@ -77,6 +85,7 @@ func PrivateKeyFromBytes(bytes []byte) (PrivateKey, error) {
 	return (*[32]byte)(bytes), nil
 }
 
+// PublicKeyFromBytes converts from a byte slice to a PublicKey type
 func PublicKeyFromBytes(bytes []byte) (PublicKey, error) {
 	log, _ := zap.NewDevelopment()
 	if len(bytes) != 65 {
@@ -87,6 +96,7 @@ func PublicKeyFromBytes(bytes []byte) (PublicKey, error) {
 	return (*[65]byte)(bytes), nil
 }
 
+// SignatureFromBytes converts from a byte slice to a Signature type
 func SignatureFromBytes(bytes []byte) (Signature, error) {
 	if len(bytes) != 64 {
 		return nil, ErrInvalidSignatureLen
@@ -95,6 +105,7 @@ func SignatureFromBytes(bytes []byte) (Signature, error) {
 	return (*[64]byte)(bytes), nil
 }
 
+// bytesFromSig converts from a Signature type to a byte slice
 func bytesFromSig(signature Signature) []byte {
 	return (*[64]byte)(signature)[:]
 }
