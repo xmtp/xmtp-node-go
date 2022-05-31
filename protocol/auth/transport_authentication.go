@@ -112,7 +112,7 @@ func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *za
 func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId, log *zap.Logger) (types.PeerId, types.WalletAddr, error) {
 
 	// Validate WalletSignature
-	signingWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
+	recoveredWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
 	if err != nil {
 		log.Error("verifying wallet signature", zap.Error(err))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
@@ -126,8 +126,8 @@ func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.Pee
 	}
 
 	// To protect against spoofing, ensure the walletAddresses match in both signatures
-	if signingWalletAddress != suppliedWalletAddress {
-		log.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", signingWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
+	if recoveredWalletAddress != suppliedWalletAddress {
+		log.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), ErrWalletMismatch
 	}
 
@@ -137,7 +137,7 @@ func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.Pee
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), ErrWrongPeerId
 	}
 
-	return suppliedPeerId, signingWalletAddress, nil
+	return suppliedPeerId, recoveredWalletAddress, nil
 }
 
 func CreateIdentitySignRequest(identityBytes []byte) crypto.Message {
