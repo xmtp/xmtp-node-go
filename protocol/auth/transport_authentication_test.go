@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	sampleAuthReq001 = "0a94020a4c08939c86ee8f301a430a41047ef767b343649e93d313eb3eabc28cac12012d20da79caae534780d96907b2c15f8e67c94550da17840a65c9178f3713fec50a006787857c7c4aaa2f7c1b1daf12440a420a405dda001c54248df91552fe6cd271b1292b0327d5a5774fc2aa2d4456c166f72d5110721377a23af3deb029edfdc5a6dd5abd8370becd09b8ee31586cf88ae9c61a0a54657374506565724944222a3078396130326441374538373933323066623832373846394532363432373938393235323039334137332a460a440a40a725ec9a6fb57e903afc13e3882f0f5d66f29cbe1f42d6d55520f932cd91585e63dad757d3409d168384baa35f2c38e46d907cba06211b782b1adbe253361bd71001"
-	sampleAuthReq002 = "0a94020a4c08d6e2d5b091301a430a4104abe63f9f0b3e98977d5a1bd8cdce3f4d570bebb9586b78d0a8409cdd11bb25be30286d9f5f85d227f8380bb9a08b0695c669ae3d8dc6d314575ba87192d0d14b12460a440a40c6c38738043dcaf75bacf8aee3ec13616c8dc9fc30ef582c3e7b77532383f7d37eb9ff677d2d47f86a6057ad7364eead4e4d24d1ff5bab6f06972359813185d210011a0a54657374506565724944222a3078334643303938326642363735383741394166433441363330423735633730353466363861303633322a440a420a40fb4a4efe87a7a391c4817ea65055d2943ac9bec27ebf99d0aee8d378a3488c376faefe936db3eb774effe6767631c1f097968781ea5ce04b369b91b27e81aa66"
+	sampleAuthReq001 = "0a9d020a4c088fd690bd91301a430a41047925bb341e63d10e3d16ccc33c7da6a6115d74e5429e8426761c1332961e48cb1627a62cdcebffe733d23c371a4b78b332d5caed7e3686c0534aa8388688a01212460a440a4076a5aafb9e8bf334629167bdc1ec3d765471f1ef22db661fbb8f24d05a34956b0e7225052ca955f73b97d38b30efb2e60ae0cd17bdda6e39b9b1cb2d0196809e10011a3f0a2a307865386162344535333335323338346234334333454533383942363041343734643137343145423336120a546573745065657249441894d990bd913022440a420a400d8423577fbf7f7ee0a878878a6804489104c19d6a4bdca280457fda7f0dc06408a040b3a79d23d403a610572453810932c5343bf945887f6148e9e9fad2fb29"
+	sampleAuthReq002 = "0a9d020a4c08ddcbaebd91301a430a4104411941157aa8041fbf6a1972fe21316f897a3bd0029ce30db43fc76181924a0aa33a261c048016ae63949a9cf6f4a821a395d933a071b429dd321cb06041aaea12440a420a40947579ea9ecc0e5d20c21fff28356606df8ecd5479892828eca3689211a0c02b0b3c148f1012313978e86af29aecb9d6e9ceb3ab108428b7933ab9340b740d241a3f0a2a307836383339663743333537323941383064374136323130373832334337376330653932423930313438120a5465737450656572494418decdaebd913022460a440a4025383de3ff37416900195dd2c7b9a640762c785a22f474565fcb6e531855ca605d387f00ce1c1391fe3bf4bb03e724f244c2832c3303392dda2feefb5557c8f71001"
 )
 
 func LoadSerializedAuthReq(str string) (*pb2.V1ClientAuthRequest, error) {
@@ -127,7 +127,7 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.
 		return false, err
 	}
 
-	return authResponseRPC.AuthSuccessful, nil
+	return authResponseRPC.GetV1().AuthSuccessful, nil
 }
 
 // This integration test checks that data can flow between a mock client and Auth protocol. As the auth request was
@@ -173,9 +173,12 @@ func TestV1_Nominal(t *testing.T) {
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
 
+	authData, err := unpackAuthData(req.AuthDataBytes)
+	require.NoError(t, err)
+
 	peerId, walletAddr, err := validateRequest(req, connectingPeerId, log)
 	require.NoError(t, err)
-	require.Equal(t, req.WalletAddr, string(walletAddr), "address Match")
+	require.Equal(t, authData.WalletAddr, string(walletAddr), "address Match")
 	require.Equal(t, connectingPeerId, peerId, "address Match")
 }
 
@@ -186,7 +189,11 @@ func TestV1_BadAuthSig(t *testing.T) {
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
 
-	req.WalletAddr = "0000000"
+	authData, err := unpackAuthData(req.AuthDataBytes)
+	require.NoError(t, err)
+
+	authData.WalletAddr = "0000000"
+	req.AuthDataBytes, _ = proto.Marshal(authData)
 
 	_, _, err = validateRequest(req, connectingPeerId, log)
 	require.Error(t, err)
@@ -211,18 +218,24 @@ func TestV1_SignatureMismatch(t *testing.T) {
 	req2, err := LoadSerializedAuthReq(sampleAuthReq002)
 	require.NoError(t, err)
 
-	_, _, err = validateRequest(req1, types.PeerId(req1.PeerId), log)
+	authData1, err := unpackAuthData(req1.AuthDataBytes)
+	require.NoError(t, err)
+	authData2, err := unpackAuthData(req2.AuthDataBytes)
 	require.NoError(t, err)
 
-	_, _, err = validateRequest(req2, types.PeerId(req2.PeerId), log)
+	// Nominal Checks
+	_, _, err = validateRequest(req1, types.PeerId(authData1.PeerId), log)
+	require.NoError(t, err)
+	_, _, err = validateRequest(req2, types.PeerId(authData2.PeerId), log)
 	require.NoError(t, err)
 
-	req1.WalletSig = req2.WalletSig
-	req2.AuthSig = req1.AuthSig
+	// Swap Signatures to check for valid but mismatched signatures
+	req1.WalletSignature = req2.WalletSignature
+	req2.AuthSignature = req1.AuthSignature
 
-	_, _, err = validateRequest(req1, types.PeerId(req1.PeerId), log)
+	// Expect Errors as the derived walletAddr will not match the one supplied in AuthData
+	_, _, err = validateRequest(req1, types.PeerId(authData1.PeerId), log)
 	require.Error(t, err)
-
-	_, _, err = validateRequest(req2, types.PeerId(req2.PeerId), log)
+	_, _, err = validateRequest(req2, types.PeerId(authData2.PeerId), log)
 	require.Error(t, err)
 }

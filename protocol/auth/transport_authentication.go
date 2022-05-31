@@ -16,7 +16,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"math"
-	"strings"
 )
 
 const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtp-v1/clientauth/0.1.0-beta1")
@@ -115,14 +114,14 @@ type RequestValidatorV1 struct {
 func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId, log *zap.Logger) (types.PeerId, types.WalletAddr, error) {
 
 	// Validate WalletSignature
-	signingWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSig.GetEcdsaCompact())
+	signingWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
 	if err != nil {
 		log.Error("verifying wallet signature", zap.Error(err), zap.Any("AuthRequest", request))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
 	}
 
 	// Validate AuthSignature
-	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(request.IdentityKeyBytes, types.PeerId(request.PeerId), types.WalletAddr(request.WalletAddr), request.AuthSig.GetEcdsaCompact(), log)
+	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact(), log)
 	if err != nil {
 		log.Error("verifying auth signature", zap.Error(err), zap.Any("AuthRequest", request))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
@@ -147,6 +146,13 @@ func CreateIdentitySignRequest(identityBytes []byte) crypto.Message {
 	return []byte(fmt.Sprintf("XMTP : Create Identity\n%s\n\nFor more info: https://xmtp.org/signatures/", hex.EncodeToString(identityBytes)))
 }
 
+func unpackAuthData(authDataBytes []byte) (*pb.AuthData, error) {
+	authData := &pb.AuthData{}
+	err := proto.Unmarshal(authDataBytes, authData)
+
+	return authData, err
+}
+
 func recoverWalletAddress(identityKeyBytes []byte, signature *pb.Signature_ECDSACompact) (types.WalletAddr, error) {
 
 	isrBytes := CreateIdentitySignRequest(identityKeyBytes)
@@ -158,7 +164,7 @@ func recoverWalletAddress(identityKeyBytes []byte, signature *pb.Signature_ECDSA
 	return crypto.RecoverWalletAddress(isrBytes, sig, uint8(signature.GetRecovery()))
 }
 
-func verifyAuthSignature(identityKeyBytes []byte, peerId types.PeerId, walletAddr types.WalletAddr, authSig *pb.Signature_ECDSACompact, log *zap.Logger) (types.PeerId, types.WalletAddr, error) {
+func verifyAuthSignature(identityKeyBytes []byte, authDataBytes []byte, authSig *pb.Signature_ECDSACompact, log *zap.Logger) (types.PeerId, types.WalletAddr, error) {
 
 	pubKey := &pb.PublicKey{}
 	err := proto.Unmarshal(identityKeyBytes, pubKey)
@@ -171,16 +177,13 @@ func verifyAuthSignature(identityKeyBytes []byte, peerId types.PeerId, walletAdd
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
 	}
 
-	messageStr := strings.Join([]string{string(peerId), string(walletAddr)}, "|")
-	messageBytes := []byte(messageStr)
-
 	signature, err := crypto.SignatureFromBytes(authSig.GetBytes())
 	if err != nil {
 		log.Error("signature decoding", zap.Error(err))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
 	}
 
-	isVerified, err := crypto.Verify(pub, messageBytes, signature)
+	isVerified, err := crypto.Verify(pub, authDataBytes, signature)
 	if err != nil {
 		log.Error("signature verification", zap.Error(err))
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
@@ -190,12 +193,25 @@ func verifyAuthSignature(identityKeyBytes []byte, peerId types.PeerId, walletAdd
 		return types.InvalidPeerId(), types.InvalidWalletAddr(), ErrInvalidSignature
 	}
 
-	return peerId, walletAddr, nil
+	authData, err := unpackAuthData(authDataBytes)
+	if err != nil {
+		log.Error("unpacking auth data", zap.Error(err))
+		return types.InvalidPeerId(), types.InvalidWalletAddr(), err
+	}
+
+	return types.PeerId(authData.PeerId), types.WalletAddr(authData.WalletAddr), nil
 }
 
 func (xmtpAuth *XmtpAuthentication) writeAuthResponse(stream network.Stream, isAuthenticated bool, errorString string) error {
 	writer := protoio.NewDelimitedWriter(stream)
-	authRespRPC := &pb.ClientAuthResponse{AuthSuccessful: isAuthenticated, ErrorStr: errorString}
+	authRespRPC := &pb.ClientAuthResponse{
+		Version: &pb.ClientAuthResponse_V1{
+			V1: &pb.V1ClientAuthResponse{
+				AuthSuccessful: isAuthenticated,
+				ErrorStr:       errorString,
+			},
+		},
+	}
 	return writer.WriteMsg(authRespRPC)
 }
 

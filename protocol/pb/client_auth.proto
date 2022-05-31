@@ -39,10 +39,9 @@ message PublicKey {
 
 message V1ClientAuthRequest {
   bytes identityKeyBytes = 1;
-  Signature walletSig = 2;
-  string peerId = 3;
-  string walletAddr = 4;
-  Signature authSig = 5;
+  Signature walletSignature = 2;
+  bytes authDataBytes = 3;
+  Signature authSignature = 4;
 }
 
 message ClientAuthRequest {
@@ -51,13 +50,19 @@ message ClientAuthRequest {
   }
 }
 
-message ClientAuthResponse{
+message V1ClientAuthResponse {
   bool authSuccessful = 1;
   string errorStr = 2;
 }
 
+message ClientAuthResponse{
+  oneof version {
+    V1ClientAuthResponse v1 = 1;
+  }
+}
 
-message ByteSigning {
-  uint64 timestamp = 1;
-  Secp256k1Uncompresed signature = 2;
+message AuthData {
+  string walletAddr = 1;
+  string peerId = 2;
+  uint64 timestamp = 3;
 }
