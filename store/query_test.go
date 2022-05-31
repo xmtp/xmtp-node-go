@@ -9,6 +9,7 @@ import (
 	"github.com/status-im/go-waku/tests"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun/driver/pgdriver"
 )
@@ -32,7 +33,7 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {
 	option := WithDB(db)
-	store, err := NewDBStore(tests.Logger().Desugar(), option)
+	store, err := NewDBStore(utils.InitLogger("console"), option)
 	require.NoError(t, err)
 	return store
 }
