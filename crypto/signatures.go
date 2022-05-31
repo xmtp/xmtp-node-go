@@ -61,7 +61,7 @@ func PrivateKeyFromBytes(bytes []byte) (PrivateKey, error) {
 		return nil, ErrInvalidSignatureLen
 	}
 
-	return (*[32]byte)(bytes), nil
+	return PrivateKey(bytes), nil
 }
 
 // PublicKeyFromBytes converts from a byte slice to a PublicKey type
@@ -70,7 +70,7 @@ func PublicKeyFromBytes(bytes []byte) (PublicKey, error) {
 		return nil, ErrInvalidPubkey
 	}
 
-	return (*[65]byte)(bytes), nil
+	return PublicKey(bytes), nil
 }
 
 // SignatureFromBytes converts from a byte slice to a Signature type
@@ -79,7 +79,7 @@ func SignatureFromBytes(bytes []byte) (Signature, error) {
 		return nil, ErrInvalidSignatureLen
 	}
 
-	return (*[64]byte)(bytes), nil
+	return Signature(bytes), nil
 }
 
 // bytesFromSig converts from a Signature type to a byte slice
