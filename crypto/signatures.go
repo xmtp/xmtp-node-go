@@ -27,7 +27,7 @@ type SignatureBytes []byte
 //well as any errors generated in the process
 func Verify(pub PublicKey, msg Message, sig Signature) (bool, error) {
 	digest := sha256.Sum256(msg)
-	isValid := secp256k1.VerifySignature((*[65]byte)(pub)[:], digest[:], (*[64]byte)(sig)[:])
+	isValid := secp256k1.VerifySignature((*pub)[:], digest[:], (*sig)[:])
 
 	return isValid, nil
 }
@@ -84,5 +84,5 @@ func SignatureFromBytes(bytes []byte) (Signature, error) {
 
 // bytesFromSig converts from a Signature type to a byte slice
 func bytesFromSig(signature Signature) []byte {
-	return (*[64]byte)(signature)[:]
+	return (*signature)[:]
 }
