@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/xmtp/xmtp-node-go/protocol/auth"
 	"io/ioutil"
@@ -23,7 +22,6 @@ import (
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
@@ -78,21 +76,16 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
 
-	if options.DBPath == "" {
-		failOnErr(errors.New("dbpath can't be null"), "")
-	}
-
-	server.db = sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(options.Store.DbConnectionString)))
-
+	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
 	server.ctx = context.Background()
 
 	if options.Metrics.Enable {
-		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger.Sugar())
+		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		go server.metricsServer.Start()
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db := createBunDb(options.Authz.DbConnectionString)
+		db := createBunDbOrFail(options.Authz.DbConnectionString, options.WaitForDB)
 		server.walletAuthorizer = authz.NewDatabaseWalletAuthorizer(db, server.logger)
 		err = server.walletAuthorizer.Start(server.ctx)
 		failOnErr(err, "wallet authorizer error")
@@ -106,8 +99,7 @@ func New(options Options) (server *Server) {
 	}
 
 	if options.EnableWS {
-		wsMa, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d/ws", options.WSAddress, options.WSPort))
-		nodeOpts = append(nodeOpts, node.WithMultiaddress([]multiaddr.Multiaddr{wsMa}))
+		nodeOpts = append(nodeOpts, node.WithWebsockets(options.WSAddress, options.WSPort))
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
@@ -156,9 +148,9 @@ func New(options Options) (server *Server) {
 	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
 	failOnErr(err, "Wakunode")
 
-	addPeers(server.wakuNode, options.Store.Nodes, store.StoreID_v20beta4)
-	addPeers(server.wakuNode, options.LightPush.Nodes, lightpush.LightPushID_v20beta1)
-	addPeers(server.wakuNode, options.Filter.Nodes, filter.FilterID_v20beta1)
+	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
+	addPeers(server.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
+	addPeers(server.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
 
 	if err = server.wakuNode.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
@@ -175,10 +167,11 @@ func New(options Options) (server *Server) {
 
 	if !options.Relay.Disable {
 		for _, nodeTopic := range options.Relay.Topics {
+			nodeTopic := nodeTopic
 			sub, err := server.wakuNode.Relay().SubscribeToTopic(server.ctx, nodeTopic)
 			failOnErr(err, "Error subscring to topic")
 			// Unregister from broadcaster. Otherwise this channel will fill until it blocks publishing
-			server.wakuNode.Broadcaster().Unregister(sub.C)
+			server.wakuNode.Broadcaster().Unregister(&nodeTopic, sub.C)
 		}
 	}
 
@@ -199,21 +192,21 @@ func New(options Options) (server *Server) {
 
 func (server *Server) WaitForShutdown() {
 	// Wait for a SIGINT or SIGTERM signal
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
-	server.logger.Info("Received signal, shutting down...")
+	termChannel := make(chan os.Signal, 1)
+	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
+	<-termChannel
+	server.logger.Info("shutting down...")
 
 	// shut the node down
 	server.wakuNode.Stop()
 
 	if server.metricsServer != nil {
 		err := server.metricsServer.Stop(server.ctx)
-		failOnErr(err, "MetricsClose")
+		failOnErr(err, "metrics stop")
 	}
 }
 
-func addPeers(wakuNode *node.WakuNode, addresses []string, protocol protocol.ID) {
+func addPeers(wakuNode *node.WakuNode, addresses []string, protocols ...string) {
 	for _, addrString := range addresses {
 		if addrString == "" {
 			continue
@@ -222,7 +215,7 @@ func addPeers(wakuNode *node.WakuNode, addresses []string, protocol protocol.ID)
 		addr, err := multiaddr.NewMultiaddr(addrString)
 		failOnErr(err, "invalid multiaddress")
 
-		_, err = wakuNode.AddPeer(addr, protocol)
+		_, err = wakuNode.AddPeer(addr, protocols...)
 		failOnErr(err, "error adding peer")
 	}
 }
@@ -327,8 +320,8 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func CreateMessageMigration(migrationName, dbConnectionString string) error {
-	db := createBunDb(dbConnectionString)
+func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
+	db := createBunDbOrFail(dbConnectionString, waitForDb)
 	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -338,8 +331,8 @@ func CreateMessageMigration(migrationName, dbConnectionString string) error {
 	return err
 }
 
-func CreateAuthzMigration(migrationName, dbConnectionString string) error {
-	db := createBunDb(dbConnectionString)
+func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
+	db := createBunDbOrFail(dbConnectionString, waitForDb)
 	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
@@ -358,6 +351,20 @@ func failOnErr(err error, msg string) {
 	}
 }
 
-func createBunDb(dsn string) *bun.DB {
-	return bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn))), pgdialect.New())
+func createBunDbOrFail(dsn string, waitForDB time.Duration) *bun.DB {
+	return bun.NewDB(createDbOrFail(dsn, waitForDB), pgdialect.New())
+}
+
+func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
+	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	waitUntil := time.Now().Add(waitForDB)
+	err := db.Ping()
+	for err != nil && time.Now().Before(waitUntil) {
+		time.Sleep(3 * time.Second)
+		err = db.Ping()
+	}
+	if err != nil {
+		failOnErr(err, "timeout waiting for DB")
+	}
+	return db
 }

@@ -8,33 +8,25 @@
 package logging
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/multiformats/go-multiaddr"
+	"github.com/status-im/go-waku/logging"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-// List of multiaddrs
+var (
+	// Re-export relevant go-waku helpers
+	MultiAddrs = logging.MultiAddrs
+	HostID     = logging.HostID
+	Time       = logging.Time
+	Filters    = logging.Filters
+	PagingInfo = logging.PagingInfo
+	HexBytes   = logging.HexBytes
+	ENode      = logging.ENode
+	TCPAddr    = logging.TCPAddr
+	UDPAddr    = logging.UDPAddr
+)
 
-type multiaddrs []multiaddr.Multiaddr
-
-func MultiAddrs(key string, addrs ...multiaddr.Multiaddr) zapcore.Field {
-	return zap.Array(key, multiaddrs(addrs))
+// WalletAddress creates a field for a wallet address.
+func WalletAddress(address string) zapcore.Field {
+	return zap.String("wallet_address", address)
 }
-
-func (addrs multiaddrs) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
-	for _, addr := range addrs {
-		encoder.AppendString(addr.String())
-	}
-	return nil
-}
-
-// Host ID
-
-type hostID peer.ID
-
-func HostID(key string, id peer.ID) zapcore.Field {
-	return zap.Stringer(key, hostID(id))
-}
-
-func (id hostID) String() string { return peer.Encode(peer.ID(id)) }

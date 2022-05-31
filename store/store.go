@@ -148,7 +148,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	if len(peerList) == 0 {
 		peerList, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
-			s.log.Error("Error selecting peer: ", zap.Error(err))
+			s.log.Error("selecting peer", zap.Error(err))
 			return -1, store.ErrNoPeersAvailable
 		}
 	}
@@ -269,6 +269,7 @@ func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candi
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
 	defer stream.Close()
+	log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
 
 	historyRPCRequest := &pb.HistoryRPC{}
 
@@ -277,30 +278,36 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 
 	err := reader.ReadMsg(historyRPCRequest)
 	if err != nil {
-		s.log.Error("reading request", zap.Error(err))
+		log.Error("reading request", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
 		return
 	}
-
-	s.log.Info("received query", logging.HostID("peer", stream.Conn().RemotePeer()))
+	log = log.With(zap.String("id", historyRPCRequest.RequestId))
+	if query := historyRPCRequest.Query; query != nil {
+		log = log.With(logging.Filters(query.GetContentFilters()))
+	}
+	log.Info("received query")
 
 	historyResponseRPC := &pb.HistoryRPC{}
 	historyResponseRPC.RequestId = historyRPCRequest.RequestId
 	res, err := s.FindMessages(historyRPCRequest.Query)
 	if err != nil {
-		s.log.Error("Error retrieving messages from DB")
+		log.Error("retrieving messages from DB", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "dbError")
 		return
 	}
 
 	historyResponseRPC.Response = res
-
+	log = log.With(
+		zap.Int("messages", len(res.Messages)),
+		logging.IfDebug(logging.PagingInfo(res.PagingInfo)),
+	)
 	err = writer.WriteMsg(historyResponseRPC)
 	if err != nil {
-		s.log.Error("writing response", zap.Error(err))
+		log.Error("writing response", zap.Error(err))
 		_ = stream.Reset()
 	} else {
-		s.log.Info("response sent", logging.HostID("peer", stream.Conn().RemotePeer()))
+		log.Info("response sent")
 	}
 }
 
@@ -323,6 +330,10 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 		metrics.RecordStoreError(s.ctx, "store_failure")
 		return err
 	}
+	s.log.Info("message stored",
+		zap.String("content_topic", env.Message().ContentTopic),
+		zap.Int("size", env.Size()),
+		logging.Time("sent", index.SenderTime))
 	// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 	metrics.RecordMessage(s.ctx, "stored", 1)
 
