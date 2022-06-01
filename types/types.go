@@ -1,6 +1,13 @@
 package types
 
-import "github.com/libp2p/go-libp2p-core/peer"
+import (
+	"github.com/libp2p/go-libp2p-core/peer"
+)
+
+var (
+	EthereumWalletAddressLength = 42
+	PeerIdLength                = 46
+)
 
 type WalletAddr string
 type PeerId peer.ID
@@ -11,6 +18,9 @@ func (walletAddr WalletAddr) String() string {
 
 func InvalidWalletAddr() WalletAddr {
 	return ""
+}
+func (walletAddr WalletAddr) IsValid() bool {
+	return EthereumWalletAddressLength == len(walletAddr.String())
 }
 
 func (peerId PeerId) String() string {
@@ -23,4 +33,8 @@ func (peerId PeerId) Raw() peer.ID {
 
 func InvalidPeerId() PeerId {
 	return ""
+}
+
+func (peerId PeerId) IsValid() bool {
+	return PeerIdLength == len(peerId.String())
 }
