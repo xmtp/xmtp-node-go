@@ -25,11 +25,11 @@ type SignatureBytes []byte
 // Verify evalutes a Secp256k1 signature to determine if the message provided was signed by the given publics
 // corresponding private key. It returns true if the message was signed by the corresponding keypair, as
 //well as any errors generated in the process
-func Verify(pub PublicKey, msg Message, sig Signature) (bool, error) {
+func Verify(pub PublicKey, msg Message, sig Signature) bool {
 	digest := sha256.Sum256(msg)
 	isValid := secp256k1.VerifySignature((*pub)[:], digest[:], (*sig)[:])
 
-	return isValid, nil
+	return isValid
 }
 
 // EtherHash implements the Ethereum hashing standard used to create signatures. Uses an Ethereum specific prefix and
@@ -41,14 +41,14 @@ func EtherHash(msg Message) []byte {
 
 // RecoverWalletAddress calculates the WalletAddress of the identity which was used to sign the given message. A value
 // is always returned and needs to verified before it can be trusted.
-func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (types.WalletAddr, error) {
+func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (wallet types.WalletAddr, err error) {
 
 	digest := EtherHash(msg)
 	signatureBytes := append(bytesFromSig(signature), recovery)
 
 	epk, err := ethcrypto.SigToPub(digest, signatureBytes)
 	if err != nil {
-		return types.InvalidWalletAddr(), err
+		return wallet, err
 	}
 
 	addr := ethcrypto.PubkeyToAddress(*epk)

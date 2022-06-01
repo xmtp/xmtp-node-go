@@ -16,9 +16,6 @@ func (walletAddr WalletAddr) String() string {
 	return string(walletAddr)
 }
 
-func InvalidWalletAddr() WalletAddr {
-	return ""
-}
 func (walletAddr WalletAddr) IsValid() bool {
 	return EthereumWalletAddressLength == len(walletAddr.String())
 }
@@ -29,10 +26,6 @@ func (peerId PeerId) String() string {
 
 func (peerId PeerId) Raw() peer.ID {
 	return peer.ID(peerId)
-}
-
-func InvalidPeerId() PeerId {
-	return ""
 }
 
 func (peerId PeerId) IsValid() bool {

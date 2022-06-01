@@ -152,7 +152,7 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	go func() {
-		err := node.Start()
+		node.Start()
 		require.NoError(t, err)
 		dest := node.h.Addrs()[0]
 

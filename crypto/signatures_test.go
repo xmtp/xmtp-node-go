@@ -48,9 +48,7 @@ func TestStaticSignatureRoundTrip(t *testing.T) {
 	require.Equal(t, expectedSig, generatedSig, "signature mismatch")
 	require.Equal(t, expectedRecovery, recovery, "bad recovery code")
 
-	isValid, err := Verify(pk, msg, generatedSig)
-	require.NoError(t, err)
-
+	isValid := Verify(pk, msg, generatedSig)
 	require.True(t, isValid, "Signature could not verified")
 }
 
