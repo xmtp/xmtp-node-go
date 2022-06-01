@@ -108,11 +108,10 @@ func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *za
 		xmtpAuth.log.Error("validating request", zap.Error(err))
 		return peer, wallet, err
 	}
-	xmtpAuth.log.Error("validating request", zap.Error(err))
 
 	err = validateResults(suppliedPeerId, walletAddr)
 
-	return suppliedPeerId, walletAddr, nil
+	return suppliedPeerId, walletAddr, err
 }
 
 func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId, log *zap.Logger) (peer types.PeerId, wallet types.WalletAddr, err error) {
