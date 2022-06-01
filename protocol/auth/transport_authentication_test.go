@@ -11,6 +11,7 @@ import (
 	"github.com/status-im/go-waku/tests"
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/go-msgio/protoio"
+	"github.com/xmtp/xmtp-node-go/logging"
 	pb2 "github.com/xmtp/xmtp-node-go/protocol/pb"
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
@@ -167,7 +168,8 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestV1_Nominal(t *testing.T) {
-	log, _ := zap.NewDevelopment()
+	logger, _ := zap.NewDevelopment()
+	ctx := logging.With(context.Background(), logger)
 
 	connectingPeerId := types.PeerId("TestPeerID")
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
@@ -176,14 +178,15 @@ func TestV1_Nominal(t *testing.T) {
 	authData, err := unpackAuthData(req.AuthDataBytes)
 	require.NoError(t, err)
 
-	peerId, walletAddr, err := validateRequest(req, connectingPeerId, log)
+	peerId, walletAddr, err := validateRequest(ctx, req, connectingPeerId)
 	require.NoError(t, err)
 	require.Equal(t, authData.WalletAddr, string(walletAddr), "address Match")
 	require.Equal(t, connectingPeerId, peerId, "address Match")
 }
 
 func TestV1_BadAuthSig(t *testing.T) {
-	log, _ := zap.NewDevelopment()
+	logger, _ := zap.NewDevelopment()
+	ctx := logging.With(context.Background(), logger)
 
 	connectingPeerId := types.PeerId("TestPeerID")
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
@@ -195,23 +198,25 @@ func TestV1_BadAuthSig(t *testing.T) {
 	authData.WalletAddr = "0000000"
 	req.AuthDataBytes, _ = proto.Marshal(authData)
 
-	_, _, err = validateRequest(req, connectingPeerId, log)
+	_, _, err = validateRequest(ctx, req, connectingPeerId)
 	require.Error(t, err)
 }
 
 func TestV1_PeerIdSpoof(t *testing.T) {
-	log, _ := zap.NewDevelopment()
+	logger, _ := zap.NewDevelopment()
+	ctx := logging.With(context.Background(), logger)
 
 	req, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
 	connectingPeerId := types.PeerId("InvalidPeerID")
 
-	_, _, err = validateRequest(req, connectingPeerId, log)
+	_, _, err = validateRequest(ctx, req, connectingPeerId)
 	require.Error(t, err)
 }
 
 func TestV1_SignatureMismatch(t *testing.T) {
-	log, _ := zap.NewDevelopment()
+	logger, _ := zap.NewDevelopment()
+	ctx := logging.With(context.Background(), logger)
 
 	req1, err := LoadSerializedAuthReq(sampleAuthReq001)
 	require.NoError(t, err)
@@ -224,9 +229,9 @@ func TestV1_SignatureMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// Nominal Checks
-	_, _, err = validateRequest(req1, types.PeerId(authData1.PeerId), log)
+	_, _, err = validateRequest(ctx, req1, types.PeerId(authData1.PeerId))
 	require.NoError(t, err)
-	_, _, err = validateRequest(req2, types.PeerId(authData2.PeerId), log)
+	_, _, err = validateRequest(ctx, req2, types.PeerId(authData2.PeerId))
 	require.NoError(t, err)
 
 	// Swap Signatures to check for valid but mismatched signatures
@@ -234,8 +239,8 @@ func TestV1_SignatureMismatch(t *testing.T) {
 	req2.AuthSignature = req1.AuthSignature
 
 	// Expect Errors as the derived walletAddr will not match the one supplied in AuthData
-	_, _, err = validateRequest(req1, types.PeerId(authData1.PeerId), log)
+	_, _, err = validateRequest(ctx, req1, types.PeerId(authData1.PeerId))
 	require.Error(t, err)
-	_, _, err = validateRequest(req2, types.PeerId(authData2.PeerId), log)
+	_, _, err = validateRequest(ctx, req2, types.PeerId(authData2.PeerId))
 	require.Error(t, err)
 }

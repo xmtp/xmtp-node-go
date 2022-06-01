@@ -52,6 +52,8 @@ func (xmtpAuth *XmtpAuthentication) Start() {
 func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	log := xmtpAuth.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
+	ctx := logging.With(xmtpAuth.ctx, log)
+
 	log.Info("stream established")
 	defer func() {
 		if err := stream.Close(); err != nil {
@@ -59,7 +61,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		}
 	}()
 
-	authenticatedPeerId, authenticatedWalletAddr, err := xmtpAuth.handleRequest(stream, log)
+	authenticatedPeerId, authenticatedWalletAddr, err := handleRequest(ctx, stream)
 	isAuthenticated := err == nil
 
 	if isAuthenticated {
@@ -73,7 +75,7 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		errStr = err.Error()
 	}
 
-	err = xmtpAuth.writeAuthResponse(stream, isAuthenticated, errStr)
+	err = writeAuthResponse(stream, isAuthenticated, errStr)
 	if err != nil {
 		log.Error("writing response", zap.Error(err))
 		return
@@ -83,11 +85,12 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 }
 
-func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *zap.Logger) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func handleRequest(ctx context.Context, stream network.Stream) (peer types.PeerId, wallet types.WalletAddr, err error) {
+	logger := logging.From(ctx)
 
-	authRequest, err := xmtpAuth.readAuthRequest(stream)
+	authRequest, err := readAuthRequest(stream)
 	if err != nil {
-		log.Error("reading request", zap.Error(err))
+		logger.Error("reading request", zap.Error(err))
 		return peer, wallet, err
 	}
 
@@ -98,14 +101,14 @@ func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *za
 
 	switch version := authRequest.Version.(type) {
 	case *pb.ClientAuthRequest_V1:
-		suppliedPeerId, walletAddr, err = validateRequest(authRequest.GetV1(), connectingPeerId, log)
+		suppliedPeerId, walletAddr, err = validateRequest(ctx, authRequest.GetV1(), connectingPeerId)
 	default:
-		xmtpAuth.log.Error("No handler for request", zap.Any("version", version))
+		logger.Error("No handler for request", zap.Any("version", version))
 		return peer, wallet, ErrNoHandler
 	}
 
 	if err != nil {
-		xmtpAuth.log.Error("validating request", zap.Error(err))
+		logger.Error("validating request", zap.Error(err))
 		return peer, wallet, err
 	}
 
@@ -114,32 +117,32 @@ func (xmtpAuth *XmtpAuthentication) handleRequest(stream network.Stream, log *za
 	return suppliedPeerId, walletAddr, err
 }
 
-func validateRequest(request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId, log *zap.Logger) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func validateRequest(ctx context.Context, request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId) (peer types.PeerId, wallet types.WalletAddr, err error) {
+	logger := logging.From(ctx)
 
 	// Validate WalletSignature
 	recoveredWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
 	if err != nil {
-		log.Error("verifying wallet signature", zap.Error(err))
+		logger.Error("verifying wallet signature", zap.Error(err))
 		return peer, wallet, err
 	}
 
 	// Validate AuthSignature
-	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact(), log)
+	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(ctx, request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact())
 	if err != nil {
-		log.Error("verifying auth signature", zap.Error(err))
+		logger.Error("verifying auth signature", zap.Error(err))
 		return peer, wallet, err
 	}
 
 	// To protect against spoofing, ensure the walletAddresses match in both signatures
 	if recoveredWalletAddress != suppliedWalletAddress {
-		log.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
+		logger.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
 		return peer, wallet, ErrWalletMismatch
 	}
 
-	log.Info("COMPARE", zap.Any("CC", connectingPeerId.Raw().Pretty()), zap.Any("SS", suppliedPeerId))
 	// To protect against spoofing, ensure the AuthRequest originated from the same peerID that was authenticated.
 	if connectingPeerId != suppliedPeerId {
-		log.Error("peerId Mismatch", zap.Error(err), logging.HostID("supplied", suppliedPeerId.Raw()))
+		logger.Error("peerId Mismatch", zap.Error(err), logging.HostID("supplied", suppliedPeerId.Raw()))
 		return peer, wallet, ErrWrongPeerId
 	}
 
@@ -168,7 +171,8 @@ func recoverWalletAddress(identityKeyBytes []byte, signature *pb.Signature_ECDSA
 	return crypto.RecoverWalletAddress(isrBytes, sig, uint8(signature.GetRecovery()))
 }
 
-func verifyAuthSignature(identityKeyBytes []byte, authDataBytes []byte, authSig *pb.Signature_ECDSACompact, log *zap.Logger) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func verifyAuthSignature(ctx context.Context, identityKeyBytes []byte, authDataBytes []byte, authSig *pb.Signature_ECDSACompact) (peer types.PeerId, wallet types.WalletAddr, err error) {
+	logger := logging.From(ctx)
 
 	pubKey := &pb.PublicKey{}
 	err = proto.Unmarshal(identityKeyBytes, pubKey)
@@ -183,7 +187,7 @@ func verifyAuthSignature(identityKeyBytes []byte, authDataBytes []byte, authSig 
 
 	signature, err := crypto.SignatureFromBytes(authSig.GetBytes())
 	if err != nil {
-		log.Error("signature decoding", zap.Error(err))
+		logger.Error("signature decoding", zap.Error(err))
 		return peer, wallet, err
 	}
 
@@ -194,7 +198,7 @@ func verifyAuthSignature(identityKeyBytes []byte, authDataBytes []byte, authSig 
 
 	authData, err := unpackAuthData(authDataBytes)
 	if err != nil {
-		log.Error("unpacking auth data", zap.Error(err))
+		logger.Error("unpacking auth data", zap.Error(err))
 		return peer, wallet, err
 	}
 
@@ -215,7 +219,7 @@ func validateResults(peerId types.PeerId, addr types.WalletAddr) error {
 	return nil
 }
 
-func (xmtpAuth *XmtpAuthentication) writeAuthResponse(stream network.Stream, isAuthenticated bool, errorString string) error {
+func writeAuthResponse(stream network.Stream, isAuthenticated bool, errorString string) error {
 	writer := protoio.NewDelimitedWriter(stream)
 	authRespRPC := &pb.ClientAuthResponse{
 		Version: &pb.ClientAuthResponse_V1{
@@ -228,7 +232,7 @@ func (xmtpAuth *XmtpAuthentication) writeAuthResponse(stream network.Stream, isA
 	return writer.WriteMsg(authRespRPC)
 }
 
-func (xmtpAuth *XmtpAuthentication) readAuthRequest(stream network.Stream) (*pb.ClientAuthRequest, error) {
+func readAuthRequest(stream network.Stream) (*pb.ClientAuthRequest, error) {
 	reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
 	authReqRPC := &pb.ClientAuthRequest{}
 	err := reader.ReadMsg(authReqRPC)
