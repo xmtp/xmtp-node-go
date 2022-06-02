@@ -103,7 +103,7 @@ func handleRequest(ctx context.Context, stream network.Stream) (peer types.PeerI
 	case *pb.ClientAuthRequest_V1:
 		suppliedPeerId, walletAddr, err = validateRequest(ctx, authRequest.GetV1(), connectingPeerId)
 	default:
-		logger.Error("No handler for request", zap.Any("version", version))
+		logger.Error("No handler for request", logging.ValueType("version", version))
 		return peer, wallet, ErrNoHandler
 	}
 

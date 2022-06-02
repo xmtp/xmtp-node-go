@@ -8,6 +8,7 @@
 package logging
 
 import (
+	"fmt"
 	"github.com/status-im/go-waku/logging"
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
@@ -34,4 +35,14 @@ func WalletAddress(address string) zapcore.Field {
 
 func WalletAddressLabelled(label string, address types.WalletAddr) zapcore.Field {
 	return zap.String(label, string(address))
+}
+
+type valueType struct{ val interface{} }
+
+func ValueType(key string, val interface{}) zap.Field {
+	return zap.Stringer(key, valueType{val})
+}
+
+func (vt valueType) String() string {
+	return fmt.Sprintf("%T", vt.val)
 }
