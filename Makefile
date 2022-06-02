@@ -7,6 +7,9 @@ deps: lint-install
 build:
 	go build -o build/xmtp main.go
 
+generate:
+	go generate ./...
+
 vendor:
 	go mod tidy
 
