@@ -1,4 +1,4 @@
-package auth
+package authn
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/crypto"
 	"github.com/xmtp/xmtp-node-go/logging"
-	"github.com/xmtp/xmtp-node-go/protocol/pb"
+	"github.com/xmtp/xmtp-node-go/pb"
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -39,7 +39,7 @@ func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.Logger) *X
 	xmtpAuth := new(XmtpAuthentication)
 	xmtpAuth.ctx = ctx
 	xmtpAuth.h = h
-	xmtpAuth.log = log.Named("client-auth")
+	xmtpAuth.log = log.Named("client-authn")
 
 	return xmtpAuth
 }
@@ -130,7 +130,7 @@ func validateRequest(ctx context.Context, request *pb.V1ClientAuthRequest, conne
 	// Validate AuthSignature
 	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(ctx, request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact())
 	if err != nil {
-		logger.Error("verifying auth signature", zap.Error(err))
+		logger.Error("verifying authn signature", zap.Error(err))
 		return peer, wallet, err
 	}
 
@@ -198,7 +198,7 @@ func verifyAuthSignature(ctx context.Context, identityKeyBytes []byte, authDataB
 
 	authData, err := unpackAuthData(authDataBytes)
 	if err != nil {
-		logger.Error("unpacking auth data", zap.Error(err))
+		logger.Error("unpacking authn data", zap.Error(err))
 		return peer, wallet, err
 	}
 

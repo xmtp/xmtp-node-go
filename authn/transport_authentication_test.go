@@ -1,4 +1,4 @@
-package auth
+package authn
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/logging"
-	pb2 "github.com/xmtp/xmtp-node-go/protocol/pb"
+	pb2 "github.com/xmtp/xmtp-node-go/pb"
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -131,7 +131,7 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.
 	return authResponseRPC.GetV1().AuthSuccessful, nil
 }
 
-// This integration test checks that data can flow between a mock client and Auth protocol. As the auth request was
+// This integration test checks that data can flow between a mock client and Auth protocol. As the authn request was
 // generated from an oracle the peerIDs between the saved request and the connecting stream will not match, resulting in
 // a failed authentication.
 func TestRoundTrip(t *testing.T) {
