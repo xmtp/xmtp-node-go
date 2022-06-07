@@ -44,6 +44,10 @@ func main() {
 		log.Fatalf("Could not set log level: %s", err)
 	}
 
+	// Set encoding for logs (console, json, ...)
+	// Note that libp2p reads the encoding from GOLOG_LOG_FMT env var.
+	utils.InitLogger(options.LogEncoding)
+
 	if options.GenerateKey {
 		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
 			log.Fatalf("Could not write private key file: %s", err)
