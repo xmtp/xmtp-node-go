@@ -212,7 +212,7 @@ func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 	}
 
 	lastMessage := messages[len(messages)-1]
-	envelope := protocol.NewEnvelope(lastMessage.Message, lastMessage.PubsubTopic)
+	envelope := protocol.NewEnvelope(lastMessage.Message, lastMessage.ReceiverTime, lastMessage.PubsubTopic)
 	return computeIndex(envelope)
 }
 

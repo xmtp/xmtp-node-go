@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -161,7 +162,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 
 	msgCount := 0
 	for _, msg := range messages {
-		if err = s.storeMessage(protocol.NewEnvelope(msg, pubsubTopic)); err == nil {
+		if err = s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic)); err == nil {
 			msgCount++
 		}
 	}
@@ -319,12 +320,7 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 }
 
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
-	index, err := computeIndex(env)
-	if err != nil {
-		s.log.Error("creating message index", zap.Error(err))
-		return err
-	}
-	err = s.msgProvider.Put(index, env.PubsubTopic(), env.Message()) // Should the index be stored?
+	err := s.msgProvider.Put(env) // Should the index be stored?
 	if err != nil {
 		s.log.Error("storing message", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "store_failure")
@@ -333,7 +329,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	s.log.Info("message stored",
 		zap.String("content_topic", env.Message().ContentTopic),
 		zap.Int("size", env.Size()),
-		logging.Time("sent", index.SenderTime))
+		logging.Time("sent", env.Index().SenderTime))
 	// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 	metrics.RecordMessage(s.ctx, "stored", 1)
 
@@ -341,8 +337,9 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 }
 
 func computeIndex(env *protocol.Envelope) (*pb.Index, error) {
+	hash := sha256.Sum256(append([]byte(env.Message().ContentTopic), env.Message().Payload...))
 	return &pb.Index{
-		Digest:       env.Hash(),
+		Digest:       hash[:],
 		ReceiverTime: utils.GetUnixEpoch(),
 		SenderTime:   env.Message().Timestamp,
 		PubsubTopic:  env.PubsubTopic(),

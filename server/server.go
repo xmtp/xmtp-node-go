@@ -6,13 +6,14 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"github.com/xmtp/xmtp-node-go/authn"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/xmtp/xmtp-node-go/authn"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	dssql "github.com/ipfs/go-ds-sql"
@@ -60,7 +61,7 @@ func New(options Options) (server *Server) {
 	server = new(Server)
 	var err error
 
-	server.logger = utils.InitLogger(options.LogEncoding)
+	server.logger = utils.Logger()
 	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
 		server.logger.Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
 	}
@@ -71,8 +72,8 @@ func New(options Options) (server *Server) {
 	prvKey, err := getPrivKey(options)
 	failOnErr(err, "nodekey error")
 
-	p2pPrvKey := libp2pcrypto.Secp256k1PrivateKey(*prvKey)
-	id, err := peer.IDFromPublicKey((&p2pPrvKey).GetPublic())
+	p2pPrvKey := utils.EcdsaPrivKeyToSecp256k1PrivKey(prvKey)
+	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
 
@@ -234,10 +235,12 @@ func loadPrivateKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	privKey := (*ecdsa.PrivateKey)(p.(*libp2pcrypto.Secp256k1PrivateKey))
-	privKey.Curve = crypto.S256()
+	pBytes, err := p.Raw()
+	if err != nil {
+		return nil, err
+	}
 
-	return privKey, nil
+	return crypto.ToECDSA(pBytes)
 }
 
 func checkForPrivateKeyFile(path string, overwrite bool) error {
@@ -260,12 +263,7 @@ func generatePrivateKey() ([]byte, error) {
 		return nil, err
 	}
 
-	privKey := libp2pcrypto.PrivKey((*libp2pcrypto.Secp256k1PrivateKey)(key))
-
-	b, err := privKey.Raw()
-	if err != nil {
-		return nil, err
-	}
+	b := key.D.Bytes()
 
 	output := make([]byte, hex.EncodedLen(len(b)))
 	hex.Encode(output, b)

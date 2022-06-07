@@ -27,13 +27,13 @@ func NewMock() *sql.DB {
 }
 
 func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
-	idx, _ := computeIndex(protocol.NewEnvelope(msg, topic))
+	idx, _ := computeIndex(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), topic))
 	return idx
 }
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {
 	option := WithDB(db)
-	store, err := NewDBStore(utils.InitLogger("console"), option)
+	store, err := NewDBStore(utils.Logger(), option)
 	require.NoError(t, err)
 	return store
 }
@@ -48,25 +48,13 @@ func createAndFillDb(t *testing.T) (*sql.DB, []*pb.WakuMessage) {
 	msg2 := tests.CreateWakuMessage("test2", 2)
 	msg3 := tests.CreateWakuMessage("test3", 3)
 
-	err = store.Put(
-		buildIndex(msg1, TOPIC),
-		TOPIC,
-		msg1,
-	)
+	err = store.Put(protocol.NewEnvelope(msg1, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(
-		buildIndex(msg2, TOPIC),
-		TOPIC,
-		msg2,
-	)
+	err = store.Put(protocol.NewEnvelope(msg2, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(
-		buildIndex(msg3, TOPIC),
-		TOPIC,
-		msg3,
-	)
+	err = store.Put(protocol.NewEnvelope(msg3, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
 	return db, []*pb.WakuMessage{msg1, msg2, msg3}
@@ -293,11 +281,7 @@ func TestPagingInfoWithFilter(t *testing.T) {
 	db, _ := createAndFillDb(t)
 	store := createStore(t, db)
 	additionalMessage := tests.CreateWakuMessage("test1", 2)
-	err := store.Put(
-		buildIndex(additionalMessage, "test"),
-		"test",
-		additionalMessage,
-	)
+	err := store.Put(protocol.NewEnvelope(additionalMessage, utils.GetUnixEpoch(), "test"))
 	require.NoError(t, err)
 
 	results := []*pb.WakuMessage{}

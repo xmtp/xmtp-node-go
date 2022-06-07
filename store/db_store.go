@@ -5,7 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/status-im/go-waku/waku/persistence"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/migrate"
@@ -76,7 +76,10 @@ func (d *DBStore) Stop() {
 }
 
 // Inserts a WakuMessage into the DB
-func (d *DBStore) Put(cursor *pb.Index, pubsubTopic string, message *pb.WakuMessage) error {
+func (d *DBStore) Put(env *protocol.Envelope) error {
+	cursor := env.Index()
+	pubsubTopic := env.PubsubTopic()
+	message := env.Message()
 	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version) VALUES ($1, $2, $3, $4, $5, $6, $7)")
 	if err != nil {
 		return err
