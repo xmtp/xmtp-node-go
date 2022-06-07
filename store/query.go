@@ -7,7 +7,6 @@ import (
 	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
-	"github.com/status-im/go-waku/waku/v2/utils"
 )
 
 /**
@@ -213,7 +212,7 @@ func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 	}
 
 	lastMessage := messages[len(messages)-1]
-	envelope := protocol.NewEnvelope(lastMessage.Message, utils.GetUnixEpoch(), lastMessage.PubsubTopic)
+	envelope := protocol.NewEnvelope(lastMessage.Message, lastMessage.ReceiverTime, lastMessage.PubsubTopic)
 	return computeIndex(envelope)
 }
 
