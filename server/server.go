@@ -62,10 +62,6 @@ func New(options Options) (server *Server) {
 	var err error
 
 	server.logger = utils.Logger()
-	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
-		server.logger.Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
-	}
-
 	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
 
