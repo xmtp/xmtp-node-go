@@ -11,3 +11,10 @@ services:
       POSTGRES_PASSWORD: xmtp
     ports:
       - 6543:5432
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
