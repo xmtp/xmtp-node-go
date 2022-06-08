@@ -28,3 +28,10 @@ XMTP Node software
 1. `docker-compose up -d`
 2. `make build`
 3. `./build/xmtp --authz-db-connection-string "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable" --create-authz-migration $MIGRATION_NAME`
+
+### Debugging metrics
+
+1. `docker-compose up -d`
+2. `make build`
+3. `./build/xmtp --message-db-connection-string "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable" --metrics`
+4. browse to http://localhost:9090 to see prometheus interface
