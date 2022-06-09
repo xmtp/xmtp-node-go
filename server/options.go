@@ -44,9 +44,10 @@ func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
 // MetricsOptions are settings used to start a prometheus server for obtaining
 // useful node metrics to monitor the health of behavior of the go-waku node.
 type MetricsOptions struct {
-	Enable  bool   `long:"metrics" description:"Enable the metrics server"`
-	Address string `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
-	Port    int    `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
+	Enable       bool          `long:"metrics" description:"Enable the metrics server"`
+	Address      string        `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
+	Port         int           `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
+	StatusPeriod time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 }
 
 type AuthzOptions struct {

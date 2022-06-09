@@ -26,7 +26,6 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/status-im/go-waku/waku/metrics"
 	"github.com/status-im/go-waku/waku/persistence/sqlite"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
@@ -40,6 +39,7 @@ import (
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/authz"
 	"github.com/xmtp/xmtp-node-go/logging"
+	"github.com/xmtp/xmtp-node-go/metrics"
 	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
 	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/store"
@@ -52,6 +52,7 @@ type Server struct {
 	metricsServer    *metrics.Server
 	wakuNode         *node.WakuNode
 	ctx              context.Context
+	cancel           context.CancelFunc
 	walletAuthorizer authz.WalletAuthorizer
 	authenticator    *authn.XmtpAuthentication
 }
@@ -72,12 +73,14 @@ func New(options Options) (server *Server) {
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
+	server.ctx = logging.With(server.ctx, server.logger)
 
 	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
-	server.ctx = context.Background()
+	server.ctx, server.cancel = context.WithCancel(context.Background())
 
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
+		metrics.RegisterViews(server.logger)
 		go server.metricsServer.Start()
 	}
 
@@ -145,6 +148,10 @@ func New(options Options) (server *Server) {
 	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
 	failOnErr(err, "Wakunode")
 
+	if options.Metrics.Enable {
+		go server.statusMetricsLoop(options.Metrics)
+	}
+
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
 	addPeers(server.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
 	addPeers(server.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
@@ -191,6 +198,7 @@ func (server *Server) WaitForShutdown() {
 	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-termChannel
 	server.logger.Info("shutting down...")
+	server.cancel()
 
 	// shut the node down
 	server.wakuNode.Stop()
@@ -198,6 +206,20 @@ func (server *Server) WaitForShutdown() {
 	if server.metricsServer != nil {
 		err := server.metricsServer.Stop(server.ctx)
 		failOnErr(err, "metrics stop")
+	}
+}
+
+func (server *Server) statusMetricsLoop(options MetricsOptions) {
+	server.logger.Info("starting status metrics loop", zap.Duration("period", options.StatusPeriod))
+	ticker := time.NewTicker(options.StatusPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-server.ctx.Done():
+			return
+		case <-ticker.C:
+			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host())
+		}
 	}
 }
 
