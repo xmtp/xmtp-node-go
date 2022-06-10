@@ -74,8 +74,7 @@ func New(options Options) (server *Server) {
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
-	server.ctx = logging.With(context.Background(), server.logger)
-	server.ctx, server.cancel = context.WithCancel(server.ctx)
+	server.ctx, server.cancel = context.WithCancel(logging.With(context.Background(), server.logger))
 
 	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
 	server.logger.Info("created DB")
