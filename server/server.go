@@ -65,6 +65,7 @@ func New(options Options) (server *Server) {
 	server.logger = utils.Logger()
 	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
+	server.logger.Info("resolved host addr", zap.Stringer("addr", server.hostAddr))
 
 	prvKey, err := getPrivKey(options)
 	failOnErr(err, "nodekey error")
@@ -73,10 +74,10 @@ func New(options Options) (server *Server) {
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
-	server.ctx = logging.With(context.Background(), server.logger)
+	server.ctx, server.cancel = context.WithCancel(logging.With(context.Background(), server.logger))
 
 	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
-	server.ctx, server.cancel = context.WithCancel(server.ctx)
+	server.logger.Info("created DB")
 
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
@@ -197,6 +198,10 @@ func (server *Server) WaitForShutdown() {
 	termChannel := make(chan os.Signal, 1)
 	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-termChannel
+	server.Shutdown()
+}
+
+func (server *Server) Shutdown() {
 	server.logger.Info("shutting down...")
 	server.cancel()
 
