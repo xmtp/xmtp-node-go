@@ -1,11 +1,8 @@
-.PHONY: all build build-deploy lint test coverage docker-image docker-image-multiarch postgres
+.PHONY: all build lint test coverage docker-image docker-image-multiarch postgres
 
 all: build
 
 deps: lint-install
-
-build-deploy:
-	go build -o build/deploy ./scripts/deploy
 
 build:
 	go build -o build/xmtp main.go
