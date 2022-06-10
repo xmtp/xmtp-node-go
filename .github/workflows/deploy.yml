@@ -1,10 +1,10 @@
-name: Push to Registry
+name: Push to Registry And Deploy
 on:
   push:
     branches:
       - main
 jobs:
-  push:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
@@ -24,4 +24,10 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Build and Push to Docker Hub
-        run: make docker-image-multiarch
+        env:
+          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
+        run: |
+          IMAGE_TO_DEPLOY=xmtp/node-go@$(make docker-image-multiarch)
+          echo Successfully pushed $IMAGE_TO_DEPLOY
+          python3 ./dev/deploy.py --tf-token=$TERRAFORM_TOKEN --workspace=dev --organization=xmtp --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          echo Successfully deployed
