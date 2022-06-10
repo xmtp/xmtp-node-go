@@ -4,6 +4,7 @@ import urllib.request
 import json
 
 TERRAFORM_BASE_URL = "https://app.terraform.io/api/v2"
+NODE_IMAGE_PREFIX = "xmtp/node-go@sha256:"
 
 
 class Terraform:
@@ -68,5 +69,10 @@ if __name__ == "__main__":
     )
     opts = {k.replace("--", ""): v for k, v in dict(opts).items()}
     tf = Terraform(opts["tf-token"], opts["organization"], opts["workspace"])
-    tf.set_workspace_variable("xmtp_node_image", opts["xmtp-node-image"])
+
+    node_image = opts["xmtp-node-image"].strip()
+    if not node_image.startswith(NODE_IMAGE_PREFIX):
+        raise Exception(f"Invalid node image {node_image}")
+
+    tf.set_workspace_variable("xmtp_node_image", node_image)
     tf.start_run(opts["git-commit"])
