@@ -21,7 +21,7 @@ const NODE_IMAGE_PREFIX = "xmtp/node-go@sha256:"
 
 var options struct {
 	TFToken      string `long:"tf-token" description:"Terraform token"`
-	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:`
+	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev"`
 	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
 	NodeImage    string `long:"xmtp-node-image"`
 	Commit       string `long:"git-commit"`
