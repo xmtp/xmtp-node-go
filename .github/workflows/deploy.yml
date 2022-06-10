@@ -33,5 +33,5 @@ jobs:
         run: |
           IMAGE_TO_DEPLOY=xmtp/node-go@$(make docker-image-multiarch)
           echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./build/deploy --tf-token=$TERRAFORM_TOKEN --workspace=dev --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --workspace=dev --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
