@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Build and Push to Docker Hub
+        env:
+          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
           IMAGE_TO_DEPLOY=xmtp/node-go@$(make docker-image-multiarch)
           echo Successfully pushed $IMAGE_TO_DEPLOY
