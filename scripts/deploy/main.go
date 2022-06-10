@@ -21,14 +21,10 @@ const NODE_IMAGE_PREFIX = "xmtp/node-go@sha256:"
 
 var options struct {
 	TFToken      string `long:"tf-token" description:"Terraform token"`
-	Workspace    string `long:"workspace" description:"TF cloud workspace"`
-	Organization string `long:"organization" default:"xmtp"`
+	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:`
+	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
 	NodeImage    string `long:"xmtp-node-image"`
 	Commit       string `long:"git-commit"`
-}
-
-var validWorkspaces = map[string]bool{
-	"dev": true,
 }
 
 func main() {
@@ -37,10 +33,6 @@ func main() {
 
 	if !strings.HasPrefix(options.NodeImage, NODE_IMAGE_PREFIX) {
 		log.Fatalf("Invalid node image %s", options.NodeImage)
-	}
-
-	if !validWorkspaces[options.Workspace] {
-		log.Fatalf("Invalid workspace %s", options.Workspace)
 	}
 
 	c := newClient()
