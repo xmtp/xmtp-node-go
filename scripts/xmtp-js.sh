@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Run the node on the node set up so that xmtp-js tests can run against it if LOCAL_NODE is set.
+# Run the node on the host set up so that xmtp-js tests can run against it if LOCAL_NODE is set.
 # ```
 #   xmtp-js % LOCAL_NODE=true npm test
 # ```
