@@ -29,7 +29,7 @@ var options struct {
 
 func main() {
 	_, err := flags.NewParser(&options, flags.Default).Parse()
-	failIfError(err, "parsing options", err)
+	failIfError(err, "parsing options")
 
 	if !strings.HasPrefix(options.NodeImage, NODE_IMAGE_PREFIX) {
 		log.Fatalf("Invalid node image %s", options.NodeImage)
