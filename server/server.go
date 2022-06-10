@@ -73,10 +73,10 @@ func New(options Options) (server *Server) {
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
-	server.ctx = logging.With(server.ctx, server.logger)
+	server.ctx = logging.With(context.Background(), server.logger)
 
 	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
-	server.ctx, server.cancel = context.WithCancel(context.Background())
+	server.ctx, server.cancel = context.WithCancel(server.ctx)
 
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
