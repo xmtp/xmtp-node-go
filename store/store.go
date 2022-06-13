@@ -59,6 +59,7 @@ func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeri
 	xmtpStore.wg = &sync.WaitGroup{}
 	xmtpStore.log = log.Named("store")
 	xmtpStore.MsgC = make(chan *protocol.Envelope, bufferSize)
+	xmtpStore.statsPeriod = statsPeriod
 
 	return xmtpStore
 }
