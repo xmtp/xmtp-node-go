@@ -150,7 +150,7 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		go server.statusMetricsLoop(options.Metrics)
+		go server.statusMetricsLoop(options)
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
