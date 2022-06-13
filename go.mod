@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/ethereum/go-ethereum v1.10.18
 	github.com/google/uuid v1.3.0
+	github.com/hashicorp/go-tfe v1.2.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/huandu/go-sqlbuilder v1.13.0
 	github.com/ipfs/go-ds-sql v0.3.0
@@ -24,6 +25,7 @@ require (
 	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
+	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.21.0
 	google.golang.org/protobuf v1.28.0
 )
@@ -66,7 +68,6 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0 // indirect
 	github.com/hashicorp/go-slug v0.8.0 // indirect
-	github.com/hashicorp/go-tfe v1.2.0 // indirect
 	github.com/hashicorp/jsonapi v0.0.0-20210826224640-ee7dae0fb22d // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
@@ -141,7 +142,6 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
-	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
@@ -161,7 +161,7 @@ require (
 
 // To update to a commit CCC run go get -d github.com/xmtp/go-waku@CCC and
 // copy the version identifier from the ouput of that
-replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220607164009-b8c602bac49e
+replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220613145414-66f48c33ee00
 
 // From node-go
 replace github.com/ethereum/go-ethereum v1.10.17 => github.com/status-im/go-ethereum v1.10.4-status.2

@@ -150,7 +150,7 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		go server.statusMetricsLoop(options.Metrics)
+		go server.statusMetricsLoop(options)
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
@@ -214,16 +214,26 @@ func (server *Server) Shutdown() {
 	}
 }
 
-func (server *Server) statusMetricsLoop(options MetricsOptions) {
-	server.logger.Info("starting status metrics loop", zap.Duration("period", options.StatusPeriod))
-	ticker := time.NewTicker(options.StatusPeriod)
+func (server *Server) statusMetricsLoop(options Options) {
+	server.logger.Info("starting status metrics loop", zap.Duration("period", options.Metrics.StatusPeriod))
+	ticker := time.NewTicker(options.Metrics.StatusPeriod)
+	bootstrapPeers := map[peer.ID]bool{}
+	for _, addr := range options.StaticNodes {
+		maddr, err := multiaddr.NewMultiaddr(addr)
+		if err != nil {
+			server.logger.Error("parsing static node multiaddr", zap.String("addr", addr), zap.Error(err))
+			continue
+		}
+		_, pid := peer.SplitAddr(maddr)
+		bootstrapPeers[pid] = true
+	}
 	defer ticker.Stop()
 	for {
 		select {
 		case <-server.ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host())
+			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host(), bootstrapPeers)
 		}
 	}
 }

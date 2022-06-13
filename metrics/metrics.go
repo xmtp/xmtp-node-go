@@ -18,6 +18,7 @@ func NewMetricsServer(address string, port int, logger *zap.Logger) *Server {
 func RegisterViews(logger *zap.Logger) {
 	if err := view.Register(
 		PeersByProtoView,
+		BootstrapPeersView,
 	); err != nil {
 		logger.Fatal("registering metrics views", zap.Error(err))
 	}
