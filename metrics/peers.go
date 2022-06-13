@@ -31,14 +31,10 @@ var BootstrapPeersView = &view.View{
 	Aggregation: view.LastValue(),
 }
 
-func EmitPeersByProtocol(ctx context.Context, host host.Host, bootstrapPeers map[peer.ID]bool) {
+func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 	byProtocol := map[string]int64{}
-	var bootstrapPeersFound int
 	ps := host.Peerstore()
 	for _, peer := range ps.Peers() {
-		if len(bootstrapPeers) > 0 && bootstrapPeers[peer] {
-			bootstrapPeersFound++
-		}
 		protos, err := ps.GetProtocols(peer)
 		if err != nil {
 			continue
@@ -47,12 +43,19 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host, bootstrapPeers map
 			byProtocol[proto]++
 		}
 	}
-	if len(bootstrapPeers) > 0 {
-		stats.Record(ctx, BootstrapPeers.M(float64(bootstrapPeersFound)/float64(len(bootstrapPeers))))
-	}
 	for proto, count := range byProtocol {
 		if err := stats.RecordWithTags(ctx, []tag.Mutator{tag.Insert(TagProto, proto)}, PeersByProto.M(count)); err != nil {
 			logging.From(ctx).Warn("recording metric", zap.String("metric", PeersByProto.Name()), zap.String("proto", proto), zap.Error(err))
 		}
 	}
+}
+
+func EmitBootstrapPeersConnected(ctx context.Context, host host.Host, bootstrapPeers map[peer.ID]bool) {
+	var bootstrapPeersFound int
+	for _, peer := range host.Network().Peers() {
+		if bootstrapPeers[peer] {
+			bootstrapPeersFound++
+		}
+	}
+	stats.Record(ctx, BootstrapPeers.M(float64(bootstrapPeersFound)/float64(len(bootstrapPeers))))
 }

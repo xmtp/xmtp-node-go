@@ -233,7 +233,10 @@ func (server *Server) statusMetricsLoop(options Options) {
 		case <-server.ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host(), bootstrapPeers)
+			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host())
+			if len(bootstrapPeers) > 0 {
+				metrics.EmitBootstrapPeersConnected(server.ctx, server.wakuNode.Host(), bootstrapPeers)
+			}
 		}
 	}
 }
