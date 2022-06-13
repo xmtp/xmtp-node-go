@@ -138,7 +138,7 @@ func New(options Options) (server *Server) {
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
 		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Store.RetentionMaxDaysDuration(), server.logger)
+			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Metrics.StatusPeriod, server.logger)
 		}))
 	}
 

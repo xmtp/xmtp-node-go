@@ -35,13 +35,14 @@ type XmtpStore struct {
 
 	log *zap.Logger
 
-	started bool
+	started     bool
+	statsPeriod time.Duration
 
 	msgProvider store.MessageProvider
 	h           host.Host
 }
 
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetentionDuration time.Duration, log *zap.Logger) *XmtpStore {
+func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger) *XmtpStore {
 	if log == nil {
 		panic("No logger provided in store initialization")
 	}
@@ -320,9 +321,9 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 	}
 }
 
-func (s *XmtpStore) statusMetricsLoop(ctx context.Context, period time.Duration) {
+func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 	defer s.wg.Done()
-	ticker := time.NewTicker(period)
+	ticker := time.NewTicker(s.statsPeriod)
 	defer ticker.Stop()
 	for {
 		select {
