@@ -74,8 +74,9 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.storeIncomingMessages(ctx)
+	go s.statusMetricsLoop(ctx)
 	s.log.Info("Store protocol started")
 }
 
