@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/xmtp/xmtp-node-go/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -22,10 +23,22 @@ var PeersByProtoView = &view.View{
 	TagKeys:     []tag.Key{TagProto},
 }
 
-func EmitPeersByProtocol(ctx context.Context, host host.Host) {
+var BootstrapPeers = stats.Float64("bootstrap_peers", "Percentage of bootstrap peers connected", stats.UnitDimensionless)
+var BootstrapPeersView = &view.View{
+	Name:        "xmtp_bootstrap_peers",
+	Measure:     BootstrapPeers,
+	Description: "Percentage of bootstrap peers connected",
+	Aggregation: view.LastValue(),
+}
+
+func EmitPeersByProtocol(ctx context.Context, host host.Host, bootstrapPeers map[peer.ID]bool) {
 	byProtocol := map[string]int64{}
+	var bootstrapPeersFound int
 	ps := host.Peerstore()
 	for _, peer := range ps.Peers() {
+		if len(bootstrapPeers) > 0 && bootstrapPeers[peer] {
+			bootstrapPeersFound++
+		}
 		protos, err := ps.GetProtocols(peer)
 		if err != nil {
 			continue
@@ -33,6 +46,9 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 		for _, proto := range protos {
 			byProtocol[proto]++
 		}
+	}
+	if len(bootstrapPeers) > 0 {
+		stats.Record(ctx, BootstrapPeers.M(float64(bootstrapPeersFound)/float64(len(bootstrapPeers))))
 	}
 	for proto, count := range byProtocol {
 		if err := stats.RecordWithTags(ctx, []tag.Mutator{tag.Insert(TagProto, proto)}, PeersByProto.M(count)); err != nil {
