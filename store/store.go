@@ -14,12 +14,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-msgio/protoio"
-	"github.com/status-im/go-waku/waku/v2/metrics"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/logging"
+	"github.com/xmtp/xmtp-node-go/metrics"
 	"go.uber.org/zap"
 )
 
@@ -316,6 +316,20 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 	defer s.wg.Done()
 	for envelope := range s.MsgC {
 		_ = s.storeMessage(envelope)
+	}
+}
+
+func (s *XmtpStore) statusMetricsLoop(ctx context.Context, period time.Duration) {
+	defer s.wg.Done()
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			metrics.EmitStoredMessages(ctx, s.db, s.log)
+		}
 	}
 }
 
