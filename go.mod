@@ -161,7 +161,7 @@ require (
 
 // To update to a commit CCC run go get -d github.com/xmtp/go-waku@CCC and
 // copy the version identifier from the ouput of that
-replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220613145414-66f48c33ee00
+replace github.com/status-im/go-waku => github.com/xmtp/go-waku v0.0.0-20220614143910-e62d713178dc
 
 // From node-go
 replace github.com/ethereum/go-ethereum v1.10.17 => github.com/status-im/go-ethereum v1.10.4-status.2
