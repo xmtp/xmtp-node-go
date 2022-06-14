@@ -1,8 +1,8 @@
 package crypto
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/xmtp-node-go/types"
@@ -13,7 +13,7 @@ import (
 // It returns a signature in IEEE p1363 Format [R||S],the recovery bit and any error encountered
 func Sign(privateKey PrivateKey, msg Message) (Signature, uint8, error) {
 
-	digest := sha256.Sum256(msg)
+	digest := ethcrypto.Keccak256(msg)
 
 	signatureBytes, err := secp256k1.Sign(digest[:], (*[32]byte)(privateKey)[:])
 	if err != nil {
@@ -29,27 +29,22 @@ func Sign(privateKey PrivateKey, msg Message) (Signature, uint8, error) {
 	return signature, recovery, nil
 }
 
+// Tests that signature verification works for a given message and keys.
 func TestStaticSignatureRoundTrip(t *testing.T) {
 
 	bPK, _ := hex.DecodeString("6a52887e81142f32dbae00d9ea666484b3de72b859805bbe4694337a63b6ca7c")
 	bpk, _ := hex.DecodeString("0497a556a06d5270300967b2d64ae2997af9efe872f8d146c155b91f6bc2315cf6a941a7ea80bb84edea2ffff5637b4f736e2aa64cfb98d6276e168dd1e7cdfc6d")
-	bSig, _ := hex.DecodeString("89ee44df0c282d5caafdd527ef314f2539d813304766daea4fab558e5fafbaf644be1943de60e7e9289567cb505041786151f950601f0cbfc4b9cbefa048dbaa")
 	msg := []byte("TestPeerID|0x12345")
-	expectedRecovery := uint8(0)
 
 	PK, _ := PrivateKeyFromBytes(bPK)
 	pk, _ := PublicKeyFromBytes(bpk)
 
-	expectedSig, _ := SignatureFromBytes(bSig)
-
 	generatedSig, recovery, err := Sign(PK, msg)
 	require.NoError(t, err)
-
-	require.Equal(t, expectedSig, generatedSig, "signature mismatch")
-	require.Equal(t, expectedRecovery, recovery, "bad recovery code")
+	require.True(t, recovery == 0 || recovery == 1, "bad recovery code")
 
 	isValid := Verify(pk, msg, generatedSig)
-	require.True(t, isValid, "Signature could not verified")
+	require.True(t, isValid, "Signature validation failed")
 }
 
 func TestStaticWalletVerify(t *testing.T) {
