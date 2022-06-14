@@ -14,12 +14,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-msgio/protoio"
-	"github.com/status-im/go-waku/waku/v2/metrics"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/logging"
+	"github.com/xmtp/xmtp-node-go/metrics"
 	"go.uber.org/zap"
 )
 
@@ -35,13 +35,14 @@ type XmtpStore struct {
 
 	log *zap.Logger
 
-	started bool
+	started     bool
+	statsPeriod time.Duration
 
 	msgProvider store.MessageProvider
 	h           host.Host
 }
 
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetentionDuration time.Duration, log *zap.Logger) *XmtpStore {
+func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger) *XmtpStore {
 	if log == nil {
 		panic("No logger provided in store initialization")
 	}
@@ -58,6 +59,7 @@ func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, maxRetent
 	xmtpStore.wg = &sync.WaitGroup{}
 	xmtpStore.log = log.Named("store")
 	xmtpStore.MsgC = make(chan *protocol.Envelope, bufferSize)
+	xmtpStore.statsPeriod = statsPeriod
 
 	return xmtpStore
 }
@@ -74,8 +76,9 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.storeIncomingMessages(ctx)
+	go s.statusMetricsLoop(ctx)
 	s.log.Info("Store protocol started")
 }
 
@@ -316,6 +319,20 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 	defer s.wg.Done()
 	for envelope := range s.MsgC {
 		_ = s.storeMessage(envelope)
+	}
+}
+
+func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
+	defer s.wg.Done()
+	ticker := time.NewTicker(s.statsPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			metrics.EmitStoredMessages(ctx, s.db, s.log)
+		}
 	}
 }
 
