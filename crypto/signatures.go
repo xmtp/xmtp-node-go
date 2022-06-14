@@ -2,7 +2,6 @@
 package crypto
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -26,7 +25,7 @@ type SignatureBytes []byte
 // corresponding private key. It returns true if the message was signed by the corresponding keypair, as
 //well as any errors generated in the process
 func Verify(pub PublicKey, msg Message, sig Signature) bool {
-	digest := sha256.Sum256(msg)
+	digest := ethcrypto.Keccak256(msg)
 	isValid := secp256k1.VerifySignature((*pub)[:], digest[:], (*sig)[:])
 
 	return isValid
