@@ -24,6 +24,7 @@ var options struct {
 	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"testnet"`
 	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
 	NodeImage    string `long:"xmtp-node-image"`
+	Apply        bool   `long:"apply"`
 	Commit       string `long:"git-commit"`
 }
 
@@ -37,7 +38,7 @@ func main() {
 
 	c := newClient()
 	c.updateVar("xmtp_node_image", options.NodeImage)
-	c.startRun(options.Commit)
+	c.startRun(options.Commit, options.Apply)
 
 }
 
