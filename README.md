@@ -35,3 +35,12 @@ XMTP Node software
 2. `make build`
 3. `./build/xmtp --message-db-connection-string "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable" --metrics`
 4. browse to http://localhost:9090 to see prometheus interface
+
+## Deployments
+
+Merging a PR to either the `dev` or `main` branch will trigger a new deployment via Github Actions and Terraform.
+
+- The `dev` branch will deploy to the `dev` environment and push to the Docker tag `latest`
+- The `main` branch will deploy to the `production` environment and push to the Docker tag `production`
+
+Changes will be automatically applied and no user action is required after merging.

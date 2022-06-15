@@ -21,9 +21,10 @@ const NODE_IMAGE_PREFIX = "xmtp/node-go@sha256:"
 
 var options struct {
 	TFToken      string `long:"tf-token" description:"Terraform token"`
-	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"testnet"`
+	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
 	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
 	NodeImage    string `long:"xmtp-node-image"`
+	Apply        bool   `long:"apply"`
 	Commit       string `long:"git-commit"`
 }
 
@@ -37,7 +38,7 @@ func main() {
 
 	c := newClient()
 	c.updateVar("xmtp_node_image", options.NodeImage)
-	c.startRun(options.Commit)
+	c.startRun(options.Commit, options.Apply)
 
 }
 
