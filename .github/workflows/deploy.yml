@@ -28,7 +28,7 @@ jobs:
       - name: Git Checkout
         uses: actions/checkout@v1
 
-      - name: Build and Push to Docker Hub (production)
+      - name: Deploy (production)
         if: ${{ github.ref_name == 'main' }}
         env:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
@@ -38,7 +38,7 @@ jobs:
           echo Successfully pushed $IMAGE_TO_DEPLOY
           go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
-      - name: Build and Push to Docker Hub (dev)
+      - name: Deploy (dev)
         if: ${{ github.ref_name == 'dev' }}
         env:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
