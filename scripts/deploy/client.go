@@ -40,11 +40,12 @@ func (c *client) updateVar(name string, value string) {
 	log.Fatalf("variable %s not found", name)
 }
 
-func (c client) startRun(commit string) {
+func (c client) startRun(commit string, apply bool) {
 	msg := fmt.Sprintf("triggered from xtmp-node-go commit %s", commit)
 	_, err := c.Runs.Create(c.ctx, tfe.RunCreateOptions{
 		Message:   &msg,
 		Workspace: c.wsp,
+		AutoApply: &apply,
 	})
 	failIfError(err, "creating run")
 }

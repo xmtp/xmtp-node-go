@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - dev
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -27,11 +28,23 @@ jobs:
       - name: Git Checkout
         uses: actions/checkout@v1
 
-      - name: Build and Push to Docker Hub
+      - name: Deploy (production)
+        if: ${{ github.ref_name == 'main' }}
         env:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
+          export DOCKER_IMAGE_TAG=production
           IMAGE_TO_DEPLOY=xmtp/node-go@$(make docker-image-multiarch)
           echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --workspace=dev --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          echo Successfully deployed
+      - name: Deploy (dev)
+        if: ${{ github.ref_name == 'dev' }}
+        env:
+          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
+        run: |
+          export DOCKER_IMAGE_TAG=latest
+          IMAGE_TO_DEPLOY=xmtp/node-go@$(make docker-image-multiarch)
+          echo Successfully pushed $IMAGE_TO_DEPLOY
+          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=dev --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
