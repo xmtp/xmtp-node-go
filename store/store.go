@@ -104,9 +104,8 @@ func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryRespons
 }
 
 func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
-	s.log.Error("Query is not implemented")
-
-	return nil, errors.New("Not implemented")
+	s.log.Named("query").Error("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 // Next is used to retrieve the next page of rows from a query response.
@@ -114,9 +113,8 @@ func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.
 // This function is useful for iterating over results without having to manually
 // specify the cursor and pagination order and max number of results
 func (s *XmtpStore) Next(ctx context.Context, r *store.Result) (*store.Result, error) {
-	s.log.Error("Next is not implemented")
-
-	return nil, errors.New("Not implemented")
+	s.log.Named("next").Error("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 // Resume retrieves the history of waku messages published on the default waku pubsub topic since the last time the waku store node has been online
@@ -171,6 +169,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 				err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
+					return false
 				}
 				return true
 			})

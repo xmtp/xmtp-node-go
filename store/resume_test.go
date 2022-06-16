@@ -13,11 +13,11 @@ import (
 func TestStore_FindLastSeen(t *testing.T) {
 	pubSubTopic := "test"
 
-	msg1 := test.NewMessage("topic1", 1)
-	msg2 := test.NewMessage("topic2", 2)
-	msg3 := test.NewMessage("topic3", 3)
-	msg4 := test.NewMessage("topic4", 4)
-	msg5 := test.NewMessage("topic5", 5)
+	msg1 := test.NewMessage("topic1", 1, "msg")
+	msg2 := test.NewMessage("topic2", 2, "msg")
+	msg3 := test.NewMessage("topic3", 3, "msg")
+	msg4 := test.NewMessage("topic4", 4, "msg")
+	msg5 := test.NewMessage("topic5", 5, "msg")
 
 	s, cleanup := newTestStore(t)
 	defer cleanup()
@@ -43,16 +43,16 @@ func TestStore_Resume_FromPeer(t *testing.T) {
 	pubSubTopic := "test"
 
 	msgs := []*pb.WakuMessage{
-		test.NewMessage("topic1", 1),
-		test.NewMessage("topic1", 2),
-		test.NewMessage("topic1", 3),
-		test.NewMessage("topic1", 4),
-		test.NewMessage("topic1", 5),
-		test.NewMessage("topic2", 6),
-		test.NewMessage("topic2", 7),
-		test.NewMessage("topic2", 8),
-		test.NewMessage("topic2", 9),
-		test.NewMessage("topic2", 10),
+		test.NewMessage("topic1", 1, "msg"),
+		test.NewMessage("topic1", 2, "msg"),
+		test.NewMessage("topic1", 3, "msg"),
+		test.NewMessage("topic1", 4, "msg"),
+		test.NewMessage("topic1", 5, "msg"),
+		test.NewMessage("topic2", 6, "msg"),
+		test.NewMessage("topic2", 7, "msg"),
+		test.NewMessage("topic2", 8, "msg"),
+		test.NewMessage("topic2", 9, "msg"),
+		test.NewMessage("topic2", 10, "msg"),
 	}
 
 	for _, msg := range msgs {
@@ -142,22 +142,22 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 	addStoreProtocol(t, s1.h, s3.h)
 
 	msgsS2 := []*pb.WakuMessage{
-		test.NewMessage("topic1", 1),
-		test.NewMessage("topic1", 2),
-		test.NewMessage("topic2", 3),
-		test.NewMessage("topic2", 4),
-		test.NewMessage("topic3", 5),
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic1", 2, "msg2"),
+		test.NewMessage("topic2", 3, "msg3"),
+		test.NewMessage("topic2", 4, "msg4"),
+		test.NewMessage("topic3", 5, "msg5"),
 	}
 	for _, msg := range msgsS2 {
 		storeMessage(t, s2, msg, pubSubTopic)
 	}
 
 	msgsS3 := []*pb.WakuMessage{
-		test.NewMessage("topic1", 1),
-		test.NewMessage("topic1", 2),
-		test.NewMessage("topic2", 3),
-		test.NewMessage("topic3", 4),
-		test.NewMessage("topic4", 6),
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic1", 2, "msg2"),
+		test.NewMessage("topic2", 3, "msg3"),
+		test.NewMessage("topic3", 4, "msg4"),
+		test.NewMessage("topic4", 6, "msg6"),
 	}
 	for _, msg := range msgsS3 {
 		storeMessage(t, s3, msg, pubSubTopic)
@@ -168,13 +168,13 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 	require.Equal(t, 7, msgCount)
 
 	expectMessages(t, s1, pubSubTopic, []*pb.WakuMessage{
-		test.NewMessage("topic1", 1),
-		test.NewMessage("topic1", 2),
-		test.NewMessage("topic2", 3),
-		test.NewMessage("topic2", 4),
-		test.NewMessage("topic3", 4),
-		test.NewMessage("topic3", 5),
-		test.NewMessage("topic4", 6),
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic1", 2, "msg2"),
+		test.NewMessage("topic2", 3, "msg3"),
+		test.NewMessage("topic2", 4, "msg4"),
+		test.NewMessage("topic3", 4, "msg4"),
+		test.NewMessage("topic3", 5, "msg5"),
+		test.NewMessage("topic4", 6, "msg6"),
 	})
 }
 
@@ -188,16 +188,16 @@ func TestStore_Resume_Paginated(t *testing.T) {
 	pubSubTopic := "test"
 
 	msgs := []*pb.WakuMessage{
-		test.NewMessage("topic1", 1),
-		test.NewMessage("topic1", 2),
-		test.NewMessage("topic1", 3),
-		test.NewMessage("topic1", 4),
-		test.NewMessage("topic1", 5),
-		test.NewMessage("topic2", 6),
-		test.NewMessage("topic2", 7),
-		test.NewMessage("topic2", 8),
-		test.NewMessage("topic2", 9),
-		test.NewMessage("topic2", 10),
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic1", 2, "msg2"),
+		test.NewMessage("topic1", 3, "msg3"),
+		test.NewMessage("topic1", 4, "msg4"),
+		test.NewMessage("topic1", 5, "msg5"),
+		test.NewMessage("topic2", 6, "msg6"),
+		test.NewMessage("topic2", 7, "msg7"),
+		test.NewMessage("topic2", 8, "msg8"),
+		test.NewMessage("topic2", 9, "msg9"),
+		test.NewMessage("topic2", 10, "msg10"),
 	}
 
 	for _, msg := range msgs {

@@ -12,7 +12,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/jarcoal/httpmock v1.2.0
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/libp2p/go-libp2p v0.20.0
+	github.com/libp2p/go-libp2p v0.20.2
 	github.com/libp2p/go-libp2p-core v0.16.1
 	github.com/libp2p/go-libp2p-peerstore v0.6.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.1
@@ -105,7 +105,7 @@ require (
 	github.com/libp2p/go-openssl v0.0.7 // indirect
 	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	github.com/libp2p/go-stream-muxer-multistream v0.4.0 // indirect
-	github.com/libp2p/go-yamux/v3 v3.1.1 // indirect
+	github.com/libp2p/go-yamux/v3 v3.1.2 // indirect
 	github.com/lucas-clemente/quic-go v0.27.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
@@ -127,7 +127,7 @@ require (
 	github.com/multiformats/go-multibase v0.0.3 // indirect
 	github.com/multiformats/go-multicodec v0.4.1 // indirect
 	github.com/multiformats/go-multihash v0.1.0 // indirect
-	github.com/multiformats/go-multistream v0.3.1 // indirect
+	github.com/multiformats/go-multistream v0.3.2 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
