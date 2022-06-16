@@ -42,7 +42,7 @@ docker-image:
 # Also worth mentioning this is painfully slow due to QEMU
 docker-image-multiarch:
 	@docker buildx build \
-		--platform linux/amd64,linux/arm64 \
+		--platform linux/amd64 \
 		--tag ${DOCKER_IMAGE_NAME} \
 		--build-arg="GIT_COMMIT=${GIT_COMMIT}" \
 		-q \
