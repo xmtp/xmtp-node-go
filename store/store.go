@@ -324,6 +324,10 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 
 func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 	defer s.wg.Done()
+	if s.statsPeriod == 0 {
+		s.log.Info("statsPeriod is 0 indicating no metrics loop")
+		return
+	}
 	ticker := time.NewTicker(s.statsPeriod)
 	defer ticker.Stop()
 	for {
