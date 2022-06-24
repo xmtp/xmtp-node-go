@@ -124,6 +124,60 @@ func TestStore_Resume_WithoutSpecifyingPeer(t *testing.T) {
 	expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{msg0})
 }
 
+func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pubSubTopic := "test"
+
+	s1, cleanup := newTestStore(t)
+	defer cleanup()
+
+	s2, cleanup := newTestStore(t)
+	defer cleanup()
+	addStoreProtocol(t, s1.h, s2.h)
+
+	s3, cleanup := newTestStore(t)
+	defer cleanup()
+	addStoreProtocol(t, s1.h, s3.h)
+
+	msgsS2 := []*pb.WakuMessage{
+		tests.CreateWakuMessage("topic1", 1),
+		tests.CreateWakuMessage("topic1", 2),
+		tests.CreateWakuMessage("topic2", 3),
+		tests.CreateWakuMessage("topic2", 4),
+		tests.CreateWakuMessage("topic3", 5),
+	}
+	for _, msg := range msgsS2 {
+		storeMessage(t, s2, msg, pubSubTopic)
+	}
+
+	msgsS3 := []*pb.WakuMessage{
+		tests.CreateWakuMessage("topic1", 1),
+		tests.CreateWakuMessage("topic1", 2),
+		tests.CreateWakuMessage("topic2", 3),
+		tests.CreateWakuMessage("topic3", 4),
+		tests.CreateWakuMessage("topic4", 6),
+	}
+	for _, msg := range msgsS3 {
+		storeMessage(t, s3, msg, pubSubTopic)
+	}
+
+	msgCount, err := s1.Resume(ctx, pubSubTopic, []peer.ID{s2.h.ID(), s3.h.ID()})
+	require.NoError(t, err)
+	require.Equal(t, 7, msgCount)
+
+	expectMessages(t, s1, pubSubTopic, []*pb.WakuMessage{
+		tests.CreateWakuMessage("topic1", 1),
+		tests.CreateWakuMessage("topic1", 2),
+		tests.CreateWakuMessage("topic2", 3),
+		tests.CreateWakuMessage("topic2", 4),
+		tests.CreateWakuMessage("topic3", 4),
+		tests.CreateWakuMessage("topic3", 5),
+		tests.CreateWakuMessage("topic4", 6),
+	})
+}
+
 func TestStore_Resume_Paginated(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
