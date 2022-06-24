@@ -123,3 +123,42 @@ func TestStore_Resume_WithoutSpecifyingPeer(t *testing.T) {
 
 	expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{msg0})
 }
+
+func TestStore_Resume_Paginated(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s1, cleanup := newTestStore(t)
+	defer cleanup()
+
+	pubSubTopic := "test"
+
+	msgs := []*pb.WakuMessage{
+		tests.CreateWakuMessage("topic1", 1),
+		tests.CreateWakuMessage("topic1", 2),
+		tests.CreateWakuMessage("topic1", 3),
+		tests.CreateWakuMessage("topic1", 4),
+		tests.CreateWakuMessage("topic1", 5),
+		tests.CreateWakuMessage("topic2", 6),
+		tests.CreateWakuMessage("topic2", 7),
+		tests.CreateWakuMessage("topic2", 8),
+		tests.CreateWakuMessage("topic2", 9),
+		tests.CreateWakuMessage("topic2", 10),
+	}
+
+	for _, msg := range msgs {
+		storeMessage(t, s1, msg, pubSubTopic)
+	}
+
+	s2, cleanup := newTestStore(t)
+	s2.resumePageSize = 2
+	defer cleanup()
+	addStoreProtocol(t, s2.h, s1.h)
+
+	expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{})
+
+	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+	require.NoError(t, err)
+	require.Equal(t, 10, msgCount)
+	expectMessages(t, s2, pubSubTopic, msgs)
+}

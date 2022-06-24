@@ -35,8 +35,9 @@ type XmtpStore struct {
 
 	log *zap.Logger
 
-	started     bool
-	statsPeriod time.Duration
+	started        bool
+	statsPeriod    time.Duration
+	resumePageSize int
 
 	msgProvider store.MessageProvider
 	h           host.Host
@@ -144,7 +145,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 		StartTime:   lastSeenTime,
 		EndTime:     currentTime,
 		PagingInfo: &pb.PagingInfo{
-			PageSize:  0,
+			PageSize:  uint64(s.resumePageSize),
 			Direction: pb.PagingInfo_BACKWARD,
 		},
 	}
@@ -157,17 +158,17 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 		}
 	}
 
-	messages, err := s.queryLoop(ctx, rpc, peerList)
+	msgCount, err := s.resumeQueryLoop(ctx, rpc, peerList, func(msg *pb.WakuMessage) error {
+		err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic))
+		if err != nil {
+			s.log.Error("storing message during resume", zap.Error(err))
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		s.log.Error("resuming history", zap.Error(err))
 		return -1, store.ErrFailedToResumeHistory
-	}
-
-	msgCount := 0
-	for _, msg := range messages {
-		if err = s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic)); err == nil {
-			msgCount++
-		}
 	}
 
 	s.log.Info("Retrieved messages since the last online time", zap.Int("count", msgCount))
@@ -233,42 +234,46 @@ func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedP
 	return historyResponseRPC.Response, nil
 }
 
-func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candidateList []peer.ID) ([]*pb.WakuMessage, error) {
-	// loops through the candidateList in order and sends the query to each until one of the query gets resolved successfully
-	// returns the number of retrieved messages, or error if all the requests fail
-
-	queryWg := sync.WaitGroup{}
-	queryWg.Add(len(candidateList))
-
-	resultChan := make(chan *pb.HistoryResponse, len(candidateList))
-
+// resumeQueryLoop loops through the candidates list of peers, or finds a peer
+// if necessary, and calls the msgFn on each message, iterating through pages
+// until there are no more.
+func (s *XmtpStore) resumeQueryLoop(ctx context.Context, query *pb.HistoryQuery, candidateList []peer.ID, msgFn func(msg *pb.WakuMessage) error) (int, error) {
+	var count int
+	var countLock sync.RWMutex
+	var wg sync.WaitGroup
 	for _, candidate := range candidateList {
+		wg.Add(1)
+		candidateQ := *query
 		go func(peer peer.ID) {
-			defer queryWg.Done()
-			result, err := s.queryFrom(ctx, query, peer, protocol.GenerateRequestId())
-			if err == nil {
-				resultChan <- result
-				return
+			defer wg.Done()
+			var res *pb.HistoryResponse
+			for {
+				if res != nil {
+					if res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0 {
+						break
+					}
+					candidateQ.PagingInfo = res.PagingInfo
+				}
+				var err error
+				res, err = s.queryFrom(ctx, &candidateQ, peer, protocol.GenerateRequestId())
+				if err != nil {
+					s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
+					return
+				}
+				for _, msg := range res.Messages {
+					err := msgFn(msg)
+					if err != nil {
+						continue
+					}
+					countLock.Lock()
+					count++
+					countLock.Unlock()
+				}
 			}
-			s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
 		}(candidate)
 	}
-
-	queryWg.Wait()
-	close(resultChan)
-
-	var messages []*pb.WakuMessage
-	hasResults := false
-	for result := range resultChan {
-		hasResults = true
-		messages = append(messages, result.Messages...)
-	}
-
-	if hasResults {
-		return messages, nil
-	}
-
-	return nil, store.ErrFailedQuery
+	wg.Wait()
+	return count, nil
 }
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
