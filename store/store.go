@@ -101,7 +101,7 @@ func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryRespons
 	return FindMessages(s.db, query)
 }
 
-func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
+func (s *XmtpStore) Query(ctx context.Context, q store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
 	s.log.Error("Query not implemented")
 
 	return nil, errors.New("XmtpStore.Query not implemented!")
@@ -129,6 +129,8 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	if !s.started {
 		return 0, errors.New("can't resume: store has not started")
 	}
+	log := s.log.With(zap.String("pubsub_topic", pubsubTopic))
+	log.Info("resuming")
 
 	currentTime := utils.GetUnixEpoch()
 	lastSeenTime, err := s.findLastSeen()
@@ -158,7 +160,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 		}
 	}
 
-	msgCount, err := s.resumeQueryLoop(ctx, rpc, peerList, func(msg *pb.WakuMessage) error {
+	msgCount, err := s.queryLoop(ctx, rpc, peerList, func(msg *pb.WakuMessage) error {
 		err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic))
 		if err != nil {
 			s.log.Error("storing message during resume", zap.Error(err))
@@ -234,10 +236,10 @@ func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedP
 	return historyResponseRPC.Response, nil
 }
 
-// resumeQueryLoop loops through the candidates list of peers, or finds a peer
+// queryLoop loops through the candidates list of peers, or finds a peer
 // if necessary, and calls the msgFn on each message, iterating through pages
 // until there are no more.
-func (s *XmtpStore) resumeQueryLoop(ctx context.Context, query *pb.HistoryQuery, candidateList []peer.ID, msgFn func(msg *pb.WakuMessage) error) (int, error) {
+func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candidateList []peer.ID, msgFn func(msg *pb.WakuMessage) error) (int, error) {
 	var count int
 	var countLock sync.RWMutex
 	var wg sync.WaitGroup

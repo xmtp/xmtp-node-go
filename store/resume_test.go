@@ -5,19 +5,19 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/status-im/go-waku/tests"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/stretchr/testify/require"
+	test "github.com/xmtp/xmtp-node-go/testing"
 )
 
-func TestStore_FindLastSeenMessage(t *testing.T) {
+func TestStore_FindLastSeen(t *testing.T) {
 	pubSubTopic := "test"
 
-	msg1 := tests.CreateWakuMessage("topic1", 1)
-	msg2 := tests.CreateWakuMessage("topic2", 2)
-	msg3 := tests.CreateWakuMessage("topic3", 3)
-	msg4 := tests.CreateWakuMessage("topic4", 4)
-	msg5 := tests.CreateWakuMessage("topic5", 5)
+	msg1 := test.NewMessage("topic1", 1)
+	msg2 := test.NewMessage("topic2", 2)
+	msg3 := test.NewMessage("topic3", 3)
+	msg4 := test.NewMessage("topic4", 4)
+	msg5 := test.NewMessage("topic5", 5)
 
 	s, cleanup := newTestStore(t)
 	defer cleanup()
@@ -43,16 +43,16 @@ func TestStore_Resume_FromPeer(t *testing.T) {
 	pubSubTopic := "test"
 
 	msgs := []*pb.WakuMessage{
-		tests.CreateWakuMessage("topic1", 1),
-		tests.CreateWakuMessage("topic1", 2),
-		tests.CreateWakuMessage("topic1", 3),
-		tests.CreateWakuMessage("topic1", 4),
-		tests.CreateWakuMessage("topic1", 5),
-		tests.CreateWakuMessage("topic2", 6),
-		tests.CreateWakuMessage("topic2", 7),
-		tests.CreateWakuMessage("topic2", 8),
-		tests.CreateWakuMessage("topic2", 9),
-		tests.CreateWakuMessage("topic2", 10),
+		test.NewMessage("topic1", 1),
+		test.NewMessage("topic1", 2),
+		test.NewMessage("topic1", 3),
+		test.NewMessage("topic1", 4),
+		test.NewMessage("topic1", 5),
+		test.NewMessage("topic2", 6),
+		test.NewMessage("topic2", 7),
+		test.NewMessage("topic2", 8),
+		test.NewMessage("topic2", 9),
+		test.NewMessage("topic2", 10),
 	}
 
 	for _, msg := range msgs {
@@ -82,7 +82,7 @@ func TestStore_Resume_WithListOfPeers(t *testing.T) {
 	defer cancel()
 
 	pubSubTopic := "test"
-	invalidHost := newTestPeer(t) // without store protocol
+	invalidHost := test.NewPeer(t) // without store protocol
 
 	s1, cleanup := newTestStore(t)
 	defer cleanup()
@@ -142,22 +142,22 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 	addStoreProtocol(t, s1.h, s3.h)
 
 	msgsS2 := []*pb.WakuMessage{
-		tests.CreateWakuMessage("topic1", 1),
-		tests.CreateWakuMessage("topic1", 2),
-		tests.CreateWakuMessage("topic2", 3),
-		tests.CreateWakuMessage("topic2", 4),
-		tests.CreateWakuMessage("topic3", 5),
+		test.NewMessage("topic1", 1),
+		test.NewMessage("topic1", 2),
+		test.NewMessage("topic2", 3),
+		test.NewMessage("topic2", 4),
+		test.NewMessage("topic3", 5),
 	}
 	for _, msg := range msgsS2 {
 		storeMessage(t, s2, msg, pubSubTopic)
 	}
 
 	msgsS3 := []*pb.WakuMessage{
-		tests.CreateWakuMessage("topic1", 1),
-		tests.CreateWakuMessage("topic1", 2),
-		tests.CreateWakuMessage("topic2", 3),
-		tests.CreateWakuMessage("topic3", 4),
-		tests.CreateWakuMessage("topic4", 6),
+		test.NewMessage("topic1", 1),
+		test.NewMessage("topic1", 2),
+		test.NewMessage("topic2", 3),
+		test.NewMessage("topic3", 4),
+		test.NewMessage("topic4", 6),
 	}
 	for _, msg := range msgsS3 {
 		storeMessage(t, s3, msg, pubSubTopic)
@@ -168,13 +168,13 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 	require.Equal(t, 7, msgCount)
 
 	expectMessages(t, s1, pubSubTopic, []*pb.WakuMessage{
-		tests.CreateWakuMessage("topic1", 1),
-		tests.CreateWakuMessage("topic1", 2),
-		tests.CreateWakuMessage("topic2", 3),
-		tests.CreateWakuMessage("topic2", 4),
-		tests.CreateWakuMessage("topic3", 4),
-		tests.CreateWakuMessage("topic3", 5),
-		tests.CreateWakuMessage("topic4", 6),
+		test.NewMessage("topic1", 1),
+		test.NewMessage("topic1", 2),
+		test.NewMessage("topic2", 3),
+		test.NewMessage("topic2", 4),
+		test.NewMessage("topic3", 4),
+		test.NewMessage("topic3", 5),
+		test.NewMessage("topic4", 6),
 	})
 }
 
@@ -188,16 +188,16 @@ func TestStore_Resume_Paginated(t *testing.T) {
 	pubSubTopic := "test"
 
 	msgs := []*pb.WakuMessage{
-		tests.CreateWakuMessage("topic1", 1),
-		tests.CreateWakuMessage("topic1", 2),
-		tests.CreateWakuMessage("topic1", 3),
-		tests.CreateWakuMessage("topic1", 4),
-		tests.CreateWakuMessage("topic1", 5),
-		tests.CreateWakuMessage("topic2", 6),
-		tests.CreateWakuMessage("topic2", 7),
-		tests.CreateWakuMessage("topic2", 8),
-		tests.CreateWakuMessage("topic2", 9),
-		tests.CreateWakuMessage("topic2", 10),
+		test.NewMessage("topic1", 1),
+		test.NewMessage("topic1", 2),
+		test.NewMessage("topic1", 3),
+		test.NewMessage("topic1", 4),
+		test.NewMessage("topic1", 5),
+		test.NewMessage("topic2", 6),
+		test.NewMessage("topic2", 7),
+		test.NewMessage("topic2", 8),
+		test.NewMessage("topic2", 9),
+		test.NewMessage("topic2", 10),
 	}
 
 	for _, msg := range msgs {
