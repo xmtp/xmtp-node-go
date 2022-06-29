@@ -52,10 +52,12 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	}
 
 	if query.StartTime != 0 {
+		// TODO: use receiver time here
 		sb.Where(sb.GreaterEqualThan("senderTimestamp", query.StartTime))
 	}
 
 	if query.EndTime != 0 {
+		// TODO: use receiver time here
 		sb.Where(sb.LessEqualThan("senderTimestamp", query.EndTime))
 	}
 
@@ -113,26 +115,22 @@ func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
 }
 
 func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.PagingInfo_Direction) {
+	// TODO: validate cursor.sendertime and cursor.digest can't be empty and stop using conditionals here so much
+	// TODO: switch from sendertime to receivertime for all this/index
+	// TODO: add missing composite index
 	switch direction {
 	case pb.PagingInfo_FORWARD:
 		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			// This is tricky. The current implementation does a complex sort by senderTimestamp, digest (id), pubsub topic, and receiverTimestamp
-			// This is also used for cursor based pagination
-			// I am going for 1:1 parity right now, and not worried about performance.
-			// But this, and the sort, is going to be a real performance issue without indexing.
-			// Alternatively, I could use a derived table/CTE to accomplish this
 			sb.Where(
 				sb.Or(
 					sb.GreaterThan("senderTimestamp", cursor.SenderTime),
 					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.GreaterThan("id", cursor.Digest)),
-					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.GreaterThan("id", cursor.Digest),
-					// sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
@@ -142,14 +140,12 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 				sb.Or(
 					sb.LessThan("senderTimestamp", cursor.SenderTime),
 					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.LessThan("id", cursor.Digest)),
-					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		} else if cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
 					sb.LessThan("id", cursor.Digest),
-					// sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
 				),
 			)
 		}
@@ -213,7 +209,7 @@ func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 
 	lastMessage := messages[len(messages)-1]
 	envelope := protocol.NewEnvelope(lastMessage.Message, lastMessage.ReceiverTime, lastMessage.PubsubTopic)
-	return computeIndex(envelope)
+	return envelope.Index(), nil
 }
 
 func getPageSize(pagingInfo *pb.PagingInfo) int {

@@ -27,8 +27,7 @@ func NewMock() *sql.DB {
 }
 
 func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
-	idx, _ := computeIndex(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), topic))
-	return idx
+	return protocol.NewEnvelope(msg, utils.GetUnixEpoch(), topic).Index()
 }
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {

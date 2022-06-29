@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -362,16 +361,6 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	metrics.RecordMessage(s.ctx, "stored", 1)
 
 	return nil
-}
-
-func computeIndex(env *protocol.Envelope) (*pb.Index, error) {
-	hash := sha256.Sum256(append([]byte(env.Message().ContentTopic), env.Message().Payload...))
-	return &pb.Index{
-		Digest:       hash[:],
-		ReceiverTime: utils.GetUnixEpoch(),
-		SenderTime:   env.Message().Timestamp,
-		PubsubTopic:  env.PubsubTopic(),
-	}, nil
 }
 
 func max(x, y int64) int64 {
