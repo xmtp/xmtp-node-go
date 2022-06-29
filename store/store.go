@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"errors"
 	"math"
 	"sync"
 	"time"
@@ -14,12 +12,14 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-msgio/protoio"
+	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/logging"
 	"github.com/xmtp/xmtp-node-go/metrics"
+	"github.com/xmtp/xmtp-node-go/store/client"
 	"github.com/xmtp/xmtp-node-go/tracing"
 	"go.uber.org/zap"
 )
@@ -39,6 +39,7 @@ type XmtpStore struct {
 	started        bool
 	statsPeriod    time.Duration
 	resumePageSize int
+	queryPageSize  int
 
 	msgProvider store.MessageProvider
 	h           host.Host
@@ -102,10 +103,10 @@ func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryRespons
 	return FindMessages(s.db, query)
 }
 
-func (s *XmtpStore) Query(ctx context.Context, q store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
-	s.log.Error("Query not implemented")
+func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
+	s.log.Error("Query is not implemented")
 
-	return nil, errors.New("XmtpStore.Query not implemented!")
+	return nil, errors.New("Not implemented")
 }
 
 // Next is used to retrieve the next page of rows from a query response.
@@ -126,7 +127,7 @@ func (s *XmtpStore) Next(ctx context.Context, r *store.Result) (*store.Result, e
 // peerList indicates the list of peers to query from. The history is fetched from the first available peer in this list. Such candidates should be found through a discovery method (to be developed).
 // if no peerList is passed, one of the peers in the underlying peer manager unit of the store protocol is picked randomly to fetch the history from. The history gets fetched successfully if the dialed peer has been online during the queried time window.
 // the resume proc returns the number of retrieved messages if no error occurs, otherwise returns the error string
-func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []peer.ID) (int, error) {
+func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer.ID) (int, error) {
 	if !s.started {
 		return 0, errors.New("can't resume: store has not started")
 	}
@@ -136,14 +137,21 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	currentTime := utils.GetUnixEpoch()
 	lastSeenTime, err := s.findLastSeen()
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "finding latest timestamp")
 	}
 
-	var offset int64 = int64(20 * time.Nanosecond)
+	var offset int64 = int64(20 * time.Second)
 	currentTime = currentTime + offset
 	lastSeenTime = max(lastSeenTime-offset, 0)
 
-	rpc := &pb.HistoryQuery{
+	if len(peers) == 0 {
+		peers, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
+		if err != nil {
+			return 0, errors.Wrap(err, "selecting peer")
+		}
+	}
+
+	req := &pb.HistoryQuery{
 		PubsubTopic: pubsubTopic,
 		StartTime:   lastSeenTime,
 		EndTime:     currentTime,
@@ -152,29 +160,59 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 			Direction: pb.PagingInfo_BACKWARD,
 		},
 	}
+	var wg sync.WaitGroup
+	var msgCount int
+	var msgCountLock sync.RWMutex
+	for _, p := range peers {
+		wg.Add(1)
+		go func(p peer.ID) {
+			defer wg.Done()
+			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
+				err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
+				if err != nil {
+					s.log.Error("storing message", zap.Error(err))
+				}
+				return true
+			})
+			if err != nil {
+				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()))
+				return
+			}
+			msgCountLock.Lock()
+			defer msgCountLock.Unlock()
+			msgCount += count
+		}(p)
+	}
+	wg.Wait()
+	s.log.Info("resume complete", zap.Int("count", msgCount))
 
-	if len(peerList) == 0 {
-		peerList, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
-		if err != nil {
-			s.log.Error("selecting peer", zap.Error(err))
-			return -1, store.ErrNoPeersAvailable
-		}
+	return msgCount, nil
+}
+
+func (s *XmtpStore) queryPeer(ctx context.Context, req *pb.HistoryQuery, peerID peer.ID, msgFn func(*pb.WakuMessage) bool) (int, error) {
+	c, err := client.New(
+		client.WithLog(s.log),
+		client.WithHost(s.h),
+		client.WithPeer(peerID),
+	)
+	if err != nil {
+		return 0, err
 	}
 
-	msgCount, err := s.queryLoop(ctx, rpc, peerList, func(msg *pb.WakuMessage) error {
-		err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic))
-		if err != nil {
-			s.log.Error("storing message during resume", zap.Error(err))
-			return err
+	msgCount, err := c.Query(ctx, req, func(res *pb.HistoryResponse) (int, bool) {
+		var count int
+		for _, msg := range res.Messages {
+			ok := msgFn(msg)
+			if !ok {
+				continue
+			}
+			count++
 		}
-		return nil
+		return count, true
 	})
 	if err != nil {
-		s.log.Error("resuming history", zap.Error(err))
-		return -1, store.ErrFailedToResumeHistory
+		return 0, err
 	}
-
-	s.log.Info("Retrieved messages since the last online time", zap.Int("count", msgCount))
 
 	return msgCount, nil
 }
@@ -191,94 +229,6 @@ func (s *XmtpStore) findLastSeen() (int64, error) {
 	}
 
 	return res.Messages[0].Timestamp, nil
-}
-
-func (s *XmtpStore) queryFrom(ctx context.Context, q *pb.HistoryQuery, selectedPeer peer.ID, requestId []byte) (*pb.HistoryResponse, error) {
-	s.log.Info("querying message history", logging.HostID("peer", selectedPeer))
-
-	// We connect first so dns4 addresses are resolved (NewStream does not do it)
-	err := s.h.Connect(ctx, s.h.Peerstore().PeerInfo(selectedPeer))
-	if err != nil {
-		return nil, err
-	}
-
-	connOpt, err := s.h.NewStream(ctx, selectedPeer, store.StoreID_v20beta4)
-	if err != nil {
-		s.log.Error("connecting to peer", zap.Error(err))
-		return nil, err
-	}
-
-	defer connOpt.Close()
-	defer func() {
-		_ = connOpt.Reset()
-	}()
-
-	historyRequest := &pb.HistoryRPC{Query: q, RequestId: hex.EncodeToString(requestId)}
-
-	writer := protoio.NewDelimitedWriter(connOpt)
-	reader := protoio.NewDelimitedReader(connOpt, math.MaxInt32)
-
-	err = writer.WriteMsg(historyRequest)
-	if err != nil {
-		s.log.Error("writing request", zap.Error(err))
-		return nil, err
-	}
-
-	historyResponseRPC := &pb.HistoryRPC{}
-	err = reader.ReadMsg(historyResponseRPC)
-	if err != nil {
-		s.log.Error("reading response", zap.Error(err))
-		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
-		return nil, err
-	}
-
-	metrics.RecordMessage(ctx, "retrieved", 1)
-
-	return historyResponseRPC.Response, nil
-}
-
-// queryLoop loops through the candidates list of peers, or finds a peer
-// if necessary, and calls the msgFn on each message, iterating through pages
-// until there are no more.
-func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candidateList []peer.ID, msgFn func(msg *pb.WakuMessage) error) (int, error) {
-	var count int
-	var countLock sync.RWMutex
-	var wg sync.WaitGroup
-	for _, candidate := range candidateList {
-		wg.Add(1)
-		candidateQ := *query
-		go func(peer peer.ID) {
-			defer wg.Done()
-			tracing.Do("resume-from-peer", func() {
-				var res *pb.HistoryResponse
-				for {
-					if res != nil {
-						if res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0 {
-							break
-						}
-						candidateQ.PagingInfo = res.PagingInfo
-					}
-					var err error
-					res, err = s.queryFrom(ctx, &candidateQ, peer, protocol.GenerateRequestId())
-					if err != nil {
-						s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
-						return
-					}
-					for _, msg := range res.Messages {
-						err := msgFn(msg)
-						if err != nil {
-							continue
-						}
-						countLock.Lock()
-						count++
-						countLock.Unlock()
-					}
-				}
-			})
-		}(candidate)
-	}
-	wg.Wait()
-	return count, nil
 }
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
