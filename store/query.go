@@ -195,13 +195,6 @@ func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.Paging
 	}, nil
 }
 
-// func getCursor(pagingInfo *pb.PagingInfo) *pb.Index {
-// 	if pagingInfo == nil {
-// 		return nil
-// 	}
-// 	return pagingInfo.Cursor
-// }
-
 func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 	if len(messages) == 0 {
 		return nil, nil
