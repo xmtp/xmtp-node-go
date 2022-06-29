@@ -52,13 +52,11 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	}
 
 	if query.StartTime != 0 {
-		// TODO: use receiver time here
-		sb.Where(sb.GreaterEqualThan("senderTimestamp", query.StartTime))
+		sb.Where(sb.GreaterEqualThan("receiverTimestamp", query.StartTime))
 	}
 
 	if query.EndTime != 0 {
-		// TODO: use receiver time here
-		sb.Where(sb.LessEqualThan("senderTimestamp", query.EndTime))
+		sb.Where(sb.LessEqualThan("receiverTimestamp", query.EndTime))
 	}
 
 	pagingInfo := query.PagingInfo
@@ -107,24 +105,24 @@ func addLimit(sb *sqlBuilder.SelectBuilder, pageSize uint64) {
 func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
 	switch direction {
 	case pb.PagingInfo_BACKWARD:
-		sb.OrderBy("senderTimestamp desc", "id desc", "pubsubTopic desc", "receiverTimestamp desc")
+		sb.OrderBy("pubsubTopic desc", "receiverTimestamp desc", "id desc")
 	case pb.PagingInfo_FORWARD:
-		sb.OrderBy("senderTimestamp asc", "id asc", "pubsubTopic asc", "receiverTimestamp asc")
+		sb.OrderBy("pubsubTopic asc", "receiverTimestamp asc", "id asc")
 	}
 
 }
 
 func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.PagingInfo_Direction) {
-	// TODO: validate cursor.sendertime and cursor.digest can't be empty and stop using conditionals here so much
-	// TODO: switch from sendertime to receivertime for all this/index
-	// TODO: add missing composite index
+	// Note that there's no use of pubsub topic in here, so the assumption is
+	// that pagination and use of the cursor always happens while scoped to a
+	// single pubsub topic.
 	switch direction {
 	case pb.PagingInfo_FORWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
+		if cursor.ReceiverTime != 0 && cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
-					sb.GreaterThan("senderTimestamp", cursor.SenderTime),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.GreaterThan("id", cursor.Digest)),
+					sb.GreaterThan("receiverTimestamp", cursor.ReceiverTime),
+					sb.And(sb.Equal("receiverTimestamp", cursor.ReceiverTime), sb.GreaterThan("id", cursor.Digest)),
 				),
 			)
 		} else if cursor.Digest != nil {
@@ -135,11 +133,11 @@ func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.Pagi
 			)
 		}
 	case pb.PagingInfo_BACKWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
+		if cursor.ReceiverTime != 0 && cursor.Digest != nil {
 			sb.Where(
 				sb.Or(
-					sb.LessThan("senderTimestamp", cursor.SenderTime),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.LessThan("id", cursor.Digest)),
+					sb.LessThan("receiverTimestamp", cursor.ReceiverTime),
+					sb.And(sb.Equal("receiverTimestamp", cursor.ReceiverTime), sb.LessThan("id", cursor.Digest)),
 				),
 			)
 		} else if cursor.Digest != nil {
@@ -240,7 +238,7 @@ func rowsToMessages(rows *sql.Rows) (result []persistence.StoredMessage, err err
 		msg := new(pb.WakuMessage)
 		msg.ContentTopic = contentTopic
 		msg.Payload = payload
-		msg.Timestamp = senderTimestamp
+		msg.Timestamp = receiverTimestamp
 		msg.Version = version
 
 		record := persistence.StoredMessage{

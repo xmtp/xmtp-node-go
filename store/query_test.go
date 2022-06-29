@@ -27,7 +27,7 @@ func NewMock() *sql.DB {
 }
 
 func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
-	return protocol.NewEnvelope(msg, utils.GetUnixEpoch(), topic).Index()
+	return protocol.NewEnvelope(msg, msg.Timestamp, topic).Index()
 }
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {
@@ -43,17 +43,17 @@ func createAndFillDb(t *testing.T) (*sql.DB, []*pb.WakuMessage) {
 	_, err := db.Exec("TRUNCATE TABLE message;")
 	require.NoError(t, err)
 
-	msg1 := tests.CreateWakuMessage("test1", 1)
-	msg2 := tests.CreateWakuMessage("test2", 2)
-	msg3 := tests.CreateWakuMessage("test3", 3)
+	msg1 := tests.CreateWakuMessage("test1", 0)
+	msg2 := tests.CreateWakuMessage("test2", 0)
+	msg3 := tests.CreateWakuMessage("test3", 0)
 
-	err = store.Put(protocol.NewEnvelope(msg1, utils.GetUnixEpoch(), TOPIC))
+	err = store.Put(protocol.NewEnvelope(msg1, 1, TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(protocol.NewEnvelope(msg2, utils.GetUnixEpoch(), TOPIC))
+	err = store.Put(protocol.NewEnvelope(msg2, 2, TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(protocol.NewEnvelope(msg3, utils.GetUnixEpoch(), TOPIC))
+	err = store.Put(protocol.NewEnvelope(msg3, 3, TOPIC))
 	require.NoError(t, err)
 
 	return db, []*pb.WakuMessage{msg1, msg2, msg3}
@@ -202,9 +202,9 @@ func TestCursorTimestamp(t *testing.T) {
 	result, err := FindMessages(db, &pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Cursor: &pb.Index{
-				SenderTime:  int64(2),
-				Digest:      idx.Digest,
-				PubsubTopic: "test",
+				ReceiverTime: int64(2),
+				Digest:       idx.Digest,
+				PubsubTopic:  "test",
 			},
 			Direction: pb.PagingInfo_FORWARD,
 		},
@@ -237,9 +237,9 @@ func TestCursorTimestampTie(t *testing.T) {
 	result, err := FindMessages(db, &pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Cursor: &pb.Index{
-				SenderTime:  int64(1),
-				Digest:      idx.Digest,
-				PubsubTopic: "test",
+				ReceiverTime: int64(1),
+				Digest:       idx.Digest,
+				PubsubTopic:  "test",
 			},
 			Direction: pb.PagingInfo_FORWARD,
 		},
@@ -279,8 +279,8 @@ func TestPagingInfoGeneration(t *testing.T) {
 func TestPagingInfoWithFilter(t *testing.T) {
 	db, _ := createAndFillDb(t)
 	store := createStore(t, db)
-	additionalMessage := tests.CreateWakuMessage("test1", 2)
-	err := store.Put(protocol.NewEnvelope(additionalMessage, utils.GetUnixEpoch(), "test"))
+	additionalMessage := tests.CreateWakuMessage("test1", 0)
+	err := store.Put(protocol.NewEnvelope(additionalMessage, 2, "test"))
 	require.NoError(t, err)
 
 	results := []*pb.WakuMessage{}

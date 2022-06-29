@@ -160,7 +160,11 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peerList []p
 	}
 
 	msgCount, err := s.queryLoop(ctx, rpc, peerList, func(msg *pb.WakuMessage) error {
-		err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), pubsubTopic))
+		// Note that we use msg.Timestamp here as the receiver timestamp, and
+		// trust that the peer has set it correctly. This also means that
+		// there is no record of the actual sender-given timestamp for these
+		// entries, which should be deprecated/removed at some point.
+		err := s.storeMessage(protocol.NewEnvelope(msg, msg.Timestamp, pubsubTopic))
 		if err != nil {
 			s.log.Error("storing message during resume", zap.Error(err))
 			return err
@@ -356,7 +360,8 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	s.log.Info("message stored",
 		zap.String("content_topic", env.Message().ContentTopic),
 		zap.Int("size", env.Size()),
-		logging.Time("sent", env.Index().SenderTime))
+		logging.Time("sender_time", env.Index().SenderTime),
+		logging.Time("receiver_time", env.Index().ReceiverTime))
 	// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 	metrics.RecordMessage(s.ctx, "stored", 1)
 
