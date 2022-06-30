@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -387,11 +386,6 @@ func expectQueryMessagesEventually(t *testing.T, c *Client, query *pb.HistoryQue
 	var msgs []*pb.WakuMessage
 	require.Eventually(t, func() bool {
 		msgs = queryMessages(t, c, query)
-		// fmt.Println(len(msgs))
-		// for _, msg := range msgs {
-		// 	fmt.Println(msg)
-		// }
-		// fmt.Println("")
 		return len(msgs) == len(expectedMsgs)
 	}, 3*time.Second, 500*time.Millisecond, "expected %d == %d", len(msgs), len(expectedMsgs))
 	require.ElementsMatch(t, expectedMsgs, msgs)
@@ -400,14 +394,9 @@ func expectQueryMessagesEventually(t *testing.T, c *Client, query *pb.HistoryQue
 
 func queryMessages(t *testing.T, client *Client, query *pb.HistoryQuery) []*pb.WakuMessage {
 	var msgs []*pb.WakuMessage
-	var msgsLock sync.RWMutex
 	ctx := context.Background()
 	msgCount, err := client.Query(ctx, query, func(res *pb.HistoryResponse) (int, bool) {
-		msgsLock.Lock()
-		defer msgsLock.Unlock()
-		for _, msg := range res.Messages {
-			msgs = append(msgs, msg)
-		}
+		msgs = append(msgs, res.Messages...)
 		return len(res.Messages), true
 	})
 	require.NoError(t, err)

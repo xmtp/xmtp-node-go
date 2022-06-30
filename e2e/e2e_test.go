@@ -163,9 +163,7 @@ func queryMessages(t *testing.T, c *node.WakuNode, peerAddr string, contentTopic
 		PubsubTopic:    relay.DefaultWakuTopic,
 		ContentFilters: contentFilters,
 	}, func(res *pb.HistoryResponse) (int, bool) {
-		for _, msg := range res.Messages {
-			msgs = append(msgs, msg)
-		}
+		msgs = append(msgs, res.Messages...)
 		return len(res.Messages), true
 	})
 	require.NoError(t, err)

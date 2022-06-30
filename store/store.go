@@ -38,7 +38,6 @@ type XmtpStore struct {
 	started        bool
 	statsPeriod    time.Duration
 	resumePageSize int
-	queryPageSize  int
 
 	msgProvider store.MessageProvider
 	h           host.Host

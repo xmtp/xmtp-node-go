@@ -123,7 +123,7 @@ func (c *Client) queryFrom(ctx context.Context, query *pb.HistoryQuery) (*pb.His
 		return nil, errors.Wrap(err, "opening query stream")
 	}
 	defer func() {
-		stream.Reset()
+		_ = stream.Reset()
 		stream.Close()
 	}()
 
