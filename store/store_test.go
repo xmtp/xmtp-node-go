@@ -20,10 +20,6 @@ func newTestStore(t *testing.T) (*XmtpStore, func()) {
 	require.NoError(t, err)
 
 	host := test.NewPeer(t)
-	host.Peerstore().AddAddr(host.ID(), tests.GetHostAddress(host), peerstore.PermanentAddrTTL)
-	err = host.Peerstore().AddProtocols(host.ID(), string(store.StoreID_v20beta4))
-	require.NoError(t, err)
-
 	store := NewXmtpStore(host, db, dbStore, 0, utils.Logger())
 
 	store.Start(context.Background())

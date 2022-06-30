@@ -1,4 +1,4 @@
-package client
+package store
 
 import (
 	"context"
@@ -24,6 +24,32 @@ type Client struct {
 	peer *peer.ID
 }
 
+var (
+	ErrMissingLogOption  = errors.New("missing log option")
+	ErrMissingHostOption = errors.New("missing host option")
+	ErrMissingPeerOption = errors.New("missing peer option")
+)
+
+type ClientOption func(c *Client)
+
+func WithLog(log *zap.Logger) ClientOption {
+	return func(c *Client) {
+		c.log = log
+	}
+}
+
+func WithHost(host host.Host) ClientOption {
+	return func(c *Client) {
+		c.host = host
+	}
+}
+
+func WithPeer(id peer.ID) ClientOption {
+	return func(c *Client) {
+		c.peer = &id
+	}
+}
+
 func New(opts ...ClientOption) (*Client, error) {
 	c := &Client{}
 	for _, opt := range opts {
@@ -32,19 +58,19 @@ func New(opts ...ClientOption) (*Client, error) {
 
 	// Required logger option.
 	if c.log == nil {
-		return nil, errors.New("missing logger option")
+		return nil, ErrMissingLogOption
 	}
 	c.log = c.log.Named("client")
 
 	// Required host option.
 	if c.host == nil {
-		return nil, errors.New("missing host option")
+		return nil, ErrMissingHostOption
 	}
 	c.log = c.log.With(zap.String("host", c.host.ID().Pretty()))
 
 	// Required peer option.
 	if c.peer == nil {
-		return nil, errors.New("missing peer option")
+		return nil, ErrMissingPeerOption
 	}
 	c.log = c.log.With(zap.String("peer", c.peer.Pretty()))
 
@@ -55,25 +81,30 @@ func New(opts ...ClientOption) (*Client, error) {
 // every page response, traversing every page until the end or until pageFn
 // returns false.
 func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(res *pb.HistoryResponse) (int, bool)) (int, error) {
+	c.log.Info("querying", logging.HostID("peer", *c.peer))
+
 	var msgCount int
 	var msgCountLock sync.RWMutex
 	var res *pb.HistoryResponse
 	for {
 		if res != nil {
-			if res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0 {
+			if isLastPage(query, res) {
 				break
 			}
 			query.PagingInfo = res.PagingInfo
 		}
+
 		var err error
-		res, err = c.queryFrom(ctx, query, protocol.GenerateRequestId())
+		res, err = c.queryFrom(ctx, query)
 		if err != nil {
 			return 0, err
 		}
+
 		count, ok := pageFn(res)
 		if !ok {
 			break
 		}
+
 		msgCountLock.Lock()
 		msgCount += count
 		msgCountLock.Unlock()
@@ -81,43 +112,42 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 	return msgCount, nil
 }
 
-func (c *Client) queryFrom(ctx context.Context, q *pb.HistoryQuery, requestId []byte) (*pb.HistoryResponse, error) {
-	peer := *c.peer
-	c.log.Info("querying from peer", logging.HostID("peer", peer))
-
-	// We connect first so dns4 addresses are resolved (NewStream does not do it)
-	err := c.host.Connect(ctx, c.host.Peerstore().PeerInfo(peer))
+func (c *Client) queryFrom(ctx context.Context, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
+	err := c.host.Connect(ctx, c.host.Peerstore().PeerInfo(*c.peer))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "connecting to peer")
 	}
 
-	stream, err := c.host.NewStream(ctx, peer, store.StoreID_v20beta4)
+	stream, err := c.host.NewStream(ctx, *c.peer, store.StoreID_v20beta4)
 	if err != nil {
-		c.log.Error("connecting to peer", zap.Error(err))
-		return nil, err
+		return nil, errors.Wrap(err, "opening query stream")
 	}
-	defer stream.Close()
 	defer func() {
-		_ = stream.Reset()
+		stream.Reset()
+		stream.Close()
 	}()
 
-	historyRequest := &pb.HistoryRPC{Query: q, RequestId: hex.EncodeToString(requestId)}
 	writer := protoio.NewDelimitedWriter(stream)
-	err = writer.WriteMsg(historyRequest)
+	err = writer.WriteMsg(&pb.HistoryRPC{
+		Query:     query,
+		RequestId: hex.EncodeToString(protocol.GenerateRequestId()),
+	})
 	if err != nil {
-		c.log.Error("writing request", zap.Error(err))
-		return nil, err
+		return nil, errors.Wrap(err, "writing query request")
 	}
 
-	historyResponseRPC := &pb.HistoryRPC{}
+	res := &pb.HistoryRPC{}
 	reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
-	err = reader.ReadMsg(historyResponseRPC)
+	err = reader.ReadMsg(res)
 	if err != nil {
-		c.log.Error("reading response", zap.Error(err))
 		metrics.RecordStoreError(ctx, "decodeRPCFailure")
-		return nil, err
+		return nil, errors.Wrap(err, "reading query response")
 	}
 
 	metrics.RecordMessage(ctx, "retrieved", 1)
-	return historyResponseRPC.Response, nil
+	return res.Response, nil
+}
+
+func isLastPage(query *pb.HistoryQuery, res *pb.HistoryResponse) bool {
+	return res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0
 }

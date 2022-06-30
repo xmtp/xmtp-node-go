@@ -19,7 +19,6 @@ import (
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/logging"
 	"github.com/xmtp/xmtp-node-go/metrics"
-	"github.com/xmtp/xmtp-node-go/store/client"
 	"github.com/xmtp/xmtp-node-go/tracing"
 	"go.uber.org/zap"
 )
@@ -189,10 +188,10 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 }
 
 func (s *XmtpStore) queryPeer(ctx context.Context, req *pb.HistoryQuery, peerID peer.ID, msgFn func(*pb.WakuMessage) bool) (int, error) {
-	c, err := client.New(
-		client.WithLog(s.log),
-		client.WithHost(s.h),
-		client.WithPeer(peerID),
+	c, err := New(
+		WithLog(s.log),
+		WithHost(s.h),
+		WithPeer(peerID),
 	)
 	if err != nil {
 		return 0, err

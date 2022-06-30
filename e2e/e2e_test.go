@@ -17,7 +17,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/stretchr/testify/require"
-	storeclient "github.com/xmtp/xmtp-node-go/store/client"
+	"github.com/xmtp/xmtp-node-go/store"
 	test "github.com/xmtp/xmtp-node-go/testing"
 	"go.uber.org/zap"
 )
@@ -144,10 +144,10 @@ func queryMessages(t *testing.T, c *node.WakuNode, peerAddr string, contentTopic
 	pi, err := peer.AddrInfoFromString(peerAddr)
 	require.NoError(t, err)
 
-	storeClient, err := storeclient.New(
-		storeclient.WithLog(log),
-		storeclient.WithHost(c.Host()),
-		storeclient.WithPeer(pi.ID),
+	client, err := store.New(
+		store.WithLog(log),
+		store.WithHost(c.Host()),
+		store.WithPeer(pi.ID),
 	)
 	require.NoError(t, err)
 
@@ -159,7 +159,7 @@ func queryMessages(t *testing.T, c *node.WakuNode, peerAddr string, contentTopic
 			ContentTopic: contentTopic,
 		}
 	}
-	msgCount, err := storeClient.Query(ctx, &pb.HistoryQuery{
+	msgCount, err := client.Query(ctx, &pb.HistoryQuery{
 		PubsubTopic:    relay.DefaultWakuTopic,
 		ContentFilters: contentFilters,
 	}, func(res *pb.HistoryResponse) (int, bool) {
