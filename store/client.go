@@ -88,7 +88,7 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 	var res *pb.HistoryResponse
 	for {
 		if res != nil {
-			if isLastPage(query, res) {
+			if isLastPage(res) {
 				break
 			}
 			query.PagingInfo = res.PagingInfo
@@ -148,6 +148,6 @@ func (c *Client) queryFrom(ctx context.Context, query *pb.HistoryQuery) (*pb.His
 	return res.Response, nil
 }
 
-func isLastPage(query *pb.HistoryQuery, res *pb.HistoryResponse) bool {
+func isLastPage(res *pb.HistoryResponse) bool {
 	return res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0
 }
