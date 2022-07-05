@@ -13,7 +13,6 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
-	"github.com/xmtp/xmtp-node-go/logging"
 	"github.com/xmtp/xmtp-node-go/metrics"
 	"go.uber.org/zap"
 )
@@ -81,8 +80,6 @@ func New(opts ...ClientOption) (*Client, error) {
 // every page response, traversing every page until the end or until pageFn
 // returns false.
 func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(res *pb.HistoryResponse) (int, bool)) (int, error) {
-	c.log.Info("querying", logging.HostID("peer", *c.peer))
-
 	var msgCount int
 	var msgCountLock sync.RWMutex
 	var res *pb.HistoryResponse
