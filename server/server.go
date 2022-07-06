@@ -208,8 +208,6 @@ func (server *Server) Shutdown() {
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-
 	dialPeer := func(peerAddr string) {
 		err := server.wakuNode.DialPeer(server.ctx, peerAddr)
 		if err != nil {
@@ -221,6 +219,20 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 		dialPeer(peerAddr)
 	}
 
+	staticNodePeerIDs := make([]peer.ID, len(staticNodes))
+	for i, peerAddr := range staticNodes {
+		ma, err := multiaddr.NewMultiaddr(peerAddr)
+		if err != nil {
+			server.logger.Error("building multiaddr from static node addr", zap.Error(err))
+		}
+		pi, err := peer.AddrInfoFromP2pAddr(ma)
+		if err != nil {
+			server.logger.Error("getting peer addr info from static node addr", zap.Error(err))
+		}
+		staticNodePeerIDs[i] = pi.ID
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
 		case <-server.ctx.Done():
@@ -230,16 +242,9 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 			for _, peerID := range server.wakuNode.Host().Network().Peers() {
 				peers[peerID] = struct{}{}
 			}
-			for _, peerAddr := range staticNodes {
-				ma, err := multiaddr.NewMultiaddr(peerAddr)
-				if err != nil {
-					server.logger.Error("building multiaddr from static node addr", zap.Error(err))
-				}
-				pi, err := peer.AddrInfoFromP2pAddr(ma)
-				if err != nil {
-					server.logger.Error("getting peer addr info from static node addr", zap.Error(err))
-				}
-				if _, exists := peers[pi.ID]; exists {
+			for i, peerAddr := range staticNodes {
+				peerID := staticNodePeerIDs[i]
+				if _, exists := peers[peerID]; exists {
 					continue
 				}
 				dialPeer(peerAddr)

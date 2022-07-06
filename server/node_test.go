@@ -425,7 +425,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 	require.Eventually(t, func() bool {
 		msgs = listMessages(t, n, contentTopics)
 		return len(msgs) == 2
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 3*time.Second, 100*time.Millisecond)
 	require.ElementsMatch(t, expectedMsgs, msgs)
 }
 
