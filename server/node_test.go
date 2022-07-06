@@ -390,7 +390,7 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 }
 
 func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func(), func()) {
-	db, dbCleanup := test.NewDB(t)
+	db, _, dbCleanup := test.NewDB(t)
 	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDB(db))
 	require.NoError(t, err)
 
@@ -425,7 +425,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 	require.Eventually(t, func() bool {
 		msgs = listMessages(t, n, contentTopics)
 		return len(msgs) == 2
-	}, 3*time.Second, 100*time.Millisecond)
+	}, 2*time.Second, 100*time.Millisecond)
 	require.ElementsMatch(t, expectedMsgs, msgs)
 }
 

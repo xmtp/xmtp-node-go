@@ -81,7 +81,10 @@ func NewPrivateKey(t *testing.T) *ecdsa.PrivateKey {
 }
 
 func ExpectPeers(t *testing.T, n *wakunode.WakuNode, expected ...peer.ID) {
-	require.Equal(t, expected, n.Host().Network().Peers())
+	require.Eventually(t, func() bool {
+		return len(n.Host().Network().Peers()) == len(expected)
+	}, 5*time.Second, 100*time.Millisecond)
+	require.ElementsMatch(t, expected, n.Host().Network().Peers())
 }
 
 func ExpectNoPeers(t *testing.T, n *wakunode.WakuNode) {
