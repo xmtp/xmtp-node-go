@@ -19,6 +19,81 @@ import (
 	test "github.com/xmtp/xmtp-node-go/testing"
 )
 
+func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {
+	t.Parallel()
+
+	n1, cleanup := newTestNode(t, nil, false, nil)
+	defer cleanup()
+
+	n2, cleanup := newTestNode(t, nil, false, nil)
+	defer cleanup()
+
+	topic1 := test.NewTopic()
+	topic2 := test.NewTopic()
+
+	// Connect to each other as store nodes.
+	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
+	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
+
+	// Subscribe via each node.
+	n1EnvC := test.Subscribe(t, n1)
+	n2EnvC := test.Subscribe(t, n2)
+
+	// Publish to each node.
+	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
+	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
+
+	// Expect subscribed messages.
+	expectedMsgs := []*pb.WakuMessage{
+		test.NewMessage(topic1, 1, "msg1"),
+		test.NewMessage(topic2, 2, "msg2"),
+	}
+	test.SubscribeExpect(t, n1EnvC, expectedMsgs)
+	test.SubscribeExpect(t, n2EnvC, expectedMsgs)
+
+	// Expect query messages.
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, expectedMsgs)
+}
+
+func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
+	t.Parallel()
+
+	db, cleanup := test.NewDB(t)
+	defer cleanup()
+
+	n1, cleanup := newTestNode(t, nil, false, db)
+	defer cleanup()
+
+	n2, cleanup := newTestNode(t, nil, false, db)
+	defer cleanup()
+
+	topic1 := test.NewTopic()
+	topic2 := test.NewTopic()
+
+	// Connect to each other as store nodes.
+	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
+	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
+
+	// Subscribe via each node.
+	n1EnvC := test.Subscribe(t, n1)
+	n2EnvC := test.Subscribe(t, n2)
+
+	// Publish to each node.
+	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
+	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
+
+	// Expect subscribed messages.
+	expectedMsgs := []*pb.WakuMessage{
+		test.NewMessage(topic1, 1, "msg1"),
+		test.NewMessage(topic2, 2, "msg2"),
+	}
+	test.SubscribeExpect(t, n1EnvC, expectedMsgs)
+	test.SubscribeExpect(t, n2EnvC, expectedMsgs)
+
+	// Expect query messages.
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, expectedMsgs)
+}
+
 func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 	t.Parallel()
 
@@ -386,7 +461,9 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 	)
 	return n, func() {
 		nodeCleanup()
-		dbCleanup()
+		if dbCleanup != nil {
+			dbCleanup()
+		}
 	}
 }
 
