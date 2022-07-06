@@ -19,6 +19,8 @@ import (
 )
 
 func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -38,6 +40,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 }
 
 func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -57,6 +61,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 	})
 }
 func TestNode_DataPartition_WithoutResume(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -98,7 +104,7 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2)
+	test.Disconnect(t, n1, n2.Host().ID())
 
 	test.Publish(t, n1, topic1, 4)
 	test.Publish(t, n2, topic2, 5)
@@ -150,6 +156,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 }
 
 func TestNode_DataPartition_WithResume(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, true)
 	defer cleanup()
 
@@ -191,7 +199,7 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2)
+	test.Disconnect(t, n1, n2.Host().ID())
 
 	test.Publish(t, n1, topic1, 4)
 	test.Publish(t, n2, topic2, 5)
@@ -247,18 +255,141 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	})
 }
 
-func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool) (*wakunode.WakuNode, func()) {
-	return test.NewNode(t, storeNodes,
-		wakunode.WithWakuStore(true, withResume),
-		wakunode.WithWakuStoreFactory(func(w *wakunode.WakuNode) wakustore.Store {
-			// Note that the same host needs to be used here.
-			store, _, _ := newTestStore(t, w.Host())
-			return store
-		}),
-	)
+func TestNodes_Deployment(t *testing.T) {
+	tcs := []struct {
+		name string
+		test func(t *testing.T, n1, newN1, n2, newN2 *wakunode.WakuNode)
+	}{
+		{
+			name: "new instances connect to new instances",
+			test: func(t *testing.T, n1, newN1, n2, newN2 *wakunode.WakuNode) {
+				n1ID := n1.Host().ID()
+				n2ID := n2.Host().ID()
+
+				// Deploy started; new instances connect to all new instances.
+				test.Connect(t, newN1, newN2)
+				test.Connect(t, newN2, newN1)
+
+				// Expect new instances are fully connected.
+				test.ExpectPeers(t, newN1, n2ID)
+				test.ExpectPeers(t, newN2, n1ID)
+
+				// Deploy ending; old instances disconnect from connected peers.
+				test.Disconnect(t, n1, n2ID)
+				test.Disconnect(t, n2, n1ID)
+
+				// Expect new instances are still fully connected.
+				test.ExpectPeers(t, newN1, n2ID)
+				test.ExpectPeers(t, newN2, n1ID)
+			},
+		},
+		{
+			name: "new instances connect to 1 new 1 old instance",
+			test: func(t *testing.T, n1, newN1, n2, newN2 *wakunode.WakuNode) {
+				n1ID := n1.Host().ID()
+				n2ID := n2.Host().ID()
+
+				// Deploy started; new instances connect to some new instances
+				// and some old instances.
+				test.Connect(t, newN1, newN2)
+				test.Connect(t, newN2, n1)
+
+				// Expect new instances are fully connected.
+				test.ExpectPeers(t, newN1, n2ID)
+				test.ExpectPeers(t, newN2, n1ID)
+
+				// Deploy ending; old instances disconnect from connected peers.
+				test.Disconnect(t, n1, n2ID)
+				test.Disconnect(t, n2, n1ID)
+
+				// Expect new instances are still fully connected.
+				test.ExpectPeers(t, newN1, n2ID)
+				test.ExpectPeers(t, newN2, n1ID)
+			},
+		},
+		{
+			name: "new instances connect to old instances",
+			test: func(t *testing.T, n1, newN1, n2, newN2 *wakunode.WakuNode) {
+				n1ID := n1.Host().ID()
+				n2ID := n2.Host().ID()
+
+				// Deploy started; new instances connect to all old instances.
+				test.Connect(t, newN1, n2)
+				test.Connect(t, newN2, n1)
+
+				// Expect new instances are fully connected.
+				test.ExpectPeers(t, newN1, n2ID)
+				test.ExpectPeers(t, newN2, n1ID)
+
+				// Deploy ending; old instances disconnect from connected peers.
+				test.Disconnect(t, n1, n2ID)
+				test.Disconnect(t, n2, n1ID)
+
+				// Expect new instances are fully disconnected.
+				test.ExpectNoPeers(t, newN1)
+				test.ExpectNoPeers(t, newN2)
+			},
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Initialize private keys for each node.
+			n1PrivKey := test.NewPrivateKey(t)
+			n2PrivKey := test.NewPrivateKey(t)
+
+			// Spin up initial instances of the nodes.
+			n1, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n1PrivKey))
+			defer cleanup()
+			n2, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n2PrivKey))
+			defer cleanup()
+
+			// Connect the nodes.
+			test.Connect(t, n1, n2)
+			test.Connect(t, n2, n1)
+
+			// Spin up new instances of the nodes.
+			newN1, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n1PrivKey))
+			defer cleanup()
+			newN2, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n2PrivKey))
+			defer cleanup()
+
+			// Expect matching peer IDs for new and old instances.
+			require.Equal(t, n1.Host().ID(), newN1.Host().ID())
+			require.Equal(t, n2.Host().ID(), newN2.Host().ID())
+
+			// Run the test case.
+			tc.test(t, n1, newN1, n2, newN2)
+		})
+	}
 }
 
-func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func()) {
+func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
+	var dbCleanup func()
+	n, nodeCleanup := test.NewNode(t, storeNodes,
+		append(
+			opts,
+			wakunode.WithWakuStore(true, withResume),
+			wakunode.WithWakuStoreFactory(func(w *wakunode.WakuNode) wakustore.Store {
+				// Note that the node calls store.Stop() during it's cleanup,
+				// but it that doesn't clean up the given DB, so we make sure
+				// to return that in the node cleanup returned here.
+				// Note that the same host needs to be used here.
+				var store *store.XmtpStore
+				store, _, _, dbCleanup = newTestStore(t, w.Host())
+				return store
+			}),
+		)...,
+	)
+	return n, func() {
+		nodeCleanup()
+		dbCleanup()
+	}
+}
+
+func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func(), func()) {
 	db, dbCleanup := test.NewDB(t)
 	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDB(db))
 	require.NoError(t, err)
@@ -270,10 +401,7 @@ func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStor
 
 	store.Start(context.Background())
 
-	return store, dbStore, func() {
-		store.Stop()
-		dbCleanup()
-	}
+	return store, dbStore, store.Stop, dbCleanup
 }
 
 func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []*pb.WakuMessage {
