@@ -209,6 +209,18 @@ func (server *Server) Shutdown() {
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 	ticker := time.NewTicker(500 * time.Millisecond)
+
+	dialPeer := func(peerAddr string) {
+		err := server.wakuNode.DialPeer(server.ctx, peerAddr)
+		if err != nil {
+			server.logger.Error("dialing static node", zap.Error(err))
+		}
+	}
+
+	for _, peerAddr := range staticNodes {
+		dialPeer(peerAddr)
+	}
+
 	for {
 		select {
 		case <-server.ctx.Done():
@@ -230,10 +242,7 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 				if _, exists := peers[pi.ID]; exists {
 					continue
 				}
-				err = server.wakuNode.DialPeer(server.ctx, peerAddr)
-				if err != nil {
-					server.logger.Error("dialing static node", zap.Error(err))
-				}
+				dialPeer(peerAddr)
 			}
 		}
 	}
