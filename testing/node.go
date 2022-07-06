@@ -22,6 +22,11 @@ func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	err := n1.DialPeer(ctx, n2.ListenAddresses()[0].String())
 	require.NoError(t, err)
 
+	if len(protocols) > 0 {
+		_, err = n1.AddPeer(n2.ListenAddresses()[0], protocols...)
+		require.NoError(t, err)
+	}
+
 	// This delay is necessary, but it's unclear why at this point. We see
 	// similar delays throughout the waku codebase as well for this reason.
 	time.Sleep(100 * time.Millisecond)

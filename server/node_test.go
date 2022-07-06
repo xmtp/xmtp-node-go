@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := newTestNode(t, nil, false)
+	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
 	topic1 := test.NewTopic()
@@ -30,7 +31,7 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
 	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
 
-	n2, cleanup := newTestNode(t, []*node.WakuNode{n1}, true)
+	n2, cleanup := newTestNode(t, []*node.WakuNode{n1}, true, nil)
 	defer cleanup()
 
 	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
@@ -42,7 +43,7 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := newTestNode(t, nil, false)
+	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
 	topic1 := test.NewTopic()
@@ -51,7 +52,7 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
 	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
 
-	n2, cleanup := newTestNode(t, nil, true)
+	n2, cleanup := newTestNode(t, nil, true, nil)
 	defer cleanup()
 	test.ConnectStoreNode(t, n2, n1)
 
@@ -63,10 +64,10 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := newTestNode(t, nil, false)
+	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
-	n2, cleanup := newTestNode(t, nil, false)
+	n2, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
 	// Connect and send a message to each node, expecting that the messages
@@ -158,10 +159,10 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 func TestNode_DataPartition_WithResume(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := newTestNode(t, nil, true)
+	n1, cleanup := newTestNode(t, nil, true, nil)
 	defer cleanup()
 
-	n2, cleanup := newTestNode(t, nil, true)
+	n2, cleanup := newTestNode(t, nil, true, nil)
 	defer cleanup()
 
 	// Connect and send a message to each node, expecting that the messages
@@ -341,9 +342,9 @@ func TestNodes_Deployment(t *testing.T) {
 			n2PrivKey := test.NewPrivateKey(t)
 
 			// Spin up initial instances of the nodes.
-			n1, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n1PrivKey))
+			n1, cleanup := newTestNode(t, nil, false, nil, wakunode.WithPrivateKey(n1PrivKey))
 			defer cleanup()
-			n2, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n2PrivKey))
+			n2, cleanup := newTestNode(t, nil, false, nil, wakunode.WithPrivateKey(n2PrivKey))
 			defer cleanup()
 
 			// Connect the nodes.
@@ -351,9 +352,9 @@ func TestNodes_Deployment(t *testing.T) {
 			test.Connect(t, n2, n1)
 
 			// Spin up new instances of the nodes.
-			newN1, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n1PrivKey))
+			newN1, cleanup := newTestNode(t, nil, false, nil, wakunode.WithPrivateKey(n1PrivKey))
 			defer cleanup()
-			newN2, cleanup := newTestNode(t, nil, false, wakunode.WithPrivateKey(n2PrivKey))
+			newN2, cleanup := newTestNode(t, nil, false, nil, wakunode.WithPrivateKey(n2PrivKey))
 			defer cleanup()
 
 			// Expect matching peer IDs for new and old instances.
@@ -366,7 +367,7 @@ func TestNodes_Deployment(t *testing.T) {
 	}
 }
 
-func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool, db *sql.DB, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	var dbCleanup func()
 	n, nodeCleanup := test.NewNode(t, storeNodes,
 		append(
@@ -378,7 +379,7 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 				// to return that in the node cleanup returned here.
 				// Note that the same host needs to be used here.
 				var store *store.XmtpStore
-				store, _, _, dbCleanup = newTestStore(t, w.Host())
+				store, _, _, dbCleanup = newTestStore(t, w.Host(), db)
 				return store
 			}),
 		)...,
@@ -389,8 +390,11 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 	}
 }
 
-func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func(), func()) {
-	db, _, dbCleanup := test.NewDB(t)
+func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *store.DBStore, func(), func()) {
+	var dbCleanup func()
+	if db == nil {
+		db, _, dbCleanup = test.NewDB(t)
+	}
 	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDB(db))
 	require.NoError(t, err)
 
