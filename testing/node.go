@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"net"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/status-im/go-waku/tests"
 	"github.com/status-im/go-waku/waku/v2/node"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
@@ -26,8 +28,8 @@ func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protoco
 	time.Sleep(100 * time.Millisecond)
 }
 
-func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
-	err := n1.ClosePeerById(n2.Host().ID())
+func Disconnect(t *testing.T, n1 *wakunode.WakuNode, peerID peer.ID) {
+	err := n1.ClosePeerById(peerID)
 	require.NoError(t, err)
 }
 
@@ -38,10 +40,7 @@ func NewTopic() string {
 func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 
-	key, err := tests.RandomHex(32)
-	require.NoError(t, err)
-	prvKey, err := crypto.HexToECDSA(key)
-	require.NoError(t, err)
+	prvKey := NewPrivateKey(t)
 
 	ctx := context.Background()
 	opts = append([]node.WakuNodeOption{
@@ -71,4 +70,22 @@ func NewPeer(t *testing.T) host.Host {
 	host, err := libp2p.New(libp2p.DefaultTransports, libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 	require.NoError(t, err)
 	return host
+}
+
+func NewPrivateKey(t *testing.T) *ecdsa.PrivateKey {
+	key, err := tests.RandomHex(32)
+	require.NoError(t, err)
+	prvKey, err := crypto.HexToECDSA(key)
+	require.NoError(t, err)
+	return prvKey
+}
+
+func ExpectPeers(t *testing.T, n *wakunode.WakuNode, expected ...peer.ID) {
+	require.Equal(t, expected, n.Host().Network().Peers())
+}
+
+func ExpectNoPeers(t *testing.T, n *wakunode.WakuNode) {
+	require.Eventually(t, func() bool {
+		return len(n.Host().Network().Peers()) == 0
+	}, 1*time.Second, 10*time.Millisecond)
 }
