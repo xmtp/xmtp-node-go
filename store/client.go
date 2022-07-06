@@ -92,7 +92,7 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 		}
 
 		var err error
-		res, err = c.queryFrom(ctx, query)
+		res, err = c.queryPage(ctx, query)
 		if err != nil {
 			return 0, err
 		}
@@ -109,7 +109,7 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 	return msgCount, nil
 }
 
-func (c *Client) queryFrom(ctx context.Context, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
+func (c *Client) queryPage(ctx context.Context, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
 	err := c.host.Connect(ctx, c.host.Peerstore().PeerInfo(*c.peer))
 	if err != nil {
 		return nil, errors.Wrap(err, "connecting to peer")
