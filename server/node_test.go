@@ -19,6 +19,8 @@ import (
 )
 
 func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -38,6 +40,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 }
 
 func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -57,6 +61,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 	})
 }
 func TestNode_DataPartition_WithoutResume(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, false)
 	defer cleanup()
 
@@ -150,6 +156,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 }
 
 func TestNode_DataPartition_WithResume(t *testing.T) {
+	t.Parallel()
+
 	n1, cleanup := newTestNode(t, nil, true)
 	defer cleanup()
 
