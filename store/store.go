@@ -165,7 +165,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		go func(p peer.ID) {
 			defer wg.Done()
 			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
-				err := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
+				err, _ := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
 					return false
@@ -276,7 +276,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 	defer s.wg.Done()
 	for envelope := range s.MsgC {
-		_ = s.storeMessage(envelope)
+		_, _ = s.storeMessage(envelope)
 	}
 }
 
@@ -298,17 +298,17 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 	}
 }
 
-func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
+func (s *XmtpStore) storeMessage(env *protocol.Envelope) (error, bool) {
 	err := s.msgProvider.Put(env) // Should the index be stored?
 	if err != nil {
 		if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
 			s.log.Debug("storing message", zap.Error(err))
 			metrics.RecordStoreError(s.ctx, "store_duplicate_key")
-			return err
+			return nil, false
 		}
 		s.log.Error("storing message", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "store_failure")
-		return err
+		return err, false
 	}
 	s.log.Info("message stored",
 		zap.String("content_topic", env.Message().ContentTopic),
@@ -317,7 +317,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 	metrics.RecordMessage(s.ctx, "stored", 1)
 
-	return nil
+	return nil, true
 }
 
 func computeIndex(env *protocol.Envelope) (*pb.Index, error) {

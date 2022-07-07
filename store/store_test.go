@@ -47,6 +47,6 @@ func expectMessages(t *testing.T, s *XmtpStore, pubSubTopic string, msgs []*pb.W
 }
 
 func storeMessage(t *testing.T, s *XmtpStore, msg *pb.WakuMessage, pubSubTopic string) {
-	err := s.storeMessage(test.NewEnvelope(t, msg, pubSubTopic))
+	err, _ := s.storeMessage(test.NewEnvelope(t, msg, pubSubTopic))
 	require.NoError(t, err)
 }
