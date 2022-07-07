@@ -15,7 +15,7 @@ const (
 	localTestDBDSNSuffix = "?sslmode=disable"
 )
 
-func NewDB(t *testing.T) (*sql.DB, func()) {
+func NewDB(t *testing.T) (*sql.DB, string, func()) {
 	dsn := localTestDBDSNPrefix + localTestDBDSNSuffix
 	ctlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	dbName := "test_" + RandomStringLower(5)
@@ -24,9 +24,9 @@ func NewDB(t *testing.T) (*sql.DB, func()) {
 
 	dsn = localTestDBDSNPrefix + "/" + dbName + localTestDBDSNSuffix
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
-	return db, func() {
+	return db, dsn, func() {
 		db.Close()
-		_, err := ctlDB.Exec("DROP DATABASE " + dbName)
+		_, err = ctlDB.Exec("DROP DATABASE " + dbName)
 		require.NoError(t, err)
 		ctlDB.Close()
 	}

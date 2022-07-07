@@ -15,7 +15,7 @@ import (
 )
 
 func newTestStore(t *testing.T) (*XmtpStore, func()) {
-	db, dbCleanup := test.NewDB(t)
+	db, _, dbCleanup := test.NewDB(t)
 	dbStore, err := NewDBStore(utils.Logger(), WithDB(db))
 	require.NoError(t, err)
 

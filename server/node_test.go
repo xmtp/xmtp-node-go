@@ -390,7 +390,7 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 }
 
 func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func(), func()) {
-	db, dbCleanup := test.NewDB(t)
+	db, _, dbCleanup := test.NewDB(t)
 	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDB(db))
 	require.NoError(t, err)
 

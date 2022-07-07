@@ -16,17 +16,14 @@ import (
 	"github.com/xmtp/xmtp-node-go/authn"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	dssql "github.com/ipfs/go-ds-sql"
 	"go.uber.org/zap"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/status-im/go-waku/waku/persistence/sqlite"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
@@ -104,19 +101,7 @@ func New(options Options) (server *Server) {
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
-	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)
-
-	// Create persistent peerstore
-	// This uses the "sqlite" package from go-waku, but with the Postgres powered store. The queries all work regardless of underlying datastore
-	queries, err := sqlite.NewQueries("peerstore", server.db)
-	failOnErr(err, "Peerstore")
-
-	datastore := dssql.NewDatastore(server.db, queries)
-	opts := pstoreds.DefaultOpts()
-	peerStore, err := pstoreds.NewPeerstore(server.ctx, datastore, opts)
-	failOnErr(err, "Peerstore")
-
-	libp2pOpts = append(libp2pOpts, libp2p.Peerstore(peerStore))
+	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)peers
 
 	nodeOpts = append(nodeOpts, node.WithLibP2POptions(libp2pOpts...))
 
@@ -178,14 +163,7 @@ func New(options Options) (server *Server) {
 		}
 	}
 
-	for _, n := range options.StaticNodes {
-		go func(node string) {
-			err = server.wakuNode.DialPeer(server.ctx, node)
-			if err != nil {
-				server.logger.Error("error dialing peer ", zap.Error(err))
-			}
-		}(n)
-	}
+	go server.staticNodesConnectLoop(options.StaticNodes)
 
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")
@@ -208,9 +186,58 @@ func (server *Server) Shutdown() {
 	// shut the node down
 	server.wakuNode.Stop()
 
+	// Close the DB.
+	server.db.Close()
+
 	if server.metricsServer != nil {
 		err := server.metricsServer.Stop(server.ctx)
 		failOnErr(err, "metrics stop")
+	}
+}
+
+func (server *Server) staticNodesConnectLoop(staticNodes []string) {
+	dialPeer := func(peerAddr string) {
+		err := server.wakuNode.DialPeer(server.ctx, peerAddr)
+		if err != nil {
+			server.logger.Error("dialing static node", zap.Error(err))
+		}
+	}
+
+	for _, peerAddr := range staticNodes {
+		dialPeer(peerAddr)
+	}
+
+	staticNodePeerIDs := make([]peer.ID, len(staticNodes))
+	for i, peerAddr := range staticNodes {
+		ma, err := multiaddr.NewMultiaddr(peerAddr)
+		if err != nil {
+			server.logger.Error("building multiaddr from static node addr", zap.Error(err))
+		}
+		pi, err := peer.AddrInfoFromP2pAddr(ma)
+		if err != nil {
+			server.logger.Error("getting peer addr info from static node addr", zap.Error(err))
+		}
+		staticNodePeerIDs[i] = pi.ID
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	for {
+		select {
+		case <-server.ctx.Done():
+			return
+		case <-ticker.C:
+			peers := map[peer.ID]struct{}{}
+			for _, peerID := range server.wakuNode.Host().Network().Peers() {
+				peers[peerID] = struct{}{}
+			}
+			for i, peerAddr := range staticNodes {
+				peerID := staticNodePeerIDs[i]
+				if _, exists := peers[peerID]; exists {
+					continue
+				}
+				dialPeer(peerAddr)
+			}
+		}
 	}
 }
 
