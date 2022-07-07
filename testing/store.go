@@ -26,10 +26,6 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	return db, dsn, func() {
 		db.Close()
-		_, err := ctlDB.Exec("REVOKE CONNECT ON DATABASE " + dbName + " FROM public; ")
-		require.NoError(t, err)
-		_, err = ctlDB.Exec("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '" + dbName + "'")
-		require.NoError(t, err)
 		_, err = ctlDB.Exec("DROP DATABASE " + dbName)
 		require.NoError(t, err)
 		ctlDB.Close()

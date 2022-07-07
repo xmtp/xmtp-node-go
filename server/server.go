@@ -16,17 +16,14 @@ import (
 	"github.com/xmtp/xmtp-node-go/authn"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	dssql "github.com/ipfs/go-ds-sql"
 	"go.uber.org/zap"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/status-im/go-waku/waku/persistence/sqlite"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
@@ -104,19 +101,7 @@ func New(options Options) (server *Server) {
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
-	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)
-
-	// Create persistent peerstore
-	// This uses the "sqlite" package from go-waku, but with the Postgres powered store. The queries all work regardless of underlying datastore
-	queries, err := sqlite.NewQueries("peerstore", server.db)
-	failOnErr(err, "Peerstore")
-
-	datastore := dssql.NewDatastore(server.db, queries)
-	opts := pstoreds.DefaultOpts()
-	peerStore, err := pstoreds.NewPeerstore(server.ctx, datastore, opts)
-	failOnErr(err, "Peerstore")
-
-	libp2pOpts = append(libp2pOpts, libp2p.Peerstore(peerStore))
+	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)peers
 
 	nodeOpts = append(nodeOpts, node.WithLibP2POptions(libp2pOpts...))
 
@@ -200,6 +185,9 @@ func (server *Server) Shutdown() {
 
 	// shut the node down
 	server.wakuNode.Stop()
+
+	// Close the DB.
+	server.db.Close()
 
 	if server.metricsServer != nil {
 		err := server.metricsServer.Stop(server.ctx)
