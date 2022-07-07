@@ -17,6 +17,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/xmtp/xmtp-node-go/logging"
 	"github.com/xmtp/xmtp-node-go/metrics"
 	"github.com/xmtp/xmtp-node-go/tracing"
@@ -300,6 +301,11 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) error {
 	err := s.msgProvider.Put(env) // Should the index be stored?
 	if err != nil {
+		if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
+			s.log.Debug("storing message", zap.Error(err))
+			metrics.RecordStoreError(s.ctx, "store_duplicate_key")
+			return err
+		}
 		s.log.Error("storing message", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "store_failure")
 		return err
