@@ -38,9 +38,8 @@ XMTP Node software
 
 ## Deployments
 
-Merging a PR to either the `dev` or `main` branch will trigger a new deployment via Github Actions and Terraform.
+Merging a PR to either the `main` branch will trigger a new deployment via Github Actions and Terraform.
 
-- The `dev` branch will deploy to the `dev` environment and push to the Docker tag `latest`
-- The `main` branch will deploy to the `production` environment and push to the Docker tag `production`
+The default behavior is to deploy `main` to both the `dev` and `production` environments. If you'd like to deploy a different branch to `dev`, open a PR with an update to [.github/workflows/deploy.yml](https://github.com/xmtp/xmtp-node-go/blob/main/.github/workflows/deploy.yml#L29) switching from `main` to your branch. Remember to PR it back to `main` when you're done.
 
 Changes will be automatically applied and no user action is required after merging.
