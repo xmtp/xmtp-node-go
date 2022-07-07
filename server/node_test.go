@@ -58,7 +58,7 @@ func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {
 func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	t.Parallel()
 
-	db, cleanup := test.NewDB(t)
+	db, _, cleanup := test.NewDB(t)
 	defer cleanup()
 
 	n1, cleanup := newTestNode(t, nil, false, db)
