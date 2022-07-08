@@ -7,6 +7,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/migrations/authz"
+	"github.com/xmtp/xmtp-node-go/tracing"
 	"go.uber.org/zap"
 )
 
@@ -93,7 +94,7 @@ func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	go d.listenForChanges()
+	go tracing.Do("authz-change-listener", d.listenForChanges)
 
 	d.log.Info("Started DatabaseWalletAuthorizer")
 	return nil

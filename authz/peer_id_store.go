@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xmtp/xmtp-node-go/tracing"
 	"go.uber.org/zap"
 )
 
@@ -39,7 +40,7 @@ func NewMemoryPeerIdStore(log *zap.Logger) *MemoryPeerIdStore {
 }
 
 func (s *MemoryPeerIdStore) Start(ctx context.Context) {
-	go s.purgeLoop(ctx)
+	go tracing.Do("authz-purge-loop", func() { s.purgeLoop(ctx) })
 }
 
 func (s *MemoryPeerIdStore) Get(peerId string) *PeerWallet {

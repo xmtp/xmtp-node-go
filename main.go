@@ -8,6 +8,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/server"
+	"github.com/xmtp/xmtp-node-go/tracing"
 )
 
 var options server.Options
@@ -72,5 +73,11 @@ func main() {
 		return
 	}
 
-	server.New(options).WaitForShutdown()
+	if options.Tracing.Enable {
+		tracing.Start()
+		defer tracing.Stop()
+	}
+	tracing.Do("main", func() {
+		server.New(options).WaitForShutdown()
+	})
 }

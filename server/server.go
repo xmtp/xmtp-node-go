@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/authn"
+	"github.com/xmtp/xmtp-node-go/tracing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
@@ -79,7 +80,7 @@ func New(options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		metrics.RegisterViews(server.logger)
-		go server.metricsServer.Start()
+		go tracing.Do("metrics", server.metricsServer.Start)
 	}
 
 	if options.Authz.DbConnectionString != "" {
@@ -135,7 +136,7 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		go server.statusMetricsLoop(options)
+		go tracing.Do("status metrics", func() { server.statusMetricsLoop(options) })
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
@@ -163,7 +164,7 @@ func New(options Options) (server *Server) {
 		}
 	}
 
-	go server.staticNodesConnectLoop(options.StaticNodes)
+	go tracing.Do("static-nodes-connect-loop", func() { server.staticNodesConnectLoop(options.StaticNodes) })
 
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")
