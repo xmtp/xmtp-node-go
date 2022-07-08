@@ -20,6 +20,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/logging"
 	"github.com/xmtp/xmtp-node-go/metrics"
+	"github.com/xmtp/xmtp-node-go/tracing"
 	"go.uber.org/zap"
 )
 
@@ -78,8 +79,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	s.wg.Add(2)
-	go s.storeIncomingMessages(ctx)
-	go s.statusMetricsLoop(ctx)
+	go tracing.Do("store-incoming-messages", func() { s.storeIncomingMessages(ctx) })
+	go tracing.Do("store-status-metrics", func() { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -248,30 +249,32 @@ func (s *XmtpStore) queryLoop(ctx context.Context, query *pb.HistoryQuery, candi
 		candidateQ := *query
 		go func(peer peer.ID) {
 			defer wg.Done()
-			var res *pb.HistoryResponse
-			for {
-				if res != nil {
-					if res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0 {
-						break
+			tracing.Do("resume-from-peer", func() {
+				var res *pb.HistoryResponse
+				for {
+					if res != nil {
+						if res.PagingInfo == nil || res.PagingInfo.Cursor == nil || len(res.Messages) == 0 {
+							break
+						}
+						candidateQ.PagingInfo = res.PagingInfo
 					}
-					candidateQ.PagingInfo = res.PagingInfo
-				}
-				var err error
-				res, err = s.queryFrom(ctx, &candidateQ, peer, protocol.GenerateRequestId())
-				if err != nil {
-					s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
-					return
-				}
-				for _, msg := range res.Messages {
-					err := msgFn(msg)
+					var err error
+					res, err = s.queryFrom(ctx, &candidateQ, peer, protocol.GenerateRequestId())
 					if err != nil {
-						continue
+						s.log.Error("resuming history", logging.HostID("peer", peer), zap.Error(err))
+						return
 					}
-					countLock.Lock()
-					count++
-					countLock.Unlock()
+					for _, msg := range res.Messages {
+						err := msgFn(msg)
+						if err != nil {
+							continue
+						}
+						countLock.Lock()
+						count++
+						countLock.Unlock()
+					}
 				}
-			}
+			})
 		}(candidate)
 	}
 	wg.Wait()
