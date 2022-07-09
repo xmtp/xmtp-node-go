@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -e
+
+DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-dev}"
+DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/node-go}"
+GIT_COMMIT="$(git rev-parse HEAD)"
+
+docker buildx build \
+    --platform linux/amd64 \
+    --tag "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}" \
+    --build-arg="GIT_COMMIT=${GIT_COMMIT}" \
+    -f dev/docker/Dockerfile \
+    -q \
+    .
+
+if [ ! -z "${DOCKER_PUSH+x}" ]; then
+    echo docker push "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+fi
