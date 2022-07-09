@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xmtp/xmtp-node-go/pkg/api"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -102,6 +103,10 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 		WSAddress:   "0.0.0.0",
 		WSPort:      0,
 		EnableWS:    true,
+		API: api.Options{
+			HTTPPort: 0,
+			GRPCPort: 0,
+		},
 	})
 	require.NotNil(t, s)
 	return s, func() {

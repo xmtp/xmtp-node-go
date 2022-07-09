@@ -14,15 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/xmtp/xmtp-node-go/pkg/authn"
-	"github.com/xmtp/xmtp-node-go/pkg/tracing"
-
-	"github.com/ethereum/go-ethereum/crypto"
-	"go.uber.org/zap"
-
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	libp2p "github.com/libp2p/go-libp2p"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
@@ -36,12 +30,16 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	authzMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 	messageMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
 	xmtpStore "github.com/xmtp/xmtp-node-go/pkg/store"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -55,6 +53,7 @@ type Server struct {
 	wg               sync.WaitGroup
 	walletAuthorizer authz.WalletAuthorizer
 	authenticator    *authn.XmtpAuthentication
+	grpc             *api.Server
 }
 
 // Create a new Server
@@ -180,6 +179,15 @@ func New(ctx context.Context, options Options) (server *Server) {
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")
 	server.logger.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
+
+	// Initialize gRPC server.
+	server.grpc, err = api.New(
+		&api.Parameters{
+			Options: options.API,
+			Log:     server.logger,
+			Waku:    server.wakuNode,
+		})
+	failOnErr(err, "initializing grpc server")
 	return server
 }
 
@@ -210,10 +218,16 @@ func (server *Server) Shutdown() {
 		}
 	}
 
-	// Cancel any outstanding goroutines
+	// Close the gRPC server.
+	if server.grpc != nil {
+		server.grpc.Close()
+	}
+
+	// Cancel outstanding goroutines
 	server.cancel()
 	server.wg.Wait()
 	server.logger.Info("shutdown complete")
+
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
@@ -324,7 +338,7 @@ func loadPrivateKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	return crypto.ToECDSA(pBytes)
+	return ethcrypto.ToECDSA(pBytes)
 }
 
 func checkForPrivateKeyFile(path string, overwrite bool) error {
@@ -342,7 +356,7 @@ func checkForPrivateKeyFile(path string, overwrite bool) error {
 }
 
 func generatePrivateKey() ([]byte, error) {
-	key, err := crypto.GenerateKey()
+	key, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +402,7 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 				}
 			} else {
 				if os.IsNotExist(err) {
-					if prvKey, err = crypto.GenerateKey(); err != nil {
+					if prvKey, err = ethcrypto.GenerateKey(); err != nil {
 						return nil, fmt.Errorf("error generating key: %w", err)
 					}
 				} else {
@@ -456,5 +470,5 @@ func hexToECDSA(key string) (*ecdsa.PrivateKey, error) {
 	if len(key) == 62 {
 		key = "00" + key
 	}
-	return crypto.HexToECDSA(key)
+	return ethcrypto.HexToECDSA(key)
 }
