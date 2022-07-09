@@ -6,8 +6,8 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations/authz"
-	"github.com/xmtp/xmtp-node-go/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
 

@@ -16,9 +16,9 @@ import (
 	"github.com/status-im/go-waku/tests"
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/go-msgio/protoio"
-	"github.com/xmtp/xmtp-node-go/logging"
-	pb2 "github.com/xmtp/xmtp-node-go/pb"
-	"github.com/xmtp/xmtp-node-go/types"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	pb2 "github.com/xmtp/xmtp-node-go/pkg/pb"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )

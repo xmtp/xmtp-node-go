@@ -9,8 +9,9 @@ package logging
 
 import (
 	"fmt"
+
 	"github.com/status-im/go-waku/logging"
-	"github.com/xmtp/xmtp-node-go/types"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

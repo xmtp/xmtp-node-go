@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	test "github.com/xmtp/xmtp-node-go/testing"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func TestServer_NewShutdown(t *testing.T) {

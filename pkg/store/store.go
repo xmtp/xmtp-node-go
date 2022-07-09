@@ -18,9 +18,9 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun/driver/pgdriver"
-	"github.com/xmtp/xmtp-node-go/logging"
-	"github.com/xmtp/xmtp-node-go/metrics"
-	"github.com/xmtp/xmtp-node-go/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
 

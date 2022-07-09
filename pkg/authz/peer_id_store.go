@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xmtp/xmtp-node-go/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
 

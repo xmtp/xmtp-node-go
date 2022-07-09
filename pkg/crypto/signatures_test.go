@@ -2,11 +2,12 @@ package crypto
 
 import (
 	"encoding/hex"
+	"testing"
+
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
-	"github.com/xmtp/xmtp-node-go/types"
-	"testing"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
 // Sign generates an RFC1363 formatted signature for the unhashed message provided.

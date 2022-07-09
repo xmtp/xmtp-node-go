@@ -11,7 +11,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
-	test "github.com/xmtp/xmtp-node-go/testing"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func newTestStore(t *testing.T) (*XmtpStore, func()) {

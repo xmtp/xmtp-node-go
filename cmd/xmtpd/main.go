@@ -8,8 +8,8 @@ import (
 	logging "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
 	"github.com/status-im/go-waku/waku/v2/utils"
-	"github.com/xmtp/xmtp-node-go/server"
-	"github.com/xmtp/xmtp-node-go/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/server"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 )
 
 var options server.Options

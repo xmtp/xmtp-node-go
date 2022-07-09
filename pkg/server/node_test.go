@@ -15,8 +15,8 @@ import (
 	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
-	"github.com/xmtp/xmtp-node-go/store"
-	test "github.com/xmtp/xmtp-node-go/testing"
+	"github.com/xmtp/xmtp-node-go/pkg/store"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {

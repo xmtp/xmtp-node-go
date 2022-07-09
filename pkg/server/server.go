@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/xmtp/xmtp-node-go/authn"
-	"github.com/xmtp/xmtp-node-go/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/authn"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
@@ -35,12 +35,12 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/authz"
-	"github.com/xmtp/xmtp-node-go/logging"
-	"github.com/xmtp/xmtp-node-go/metrics"
-	authzMigrations "github.com/xmtp/xmtp-node-go/migrations/authz"
-	messageMigrations "github.com/xmtp/xmtp-node-go/migrations/messages"
-	xmtpStore "github.com/xmtp/xmtp-node-go/store"
+	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	authzMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
+	messageMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
+	xmtpStore "github.com/xmtp/xmtp-node-go/pkg/store"
 )
 
 type Server struct {

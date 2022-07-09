@@ -9,7 +9,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/migrations/messages"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
 	"go.uber.org/zap"
 )
 

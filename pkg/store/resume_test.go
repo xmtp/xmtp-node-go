@@ -7,7 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/stretchr/testify/require"
-	test "github.com/xmtp/xmtp-node-go/testing"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func TestStore_FindLastSeen(t *testing.T) {

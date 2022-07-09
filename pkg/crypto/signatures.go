@@ -4,9 +4,10 @@ package crypto
 import (
 	"errors"
 	"fmt"
+
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/xmtp/xmtp-node-go/types"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/xmtp/xmtp-node-go/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
