@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -e
+. dev/docker/env
+
+docker_compose build
+docker_compose up -d

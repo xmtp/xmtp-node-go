@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+if ! which chronic &>/dev/null; then brew install moreutils; fi
+if ! which golangci-lint &>/dev/null; then brew install golangci-lint; fi
+if ! which shellcheck &>/dev/null; then brew install shellcheck; fi
+if ! which protoc &>/dev/null; then brew install protobuf; fi
+if ! which protoc-gen-go &>/dev/null; then go install google.golang.org/protobuf/cmd/protoc-gen-go; fi
+if ! which protoc-gen-go-grpc &>/dev/null; then go install google.golang.org/grpc/cmd/protoc-gen-go-grpc; fi
+if ! which protoc-gen-grpc-gateway &>/dev/null; then go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway; fi
+if ! which protoc-gen-openapiv2 &>/dev/null; then go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2; fi
+if ! which mockgen &>/dev/null; then go install github.com/golang/mock/mockgen@latest; fi
+if ! which protolint &>/dev/null; then go install github.com/yoheimuta/protolint/cmd/protolint@latest; fi
+
+go mod tidy
+dev/generate
+dev/docker/up
