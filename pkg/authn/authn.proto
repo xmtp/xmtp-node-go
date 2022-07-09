@@ -4,11 +4,12 @@ package pb;
 
 option go_package=".;authn";
 
-// ------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // These objects are copied from xmtpjs.
-// Compile failure occurs with GoGo protobuf as optional fields are not supported.
+// Compile failure occurs with GoGo protobuf as optional fields are not 
+// supported.
 // Migrating to go
-// ------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // Signature represents a generalized public key signature,
 // defined as a union to support cryptographic algorithm agility.
@@ -18,12 +19,13 @@ message Signature {
     uint32 recovery = 2; // recovery bit
   }
   oneof union {
-    ECDSACompact ecdsaCompact = 1;
+    ECDSACompact ecdsa_compact = 1;
   }
 }
 
 message Secp256k1Uncompresed {
-  bytes bytes = 1; // uncompressed point with prefix (0x04) [ P || X || Y ], 65 bytes
+  // uncompressed point with prefix (0x04) [ P || X || Y ], 65 bytes
+  bytes bytes = 1; 
 }
 // PublicKey represents a generalized public key,
 // defined as a union to support cryptographic algorithm agility.
@@ -31,17 +33,17 @@ message PublicKey {
   uint64 timestamp = 1;
   optional Signature signature = 2;
   oneof union {
-    Secp256k1Uncompresed secp256k1Uncompressed = 3;
+    Secp256k1Uncompresed secp256k1_uncompressed = 3;
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 message V1ClientAuthRequest {
-  bytes identityKeyBytes = 1;
-  Signature walletSignature = 2;
-  bytes authDataBytes = 3;
-  Signature authSignature = 4;
+  bytes identity_key_bytes = 1;
+  Signature wallet_signature = 2;
+  bytes auth_data_bytes = 3;
+  Signature auth_signature = 4;
 }
 
 message ClientAuthRequest {
@@ -51,8 +53,8 @@ message ClientAuthRequest {
 }
 
 message V1ClientAuthResponse {
-  bool authSuccessful = 1;
-  string errorStr = 2;
+  bool auth_successful = 1;
+  string error_str = 2;
 }
 
 message ClientAuthResponse{
@@ -62,7 +64,7 @@ message ClientAuthResponse{
 }
 
 message AuthData {
-  string walletAddr = 1;
-  string peerId = 2;
+  string wallet_addr = 1;
+  string peer_id = 2;
   uint64 timestamp = 3;
 }
