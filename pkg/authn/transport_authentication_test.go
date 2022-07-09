@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
-	pb2 "github.com/xmtp/xmtp-node-go/pkg/pb"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -45,10 +44,10 @@ var (
 	}
 )
 
-func LoadSerializedAuthReq(str string) (*pb2.V1ClientAuthRequest, error) {
+func LoadSerializedAuthReq(str string) (*V1ClientAuthRequest, error) {
 	serializedAuthReq, _ := hex.DecodeString(str)
 
-	authReq := &pb2.ClientAuthRequest{}
+	authReq := &ClientAuthRequest{}
 	err := proto.Unmarshal(serializedAuthReq, authReq)
 	if err != nil {
 		return nil, err
@@ -122,8 +121,8 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.
 	}
 
 	v1, _ := LoadSerializedAuthReq(serializedRequest)
-	authReqRPC := &pb2.ClientAuthRequest{
-		Version: &pb2.ClientAuthRequest_V1{
+	authReqRPC := &ClientAuthRequest{
+		Version: &ClientAuthRequest_V1{
 			V1: v1,
 		},
 	}
@@ -139,7 +138,7 @@ func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.
 		return false, err
 	}
 
-	authResponseRPC := &pb2.ClientAuthResponse{}
+	authResponseRPC := &ClientAuthResponse{}
 	err = reader.ReadMsg(authResponseRPC)
 	if err != nil {
 		log.Error("could not read response", zap.Error(err))

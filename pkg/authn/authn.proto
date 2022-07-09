@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package pb;
 
-option go_package="../pb";
+option go_package=".;authn";
 
 // ------------------------------------------------------------------------------------------------
 // These objects are copied from xmtpjs.

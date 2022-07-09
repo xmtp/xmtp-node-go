@@ -13,7 +13,6 @@ import (
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
-	"github.com/xmtp/xmtp-node-go/pkg/pb"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -101,7 +100,7 @@ func handleRequest(ctx context.Context, stream network.Stream) (peer types.PeerI
 	connectingPeerId := types.PeerId(stream.Conn().RemotePeer().String())
 
 	switch version := authRequest.Version.(type) {
-	case *pb.ClientAuthRequest_V1:
+	case *ClientAuthRequest_V1:
 		suppliedPeerId, walletAddr, err = validateRequest(ctx, authRequest.GetV1(), connectingPeerId)
 	default:
 		logger.Error("No handler for request", logging.ValueType("version", version))
@@ -118,7 +117,7 @@ func handleRequest(ctx context.Context, stream network.Stream) (peer types.PeerI
 	return suppliedPeerId, walletAddr, err
 }
 
-func validateRequest(ctx context.Context, request *pb.V1ClientAuthRequest, connectingPeerId types.PeerId) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func validateRequest(ctx context.Context, request *V1ClientAuthRequest, connectingPeerId types.PeerId) (peer types.PeerId, wallet types.WalletAddr, err error) {
 	logger := logging.From(ctx)
 
 	// Validate WalletSignature
@@ -154,14 +153,14 @@ func CreateIdentitySignRequest(identityBytes []byte) crypto.Message {
 	return []byte(fmt.Sprintf("XMTP : Create Identity\n%s\n\nFor more info: https://xmtp.org/signatures/", hex.EncodeToString(identityBytes)))
 }
 
-func unpackAuthData(authDataBytes []byte) (*pb.AuthData, error) {
-	authData := &pb.AuthData{}
+func unpackAuthData(authDataBytes []byte) (*AuthData, error) {
+	authData := &AuthData{}
 	err := proto.Unmarshal(authDataBytes, authData)
 
 	return authData, err
 }
 
-func recoverWalletAddress(identityKeyBytes []byte, signature *pb.Signature_ECDSACompact) (wallet types.WalletAddr, err error) {
+func recoverWalletAddress(identityKeyBytes []byte, signature *Signature_ECDSACompact) (wallet types.WalletAddr, err error) {
 
 	isrBytes := CreateIdentitySignRequest(identityKeyBytes)
 
@@ -172,10 +171,10 @@ func recoverWalletAddress(identityKeyBytes []byte, signature *pb.Signature_ECDSA
 	return crypto.RecoverWalletAddress(isrBytes, sig, uint8(signature.GetRecovery()))
 }
 
-func verifyAuthSignature(ctx context.Context, identityKeyBytes []byte, authDataBytes []byte, authSig *pb.Signature_ECDSACompact) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func verifyAuthSignature(ctx context.Context, identityKeyBytes []byte, authDataBytes []byte, authSig *Signature_ECDSACompact) (peer types.PeerId, wallet types.WalletAddr, err error) {
 	logger := logging.From(ctx)
 
-	pubKey := &pb.PublicKey{}
+	pubKey := &PublicKey{}
 	err = proto.Unmarshal(identityKeyBytes, pubKey)
 	if err != nil {
 		return peer, wallet, err
@@ -222,9 +221,9 @@ func validateResults(peerId types.PeerId, addr types.WalletAddr) error {
 
 func writeAuthResponse(stream network.Stream, isAuthenticated bool, errorString string) error {
 	writer := protoio.NewDelimitedWriter(stream)
-	authRespRPC := &pb.ClientAuthResponse{
-		Version: &pb.ClientAuthResponse_V1{
-			V1: &pb.V1ClientAuthResponse{
+	authRespRPC := &ClientAuthResponse{
+		Version: &ClientAuthResponse_V1{
+			V1: &V1ClientAuthResponse{
 				AuthSuccessful: isAuthenticated,
 				ErrorStr:       errorString,
 			},
@@ -233,9 +232,9 @@ func writeAuthResponse(stream network.Stream, isAuthenticated bool, errorString 
 	return writer.WriteMsg(authRespRPC)
 }
 
-func readAuthRequest(stream network.Stream) (*pb.ClientAuthRequest, error) {
+func readAuthRequest(stream network.Stream) (*ClientAuthRequest, error) {
 	reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
-	authReqRPC := &pb.ClientAuthRequest{}
+	authReqRPC := &ClientAuthRequest{}
 	err := reader.ReadMsg(authReqRPC)
 
 	return authReqRPC, err
