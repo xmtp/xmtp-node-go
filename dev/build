@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -e
+
+go mod download
+
+for dir in ./cmd/*; do
+    if [ -d "$dir" ]; then
+        go build -o "./bin/${dir##*/}" "${dir}" &
+    fi
+done
+
+wait
