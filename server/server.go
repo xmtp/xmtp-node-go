@@ -200,7 +200,7 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 	dialPeer := func(peerAddr string) {
 		err := server.wakuNode.DialPeer(server.ctx, peerAddr)
 		if err != nil {
-			server.logger.Error("dialing static node", zap.Error(err))
+			server.logger.Error("dialing static node", zap.Error(err), zap.String("peer_addr", peerAddr))
 		}
 	}
 
