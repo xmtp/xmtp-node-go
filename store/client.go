@@ -106,11 +106,6 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 }
 
 func (c *Client) queryPage(ctx context.Context, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
-	err := c.host.Connect(ctx, c.host.Peerstore().PeerInfo(*c.peer))
-	if err != nil {
-		return nil, errors.Wrap(err, "connecting to peer")
-	}
-
 	stream, err := c.host.NewStream(ctx, *c.peer, store.StoreID_v20beta4)
 	if err != nil {
 		return nil, errors.Wrap(err, "opening query stream")
