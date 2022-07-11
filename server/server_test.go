@@ -59,6 +59,9 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 			DbConnectionString: dbDSN,
 		},
 		StaticNodes: staticNodes,
+		WSAddress:   "0.0.0.0",
+		WSPort:      0,
+		EnableWS:    true,
 	})
 	require.NotNil(t, s)
 	return s, func() {

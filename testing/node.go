@@ -12,15 +12,24 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/status-im/go-waku/tests"
-	"github.com/status-im/go-waku/waku/v2/node"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/stretchr/testify/require"
 )
 
-func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...string) {
+func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	ctx := context.Background()
 	err := n1.DialPeer(ctx, n2.ListenAddresses()[0].String())
+	require.NoError(t, err)
+
+	// This delay is necessary, but it's unclear why at this point. We see
+	// similar delays throughout the waku codebase as well for this reason.
+	time.Sleep(100 * time.Millisecond)
+}
+
+func ConnectWithAddr(t *testing.T, n *wakunode.WakuNode, addr string) {
+	ctx := context.Background()
+	err := n.DialPeer(ctx, addr)
 	require.NoError(t, err)
 
 	// This delay is necessary, but it's unclear why at this point. We see
@@ -37,16 +46,18 @@ func NewTopic() string {
 	return "test-" + RandomStringLower(5)
 }
 
-func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 
 	prvKey := NewPrivateKey(t)
 
 	ctx := context.Background()
-	opts = append([]node.WakuNodeOption{
+	opts = append([]wakunode.WakuNodeOption{
 		wakunode.WithPrivateKey(prvKey),
 		wakunode.WithHostAddress(hostAddr),
 		wakunode.WithWakuRelay(),
+		wakunode.WithWakuFilter(true),
+		wakunode.WithWebsockets("0.0.0.0", 0),
 	}, opts...)
 	node, err := wakunode.New(ctx, opts...)
 	require.NoError(t, err)
