@@ -44,7 +44,7 @@ func SubscribeExpect(t *testing.T, envC chan *protocol.Envelope, msgs []*pb.Waku
 			if len(receivedMsgs) == len(msgs) {
 				done = true
 			}
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(2 * time.Second):
 			done = true
 		}
 	}
