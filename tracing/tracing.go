@@ -55,3 +55,9 @@ func Do(ctx context.Context, spanName string, action func(context.Context)) {
 	}()
 	action(ctx)
 }
+
+func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
+	return l.With(
+		zap.Uint64("dd.trace_id", span.Context().TraceID()),
+		zap.Uint64("dd.span_id", span.Context().SpanID()))
+}
