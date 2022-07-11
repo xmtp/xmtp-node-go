@@ -144,10 +144,10 @@ func queryMessages(t *testing.T, c *node.WakuNode, peerAddr string, contentTopic
 	pi, err := peer.AddrInfoFromString(peerAddr)
 	require.NoError(t, err)
 
-	client, err := store.New(
-		store.WithLog(log),
-		store.WithHost(c.Host()),
-		store.WithPeer(pi.ID),
+	client, err := store.NewClient(
+		store.WithClientLog(log),
+		store.WithClientHost(c.Host()),
+		store.WithClientPeer(pi.ID),
 	)
 	require.NoError(t, err)
 

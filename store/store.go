@@ -187,10 +187,10 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 }
 
 func (s *XmtpStore) queryPeer(ctx context.Context, req *pb.HistoryQuery, peerID peer.ID, msgFn func(*pb.WakuMessage) bool) (int, error) {
-	c, err := New(
-		WithLog(s.log),
-		WithHost(s.h),
-		WithPeer(peerID),
+	c, err := NewClient(
+		WithClientLog(s.log),
+		WithClientHost(s.h),
+		WithClientPeer(peerID),
 	)
 	if err != nil {
 		return 0, err

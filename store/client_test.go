@@ -33,7 +33,7 @@ func TestStoreClient_New(t *testing.T) {
 		{
 			name: "missing host",
 			opts: []ClientOption{
-				WithLog(log),
+				WithClientLog(log),
 			},
 			expect: func(t *testing.T, c *Client, err error) {
 				require.Equal(t, ErrMissingHostOption, err)
@@ -43,8 +43,8 @@ func TestStoreClient_New(t *testing.T) {
 		{
 			name: "missing peer",
 			opts: []ClientOption{
-				WithLog(log),
-				WithHost(host),
+				WithClientLog(log),
+				WithClientHost(host),
 			},
 			expect: func(t *testing.T, c *Client, err error) {
 				require.Equal(t, ErrMissingPeerOption, err)
@@ -54,9 +54,9 @@ func TestStoreClient_New(t *testing.T) {
 		{
 			name: "success",
 			opts: []ClientOption{
-				WithLog(log),
-				WithHost(host),
-				WithPeer(peerID),
+				WithClientLog(log),
+				WithClientHost(host),
+				WithClientPeer(peerID),
 			},
 			expect: func(t *testing.T, c *Client, err error) {
 				require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestStoreClient_New(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			c, err := New(tc.opts...)
+			c, err := NewClient(tc.opts...)
 			tc.expect(t, c, err)
 		})
 	}
@@ -372,10 +372,10 @@ func TestStoreClient_Query_PagingShouldStopOnReturnFalse(t *testing.T) {
 func newTestClient(t *testing.T, peerID peer.ID) *Client {
 	host := test.NewPeer(t)
 	log := test.NewLog(t)
-	c, err := New(
-		WithLog(log),
-		WithHost(host),
-		WithPeer(peerID),
+	c, err := NewClient(
+		WithClientLog(log),
+		WithClientHost(host),
+		WithClientPeer(peerID),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, c)

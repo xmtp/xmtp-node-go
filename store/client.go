@@ -31,25 +31,25 @@ var (
 
 type ClientOption func(c *Client)
 
-func WithLog(log *zap.Logger) ClientOption {
+func WithClientLog(log *zap.Logger) ClientOption {
 	return func(c *Client) {
 		c.log = log
 	}
 }
 
-func WithHost(host host.Host) ClientOption {
+func WithClientHost(host host.Host) ClientOption {
 	return func(c *Client) {
 		c.host = host
 	}
 }
 
-func WithPeer(id peer.ID) ClientOption {
+func WithClientPeer(id peer.ID) ClientOption {
 	return func(c *Client) {
 		c.peer = &id
 	}
 }
 
-func New(opts ...ClientOption) (*Client, error) {
+func NewClient(opts ...ClientOption) (*Client, error) {
 	c := &Client{}
 	for _, opt := range opts {
 		opt(c)
