@@ -234,6 +234,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	span, _ := tracing.StartSpanFromContext(s.ctx, "store request")
 	defer span.Finish()
 	log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
+	log = tracing.Link(span, log)
 	span.SetTag("peer", stream.Conn().RemotePeer())
 
 	historyRPCRequest := &pb.HistoryRPC{}
