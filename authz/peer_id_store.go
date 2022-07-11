@@ -40,7 +40,7 @@ func NewMemoryPeerIdStore(log *zap.Logger) *MemoryPeerIdStore {
 }
 
 func (s *MemoryPeerIdStore) Start(ctx context.Context) {
-	go tracing.Do("authz-purge-loop", func() { s.purgeLoop(ctx) })
+	go tracing.Do(ctx, "authz-purge-loop", func(ctx context.Context) { s.purgeLoop(ctx) })
 }
 
 func (s *MemoryPeerIdStore) Get(peerId string) *PeerWallet {
