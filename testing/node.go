@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
+func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...string) {
 	ctx := context.Background()
 	err := n1.DialPeer(ctx, n2.ListenAddresses()[0].String())
 	require.NoError(t, err)

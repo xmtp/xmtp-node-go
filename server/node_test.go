@@ -306,7 +306,7 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 		test.NewMessage(topic2, 7, "msg7"),
 	})
 
-	// Reconnect, trigger a resume from node 2, and expect new messages .
+	// Reconnect, trigger a resume from node 2, and expect new messages.
 	test.ConnectStoreNode(t, n1, n2)
 	msgCount, err := n1.Store().Resume(context.Background(), relay.DefaultWakuTopic, []peer.ID{n2.Host().ID()})
 	require.NoError(t, err)

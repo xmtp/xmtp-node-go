@@ -165,12 +165,12 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		go func(p peer.ID) {
 			defer wg.Done()
 			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
-				err, _ := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
+				err, stored := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
 					return false
 				}
-				return true
+				return stored
 			})
 			if err != nil {
 				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()))
