@@ -75,6 +75,7 @@ func main() {
 	}
 
 	if options.Tracing.Enable {
+		utils.Logger().Info("starting tracer")
 		tracing.Start(utils.Logger())
 		defer tracing.Stop()
 	}
