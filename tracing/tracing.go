@@ -56,6 +56,8 @@ func Do(ctx context.Context, spanName string, action func(context.Context)) {
 	action(ctx)
 }
 
+// Link connects a logger to a particular trace and span.
+// DD APM should provide some additional functionality based on that.
 func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
 	return l.With(
 		zap.Uint64("dd.trace_id", span.Context().TraceID()),
