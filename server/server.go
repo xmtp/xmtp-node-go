@@ -102,7 +102,7 @@ func New(options Options) (server *Server) {
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
-	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.)peers
+	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.
 
 	nodeOpts = append(nodeOpts, node.WithLibP2POptions(libp2pOpts...))
 

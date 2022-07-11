@@ -13,11 +13,11 @@ import (
 func TestStore_FindLastSeen(t *testing.T) {
 	pubSubTopic := "test"
 
-	msg1 := test.NewMessage("topic1", 1, "msg")
-	msg2 := test.NewMessage("topic2", 2, "msg")
-	msg3 := test.NewMessage("topic3", 3, "msg")
-	msg4 := test.NewMessage("topic4", 4, "msg")
-	msg5 := test.NewMessage("topic5", 5, "msg")
+	msg1 := test.NewMessage("topic1", 1, "msg1")
+	msg2 := test.NewMessage("topic2", 2, "msg2")
+	msg3 := test.NewMessage("topic3", 3, "msg3")
+	msg4 := test.NewMessage("topic4", 4, "msg4")
+	msg5 := test.NewMessage("topic5", 5, "msg5")
 
 	s, cleanup := newTestStore(t)
 	defer cleanup()
@@ -43,16 +43,16 @@ func TestStore_Resume_FromPeer(t *testing.T) {
 	pubSubTopic := "test"
 
 	msgs := []*pb.WakuMessage{
-		test.NewMessage("topic1", 1, "msg"),
-		test.NewMessage("topic1", 2, "msg"),
-		test.NewMessage("topic1", 3, "msg"),
-		test.NewMessage("topic1", 4, "msg"),
-		test.NewMessage("topic1", 5, "msg"),
-		test.NewMessage("topic2", 6, "msg"),
-		test.NewMessage("topic2", 7, "msg"),
-		test.NewMessage("topic2", 8, "msg"),
-		test.NewMessage("topic2", 9, "msg"),
-		test.NewMessage("topic2", 10, "msg"),
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic1", 2, "msg2"),
+		test.NewMessage("topic1", 3, "msg3"),
+		test.NewMessage("topic1", 4, "msg4"),
+		test.NewMessage("topic1", 5, "msg5"),
+		test.NewMessage("topic2", 6, "msg6"),
+		test.NewMessage("topic2", 7, "msg7"),
+		test.NewMessage("topic2", 8, "msg8"),
+		test.NewMessage("topic2", 9, "msg9"),
+		test.NewMessage("topic2", 10, "msg10"),
 	}
 
 	for _, msg := range msgs {

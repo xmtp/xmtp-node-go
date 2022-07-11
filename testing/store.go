@@ -33,7 +33,5 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 }
 
 func ConnectStoreNode(t *testing.T, n1, n2 *node.WakuNode) {
-	Connect(t, n1, n2)
-	_, err := n1.AddPeer(n2.ListenAddresses()[0], string(wakustore.StoreID_v20beta4))
-	require.NoError(t, err)
+	Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
 }
