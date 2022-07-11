@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - dev
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -36,7 +35,7 @@ jobs:
           go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
       - name: Deploy (dev)
-        if: ${{ github.ref_name == 'dev' }}
+        if: ${{ github.ref_name == 'main' }}
         env:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
