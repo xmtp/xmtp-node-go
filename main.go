@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -74,10 +75,10 @@ func main() {
 	}
 
 	if options.Tracing.Enable {
-		tracing.Start()
+		tracing.Start(utils.Logger())
 		defer tracing.Stop()
 	}
-	tracing.Do("main", func() {
-		server.New(options).WaitForShutdown()
+	tracing.Do(context.Background(), "main", func(ctx context.Context) {
+		server.New(ctx, options).WaitForShutdown()
 	})
 }

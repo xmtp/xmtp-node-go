@@ -94,7 +94,7 @@ func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	go tracing.Do("authz-change-listener", d.listenForChanges)
+	go tracing.Do(ctx, "authz-change-listener", func(_ context.Context) { d.listenForChanges() })
 
 	d.log.Info("Started DatabaseWalletAuthorizer")
 	return nil

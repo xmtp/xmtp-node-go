@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,7 @@ func TestServer_StaticNodesReconnect(t *testing.T) {
 
 func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 	_, dbDSN, dbCleanup := test.NewDB(t)
-	s := New(Options{
+	s := New(context.Background(), Options{
 		NodeKey: newNodeKey(t),
 		Address: "localhost",
 		Store: StoreOptions{

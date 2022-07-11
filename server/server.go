@@ -56,7 +56,7 @@ type Server struct {
 }
 
 // Create a new Server
-func New(options Options) (server *Server) {
+func New(ctx context.Context, options Options) (server *Server) {
 	server = new(Server)
 	var err error
 
@@ -72,7 +72,7 @@ func New(options Options) (server *Server) {
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
 	failOnErr(err, "deriving peer ID from private key")
 	server.logger = server.logger.With(logging.HostID("node", id))
-	server.ctx, server.cancel = context.WithCancel(logging.With(context.Background(), server.logger))
+	server.ctx, server.cancel = context.WithCancel(logging.With(ctx, server.logger))
 
 	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
 	server.logger.Info("created DB")
@@ -80,7 +80,7 @@ func New(options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		metrics.RegisterViews(server.logger)
-		go tracing.Do("metrics", server.metricsServer.Start)
+		go tracing.Do(server.ctx, "metrics", func(_ context.Context) { server.metricsServer.Start() })
 	}
 
 	if options.Authz.DbConnectionString != "" {
@@ -136,7 +136,7 @@ func New(options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		go tracing.Do("status metrics", func() { server.statusMetricsLoop(options) })
+		go tracing.Do(server.ctx, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
@@ -164,7 +164,7 @@ func New(options Options) (server *Server) {
 		}
 	}
 
-	go tracing.Do("static-nodes-connect-loop", func() { server.staticNodesConnectLoop(options.StaticNodes) })
+	go tracing.Do(server.ctx, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
 
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")

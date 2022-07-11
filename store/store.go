@@ -79,8 +79,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	s.wg.Add(2)
-	go tracing.Do("store-incoming-messages", func() { s.storeIncomingMessages(ctx) })
-	go tracing.Do("store-status-metrics", func() { s.statusMetricsLoop(ctx) })
+	go tracing.Do(ctx, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	go tracing.Do(ctx, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -231,6 +231,8 @@ func (s *XmtpStore) findLastSeen() (int64, error) {
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
 	defer stream.Close()
+	span, _ := tracing.StartSpanFromContext(s.ctx, "store request")
+	defer span.Finish()
 	log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
 
 	historyRPCRequest := &pb.HistoryRPC{}
@@ -242,6 +244,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	if err != nil {
 		log.Error("reading request", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "decodeRPCFailure")
+		span.Finish(tracing.WithError(err))
 		return
 	}
 	log = log.With(zap.String("id", historyRPCRequest.RequestId))
@@ -256,6 +259,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	if err != nil {
 		log.Error("retrieving messages from DB", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "dbError")
+		span.Finish(tracing.WithError(err))
 		return
 	}
 
@@ -268,6 +272,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	if err != nil {
 		log.Error("writing response", zap.Error(err))
 		_ = stream.Reset()
+		span.Finish(tracing.WithError(err))
 	} else {
 		log.Info("response sent")
 	}
@@ -299,6 +304,8 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 }
 
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) (error, bool) {
+	span, _ := tracing.StartSpanFromContext(s.ctx, "store message")
+	defer span.Finish()
 	err := s.msgProvider.Put(env) // Should the index be stored?
 	if err != nil {
 		if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
@@ -308,6 +315,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (error, bool) {
 		}
 		s.log.Error("storing message", zap.Error(err))
 		metrics.RecordStoreError(s.ctx, "store_failure")
+		span.Finish(tracing.WithError(err))
 		return err, false
 	}
 	s.log.Info("message stored",
