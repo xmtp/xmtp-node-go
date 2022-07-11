@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"math"
-	"sync"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -81,7 +80,6 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 // returns false.
 func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(res *pb.HistoryResponse) (int, bool)) (int, error) {
 	var msgCount int
-	var msgCountLock sync.RWMutex
 	var res *pb.HistoryResponse
 	for {
 		if res != nil {
@@ -102,9 +100,7 @@ func (c *Client) Query(ctx context.Context, query *pb.HistoryQuery, pageFn func(
 			break
 		}
 
-		msgCountLock.Lock()
 		msgCount += count
-		msgCountLock.Unlock()
 	}
 	return msgCount, nil
 }
