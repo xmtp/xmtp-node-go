@@ -1,0 +1,10 @@
+#!/bin/bash
+
+region=us-east-2
+task=$(aws --region $region --query 'taskArns[0]' --output text ecs list-tasks --cluster dev)
+aws --region $region ecs execute-command \
+    --cluster dev \
+    --task $task \
+    --container node-0 \
+    --interactive \
+    --command "/bin/sh"
