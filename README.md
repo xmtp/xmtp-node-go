@@ -1,40 +1,33 @@
 # xmtp-node-go
 
-XMTP Node software
+XMTP node software
 
 ## Instructions
 
 ### Start the server
 
-1. `make build`
-2. `./build/xmtp`
-
-### Build the Docker image
-
-1. `make docker-image`
+1. `dev/up`
 
 ### Run the tests
 
-1. `make test`
+1. `dev/test`
+
+### Start a local node
+
+1. `dev/start`
 
 ### Create a migration for the message database
 
-1. `docker-compose up -d`
-2. `make build`
-3. `./build/xmtp --message-db-connection-string "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable" --create-message-migration $MIGRATION_NAME`
+1. `dev/migrate-message $MIGRATION_NAME`
 
 ### Create a migration for the authz database
 
-1. `docker-compose up -d`
-2. `make build`
-3. `./build/xmtp --authz-db-connection-string "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable" --create-authz-migration $MIGRATION_NAME`
+1. `dev/migrate-authz $MIGRATION_NAME`
 
 ### Debugging metrics
 
-1. `docker-compose up -d`
-2. `make build`
-3. `./build/xmtp --message-db-connection-string "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable" --metrics`
-4. browse to http://localhost:9090 to see prometheus interface
+1. `dev/run --metrics`
+2. Browse to http://localhost:9090 to see prometheus interface
 
 ## Deployments
 

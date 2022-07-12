@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+SCRIPTS=$(find dev -type file -not -path "dev/.golangci.yaml" -not -path "dev/docker/*")
+# shellcheck disable=SC2086 # Intended splitting of SCRIPTS
+shellcheck $SCRIPTS
+
+if [[ $(gofmt -l .) ]]; then
+    echo "gofmt errors, run 'gofmt -w .' and commit"
+fi 
+
+golangci-lint --exclude=SA1019 run ./... --deadline=5m
+
+protolint .

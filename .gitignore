@@ -6,7 +6,8 @@
 *.dylib
 
 # build folder
-build
+build/
+bin/
 
 # Test binary, built with `go test -c`
 *.test
