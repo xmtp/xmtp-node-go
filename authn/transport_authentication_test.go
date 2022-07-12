@@ -4,6 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"math"
+	"net"
+	"testing"
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -16,10 +21,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
-	"math"
-	"net"
-	"testing"
-	"time"
 )
 
 type testCase struct {

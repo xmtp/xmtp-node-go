@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
+
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
@@ -15,10 +17,9 @@ import (
 	"github.com/xmtp/xmtp-node-go/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
-	"math"
 )
 
-const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtp-v1/clientauth/0.1.0-beta1")
+const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtp-v1/clientauthn/0.1.0-beta1")
 
 var (
 	ErrInvalidPeerId     = errors.New("invalid peerId")
