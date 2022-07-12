@@ -14,5 +14,5 @@ docker buildx build \
     .
 
 if [ ! -z "${DOCKER_PUSH+x}" ]; then
-    echo docker push "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+    docker push -q "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
 fi

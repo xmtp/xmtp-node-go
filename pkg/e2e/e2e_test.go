@@ -17,8 +17,8 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/stretchr/testify/require"
-	"github.com/xmtp/xmtp-node-go/store"
-	test "github.com/xmtp/xmtp-node-go/testing"
+	"github.com/xmtp/xmtp-node-go/pkg/store"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"go.uber.org/zap"
 )
 

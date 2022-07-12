@@ -12,7 +12,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
-	"github.com/xmtp/xmtp-node-go/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
 )
 
