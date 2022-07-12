@@ -62,18 +62,18 @@ func TestStore_Resume_FromPeer(t *testing.T) {
 
 	s2, cleanup := newTestStore(t)
 	defer cleanup()
-	addStoreProtocol(t, s2.h, s1.h)
+	addStoreProtocol(t, s2.host, s1.host)
 
 	expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{})
 
-	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
 	require.NoError(t, err)
 	require.Equal(t, 10, msgCount)
 
 	expectMessages(t, s2, pubSubTopic, msgs)
 
 	// Test duplication
-	msgCount, err = s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+	msgCount, err = s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
 	require.NoError(t, err)
 	require.Equal(t, 0, msgCount)
 }
@@ -93,9 +93,9 @@ func TestStore_Resume_WithListOfPeers(t *testing.T) {
 
 	s2, cleanup := newTestStore(t)
 	defer cleanup()
-	addStoreProtocol(t, s2.h, s1.h)
+	addStoreProtocol(t, s2.host, s1.host)
 
-	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{invalidHost.ID(), s1.h.ID()})
+	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{invalidHost.ID(), s1.host.ID()})
 	require.NoError(t, err)
 	require.Equal(t, 1, msgCount)
 
@@ -116,7 +116,7 @@ func TestStore_Resume_WithoutSpecifyingPeer(t *testing.T) {
 
 	s2, cleanup := newTestStore(t)
 	defer cleanup()
-	addStoreProtocol(t, s2.h, s1.h)
+	addStoreProtocol(t, s2.host, s1.host)
 
 	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{})
 	require.NoError(t, err)
@@ -136,11 +136,11 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 
 	s2, cleanup := newTestStore(t)
 	defer cleanup()
-	addStoreProtocol(t, s1.h, s2.h)
+	addStoreProtocol(t, s1.host, s2.host)
 
 	s3, cleanup := newTestStore(t)
 	defer cleanup()
-	addStoreProtocol(t, s1.h, s3.h)
+	addStoreProtocol(t, s1.host, s3.host)
 
 	msgsS2 := []*pb.WakuMessage{
 		test.NewMessage("topic1", 1, "msg1"),
@@ -164,7 +164,7 @@ func TestStore_Resume_MultiplePeersDifferentData(t *testing.T) {
 		storeMessage(t, s3, msg, pubSubTopic)
 	}
 
-	msgCount, err := s1.Resume(ctx, pubSubTopic, []peer.ID{s2.h.ID(), s3.h.ID()})
+	msgCount, err := s1.Resume(ctx, pubSubTopic, []peer.ID{s2.host.ID(), s3.host.ID()})
 	require.NoError(t, err)
 	require.Equal(t, 7, msgCount)
 
@@ -208,11 +208,11 @@ func TestStore_Resume_Paginated(t *testing.T) {
 	s2, cleanup := newTestStore(t)
 	s2.resumePageSize = 2
 	defer cleanup()
-	addStoreProtocol(t, s2.h, s1.h)
+	addStoreProtocol(t, s2.host, s1.host)
 
 	expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{})
 
-	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+	msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
 	require.NoError(t, err)
 	require.Equal(t, 10, msgCount)
 	expectMessages(t, s2, pubSubTopic, msgs)
@@ -302,10 +302,10 @@ func TestStore_Resume_StartTime(t *testing.T) {
 
 			s2, cleanup := newTestStore(t, WithResumeStartTime(tc.startTime))
 			defer cleanup()
-			addStoreProtocol(t, s2.h, s1.h)
+			addStoreProtocol(t, s2.host, s1.host)
 			expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{})
 
-			msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+			msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedCount, msgCount)
 			expectMessages(t, s2, pubSubTopic, tc.expectedMsgs)

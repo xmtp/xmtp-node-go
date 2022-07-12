@@ -118,15 +118,22 @@ func New(ctx context.Context, options Options) (server *Server) {
 
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
-		dbStore, err := xmtpStore.NewDBStore(server.logger, xmtpStore.WithDB(server.db))
+		dbStore, err := xmtpStore.NewDBStore(server.logger, xmtpStore.WithDBStoreDB(server.db))
 		failOnErr(err, "DBStore")
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
 		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			return xmtpStore.NewXmtpStore(w.Host(), server.db, dbStore, options.Metrics.StatusPeriod, server.logger,
+			s, err := xmtpStore.NewXmtpStore(
+				xmtpStore.WithLog(server.logger),
+				xmtpStore.WithHost(w.Host()),
+				xmtpStore.WithDB(server.db),
+				xmtpStore.WithMessageProvider(dbStore),
+				xmtpStore.WithStatsPeriod(options.Metrics.StatusPeriod),
 				xmtpStore.WithResumeStartTime(options.Store.ResumeStartTime),
 			)
+			failOnErr(err, "initializing store")
+			return s
 		}))
 	}
 

@@ -28,54 +28,61 @@ const bufferSize = 1024
 const maxPageSize = 100
 const maxPeersToResume = 5
 
-type XmtpStore struct {
-	ctx  context.Context
-	MsgC chan *protocol.Envelope
-	wg   *sync.WaitGroup
-	db   *sql.DB
+var (
+	ErrMissingLogOption             = errors.New("missing log option")
+	ErrMissingHostOption            = errors.New("missing host option")
+	ErrMissingDBOption              = errors.New("missing db option")
+	ErrMissingMessageProviderOption = errors.New("missing message provider option")
+	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
+)
 
-	log *zap.Logger
+type XmtpStore struct {
+	ctx         context.Context
+	MsgC        chan *protocol.Envelope
+	wg          *sync.WaitGroup
+	db          *sql.DB
+	log         *zap.Logger
+	host        host.Host
+	msgProvider store.MessageProvider
 
 	started         bool
 	statsPeriod     time.Duration
 	resumePageSize  int
 	resumeStartTime int64
-
-	msgProvider store.MessageProvider
-	h           host.Host
 }
 
-type Option func(c *XmtpStore)
-
-func WithResumeStartTime(resumeStartTime int64) Option {
-	return func(s *XmtpStore) {
-		s.resumeStartTime = resumeStartTime
-	}
-}
-
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger, opts ...Option) *XmtpStore {
-	if log == nil {
-		panic("No logger provided in store initialization")
-	}
-	if db == nil {
-		log.Panic("No DB in store initialization")
-	}
-	if p == nil {
-		log.Panic("No message provider in store initialization")
-	}
-	xmtpStore := new(XmtpStore)
+func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
+	s := new(XmtpStore)
 	for _, opt := range opts {
-		opt(xmtpStore)
+		opt(s)
 	}
-	xmtpStore.msgProvider = p
-	xmtpStore.h = host
-	xmtpStore.db = db
-	xmtpStore.wg = &sync.WaitGroup{}
-	xmtpStore.log = log.Named("store").With(zap.String("node", host.ID().Pretty()))
-	xmtpStore.MsgC = make(chan *protocol.Envelope, bufferSize)
-	xmtpStore.statsPeriod = statsPeriod
 
-	return xmtpStore
+	// Required logger option.
+	if s.log == nil {
+		return nil, ErrMissingLogOption
+	}
+	s.log = s.log.Named("store")
+
+	// Required host option.
+	if s.host == nil {
+		return nil, ErrMissingHostOption
+	}
+	s.log = s.log.With(zap.String("host", s.host.ID().Pretty()))
+
+	// Required db option.
+	if s.db == nil {
+		return nil, ErrMissingDBOption
+	}
+
+	// Required db option.
+	if s.msgProvider == nil {
+		return nil, ErrMissingMessageProviderOption
+	}
+
+	s.wg = &sync.WaitGroup{}
+	s.MsgC = make(chan *protocol.Envelope, bufferSize)
+
+	return s, nil
 }
 
 func (s *XmtpStore) MessageChannel() chan *protocol.Envelope {
@@ -88,7 +95,7 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	}
 	s.started = true
 	s.ctx = ctx
-	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
+	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	s.wg.Add(2)
 	go tracing.Do(ctx, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
@@ -103,8 +110,8 @@ func (s *XmtpStore) Stop() {
 		close(s.MsgC)
 	}
 
-	if s.h != nil {
-		s.h.RemoveStreamHandler(store.StoreID_v20beta4)
+	if s.host != nil {
+		s.host.RemoveStreamHandler(store.StoreID_v20beta4)
 	}
 
 	s.wg.Wait()
@@ -159,7 +166,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 
 	if len(peers) == 0 {
 		var err error
-		peers, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
+		peers, err = selectPeers(s.host, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
 			return 0, errors.Wrap(err, "selecting peer")
 		}
@@ -212,7 +219,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 func (s *XmtpStore) queryPeer(ctx context.Context, req *pb.HistoryQuery, peerID peer.ID, msgFn func(*pb.WakuMessage) bool) (int, error) {
 	c, err := NewClient(
 		WithClientLog(s.log),
-		WithClientHost(s.h),
+		WithClientHost(s.host),
 		WithClientPeer(peerID),
 	)
 	if err != nil {

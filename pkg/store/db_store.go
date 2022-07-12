@@ -24,7 +24,7 @@ type DBStore struct {
 type DBOption func(*DBStore) error
 
 // WithDB is a DBOption that lets you use any custom *sql.DB with a DBStore.
-func WithDB(db *sql.DB) DBOption {
+func WithDBStoreDB(db *sql.DB) DBOption {
 	return func(d *DBStore) error {
 		d.db = db
 		return nil

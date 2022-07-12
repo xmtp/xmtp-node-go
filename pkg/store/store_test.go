@@ -16,11 +16,21 @@ import (
 
 func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	dbStore, err := NewDBStore(utils.Logger(), WithDB(db))
+	dbStore, err := NewDBStore(utils.Logger(), WithDBStoreDB(db))
 	require.NoError(t, err)
 
 	host := test.NewPeer(t)
-	store := NewXmtpStore(host, db, dbStore, 0, utils.Logger(), opts...)
+	store, err := NewXmtpStore(
+		append(
+			[]Option{
+				WithLog(utils.Logger()),
+				WithHost(host),
+				WithDB(db),
+				WithMessageProvider(dbStore),
+			},
+			opts...,
+		)...,
+	)
 
 	store.Start(context.Background())
 

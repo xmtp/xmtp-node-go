@@ -475,13 +475,19 @@ func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *
 	if db == nil {
 		db, _, dbCleanup = test.NewDB(t)
 	}
-	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDB(db))
+	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDBStoreDB(db))
 	require.NoError(t, err)
 
 	if host == nil {
 		host = test.NewPeer(t)
 	}
-	store := store.NewXmtpStore(host, db, dbStore, 0, utils.Logger())
+	store, err := store.NewXmtpStore(
+		store.WithLog(utils.Logger()),
+		store.WithHost(host),
+		store.WithDB(db),
+		store.WithMessageProvider(dbStore),
+	)
+	require.NoError(t, err)
 
 	store.Start(context.Background())
 
