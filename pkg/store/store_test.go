@@ -31,6 +31,7 @@ func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 			opts...,
 		)...,
 	)
+	require.NoError(t, err)
 
 	store.Start(context.Background())
 
