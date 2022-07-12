@@ -17,27 +17,45 @@ import (
 	"github.com/jessevdk/go-flags"
 )
 
-const NODE_IMAGE_PREFIX = "xmtp/node-go@sha256:"
+const (
+	nodeImagePrefix      = "xmtp/node-go@sha256:"
+	e2eRunnerImagePrefix = "xmtp/xmtpd-e2e@sha256:"
+)
 
 var options struct {
-	TFToken      string `long:"tf-token" description:"Terraform token"`
-	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
-	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
-	NodeImage    string `long:"xmtp-node-image"`
-	Apply        bool   `long:"apply"`
-	Commit       string `long:"git-commit"`
+	TFToken        string `long:"tf-token" description:"Terraform token"`
+	Workspace      string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
+	Organization   string `long:"organization" default:"xmtp" choice:"xmtp"`
+	NodeImage      string `long:"xmtp-node-image"`
+	E2ERunnerImage string `long:"xmtpd-e2e-image"`
+	Apply          bool   `long:"apply"`
+	Commit         string `long:"git-commit"`
 }
 
 func main() {
 	_, err := flags.NewParser(&options, flags.Default).Parse()
 	failIfError(err, "parsing options")
 
-	if !strings.HasPrefix(options.NodeImage, NODE_IMAGE_PREFIX) {
-		log.Fatalf("Invalid node image %s", options.NodeImage)
+	c := newClient()
+
+	if options.NodeImage == "" && options.E2ERunnerImage == "" {
+		log.Fatal("Must specify either xmtp-node-image or xmtpd-e2e-image")
 	}
 
-	c := newClient()
-	c.updateVar("xmtp_node_image", options.NodeImage)
+	if options.NodeImage != "" {
+		if !strings.HasPrefix(options.NodeImage, nodeImagePrefix) {
+			log.Fatalf("Invalid node image %s", options.NodeImage)
+		}
+		c.updateVar("xmtp_node_image", options.NodeImage)
+	}
+
+	if options.E2ERunnerImage != "" {
+		if !strings.HasPrefix(options.E2ERunnerImage, e2eRunnerImagePrefix) {
+			log.Fatalf("Invalid e2e image %s", options.E2ERunnerImage)
+		}
+		c.updateVar("xmtpd_e2e_image", options.E2ERunnerImage)
+	}
+
 	c.startRun(options.Commit, options.Apply)
 
 }

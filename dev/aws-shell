@@ -6,19 +6,19 @@
 # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html
 # https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
 
-region=${REGION:-us-east-2}
-cluster=${ENV:-dev}
-task=${TASK:-node-0}
-container=${CONTAINER:-$task}
-task=$(aws --region $region \
+region="${REGION:-us-east-2}"
+cluster="${ENV:-dev}"
+task="${TASK:-node-0}"
+container="${CONTAINER:-$task}"
+task=$(aws --region "$region" \
         --query 'taskArns[0]' \
         --output text \
         ecs list-tasks \
-        --cluster $cluster \
-        --family $task)
-aws --region $region ecs execute-command \
-    --cluster $cluster \
-    --task $task \
-    --container $container \
+        --cluster "$cluster" \
+        --family "$task")
+aws --region "$region" ecs execute-command \
+    --cluster "$cluster" \
+    --task "$task" \
+    --container "$container" \
     --interactive \
     --command "/bin/sh"
