@@ -30,7 +30,6 @@ jobs:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
           export DOCKER_IMAGE_TAG=production
-          export DOCKER_PUSH=1
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
@@ -41,7 +40,6 @@ jobs:
           TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
           export DOCKER_IMAGE_TAG=latest
-          export DOCKER_PUSH=1
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=dev --xmtp-node-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
