@@ -6,10 +6,12 @@
 # https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
 
 region=us-east-2
-task=$(aws --region $region --query 'taskArns[0]' --output text ecs list-tasks --cluster dev)
+cluster=dev
+container=node-0
+task=$(aws --region $region --query 'taskArns[0]' --output text ecs list-tasks --cluster $cluster)
 aws --region $region ecs execute-command \
-    --cluster dev \
+    --cluster $cluster \
     --task $task \
-    --container node-0 \
+    --container $container \
     --interactive \
     --command "/bin/sh"
