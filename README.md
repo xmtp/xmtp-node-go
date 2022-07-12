@@ -8,13 +8,13 @@ XMTP node software
 
 1. `dev/up`
 
-### Build the Docker image
-
-1. `dev/docker/build`
-
 ### Run the tests
 
 1. `dev/test`
+
+### Start a local node
+
+1. `dev/start`
 
 ### Create a migration for the message database
 
