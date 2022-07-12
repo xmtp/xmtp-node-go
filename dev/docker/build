@@ -11,8 +11,5 @@ docker buildx build \
     --build-arg="GIT_COMMIT=${GIT_COMMIT}" \
     -f dev/docker/Dockerfile \
     -q \
+    --push \
     .
-
-if [ ! -z "${DOCKER_PUSH+x}" ]; then
-    docker push -q "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
-fi
