@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Open shell in the node-0 container of the node-0 node in dev cluster.
+# Assumes aws cli is installed and configured as per
+# https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html
+# https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
 
 region=us-east-2
 task=$(aws --region $region --query 'taskArns[0]' --output text ecs list-tasks --cluster dev)
