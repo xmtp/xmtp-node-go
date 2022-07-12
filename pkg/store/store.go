@@ -193,16 +193,19 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
+			var latestStoredTimestamp int64
 			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
-				err, stored := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
+				timestamp := utils.GetUnixEpoch()
+				err, stored := s.storeMessage(protocol.NewEnvelope(msg, timestamp, req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
 					return false
 				}
+				latestStoredTimestamp = timestamp
 				return stored
 			})
 			if err != nil {
-				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()))
+				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
 				return
 			}
 			msgCountLock.Lock()
