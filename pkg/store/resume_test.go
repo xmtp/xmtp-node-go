@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -215,4 +216,99 @@ func TestStore_Resume_Paginated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 10, msgCount)
 	expectMessages(t, s2, pubSubTopic, msgs)
+}
+
+func TestStore_Resume_StartTime(t *testing.T) {
+	offset := int64(100 * time.Second)
+	tcs := []struct {
+		name          string
+		startTime     int64
+		storedMsgs    []*pb.WakuMessage
+		expectedMsgs  []*pb.WakuMessage
+		expectedCount int
+	}{
+		{
+			name:      "negative unset",
+			startTime: -1,
+			storedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", 1, "msg1"),
+				test.NewMessage("topic1", 2, "msg2"),
+				test.NewMessage("topic1", 3, "msg3"),
+			},
+			expectedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", 1, "msg1"),
+				test.NewMessage("topic1", 2, "msg2"),
+				test.NewMessage("topic1", 3, "msg3"),
+			},
+			expectedCount: 3,
+		},
+		{
+			name:      "beginning of time",
+			startTime: 0,
+			storedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", offset+1, "msg1"),
+				test.NewMessage("topic1", offset+2, "msg2"),
+				test.NewMessage("topic1", offset+3, "msg3"),
+			},
+			expectedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", offset+1, "msg1"),
+				test.NewMessage("topic1", offset+2, "msg2"),
+				test.NewMessage("topic1", offset+3, "msg3"),
+			},
+			expectedCount: 3,
+		},
+		{
+			name:      "recent past",
+			startTime: offset + 2,
+			storedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", offset+1, "msg1"),
+				test.NewMessage("topic1", offset+2, "msg2"),
+				test.NewMessage("topic1", offset+3, "msg3"),
+			},
+			expectedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", offset+2, "msg2"),
+				test.NewMessage("topic1", offset+3, "msg3"),
+			},
+			expectedCount: 2,
+		},
+		{
+			name:      "future",
+			startTime: offset + 4,
+			storedMsgs: []*pb.WakuMessage{
+				test.NewMessage("topic1", offset+1, "msg1"),
+				test.NewMessage("topic1", offset+2, "msg2"),
+				test.NewMessage("topic1", offset+3, "msg3"),
+			},
+			expectedMsgs:  []*pb.WakuMessage{},
+			expectedCount: 0,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			pubSubTopic := "test-" + test.RandomStringLower(5)
+
+			s1, cleanup := newTestStore(t, WithResumeStartTime(tc.startTime))
+			defer cleanup()
+
+			for _, msg := range tc.storedMsgs {
+				storeMessage(t, s1, msg, pubSubTopic)
+			}
+			expectMessages(t, s1, pubSubTopic, tc.storedMsgs)
+
+			s2, cleanup := newTestStore(t, WithResumeStartTime(tc.startTime))
+			defer cleanup()
+			addStoreProtocol(t, s2.h, s1.h)
+			expectMessages(t, s2, pubSubTopic, []*pb.WakuMessage{})
+
+			msgCount, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.h.ID()})
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedCount, msgCount)
+			expectMessages(t, s2, pubSubTopic, tc.expectedMsgs)
+		})
+	}
 }

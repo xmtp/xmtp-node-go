@@ -36,15 +36,24 @@ type XmtpStore struct {
 
 	log *zap.Logger
 
-	started        bool
-	statsPeriod    time.Duration
-	resumePageSize int
+	started         bool
+	statsPeriod     time.Duration
+	resumePageSize  int
+	resumeStartTime int64
 
 	msgProvider store.MessageProvider
 	h           host.Host
 }
 
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger) *XmtpStore {
+type Option func(c *XmtpStore)
+
+func WithResumeStartTime(resumeStartTime int64) Option {
+	return func(s *XmtpStore) {
+		s.resumeStartTime = resumeStartTime
+	}
+}
+
+func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger, opts ...Option) *XmtpStore {
 	if log == nil {
 		panic("No logger provided in store initialization")
 	}
@@ -55,6 +64,9 @@ func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeri
 		log.Panic("No message provider in store initialization")
 	}
 	xmtpStore := new(XmtpStore)
+	for _, opt := range opts {
+		opt(xmtpStore)
+	}
 	xmtpStore.msgProvider = p
 	xmtpStore.h = host
 	xmtpStore.db = db
@@ -129,19 +141,24 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		return 0, errors.New("can't resume: store has not started")
 	}
 	log := s.log.With(zap.String("pubsub_topic", pubsubTopic))
-	log.Info("resuming")
 
 	currentTime := utils.GetUnixEpoch()
-	lastSeenTime, err := s.findLastSeen()
-	if err != nil {
-		return 0, errors.Wrap(err, "finding latest timestamp")
+	offset := int64(20 * time.Second)
+	endTime := currentTime + offset
+
+	var startTime int64
+	if s.resumeStartTime < 0 {
+		lastSeenTime, err := s.findLastSeen()
+		if err != nil {
+			return 0, errors.Wrap(err, "finding latest timestamp")
+		}
+		startTime = max(lastSeenTime-offset, 0)
+	} else {
+		startTime = s.resumeStartTime
 	}
 
-	var offset int64 = int64(20 * time.Second)
-	currentTime = currentTime + offset
-	lastSeenTime = max(lastSeenTime-offset, 0)
-
 	if len(peers) == 0 {
+		var err error
 		peers, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
 			return 0, errors.Wrap(err, "selecting peer")
@@ -151,10 +168,12 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		return 0, errors.New("no peers")
 	}
 
+	log.Info("resuming", zap.Int64("start_time", startTime), zap.Int64("end_time", endTime), zap.Int("page_size", s.resumePageSize))
+
 	req := &pb.HistoryQuery{
 		PubsubTopic: pubsubTopic,
-		StartTime:   lastSeenTime,
-		EndTime:     currentTime,
+		StartTime:   startTime,
+		EndTime:     endTime,
 		PagingInfo: &pb.PagingInfo{
 			PageSize:  uint64(s.resumePageSize),
 			Direction: pb.PagingInfo_BACKWARD,
