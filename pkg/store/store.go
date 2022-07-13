@@ -183,7 +183,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		EndTime:     endTime,
 		PagingInfo: &pb.PagingInfo{
 			PageSize:  uint64(s.resumePageSize),
-			Direction: pb.PagingInfo_BACKWARD,
+			Direction: pb.PagingInfo_FORWARD,
 		},
 	}
 	var wg sync.WaitGroup
