@@ -192,13 +192,13 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 	var asyncErr error
 	var success bool
 	started := time.Now().UTC()
+	var latestStoredTimestamp int64
 	for _, p := range peers {
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
 			log := s.log.With(logging.HostID("peer", p))
 
-			var latestStoredTimestamp int64
 			var msgFnErr error
 			// NOTE that we intentionally do not use the ctx passed into the
 			// method, since it's created within go-waku with a 20 second
@@ -216,12 +216,12 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 				return stored
 			})
 			if err != nil {
-				log.Error("querying peer", zap.Error(err), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				log.Error("querying peer", zap.Error(err))
 				asyncErr = err
 				return
 			}
 			if msgFnErr != nil {
-				log.Error("querying peer", zap.Error(err), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				log.Error("querying peer")
 				asyncErr = msgFnErr
 				return
 			}
@@ -234,7 +234,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		}(p)
 	}
 	wg.Wait()
-	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)))
+	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
 	if !success && asyncErr != nil {
 		log.Error("resuming", zap.Error(asyncErr))
 		return msgCount, asyncErr
