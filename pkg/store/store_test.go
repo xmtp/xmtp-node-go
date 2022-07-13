@@ -11,8 +11,8 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
-	"go.uber.org/zap"
 )
 
 func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
@@ -22,7 +22,7 @@ func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	require.NoError(t, err)
 
 	host := test.NewPeer(t)
-	log = log.With(zap.String("node", host.ID().Pretty()))
+	log = log.With(logging.HostID("node", host.ID()))
 	store, err := NewXmtpStore(
 		append(
 			[]Option{
