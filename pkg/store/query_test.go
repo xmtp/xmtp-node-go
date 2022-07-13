@@ -19,7 +19,7 @@ const TOPIC = "test"
 func NewMock() *sql.DB {
 	dsn, hasDsn := os.LookupEnv("MESSAGE_POSTGRES_CONNECTION_STRING")
 	if !hasDsn {
-		dsn = "postgres://postgres:xmtp@localhost:5432/postgres?sslmode=disable"
+		dsn = "postgres://postgres:xmtp@localhost:15432/postgres?sslmode=disable"
 	}
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 
