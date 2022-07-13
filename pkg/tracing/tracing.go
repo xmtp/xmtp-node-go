@@ -5,6 +5,7 @@ package tracing
 import (
 	"context"
 
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
@@ -36,6 +37,9 @@ func Stop() {
 // This should trigger DD APM's Error Tracking to record the error.
 func Do(ctx context.Context, spanName string, action func(context.Context)) {
 	span, ctx := tracer.StartSpanFromContext(ctx, spanName)
+	log := logging.From(ctx).With(zap.String("span", spanName))
+	log = Link(span, log)
+	log.Info("started span")
 	defer func() {
 		r := recover()
 		switch r := r.(type) {
@@ -48,6 +52,7 @@ func Do(ctx context.Context, spanName string, action func(context.Context)) {
 			// as well as path with panics that don't have an error.
 			span.Finish()
 		}
+		log.Info("finished span")
 		if r != nil {
 			// Repanic so that we don't suppress normal panic behavior.
 			panic(r)
