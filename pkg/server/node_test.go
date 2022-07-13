@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/status-im/go-waku/waku/v2/node"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -169,11 +168,11 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 	})
@@ -198,13 +197,13 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic1, 4, "msg4"),
 		test.NewMessage(topic1, 6, "msg6"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic2, 5, "msg5"),
@@ -217,13 +216,13 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic1, 4, "msg4"),
 		test.NewMessage(topic1, 6, "msg6"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic2, 5, "msg5"),
@@ -264,11 +263,11 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 	})
@@ -293,29 +292,27 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic1, 4, "msg4"),
 		test.NewMessage(topic1, 6, "msg6"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic2, 5, "msg5"),
 		test.NewMessage(topic2, 7, "msg7"),
 	})
 
-	// Reconnect, trigger a resume from node 2, and expect new messages.
+	// Reconnect, resume is automatically triggered from node 2, and expect new
+	// messages.
 	test.ConnectStoreNode(t, n1, n2)
-	msgCount, err := n1.Store().Resume(context.Background(), relay.DefaultWakuTopic, []peer.ID{n2.Host().ID()})
-	require.NoError(t, err)
-	require.Equal(t, 2, msgCount)
 
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
 
-	expectStoreMessages(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
 		test.NewMessage(topic1, 4, "msg4"),
@@ -323,10 +320,12 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 		test.NewMessage(topic1, 6, "msg6"),
 		test.NewMessage(topic2, 7, "msg7"),
 	})
-	expectStoreMessages(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
+	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
 		test.NewMessage(topic2, 2, "msg2"),
+		test.NewMessage(topic1, 4, "msg4"),
 		test.NewMessage(topic2, 5, "msg5"),
+		test.NewMessage(topic1, 6, "msg6"),
 		test.NewMessage(topic2, 7, "msg7"),
 	})
 }
@@ -502,15 +501,25 @@ func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []
 }
 
 func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics []string, expectedMsgs []*pb.WakuMessage) {
-	var msgs []*pb.WakuMessage
-	require.Eventually(t, func() bool {
-		msgs = listMessages(t, n, contentTopics)
-		return len(msgs) == 2
-	}, 3*time.Second, 100*time.Millisecond)
-	require.ElementsMatch(t, expectedMsgs, msgs)
-}
 
-func expectStoreMessages(t *testing.T, n *node.WakuNode, contentTopics []string, expectedMsgs []*pb.WakuMessage) {
 	msgs := listMessages(t, n, contentTopics)
+	if len(msgs) == len(expectedMsgs) {
+		require.ElementsMatch(t, expectedMsgs, msgs)
+		return
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	var done bool
+	for !done {
+		select {
+		case <-ticker.C:
+			msgs = listMessages(t, n, contentTopics)
+			if len(msgs) == len(expectedMsgs) {
+				done = true
+			}
+		case <-time.After(3 * time.Second):
+			done = true
+		}
+	}
 	require.ElementsMatch(t, expectedMsgs, msgs)
 }
