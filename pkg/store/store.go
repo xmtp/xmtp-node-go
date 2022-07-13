@@ -200,7 +200,11 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 
 			var latestStoredTimestamp int64
 			var msgFnErr error
-			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
+			// NOTE that we intentionally do not use the ctx passed into the
+			// method, since it's created within go-waku with a 20 second
+			// timeout. We don't want a timeout on this, and the store-owned
+			// context will trigger a cancel on tear down.
+			count, err := s.queryPeer(s.ctx, req, p, func(msg *pb.WakuMessage) bool {
 				timestamp := utils.GetUnixEpoch()
 				err, stored := s.storeMessage(protocol.NewEnvelope(msg, timestamp, req.PubsubTopic))
 				if err != nil {
