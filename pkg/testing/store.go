@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	localTestDBDSNPrefix = "postgres://postgres:xmtp@localhost:5432"
+	localTestDBDSNPrefix = "postgres://postgres:xmtp@localhost:15432"
 	localTestDBDSNSuffix = "?sslmode=disable"
 )
 
