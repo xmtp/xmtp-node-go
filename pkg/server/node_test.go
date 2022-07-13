@@ -518,6 +518,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 		return
 	}
 
+	timer := time.After(3 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	var done bool
 	for !done {
@@ -527,7 +528,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 			if len(msgs) == len(expectedMsgs) {
 				done = true
 			}
-		case <-time.After(3 * time.Second):
+		case <-timer:
 			done = true
 		}
 	}
