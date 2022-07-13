@@ -174,7 +174,7 @@ func TestRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		dest := node.h.Addrs()[0]
 
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, types.PeerId(node.h.ID()), dest, TransportAuthID_v01beta1, sampleAuthReq002.reqBytes)
+		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, types.PeerId(node.h.ID()), dest, ClientAuthnID_v1_0_0, sampleAuthReq002.reqBytes)
 		require.NoError(t, err)
 		require.False(t, didSucceed)
 

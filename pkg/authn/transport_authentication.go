@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const TransportAuthID_v01beta1 = libp2pProtocol.ID("/xmtplabs/xmtp-v1/clientauthn/0.1.0-beta1")
+const ClientAuthnID_v1_0_0 = libp2pProtocol.ID("/xmtplabs/xmtp-v1/clientauthn/1.0.0")
 
 var (
 	ErrInvalidPeerId     = errors.New("invalid peerId")
@@ -45,7 +45,7 @@ func NewXmtpAuthentication(ctx context.Context, h host.Host, log *zap.Logger) *X
 }
 
 func (xmtpAuth *XmtpAuthentication) Start() {
-	xmtpAuth.h.SetStreamHandler(TransportAuthID_v01beta1, xmtpAuth.onRequest)
+	xmtpAuth.h.SetStreamHandler(ClientAuthnID_v1_0_0, xmtpAuth.onRequest)
 	xmtpAuth.log.Info("Auth protocol started")
 }
 
