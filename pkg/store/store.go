@@ -191,6 +191,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 	var msgCountLock sync.RWMutex
 	var asyncErr error
 	var success bool
+	started := time.Now().UTC()
 	for _, p := range peers {
 		wg.Add(1)
 		go func(p peer.ID) {
@@ -229,12 +230,13 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		}(p)
 	}
 	wg.Wait()
+	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)))
 	if !success && asyncErr != nil {
-		s.log.Error("resuming", zap.Error(asyncErr), zap.Int("count", msgCount))
+		log.Error("resuming", zap.Error(asyncErr))
 		return msgCount, asyncErr
 	}
 
-	s.log.Info("resume complete", zap.Int("count", msgCount))
+	log.Info("resume complete")
 	return msgCount, nil
 }
 
