@@ -180,6 +180,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
 	test.Disconnect(t, n1, n2.Host().ID())
+	test.ExpectNoPeers(t, n1)
+	test.ExpectNoPeers(t, n2)
 
 	test.Publish(t, n1, test.NewMessage(topic1, 4, "msg4"))
 	test.Publish(t, n2, test.NewMessage(topic2, 5, "msg5"))
@@ -275,6 +277,8 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
 	test.Disconnect(t, n1, n2.Host().ID())
+	test.ExpectNoPeers(t, n1)
+	test.ExpectNoPeers(t, n2)
 
 	test.Publish(t, n1, test.NewMessage(topic1, 4, "msg4"))
 	test.Publish(t, n2, test.NewMessage(topic2, 5, "msg5"))
