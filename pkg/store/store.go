@@ -59,7 +59,7 @@ func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeri
 	xmtpStore.h = host
 	xmtpStore.db = db
 	xmtpStore.wg = &sync.WaitGroup{}
-	xmtpStore.log = log.Named("store")
+	xmtpStore.log = log.Named("store").With(zap.String("node", host.ID().Pretty()))
 	xmtpStore.MsgC = make(chan *protocol.Envelope, bufferSize)
 	xmtpStore.statsPeriod = statsPeriod
 
@@ -146,6 +146,9 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		if err != nil {
 			return 0, errors.Wrap(err, "selecting peer")
 		}
+	}
+	if len(peers) == 0 {
+		return 0, errors.New("no peers")
 	}
 
 	req := &pb.HistoryQuery{
