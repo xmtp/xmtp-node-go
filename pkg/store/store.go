@@ -189,33 +189,52 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 	var wg sync.WaitGroup
 	var msgCount int
 	var msgCountLock sync.RWMutex
+	var asyncErr error
+	var success bool
 	for _, p := range peers {
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
+			log := s.log.With(zap.String("peer", p.Pretty()))
+
 			var latestStoredTimestamp int64
+			var msgFnErr error
 			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
 				timestamp := utils.GetUnixEpoch()
 				err, stored := s.storeMessage(protocol.NewEnvelope(msg, timestamp, req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
+					msgFnErr = err
 					return false
 				}
 				latestStoredTimestamp = timestamp
 				return stored
 			})
 			if err != nil {
-				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				log.Error("querying peer", zap.Error(err), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				asyncErr = err
 				return
 			}
+			if msgFnErr != nil {
+				log.Error("querying peer", zap.Error(err), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				asyncErr = msgFnErr
+				return
+			}
+
+			success = true
+
 			msgCountLock.Lock()
 			defer msgCountLock.Unlock()
 			msgCount += count
 		}(p)
 	}
 	wg.Wait()
-	s.log.Info("resume complete", zap.Int("count", msgCount))
+	if !success && asyncErr != nil {
+		s.log.Error("resuming", zap.Error(asyncErr), zap.Int("count", msgCount))
+		return msgCount, asyncErr
+	}
 
+	s.log.Info("resume complete", zap.Int("count", msgCount))
 	return msgCount, nil
 }
 
