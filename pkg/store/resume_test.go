@@ -313,7 +313,7 @@ func TestStore_Resume_StartTime(t *testing.T) {
 	}
 }
 
-func TestStore_ContextError(t *testing.T) {
+func TestStore_Resume_ContextError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -330,5 +330,5 @@ func TestStore_ContextError(t *testing.T) {
 
 	s1.db.Close()
 	_, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
-	require.EqualError(t, err, "opening query stream: context canceled")
+	require.EqualError(t, err, "reading query response: EOF")
 }
