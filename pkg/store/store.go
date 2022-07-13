@@ -195,7 +195,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
-			log := s.log.With(zap.String("peer", p.Pretty()))
+			log := s.log.With(logging.HostID("peer", p))
 
 			var latestStoredTimestamp int64
 			var msgFnErr error
