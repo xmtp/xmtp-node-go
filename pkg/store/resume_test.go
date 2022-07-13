@@ -312,3 +312,23 @@ func TestStore_Resume_StartTime(t *testing.T) {
 		})
 	}
 }
+
+func TestStore_Resume_ContextError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s1, cleanup := newTestStore(t)
+	defer cleanup()
+
+	pubSubTopic := "test"
+
+	storeMessage(t, s1, test.NewMessage("topic1", 1, "msg1"), pubSubTopic)
+
+	s2, cleanup := newTestStore(t)
+	defer cleanup()
+	addStoreProtocol(t, s2.host, s1.host)
+
+	s1.db.Close()
+	_, err := s2.Resume(ctx, pubSubTopic, []peer.ID{s1.host.ID()})
+	require.EqualError(t, err, "reading query response: EOF")
+}

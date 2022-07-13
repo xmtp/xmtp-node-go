@@ -183,39 +183,64 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		EndTime:     endTime,
 		PagingInfo: &pb.PagingInfo{
 			PageSize:  uint64(s.resumePageSize),
-			Direction: pb.PagingInfo_BACKWARD,
+			Direction: pb.PagingInfo_FORWARD,
 		},
 	}
 	var wg sync.WaitGroup
 	var msgCount int
 	var msgCountLock sync.RWMutex
+	var asyncErr error
+	var success bool
+	started := time.Now().UTC()
+	var latestStoredTimestamp int64
 	for _, p := range peers {
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
-			var latestStoredTimestamp int64
-			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
+			log := s.log.With(logging.HostID("peer", p))
+
+			var msgFnErr error
+			// NOTE that we intentionally do not use the ctx passed into the
+			// method, since it's created within go-waku with a 20 second
+			// timeout. We don't want a timeout on this, and the store-owned
+			// context will trigger a cancel on tear down.
+			count, err := s.queryPeer(s.ctx, req, p, func(msg *pb.WakuMessage) bool {
 				timestamp := utils.GetUnixEpoch()
 				err, stored := s.storeMessage(protocol.NewEnvelope(msg, timestamp, req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
+					msgFnErr = err
 					return false
 				}
 				latestStoredTimestamp = timestamp
 				return stored
 			})
 			if err != nil {
-				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+				log.Error("querying peer", zap.Error(err))
+				asyncErr = err
 				return
 			}
+			if msgFnErr != nil {
+				log.Error("querying peer")
+				asyncErr = msgFnErr
+				return
+			}
+
+			success = true
+
 			msgCountLock.Lock()
 			defer msgCountLock.Unlock()
 			msgCount += count
 		}(p)
 	}
 	wg.Wait()
-	s.log.Info("resume complete", zap.Int("count", msgCount))
+	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+	if !success && asyncErr != nil {
+		log.Error("resuming", zap.Error(asyncErr))
+		return msgCount, asyncErr
+	}
 
+	log.Info("resume complete")
 	return msgCount, nil
 }
 
