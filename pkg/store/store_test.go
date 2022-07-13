@@ -14,13 +14,24 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
-func newTestStore(t *testing.T) (*XmtpStore, func()) {
+func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	dbStore, err := NewDBStore(utils.Logger(), WithDB(db))
+	dbStore, err := NewDBStore(utils.Logger(), WithDBStoreDB(db))
 	require.NoError(t, err)
 
 	host := test.NewPeer(t)
-	store := NewXmtpStore(host, db, dbStore, 0, utils.Logger())
+	store, err := NewXmtpStore(
+		append(
+			[]Option{
+				WithLog(utils.Logger()),
+				WithHost(host),
+				WithDB(db),
+				WithMessageProvider(dbStore),
+			},
+			opts...,
+		)...,
+	)
+	require.NoError(t, err)
 
 	store.Start(context.Background())
 

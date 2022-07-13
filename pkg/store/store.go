@@ -28,42 +28,61 @@ const bufferSize = 1024
 const maxPageSize = 100
 const maxPeersToResume = 5
 
+var (
+	ErrMissingLogOption             = errors.New("missing log option")
+	ErrMissingHostOption            = errors.New("missing host option")
+	ErrMissingDBOption              = errors.New("missing db option")
+	ErrMissingMessageProviderOption = errors.New("missing message provider option")
+	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
+)
+
 type XmtpStore struct {
-	ctx  context.Context
-	MsgC chan *protocol.Envelope
-	wg   *sync.WaitGroup
-	db   *sql.DB
-
-	log *zap.Logger
-
-	started        bool
-	statsPeriod    time.Duration
-	resumePageSize int
-
+	ctx         context.Context
+	MsgC        chan *protocol.Envelope
+	wg          *sync.WaitGroup
+	db          *sql.DB
+	log         *zap.Logger
+	host        host.Host
 	msgProvider store.MessageProvider
-	h           host.Host
+
+	started         bool
+	statsPeriod     time.Duration
+	resumePageSize  int
+	resumeStartTime int64
 }
 
-func NewXmtpStore(host host.Host, db *sql.DB, p store.MessageProvider, statsPeriod time.Duration, log *zap.Logger) *XmtpStore {
-	if log == nil {
-		panic("No logger provided in store initialization")
+func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
+	s := new(XmtpStore)
+	for _, opt := range opts {
+		opt(s)
 	}
-	if db == nil {
-		log.Panic("No DB in store initialization")
-	}
-	if p == nil {
-		log.Panic("No message provider in store initialization")
-	}
-	xmtpStore := new(XmtpStore)
-	xmtpStore.msgProvider = p
-	xmtpStore.h = host
-	xmtpStore.db = db
-	xmtpStore.wg = &sync.WaitGroup{}
-	xmtpStore.log = log.Named("store")
-	xmtpStore.MsgC = make(chan *protocol.Envelope, bufferSize)
-	xmtpStore.statsPeriod = statsPeriod
 
-	return xmtpStore
+	// Required logger option.
+	if s.log == nil {
+		return nil, ErrMissingLogOption
+	}
+	s.log = s.log.Named("store")
+
+	// Required host option.
+	if s.host == nil {
+		return nil, ErrMissingHostOption
+	}
+	s.log = s.log.With(zap.String("host", s.host.ID().Pretty()))
+
+	// Required db option.
+	if s.db == nil {
+		return nil, ErrMissingDBOption
+	}
+
+	// Required db option.
+	if s.msgProvider == nil {
+		return nil, ErrMissingMessageProviderOption
+	}
+
+	s.wg = &sync.WaitGroup{}
+	s.MsgC = make(chan *protocol.Envelope, bufferSize)
+
+	return s, nil
 }
 
 func (s *XmtpStore) MessageChannel() chan *protocol.Envelope {
@@ -76,7 +95,7 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	}
 	s.started = true
 	s.ctx = ctx
-	s.h.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
+	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	s.wg.Add(2)
 	go tracing.Do(ctx, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
@@ -91,8 +110,8 @@ func (s *XmtpStore) Stop() {
 		close(s.MsgC)
 	}
 
-	if s.h != nil {
-		s.h.RemoveStreamHandler(store.StoreID_v20beta4)
+	if s.host != nil {
+		s.host.RemoveStreamHandler(store.StoreID_v20beta4)
 	}
 
 	s.wg.Wait()
@@ -129,29 +148,39 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		return 0, errors.New("can't resume: store has not started")
 	}
 	log := s.log.With(zap.String("pubsub_topic", pubsubTopic))
-	log.Info("resuming")
 
 	currentTime := utils.GetUnixEpoch()
-	lastSeenTime, err := s.findLastSeen()
-	if err != nil {
-		return 0, errors.Wrap(err, "finding latest timestamp")
+	offset := int64(20 * time.Second)
+	endTime := currentTime + offset
+
+	var startTime int64
+	if s.resumeStartTime < 0 {
+		lastSeenTime, err := s.findLastSeen()
+		if err != nil {
+			return 0, errors.Wrap(err, "finding latest timestamp")
+		}
+		startTime = max(lastSeenTime-offset, 0)
+	} else {
+		startTime = s.resumeStartTime
 	}
 
-	var offset int64 = int64(20 * time.Second)
-	currentTime = currentTime + offset
-	lastSeenTime = max(lastSeenTime-offset, 0)
-
 	if len(peers) == 0 {
-		peers, err = selectPeers(s.h, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
+		var err error
+		peers, err = selectPeers(s.host, string(store.StoreID_v20beta4), maxPeersToResume, s.log)
 		if err != nil {
 			return 0, errors.Wrap(err, "selecting peer")
 		}
 	}
+	if len(peers) == 0 {
+		return 0, errors.New("no peers")
+	}
+
+	log.Info("resuming", zap.Int64("start_time", startTime), zap.Int64("end_time", endTime), zap.Int("page_size", s.resumePageSize))
 
 	req := &pb.HistoryQuery{
 		PubsubTopic: pubsubTopic,
-		StartTime:   lastSeenTime,
-		EndTime:     currentTime,
+		StartTime:   startTime,
+		EndTime:     endTime,
 		PagingInfo: &pb.PagingInfo{
 			PageSize:  uint64(s.resumePageSize),
 			Direction: pb.PagingInfo_BACKWARD,
@@ -164,16 +193,19 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 		wg.Add(1)
 		go func(p peer.ID) {
 			defer wg.Done()
+			var latestStoredTimestamp int64
 			count, err := s.queryPeer(ctx, req, p, func(msg *pb.WakuMessage) bool {
-				err, stored := s.storeMessage(protocol.NewEnvelope(msg, utils.GetUnixEpoch(), req.PubsubTopic))
+				timestamp := utils.GetUnixEpoch()
+				err, stored := s.storeMessage(protocol.NewEnvelope(msg, timestamp, req.PubsubTopic))
 				if err != nil {
 					s.log.Error("storing message", zap.Error(err))
 					return false
 				}
+				latestStoredTimestamp = timestamp
 				return stored
 			})
 			if err != nil {
-				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()))
+				s.log.Error("querying peer", zap.Error(err), zap.String("peer", p.Pretty()), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
 				return
 			}
 			msgCountLock.Lock()
@@ -190,7 +222,7 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 func (s *XmtpStore) queryPeer(ctx context.Context, req *pb.HistoryQuery, peerID peer.ID, msgFn func(*pb.WakuMessage) bool) (int, error) {
 	c, err := NewClient(
 		WithClientLog(s.log),
-		WithClientHost(s.h),
+		WithClientHost(s.host),
 		WithClientPeer(peerID),
 	)
 	if err != nil {

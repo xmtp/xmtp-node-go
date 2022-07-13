@@ -32,7 +32,7 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 }
 
 func createStore(t *testing.T, db *sql.DB) *DBStore {
-	option := WithDB(db)
+	option := WithDBStoreDB(db)
 	store, err := NewDBStore(utils.Logger(), option)
 	require.NoError(t, err)
 	return store

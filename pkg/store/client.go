@@ -23,9 +23,9 @@ type Client struct {
 }
 
 var (
-	ErrMissingLogOption  = errors.New("missing log option")
-	ErrMissingHostOption = errors.New("missing host option")
-	ErrMissingPeerOption = errors.New("missing peer option")
+	ErrMissingClientLogOption  = errors.New("missing log option")
+	ErrMissingClientHostOption = errors.New("missing host option")
+	ErrMissingClientPeerOption = errors.New("missing peer option")
 )
 
 type ClientOption func(c *Client)
@@ -56,19 +56,19 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 
 	// Required logger option.
 	if c.log == nil {
-		return nil, ErrMissingLogOption
+		return nil, ErrMissingClientLogOption
 	}
 	c.log = c.log.Named("client")
 
 	// Required host option.
 	if c.host == nil {
-		return nil, ErrMissingHostOption
+		return nil, ErrMissingClientHostOption
 	}
 	c.log = c.log.With(zap.String("host", c.host.ID().Pretty()))
 
 	// Required peer option.
 	if c.peer == nil {
-		return nil, ErrMissingPeerOption
+		return nil, ErrMissingClientPeerOption
 	}
 	c.log = c.log.With(zap.String("peer", c.peer.Pretty()))
 

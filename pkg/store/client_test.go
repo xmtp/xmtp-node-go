@@ -26,7 +26,7 @@ func TestStoreClient_New(t *testing.T) {
 			name: "missing log",
 			opts: []ClientOption{},
 			expect: func(t *testing.T, c *Client, err error) {
-				require.Equal(t, ErrMissingLogOption, err)
+				require.Equal(t, ErrMissingClientLogOption, err)
 				require.Nil(t, c)
 			},
 		},
@@ -36,7 +36,7 @@ func TestStoreClient_New(t *testing.T) {
 				WithClientLog(log),
 			},
 			expect: func(t *testing.T, c *Client, err error) {
-				require.Equal(t, ErrMissingHostOption, err)
+				require.Equal(t, ErrMissingClientHostOption, err)
 				require.Nil(t, c)
 			},
 		},
@@ -47,7 +47,7 @@ func TestStoreClient_New(t *testing.T) {
 				WithClientHost(host),
 			},
 			expect: func(t *testing.T, c *Client, err error) {
-				require.Equal(t, ErrMissingPeerOption, err)
+				require.Equal(t, ErrMissingClientPeerOption, err)
 				require.Nil(t, c)
 			},
 		},
@@ -333,8 +333,8 @@ func TestStoreClient_Query(t *testing.T) {
 			t.Parallel()
 			s, cleanup := newTestStore(t)
 			defer cleanup()
-			c := newTestClient(t, s.h.ID())
-			addStoreProtocol(t, c.host, s.h)
+			c := newTestClient(t, s.host.ID())
+			addStoreProtocol(t, c.host, s.host)
 			for _, env := range tc.stored {
 				storeMessage(t, s, env.Message(), env.PubsubTopic())
 			}
@@ -346,8 +346,8 @@ func TestStoreClient_Query(t *testing.T) {
 func TestStoreClient_Query_PagingShouldStopOnReturnFalse(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()
-	c := newTestClient(t, s.h.ID())
-	addStoreProtocol(t, c.host, s.h)
+	c := newTestClient(t, s.host.ID())
+	addStoreProtocol(t, c.host, s.host)
 	storeMessage(t, s, test.NewMessage("topic1", 1, "msg1"), "pubsub1")
 	storeMessage(t, s, test.NewMessage("topic1", 2, "msg2"), "pubsub1")
 	storeMessage(t, s, test.NewMessage("topic1", 3, "msg3"), "pubsub1")

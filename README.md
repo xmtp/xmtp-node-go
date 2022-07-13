@@ -4,7 +4,7 @@ XMTP node software
 
 ## Instructions
 
-### Start the server
+### Install dependencies and start the DB
 
 1. `dev/up`
 
