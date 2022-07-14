@@ -36,6 +36,10 @@ var (
 	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
 )
 
+const (
+	relayPingContentTopic = "/relay-ping/1/ping/null"
+)
+
 type XmtpStore struct {
 	ctx         context.Context
 	MsgC        chan *protocol.Envelope
@@ -367,6 +371,12 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (error, bool) {
 	span, _ := tracing.StartSpanFromContext(s.ctx, "store message")
 	defer span.Finish()
 	log := tracing.Link(span, s.log)
+
+	if isRelayPing(env) {
+		log.Debug("not storing relay ping message")
+		return nil, false
+	}
+
 	err := s.msgProvider.Put(env) // Should the index be stored?
 	if err != nil {
 		if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
@@ -388,6 +398,13 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (error, bool) {
 	span.SetTag("content_topic", env.Message().ContentTopic)
 	span.SetTag("size", env.Size())
 	return nil, true
+}
+
+func isRelayPing(env *protocol.Envelope) bool {
+	if env == nil || env.Message() == nil {
+		return false
+	}
+	return env.Message().ContentTopic == relayPingContentTopic
 }
 
 func computeIndex(env *protocol.Envelope) (*pb.Index, error) {

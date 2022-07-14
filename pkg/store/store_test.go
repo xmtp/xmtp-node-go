@@ -14,6 +14,31 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
+func TestStore_ExcludeRelayPings(t *testing.T) {
+	t.Parallel()
+
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	c := newTestClient(t, s.host.ID())
+	addStoreProtocol(t, c.host, s.host)
+
+	pubSubTopic := test.NewTopic()
+
+	storeMessage(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic)
+	storeMessage(t, s, test.NewMessage(relayPingContentTopic, 2, ""), pubSubTopic)
+	storeMessage(t, s, test.NewMessage("topic2", 3, "msg2"), pubSubTopic)
+	storeMessage(t, s, test.NewMessage(relayPingContentTopic, 4, "msg4"), pubSubTopic)
+
+	query := &pb.HistoryQuery{
+		PubsubTopic: pubSubTopic,
+	}
+	expectQueryMessagesEventually(t, c, query, []*pb.WakuMessage{
+		test.NewMessage("topic1", 1, "msg1"),
+		test.NewMessage("topic2", 3, "msg2"),
+	})
+}
+
 func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	db, _, dbCleanup := test.NewDB(t)
 	dbStore, err := NewDBStore(utils.Logger(), WithDBStoreDB(db))
