@@ -33,6 +33,8 @@ func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {
 	// Connect to each other as store nodes.
 	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
 	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	// Subscribe via each node.
 	n1EnvC := test.Subscribe(t, n1)
@@ -72,6 +74,8 @@ func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	// Connect to each other as store nodes.
 	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
 	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	// Subscribe via each node.
 	n1EnvC := test.Subscribe(t, n1)
@@ -147,6 +151,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	// Connect and send a message to each node, expecting that the messages
 	// are relayed to the other nodes.
 	test.Connect(t, n1, n2)
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	topic1 := test.NewTopic()
 	topic2 := test.NewTopic()
@@ -214,6 +220,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 
 	// Reconnect and expect that no new messages are relayed.
 	test.Connect(t, n1, n2)
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
@@ -244,6 +252,8 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	// Connect and send a message to each node, expecting that the messages
 	// are relayed to the other nodes.
 	test.Connect(t, n1, n2)
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	topic1 := test.NewTopic()
 	topic2 := test.NewTopic()
@@ -312,6 +322,8 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	// Reconnect, resume is automatically triggered from node 2, and expect new
 	// messages.
 	test.ConnectStoreNode(t, n1, n2)
+	test.ExpectPeers(t, n1, n2.Host().ID())
+	test.ExpectPeers(t, n2, n1.Host().ID())
 
 	test.SubscribeExpectNone(t, n1EnvC)
 	test.SubscribeExpectNone(t, n2EnvC)
@@ -518,6 +530,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 		return
 	}
 
+	timer := time.After(3 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	var done bool
 	for !done {
@@ -527,7 +540,7 @@ func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics
 			if len(msgs) == len(expectedMsgs) {
 				done = true
 			}
-		case <-time.After(3 * time.Second):
+		case <-timer:
 			done = true
 		}
 	}

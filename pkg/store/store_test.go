@@ -11,6 +11,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -41,14 +42,16 @@ func TestStore_ExcludeRelayPings(t *testing.T) {
 
 func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	dbStore, err := NewDBStore(utils.Logger(), WithDBStoreDB(db))
+	log := utils.Logger()
+	dbStore, err := NewDBStore(log, WithDBStoreDB(db))
 	require.NoError(t, err)
 
 	host := test.NewPeer(t)
+	log = log.With(logging.HostID("node", host.ID()))
 	store, err := NewXmtpStore(
 		append(
 			[]Option{
-				WithLog(utils.Logger()),
+				WithLog(log),
 				WithHost(host),
 				WithDB(db),
 				WithMessageProvider(dbStore),
