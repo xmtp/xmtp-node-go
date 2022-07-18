@@ -101,9 +101,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	s.wg.Add(2)
-	go tracing.Do(ctx, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	go tracing.Do(ctx, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoDo(ctx, s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	tracing.GoDo(ctx, s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -344,8 +343,13 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 
 func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 	defer s.wg.Done()
-	for envelope := range s.MsgC {
-		_, _ = s.storeMessage(envelope)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case envelope := <-s.MsgC:
+			_, _ = s.storeMessage(envelope)
+		}
 	}
 }
 

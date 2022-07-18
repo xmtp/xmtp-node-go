@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -47,10 +48,12 @@ type Server struct {
 	logger           *zap.Logger
 	hostAddr         *net.TCPAddr
 	db               *sql.DB
+	wakuStore        store.Store
 	metricsServer    *metrics.Server
 	wakuNode         *node.WakuNode
 	ctx              context.Context
 	cancel           context.CancelFunc
+	wg               sync.WaitGroup
 	walletAuthorizer authz.WalletAuthorizer
 	authenticator    *authn.XmtpAuthentication
 }
@@ -80,7 +83,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		metrics.RegisterViews(server.logger)
-		go tracing.Do(server.ctx, "metrics", func(_ context.Context) { server.metricsServer.Start() })
+		go tracing.Do(server.ctx, "metrics server", func(_ context.Context) { server.metricsServer.Start() })
 	}
 
 	if options.Authz.DbConnectionString != "" {
@@ -133,6 +136,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 				xmtpStore.WithResumeStartTime(options.Store.ResumeStartTime),
 			)
 			failOnErr(err, "initializing store")
+			server.wakuStore = s
 			return s
 		}))
 	}
@@ -145,7 +149,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		go tracing.Do(server.ctx, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
+		tracing.GoDo(server.ctx, &server.wg, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
@@ -173,7 +177,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 		}
 	}
 
-	go tracing.Do(server.ctx, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
+	tracing.GoDo(server.ctx, &server.wg, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
 
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")
@@ -195,6 +199,10 @@ func (server *Server) Shutdown() {
 	// shut the node down
 	server.wakuNode.Stop()
 
+	if server.wakuStore != nil {
+		server.wakuStore.Stop()
+	}
+
 	// Close the DB.
 	server.db.Close()
 
@@ -206,6 +214,8 @@ func (server *Server) Shutdown() {
 
 	// Cancel any outstanding goroutines
 	server.cancel()
+	server.wg.Wait()
+	server.logger.Info("shutdown complete, exiting")
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
