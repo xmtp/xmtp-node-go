@@ -43,7 +43,7 @@ const (
 type XmtpStore struct {
 	ctx         context.Context
 	MsgC        chan *protocol.Envelope
-	wg          *sync.WaitGroup
+	wg          sync.WaitGroup
 	db          *sql.DB
 	log         *zap.Logger
 	host        host.Host
@@ -83,7 +83,6 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingMessageProviderOption
 	}
 
-	s.wg = &sync.WaitGroup{}
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
 
 	return s, nil
@@ -101,8 +100,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	tracing.GoDo(ctx, s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	tracing.GoDo(ctx, s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoDo(ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	tracing.GoDo(ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
