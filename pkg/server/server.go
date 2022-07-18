@@ -199,6 +199,10 @@ func (server *Server) Shutdown() {
 	// shut the node down
 	server.wakuNode.Stop()
 
+	if server.walletAuthorizer != nil {
+		server.walletAuthorizer.Stop()
+	}
+
 	if server.wakuStore != nil {
 		server.wakuStore.Stop()
 	}
