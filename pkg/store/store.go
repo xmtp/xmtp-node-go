@@ -342,19 +342,20 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 }
 
 func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
-	defer s.wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case envelope := <-s.MsgC:
+			if envelope == nil {
+				return
+			}
 			_, _ = s.storeMessage(envelope)
 		}
 	}
 }
 
 func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
-	defer s.wg.Done()
 	if s.statsPeriod == 0 {
 		s.log.Info("statsPeriod is 0 indicating no metrics loop")
 		return
