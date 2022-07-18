@@ -191,7 +191,6 @@ func (server *Server) WaitForShutdown() {
 
 func (server *Server) Shutdown() {
 	server.logger.Info("shutting down...")
-	server.cancel()
 
 	// shut the node down
 	server.wakuNode.Stop()
@@ -200,9 +199,13 @@ func (server *Server) Shutdown() {
 	server.db.Close()
 
 	if server.metricsServer != nil {
-		err := server.metricsServer.Stop(server.ctx)
-		failOnErr(err, "metrics stop")
+		if err := server.metricsServer.Stop(server.ctx); err != nil {
+			server.logger.Error("stopping metrics", zap.Error(err))
+		}
 	}
+
+	// Cancel any outstanding goroutines
+	server.cancel()
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
