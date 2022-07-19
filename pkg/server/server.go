@@ -48,7 +48,6 @@ type Server struct {
 	logger           *zap.Logger
 	hostAddr         *net.TCPAddr
 	db               *sql.DB
-	wakuStore        store.Store
 	metricsServer    *metrics.Server
 	wakuNode         *node.WakuNode
 	ctx              context.Context
@@ -136,7 +135,6 @@ func New(ctx context.Context, options Options) (server *Server) {
 				xmtpStore.WithResumeStartTime(options.Store.ResumeStartTime),
 			)
 			failOnErr(err, "initializing store")
-			server.wakuStore = s
 			return s
 		}))
 	}
