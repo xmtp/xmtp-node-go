@@ -90,4 +90,6 @@ func main() {
 	tracing.Do(context.Background(), "main", func(ctx context.Context) {
 		server.New(ctx, options).WaitForShutdown()
 	})
+
+	utils.Logger().Sync()
 }
