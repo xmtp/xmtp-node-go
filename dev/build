@@ -4,11 +4,11 @@ set -e
 go mod download
 
 COMMIT=$(git rev-parse --short HEAD)
-LD_FLAGS=("-X 'main.Commit=${COMMIT}'")
+LD_FLAGS="-X 'main.Commit=${COMMIT}'"
 
 for dir in ./cmd/*; do
     if [ -d "$dir" ]; then
-        go build -ldflags="${LD_FLAGS[*]}" -o "./bin/${dir##*/}" "${dir}" &
+        go build -ldflags="${LD_FLAGS}" -o "./bin/${dir##*/}" "${dir}" &
     fi
 done
 
