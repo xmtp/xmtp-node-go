@@ -42,12 +42,11 @@ func (c *client) updateVar(name string, value string) {
 }
 
 func (c client) startRun(commit string, apply bool) {
-	msg := commit
+	msg := fmt.Sprintf("triggered from xtmp-node-go commit %s", commit)
 	out, err := exec.Command("git", "log", "--oneline", "-n 1").Output()
 	if err == nil {
 		msg = string(out)
 	}
-	msg = fmt.Sprintf("triggered from xtmp-node-go commit\n%s", msg)
 	_, err = c.Runs.Create(c.ctx, tfe.RunCreateOptions{
 		Message:   &msg,
 		Workspace: c.wsp,
