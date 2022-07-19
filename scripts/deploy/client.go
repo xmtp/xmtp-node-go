@@ -47,7 +47,6 @@ func (c client) startRun(commit string, apply bool) {
 	if err == nil {
 		msg = string(out)
 	}
-	msg = fmt.Sprintf(msg)
 	_, err = c.Runs.Create(c.ctx, tfe.RunCreateOptions{
 		Message:   &msg,
 		Workspace: c.wsp,
