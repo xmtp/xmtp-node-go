@@ -91,5 +91,5 @@ func main() {
 		server.New(ctx, options).WaitForShutdown()
 	})
 
-	utils.Logger().Sync()
+	_ = utils.Logger().Sync()
 }
