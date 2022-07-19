@@ -24,8 +24,12 @@ func (l logger) Log(msg string) {
 }
 
 // Start boots the datadog tracer, run this once early in the startup sequence.
-func Start(l *zap.Logger) {
-	tracer.Start(tracer.WithService("xmtp-node"), tracer.WithLogger(logger{l}))
+func Start(version string, l *zap.Logger) {
+	tracer.Start(
+		tracer.WithService("xmtp-node"),
+		tracer.WithServiceVersion(version),
+		tracer.WithLogger(logger{l}),
+	)
 }
 
 // Stop shuts down the datadog tracer, defer this right after Start().

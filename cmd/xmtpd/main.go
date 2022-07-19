@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 )
+
+var Commit string
 
 var options server.Options
 
@@ -53,6 +56,11 @@ func main() {
 		utils.Logger().Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
 	}
 
+	if options.Version {
+		fmt.Printf("Version: %s", Commit)
+		return
+	}
+
 	if options.GenerateKey {
 		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
 			log.Fatalf("Could not write private key file: %s", err)
@@ -76,7 +84,7 @@ func main() {
 
 	if options.Tracing.Enable {
 		utils.Logger().Info("starting tracer")
-		tracing.Start(utils.Logger())
+		tracing.Start(Commit, utils.Logger())
 		defer tracing.Stop()
 	}
 	tracing.Do(context.Background(), "main", func(ctx context.Context) {

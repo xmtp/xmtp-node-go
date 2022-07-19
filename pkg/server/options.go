@@ -81,6 +81,7 @@ type Options struct {
 	CreateMessageMigration string        `long:"create-message-migration" default:"" description:"Create a migration. Must provide a name"`
 	CreateAuthzMigration   string        `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
 	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
+	Version                bool          `long:"version" description:"Output binary version and exit"`
 
 	Authz     AuthzOptions     `group:"Authz Options"`
 	Relay     RelayOptions     `group:"Relay Options"`
