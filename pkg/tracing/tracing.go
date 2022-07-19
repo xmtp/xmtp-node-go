@@ -4,6 +4,7 @@ package tracing
 
 import (
 	"context"
+	"sync"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
@@ -36,7 +37,8 @@ func Stop() {
 // tagging the span with the error if the action panics.
 // This should trigger DD APM's Error Tracking to record the error.
 func Do(ctx context.Context, spanName string, action func(context.Context)) {
-	span, ctx := tracer.StartSpanFromContext(ctx, spanName)
+	span := tracer.StartSpan(spanName)
+	ctx = tracer.ContextWithSpan(ctx, span)
 	log := logging.From(ctx).With(zap.String("span", spanName))
 	log = Link(span, log)
 	log.Info("started span")
@@ -67,4 +69,14 @@ func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
 	return l.With(
 		zap.Uint64("dd.trace_id", span.Context().TraceID()),
 		zap.Uint64("dd.span_id", span.Context().SpanID()))
+}
+
+// Run the action in a goroutine, synchronize the goroutine exit with the WaitGroup,
+// The action must respect cancellation of the Context.
+func GoDo(ctx context.Context, wg *sync.WaitGroup, spanName string, action func(context.Context)) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		Do(ctx, spanName, action)
+	}()
 }

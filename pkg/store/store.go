@@ -43,7 +43,7 @@ const (
 type XmtpStore struct {
 	ctx         context.Context
 	MsgC        chan *protocol.Envelope
-	wg          *sync.WaitGroup
+	wg          sync.WaitGroup
 	db          *sql.DB
 	log         *zap.Logger
 	host        host.Host
@@ -83,7 +83,6 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingMessageProviderOption
 	}
 
-	s.wg = &sync.WaitGroup{}
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
 
 	return s, nil
@@ -101,9 +100,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	s.wg.Add(2)
-	go tracing.Do(ctx, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	go tracing.Do(ctx, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoDo(ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	tracing.GoDo(ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -343,14 +341,20 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 }
 
 func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
-	defer s.wg.Done()
-	for envelope := range s.MsgC {
-		_, _ = s.storeMessage(envelope)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case envelope := <-s.MsgC:
+			if envelope == nil {
+				return
+			}
+			_, _ = s.storeMessage(envelope)
+		}
 	}
 }
 
 func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
-	defer s.wg.Done()
 	if s.statsPeriod == 0 {
 		s.log.Info("statsPeriod is 0 indicating no metrics loop")
 		return
