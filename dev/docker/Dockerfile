@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the final node binary
-RUN go build -o bin/xmtpd cmd/xmtpd/main.go
+RUN go build -ldflags="-X 'main.Commit=$GIT_COMMIT'" -o bin/xmtpd cmd/xmtpd/main.go
 
 # ACTUAL IMAGE -------------------------------------------------------
 
