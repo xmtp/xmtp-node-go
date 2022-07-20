@@ -38,7 +38,7 @@ func Start(version string, l *zap.Logger) {
 	}
 	tracer.Start(
 		tracer.WithEnv(env),
-		tracer.WithService("xmtp-node"),
+		tracer.WithService("xmtpd"),
 		tracer.WithServiceVersion(version),
 		tracer.WithLogger(logger{l}),
 		tracer.WithRuntimeMetrics(),
