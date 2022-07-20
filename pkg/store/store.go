@@ -388,7 +388,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 	}
 	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
 		tracing.SpanResource(span, "store")
-		tracing.SpanType(span, "p2p")
+		tracing.SpanType(span, "db")
 		err = s.msgProvider.Put(env) // Should the index be stored?
 		if err != nil {
 			tracing.SpanTag(span, "stored", false)
