@@ -4,6 +4,7 @@ package tracing
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -31,7 +32,12 @@ func (l logger) Log(msg string) {
 
 // Start boots the datadog tracer, run this once early in the startup sequence.
 func Start(version string, l *zap.Logger) {
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "test"
+	}
 	tracer.Start(
+		tracer.WithEnv(env),
 		tracer.WithService("xmtp-node"),
 		tracer.WithServiceVersion(version),
 		tracer.WithLogger(logger{l}),
