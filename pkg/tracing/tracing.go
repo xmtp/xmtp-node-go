@@ -9,6 +9,7 @@ import (
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
@@ -17,7 +18,6 @@ var (
 	StartSpanFromContext = tracer.StartSpanFromContext
 	StartSpan            = tracer.StartSpan
 	ChildOf              = tracer.ChildOf
-	SpanType             = tracer.SpanType
 	WithError            = tracer.WithError
 	ContextWithSpan      = tracer.ContextWithSpan
 )
@@ -52,10 +52,10 @@ func Stop() {
 
 // Wrap executes action in the context of a span.
 // Tags the span with the error if action returns one.
-func Wrap(ctx context.Context, spanName string, action func(context.Context, Span) error) error {
-	span, ctx := tracer.StartSpanFromContext(ctx, spanName)
+func Wrap(ctx context.Context, operation string, action func(context.Context, Span) error) error {
+	span, ctx := tracer.StartSpanFromContext(ctx, operation)
 	defer span.Finish()
-	log := logging.From(ctx).With(zap.String("span", spanName))
+	log := logging.From(ctx).With(zap.String("span", operation))
 	ctx = logging.With(ctx, Link(span, log))
 	err := action(ctx, span)
 	if err != nil {
@@ -89,6 +89,18 @@ func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
 	return l.With(
 		zap.Uint64("dd.trace_id", span.Context().TraceID()),
 		zap.Uint64("dd.span_id", span.Context().SpanID()))
+}
+
+func SpanType(span Span, typ string) {
+	span.SetTag(ext.SpanType, typ)
+}
+
+func SpanResource(span Span, resource string) {
+	span.SetTag(ext.ResourceName, resource)
+}
+
+func SpanTag(span Span, key string, value interface{}) {
+	span.SetTag(key, value)
 }
 
 // GoPanicWrap extends PanicWrap by running the body in a goroutine and

@@ -294,7 +294,9 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	_ = tracing.Wrap(s.ctx, "store request", func(ctx context.Context, span tracing.Span) error {
 		log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
 		log = tracing.Link(span, log)
-		span.SetTag("peer", stream.Conn().RemotePeer())
+		tracing.SpanResource(span, "store")
+		tracing.SpanType(span, "p2p")
+		tracing.SpanTag(span, "peer", stream.Conn().RemotePeer())
 
 		historyRPCRequest := &pb.HistoryRPC{}
 		writer := protoio.NewDelimitedWriter(stream)
@@ -318,6 +320,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		historyResponseRPC.RequestId = historyRPCRequest.RequestId
 		var res *pb.HistoryResponse
 		err = tracing.Wrap(ctx, "finding messages", func(ctx context.Context, span tracing.Span) (err error) {
+			tracing.SpanType(span, "db")
 			res, err = s.FindMessages(historyRPCRequest.Query)
 			return err
 		})
@@ -332,7 +335,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 			zap.Int("messages", len(res.Messages)),
 			logging.IfDebug(logging.PagingInfo(res.PagingInfo)),
 		)
-		span.SetTag("messages", len(res.Messages))
+		tracing.SpanTag(span, "messages", len(res.Messages))
 
 		err = tracing.Wrap(ctx, "writing response", func(ctx context.Context, span tracing.Span) error {
 			return writer.WriteMsg(historyResponseRPC)
@@ -384,9 +387,11 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 		return false, nil
 	}
 	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
+		tracing.SpanResource(span, "store")
+		tracing.SpanType(span, "p2p")
 		err = s.msgProvider.Put(env) // Should the index be stored?
 		if err != nil {
-			span.SetTag("stored", false)
+			tracing.SpanTag(span, "stored", false)
 			if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
 				s.log.Debug("storing message", zap.Error(err))
 				metrics.RecordStoreError(s.ctx, "store_duplicate_key")
@@ -404,9 +409,9 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 			logging.Time("sent", env.Index().SenderTime))
 		// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 		metrics.RecordMessage(s.ctx, "stored", 1)
-		span.SetTag("stored", true)
-		span.SetTag("content_topic", env.Message().ContentTopic)
-		span.SetTag("size", env.Size())
+		tracing.SpanTag(span, "stored", true)
+		tracing.SpanTag(span, "content_topic", env.Message().ContentTopic)
+		tracing.SpanTag(span, "size", env.Size())
 		return nil
 	})
 	return stored, err
