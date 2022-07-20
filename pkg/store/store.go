@@ -291,7 +291,7 @@ func (s *XmtpStore) findLastSeen() (int64, error) {
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
 	defer stream.Close()
-	tracing.Do(s.ctx, "store request", func(ctx context.Context, span tracing.Span) error {
+	_ = tracing.Do(s.ctx, "store request", func(ctx context.Context, span tracing.Span) error {
 		log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
 		log = tracing.Link(span, log)
 		span.SetTag("peer", stream.Conn().RemotePeer())
