@@ -52,7 +52,7 @@ func main() {
 	// Set encoding for logs (console, json, ...)
 	// Note that libp2p reads the encoding from GOLOG_LOG_FMT env var.
 	utils.InitLogger(options.LogEncoding)
-	defer utils.Logger().Sync()
+	defer func() { _ = utils.Logger().Sync() }()
 	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
 		utils.Logger().Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
 	}
