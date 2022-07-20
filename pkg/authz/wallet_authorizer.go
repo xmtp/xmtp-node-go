@@ -96,9 +96,9 @@ func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	tracing.GoDo(ctx, &d.wg, "authz-change-listener", func(_ context.Context) { d.listenForChanges() })
+	tracing.GoPanicsDo(ctx, &d.wg, "authz-change-listener", func(_ context.Context) { d.listenForChanges() })
 
-	d.log.Info("Started DatabaseWalletAuthorizer")
+	d.log.Info("started")
 	return nil
 }
 
@@ -166,4 +166,5 @@ func (d *DatabaseWalletAuthorizer) listenForChanges() {
 func (d *DatabaseWalletAuthorizer) Stop() {
 	d.cancelFunc()
 	d.wg.Wait()
+	d.log.Info("stopped")
 }

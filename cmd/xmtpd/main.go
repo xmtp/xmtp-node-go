@@ -52,6 +52,7 @@ func main() {
 	// Set encoding for logs (console, json, ...)
 	// Note that libp2p reads the encoding from GOLOG_LOG_FMT env var.
 	utils.InitLogger(options.LogEncoding)
+	defer utils.Logger().Sync()
 	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
 		utils.Logger().Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
 	}
@@ -85,11 +86,12 @@ func main() {
 	if options.Tracing.Enable {
 		utils.Logger().Info("starting tracer")
 		tracing.Start(Commit, utils.Logger())
-		defer tracing.Stop()
+		defer func() {
+			utils.Logger().Info("stopping tracer")
+			tracing.Stop()
+		}()
 	}
-	tracing.Do(context.Background(), "main", func(ctx context.Context) {
+	tracing.PanicsDo(context.Background(), "main", func(ctx context.Context) {
 		server.New(ctx, options).WaitForShutdown()
 	})
-
-	_ = utils.Logger().Sync()
 }
