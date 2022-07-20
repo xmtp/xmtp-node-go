@@ -91,7 +91,7 @@ func main() {
 			tracing.Stop()
 		}()
 	}
-	tracing.PanicsDo(context.Background(), "main", func(ctx context.Context) {
+	tracing.PanicWrap(context.Background(), "main", func(ctx context.Context) {
 		server.New(ctx, options).WaitForShutdown()
 	})
 }

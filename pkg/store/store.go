@@ -100,8 +100,8 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	tracing.GoPanicsDo(ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	tracing.GoPanicsDo(ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoPanicWrap(ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	tracing.GoPanicWrap(ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -291,7 +291,7 @@ func (s *XmtpStore) findLastSeen() (int64, error) {
 
 func (s *XmtpStore) onRequest(stream network.Stream) {
 	defer stream.Close()
-	_ = tracing.Do(s.ctx, "store request", func(ctx context.Context, span tracing.Span) error {
+	_ = tracing.Wrap(s.ctx, "store request", func(ctx context.Context, span tracing.Span) error {
 		log := s.log.With(logging.HostID("peer", stream.Conn().RemotePeer()))
 		log = tracing.Link(span, log)
 		span.SetTag("peer", stream.Conn().RemotePeer())
@@ -300,7 +300,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		writer := protoio.NewDelimitedWriter(stream)
 		reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
 
-		err := tracing.Do(ctx, "reading request", func(ctx context.Context, span tracing.Span) error {
+		err := tracing.Wrap(ctx, "reading request", func(ctx context.Context, span tracing.Span) error {
 			return reader.ReadMsg(historyRPCRequest)
 		})
 		if err != nil {
@@ -317,7 +317,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		historyResponseRPC := &pb.HistoryRPC{}
 		historyResponseRPC.RequestId = historyRPCRequest.RequestId
 		var res *pb.HistoryResponse
-		err = tracing.Do(ctx, "finding messages", func(ctx context.Context, span tracing.Span) (err error) {
+		err = tracing.Wrap(ctx, "finding messages", func(ctx context.Context, span tracing.Span) (err error) {
 			res, err = s.FindMessages(historyRPCRequest.Query)
 			return err
 		})
@@ -334,7 +334,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		)
 		span.SetTag("messages", len(res.Messages))
 
-		err = tracing.Do(ctx, "writing response", func(ctx context.Context, span tracing.Span) error {
+		err = tracing.Wrap(ctx, "writing response", func(ctx context.Context, span tracing.Span) error {
 			return writer.WriteMsg(historyResponseRPC)
 		})
 		if err != nil {
@@ -383,7 +383,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 		s.log.Debug("not storing relay ping message")
 		return false, nil
 	}
-	err = tracing.Do(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
+	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
 		err = s.msgProvider.Put(env) // Should the index be stored?
 		if err != nil {
 			span.SetTag("stored", false)

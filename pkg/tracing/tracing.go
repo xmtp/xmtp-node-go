@@ -44,9 +44,9 @@ func Stop() {
 	tracer.Stop()
 }
 
-// Do executes action in the context of a span.
+// Wrap executes action in the context of a span.
 // Tags the span with the error if action returns one.
-func Do(ctx context.Context, spanName string, action func(context.Context, Span) error) error {
+func Wrap(ctx context.Context, spanName string, action func(context.Context, Span) error) error {
 	span, ctx := tracer.StartSpanFromContext(ctx, spanName)
 	defer span.Finish()
 	log := logging.From(ctx).With(zap.String("span", spanName))
@@ -58,10 +58,10 @@ func Do(ctx context.Context, spanName string, action func(context.Context, Span)
 	return err
 }
 
-// PanicDo executes the body guarding for panics.
+// PanicWrap executes the body guarding for panics.
 // If panic happens it emits a span with the error attached.
 // This should trigger DD APM's Error Tracking to record the error.
-func PanicsDo(ctx context.Context, name string, body func(context.Context)) {
+func PanicWrap(ctx context.Context, name string, body func(context.Context)) {
 	defer func() {
 		r := recover()
 		if err, ok := r.(error); ok {
@@ -85,12 +85,13 @@ func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
 		zap.Uint64("dd.span_id", span.Context().SpanID()))
 }
 
-// Run the action in a goroutine, synchronize the goroutine exit with the WaitGroup,
-// The action must respect cancellation of the Context.
-func GoPanicsDo(ctx context.Context, wg *sync.WaitGroup, name string, action func(context.Context)) {
+// GoPanicWrap extends PanicWrap by running the body in a goroutine and
+// synchronizing the goroutine exit with the WaitGroup.
+// The body must respect cancellation of the Context.
+func GoPanicWrap(ctx context.Context, wg *sync.WaitGroup, name string, body func(context.Context)) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		PanicsDo(ctx, name, action)
+		PanicWrap(ctx, name, body)
 	}()
 }
