@@ -300,7 +300,7 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 		writer := protoio.NewDelimitedWriter(stream)
 		reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
 
-		err := tracing.Do(ctx, "reading message", func(ctx context.Context, span tracing.Span) error {
+		err := tracing.Do(ctx, "reading request", func(ctx context.Context, span tracing.Span) error {
 			return reader.ReadMsg(historyRPCRequest)
 		})
 		if err != nil {
