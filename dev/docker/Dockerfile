@@ -1,8 +1,6 @@
 # BUILD IMAGE --------------------------------------------------------
 FROM golang:1.17-alpine as builder
 
-ARG GIT_COMMIT=unknown
-
 # Get build tools and required header files
 RUN apk add --no-cache build-base
 
@@ -10,6 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the final node binary
+ARG GIT_COMMIT=unknown
 RUN go build -ldflags="-X 'main.Commit=$GIT_COMMIT'" -o bin/xmtpd cmd/xmtpd/main.go
 
 # ACTUAL IMAGE -------------------------------------------------------
