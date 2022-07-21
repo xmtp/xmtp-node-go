@@ -1,6 +1,8 @@
 # BUILD IMAGE --------------------------------------------------------
 FROM golang:1.17-alpine as builder
 
+ARG GIT_COMMIT=unknown
+
 # Get build tools and required header files
 RUN apk add --no-cache build-base
 
