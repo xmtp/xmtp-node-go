@@ -25,9 +25,11 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Docker Publish
+        id: docker-publish
         run: |
           export DOCKER_IMAGE_TAG=latest
           IMAGE_TO_DEPLOY=xmtp/xmtpd-e2e@$(dev/e2e/build)
+          echo "::set-env name=IMAGE_TO_DEPLOY::$IMAGE_TO_DEPLOY"
           echo Successfully pushed $IMAGE_TO_DEPLOY
 
       - name: Deploy (production)
