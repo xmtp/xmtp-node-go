@@ -1,0 +1,53 @@
+name: Deploy E2E
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: xmtpeng
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "1.17.8" # The Go version to download (if necessary) and use.
+
+      - name: Git Checkout
+        uses: actions/checkout@v1
+
+      - name: Docker Publish
+        id: docker-publish
+        run: |
+          export DOCKER_IMAGE_TAG=latest
+          IMAGE_TO_DEPLOY="$(dev/e2e/build)"
+          echo "IMAGE_TO_DEPLOY=${IMAGE_TO_DEPLOY}" >> ${GITHUB_ENV}
+          echo Successfully pushed $IMAGE_TO_DEPLOY
+
+      - name: Deploy (production)
+        run: |
+          go run ./scripts/deploy \
+            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
+            --apply \
+            --workspace=production \
+            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --git-commit="$(git rev-parse HEAD)"
+          echo Successfully deployed
+
+      - name: Deploy (dev)
+        run: |
+          go run ./scripts/deploy \
+            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
+            --apply \
+            --workspace=dev \
+            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --git-commit="$(git rev-parse HEAD)"
+          echo Successfully deployed

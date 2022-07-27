@@ -1,5 +1,8 @@
 README.md
 dev/docker/*
+dev/e2e/Dockerfile
+dev/e2e/build
+dev/e2e/run
 dev/tmp/*
 .*ignore
 LICENSE*

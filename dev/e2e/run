@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -e
+
+export XMTPD_E2E_ENV="$1"
+export E2E="yes"
+
+go clean -testcache
+go test ./pkg/e2e/... -v
