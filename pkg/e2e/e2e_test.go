@@ -62,7 +62,7 @@ func runTest(t *testing.T, ctx context.Context, name string, fn func(t *testing.
 			}
 		}()
 
-		testPublishSubscribeQuery(t)
+		fn(t)
 	})
 }
 
