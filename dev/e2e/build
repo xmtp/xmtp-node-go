@@ -14,4 +14,4 @@ DOCKER_IMAGE_SHA=$(docker buildx build \
     --push \
     .)
 
-echo "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_SHA}"
+echo "${DOCKER_IMAGE_NAME}@${DOCKER_IMAGE_SHA}"

@@ -28,20 +28,26 @@ jobs:
         id: docker-publish
         run: |
           export DOCKER_IMAGE_TAG=latest
-          IMAGE_TO_DEPLOY=xmtp/xmtpd-e2e@$(dev/e2e/build)
-          echo "::set-env name=IMAGE_TO_DEPLOY::$IMAGE_TO_DEPLOY"
+          IMAGE_TO_DEPLOY="$(dev/e2e/build)"
+          echo "IMAGE_TO_DEPLOY=${IMAGE_TO_DEPLOY}" >> ${GITHUB_ENV}
           echo Successfully pushed $IMAGE_TO_DEPLOY
 
       - name: Deploy (production)
-        env:
-          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
-          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --xmtpd-e2e-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy \
+            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
+            --apply \
+            --workspace=production \
+            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --git-commit="$(git rev-parse HEAD)"
           echo Successfully deployed
 
       - name: Deploy (dev)
-        env:
-          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
         run: |
-          go run ./scripts/deploy --tf-token=$TERRAFORM_TOKEN --apply --workspace=dev --xmtpd-e2e-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy \
+            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
+            --apply \
+            --workspace=dev \
+            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --git-commit="$(git rev-parse HEAD)"
           echo Successfully deployed
