@@ -8,6 +8,5 @@ FROM golang:1.17-alpine
 ARG GIT_COMMIT=unknown
 LABEL commit=$GIT_COMMIT
 COPY --from=builder /code/build/xmtpd-e2e /usr/bin/
-COPY --from=builder /code/dev/e2e/entrypoint.sh /opt/
 ENV E2E_CONTINUOUS=true
 CMD [ "go", "tool", "test2json", "-t", "xmtpd-e2e" ]
