@@ -31,21 +31,13 @@ func TestServer_StaticNodesReconnect(t *testing.T) {
 		n2.ListenAddresses()[0].String(),
 	})
 	defer cleanup()
-	serverID := server.wakuNode.Host().ID()
 
 	// Expect connect to static nodes.
 	test.ExpectPeers(t, server.wakuNode, n1ID, n2ID)
 
-	// Disconnect from static nodes via server.
-	test.Disconnect(t, server.wakuNode, n1ID)
-	test.Disconnect(t, server.wakuNode, n2ID)
-
-	// Expect reconnect to static nodes.
-	test.ExpectPeers(t, server.wakuNode, n1ID, n2ID)
-
-	// Disconnect from static nodes via the nodes.
-	test.Disconnect(t, n1, serverID)
-	test.Disconnect(t, n2, serverID)
+	// Disconnect from static nodes.
+	test.Disconnect(t, server.wakuNode, n1)
+	test.Disconnect(t, server.wakuNode, n2)
 
 	// Expect reconnect to static nodes.
 	test.ExpectPeers(t, server.wakuNode, n1ID, n2ID)
