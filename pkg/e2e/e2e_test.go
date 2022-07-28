@@ -20,7 +20,6 @@ import (
 )
 
 var (
-	envShouldRunE2ETests             = envVarBool("E2E")
 	envShouldRunE2ETestsContinuously = envVarBool("E2E_CONTINUOUS")
 	envNetworkEnv                    = envVar("XMTPD_E2E_ENV", "dev")
 	envBootstrapAddrs                = envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS")
@@ -29,9 +28,6 @@ var (
 )
 
 func TestE2E(t *testing.T) {
-	if !envShouldRunE2ETests && !envShouldRunE2ETestsContinuously {
-		t.Skip("E2E env not set")
-	}
 	ctx := context.Background()
 	withMetricsServer(t, ctx, func(t *testing.T) {
 		for {
