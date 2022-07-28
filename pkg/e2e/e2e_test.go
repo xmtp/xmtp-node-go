@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"testing"
 	"time"
@@ -17,9 +18,12 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"go.uber.org/zap"
+
+	_ "net/http/pprof"
 )
 
 var (
+	envShouldRunE2E                  = envVarBool("E2E")
 	envShouldRunE2ETestsContinuously = envVarBool("E2E_CONTINUOUS")
 	envNetworkEnv                    = envVar("XMTPD_E2E_ENV", "dev")
 	envBootstrapAddrs                = envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS")
@@ -29,6 +33,11 @@ var (
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
+	if envShouldRunE2E {
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	}
 	withMetricsServer(t, ctx, func(t *testing.T) {
 		for {
 			runTest(t, ctx, "publish subscribe query", testPublishSubscribeQuery)
