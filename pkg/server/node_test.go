@@ -185,7 +185,7 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2.Host().ID())
+	test.Disconnect(t, n1, n2)
 	test.ExpectNoPeers(t, n1)
 	test.ExpectNoPeers(t, n2)
 
@@ -286,7 +286,7 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 
 	// Disconnect and send a message to each node, expecting that the messages
 	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2.Host().ID())
+	test.Disconnect(t, n1, n2)
 	test.ExpectNoPeers(t, n1)
 	test.ExpectNoPeers(t, n2)
 
@@ -366,8 +366,7 @@ func TestNodes_Deployment(t *testing.T) {
 				test.ExpectPeers(t, newN2, n1ID)
 
 				// Deploy ending; old instances disconnect from connected peers.
-				test.Disconnect(t, n1, n2ID)
-				test.Disconnect(t, n2, n1ID)
+				test.Disconnect(t, n1, n2)
 
 				// Expect new instances are still fully connected.
 				test.ExpectPeers(t, newN1, n2ID)
@@ -390,8 +389,7 @@ func TestNodes_Deployment(t *testing.T) {
 				test.ExpectPeers(t, newN2, n1ID)
 
 				// Deploy ending; old instances disconnect from connected peers.
-				test.Disconnect(t, n1, n2ID)
-				test.Disconnect(t, n2, n1ID)
+				test.Disconnect(t, n1, n2)
 
 				// Expect new instances are still fully connected.
 				test.ExpectPeers(t, newN1, n2ID)
@@ -413,8 +411,7 @@ func TestNodes_Deployment(t *testing.T) {
 				test.ExpectPeers(t, newN2, n1ID)
 
 				// Deploy ending; old instances disconnect from connected peers.
-				test.Disconnect(t, n1, n2ID)
-				test.Disconnect(t, n2, n1ID)
+				test.Disconnect(t, n1, n2)
 
 				// Expect new instances are fully disconnected.
 				test.ExpectNoPeers(t, newN1)

@@ -42,9 +42,14 @@ func ConnectWithAddr(t *testing.T, n *wakunode.WakuNode, addr string) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-func Disconnect(t *testing.T, n1 *wakunode.WakuNode, peerID peer.ID) {
-	err := n1.ClosePeerById(peerID)
+func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
+	err := n1.ClosePeerById(n2.Host().ID())
 	require.NoError(t, err)
+	n1.Host().Peerstore().RemovePeer(n2.Host().ID())
+
+	err = n2.ClosePeerById(n1.Host().ID())
+	require.NoError(t, err)
+	n2.Host().Peerstore().RemovePeer(n1.Host().ID())
 }
 
 func NewTopic() string {
