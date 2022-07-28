@@ -372,13 +372,13 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	var prvKey *ecdsa.PrivateKey
 	var err error
 	if options.NodeKey != "" {
-		if prvKey, err = crypto.HexToECDSA(options.NodeKey); err != nil {
+		if prvKey, err = hexToECDSA(options.NodeKey); err != nil {
 			return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 		}
 	} else {
 		keyString := os.Getenv("GOWAKU-NODEKEY")
 		if keyString != "" {
-			if prvKey, err = crypto.HexToECDSA(keyString); err != nil {
+			if prvKey, err = hexToECDSA(keyString); err != nil {
 				return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 			}
 		} else {
@@ -447,4 +447,14 @@ func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
 		failOnErr(err, "timeout waiting for DB")
 	}
 	return db
+}
+
+func hexToECDSA(key string) (*ecdsa.PrivateKey, error) {
+	if len(key) == 60 {
+		key = "0000" + key
+	}
+	if len(key) == 62 {
+		key = "00" + key
+	}
+	return crypto.HexToECDSA(key)
 }
