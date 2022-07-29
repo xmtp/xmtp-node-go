@@ -87,7 +87,11 @@ func testPublishSubscribeQuery(t *testing.T) {
 	// Create a client node for each bootstrap node, and connect to it.
 	clients := make([]*wakunode.WakuNode, len(bootstrapAddrs))
 	for i, addr := range bootstrapAddrs {
-		c, cleanup := test.NewNode(t, nil)
+		// Specify libp2p options here to avoid using the waku-default that
+		// enables the NAT service, which currently creates peerstores without
+		// cleaning them up, and so leaks memory over time when creating many
+		// in-process.
+		c, cleanup := test.NewNode(t, nil, wakunode.WithLibP2POptions())
 		defer cleanup()
 		test.ConnectWithAddr(t, c, addr)
 		clients[i] = c
