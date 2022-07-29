@@ -82,7 +82,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		metrics.RegisterViews(server.logger)
-		go tracing.Do(server.ctx, "metrics server", func(_ context.Context) { server.metricsServer.Start() })
+		go tracing.PanicWrap(server.ctx, "metrics server", func(_ context.Context) { server.metricsServer.Start() })
 	}
 
 	if options.Authz.DbConnectionString != "" {
@@ -147,7 +147,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	failOnErr(err, "Wakunode")
 
 	if options.Metrics.Enable {
-		tracing.GoDo(server.ctx, &server.wg, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
+		tracing.GoPanicWrap(server.ctx, &server.wg, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
 	}
 
 	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
@@ -175,7 +175,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 		}
 	}
 
-	tracing.GoDo(server.ctx, &server.wg, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
+	tracing.GoPanicWrap(server.ctx, &server.wg, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
 
 	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
 	failOnErr(err, "getting listen addresses")
@@ -213,7 +213,7 @@ func (server *Server) Shutdown() {
 	// Cancel any outstanding goroutines
 	server.cancel()
 	server.wg.Wait()
-	server.logger.Info("shutdown complete, exiting")
+	server.logger.Info("shutdown complete")
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
@@ -372,13 +372,13 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	var prvKey *ecdsa.PrivateKey
 	var err error
 	if options.NodeKey != "" {
-		if prvKey, err = crypto.HexToECDSA(options.NodeKey); err != nil {
+		if prvKey, err = hexToECDSA(options.NodeKey); err != nil {
 			return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 		}
 	} else {
 		keyString := os.Getenv("GOWAKU-NODEKEY")
 		if keyString != "" {
-			if prvKey, err = crypto.HexToECDSA(keyString); err != nil {
+			if prvKey, err = hexToECDSA(keyString); err != nil {
 				return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 			}
 		} else {
@@ -447,4 +447,14 @@ func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
 		failOnErr(err, "timeout waiting for DB")
 	}
 	return db
+}
+
+func hexToECDSA(key string) (*ecdsa.PrivateKey, error) {
+	if len(key) == 60 {
+		key = "0000" + key
+	}
+	if len(key) == 62 {
+		key = "00" + key
+	}
+	return crypto.HexToECDSA(key)
 }

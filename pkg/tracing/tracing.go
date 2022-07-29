@@ -4,18 +4,25 @@ package tracing
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
+// reimport relevant bits of the tracer API
 var (
-	// reimport relevant bits of the tracer API
 	StartSpanFromContext = tracer.StartSpanFromContext
+	StartSpan            = tracer.StartSpan
+	ChildOf              = tracer.ChildOf
 	WithError            = tracer.WithError
+	ContextWithSpan      = tracer.ContextWithSpan
 )
+
+type Span = tracer.Span
 
 type logger struct{ *zap.Logger }
 
@@ -25,8 +32,13 @@ func (l logger) Log(msg string) {
 
 // Start boots the datadog tracer, run this once early in the startup sequence.
 func Start(version string, l *zap.Logger) {
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "test"
+	}
 	tracer.Start(
-		tracer.WithService("xmtp-node"),
+		tracer.WithEnv(env),
+		tracer.WithService("xmtpd"),
 		tracer.WithServiceVersion(version),
 		tracer.WithLogger(logger{l}),
 		tracer.WithRuntimeMetrics(),
@@ -38,34 +50,37 @@ func Stop() {
 	tracer.Stop()
 }
 
-// Do executes action in the context of a top level span,
-// tagging the span with the error if the action panics.
+// Wrap executes action in the context of a span.
+// Tags the span with the error if action returns one.
+func Wrap(ctx context.Context, operation string, action func(context.Context, Span) error) error {
+	span, ctx := tracer.StartSpanFromContext(ctx, operation)
+	defer span.Finish()
+	log := logging.From(ctx).With(zap.String("span", operation))
+	ctx = logging.With(ctx, Link(span, log))
+	err := action(ctx, span)
+	if err != nil {
+		span.Finish(WithError(err))
+	}
+	return err
+}
+
+// PanicWrap executes the body guarding for panics.
+// If panic happens it emits a span with the error attached.
 // This should trigger DD APM's Error Tracking to record the error.
-func Do(ctx context.Context, spanName string, action func(context.Context)) {
-	span := tracer.StartSpan(spanName)
-	ctx = tracer.ContextWithSpan(ctx, span)
-	log := logging.From(ctx).With(zap.String("span", spanName))
-	log = Link(span, log)
-	log.Info("started span")
+func PanicWrap(ctx context.Context, name string, body func(context.Context)) {
 	defer func() {
 		r := recover()
-		switch r := r.(type) {
-		case error:
-			// If action panics with an error,
-			// finish the span with the error.
-			span.Finish(WithError(r))
-		default:
-			// This is the normal non-panicking path
-			// as well as path with panics that don't have an error.
-			span.Finish()
+		if err, ok := r.(error); ok {
+			StartSpan("panic: " + name).Finish(
+				WithError(err),
+			)
 		}
-		log.Info("finished span")
 		if r != nil {
 			// Repanic so that we don't suppress normal panic behavior.
 			panic(r)
 		}
 	}()
-	action(ctx)
+	body(ctx)
 }
 
 // Link connects a logger to a particular trace and span.
@@ -76,12 +91,25 @@ func Link(span tracer.Span, l *zap.Logger) *zap.Logger {
 		zap.Uint64("dd.span_id", span.Context().SpanID()))
 }
 
-// Run the action in a goroutine, synchronize the goroutine exit with the WaitGroup,
-// The action must respect cancellation of the Context.
-func GoDo(ctx context.Context, wg *sync.WaitGroup, spanName string, action func(context.Context)) {
+func SpanType(span Span, typ string) {
+	span.SetTag(ext.SpanType, typ)
+}
+
+func SpanResource(span Span, resource string) {
+	span.SetTag(ext.ResourceName, resource)
+}
+
+func SpanTag(span Span, key string, value interface{}) {
+	span.SetTag(key, value)
+}
+
+// GoPanicWrap extends PanicWrap by running the body in a goroutine and
+// synchronizing the goroutine exit with the WaitGroup.
+// The body must respect cancellation of the Context.
+func GoPanicWrap(ctx context.Context, wg *sync.WaitGroup, name string, body func(context.Context)) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		Do(ctx, spanName, action)
+		PanicWrap(ctx, name, body)
 	}()
 }

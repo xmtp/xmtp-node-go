@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -53,8 +54,8 @@ func SubscribeExpect(t *testing.T, envC chan *protocol.Envelope, msgs []*pb.Waku
 
 func SubscribeExpectNone(t *testing.T, envC chan *protocol.Envelope) {
 	select {
-	case <-envC:
-		require.FailNow(t, "expected no message")
+	case env := <-envC:
+		require.FailNow(t, fmt.Sprintf("expected no message, got: %v", env.Message()))
 	case <-time.After(100 * time.Millisecond):
 	}
 }
