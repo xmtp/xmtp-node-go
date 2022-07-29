@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
+	leveldb "github.com/ipfs/go-ds-leveldb"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -211,9 +212,12 @@ func expectQueryMessagesEventually(t *testing.T, n *wakunode.WakuNode, peerAddr 
 }
 
 func newPeerstore(t *testing.T) (peerstore.Peerstore, func()) {
-	ps, err := pstoremem.NewPeerstore()
+	store, err := leveldb.NewDatastore("", nil)
+	require.NoError(t, err)
+	ps, err := pstoreds.NewPeerstore(context.Background(), store, pstoreds.DefaultOpts())
 	require.NoError(t, err)
 	return ps, func() {
 		ps.Close()
+		store.Close()
 	}
 }
