@@ -5,4 +5,4 @@ export XMTPD_E2E_ENV="$1"
 export E2E="yes"
 
 go clean -testcache
-go test ./pkg/e2e/... -v
+go test -timeout=0 ./pkg/e2e/... -v
