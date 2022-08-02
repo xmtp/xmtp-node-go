@@ -11,6 +11,7 @@ import (
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
 var Commit string
@@ -92,6 +93,36 @@ func main() {
 			tracing.Stop()
 		}()
 	}
+
+	if options.Profiling.Enable {
+		env := os.Getenv("ENV")
+		if env == "" {
+			env = "test"
+		}
+		ptypes := []profiler.ProfileType{
+			profiler.CPUProfile,
+			profiler.HeapProfile,
+		}
+		if options.Profiling.Block {
+			ptypes = append(ptypes, profiler.BlockProfile)
+		}
+		if options.Profiling.Mutex {
+			ptypes = append(ptypes, profiler.MutexProfile)
+		}
+		if options.Profiling.Goroutine {
+			ptypes = append(ptypes, profiler.GoroutineProfile)
+		}
+		if err := profiler.Start(
+			profiler.WithService("xmtpd"),
+			profiler.WithEnv(env),
+			profiler.WithVersion(Commit),
+			profiler.WithProfileTypes(ptypes...),
+		); err != nil {
+			log.Fatalf("Could not start profiler: %s", err)
+		}
+		defer profiler.Stop()
+	}
+
 	tracing.PanicWrap(context.Background(), "main", func(ctx context.Context) {
 		server.New(ctx, options).WaitForShutdown()
 	})

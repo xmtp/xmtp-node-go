@@ -55,11 +55,19 @@ type MetricsOptions struct {
 	StatusPeriod time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 }
 
-// TracingOptions are settings controlling collection of profiling traces and error tracking.
+// TracingOptions are settings controlling collection of DD APM traces and error tracking.
 type TracingOptions struct {
-	Enable bool `long:"tracing" description:"Enable trace collection"`
+	Enable bool `long:"tracing" description:"Enable DD APM trace collection"`
 }
 
+// ProfilingOptions enable DD APM Profiling.
+type ProfilingOptions struct {
+	Enable bool `long:"enable" description:"Enable CPU and Heap profiling"`
+	// Following options have more overhead
+	Block     bool `long:"block" description:"Enable block profiling"`
+	Mutex     bool `long:"mutex" description:"Enable mutex profiling"`
+	Goroutine bool `long:"goroutine" description:"Enable goroutine profiling"`
+}
 type AuthzOptions struct {
 	DbConnectionString string `long:"authz-db-connection-string" description:"Connection string for the authz DB"`
 }
@@ -94,5 +102,6 @@ type Options struct {
 	Filter    FilterOptions    `group:"Filter Options"`
 	LightPush LightpushOptions `group:"LightPush Options"`
 	Metrics   MetricsOptions   `group:"Metrics Options"`
-	Tracing   TracingOptions   `group:"Tracing Options"`
+	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
+	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
 }
