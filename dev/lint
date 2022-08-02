@@ -9,6 +9,6 @@ if [[ $(gofmt -l .) ]]; then
     echo "gofmt errors, run 'gofmt -w .' and commit"
 fi 
 
-golangci-lint --exclude=SA1019 run ./... --deadline=5m
+golangci-lint --config dev/.golangci.yaml run ./... --deadline=5m
 
 protolint .

@@ -95,6 +95,7 @@ func (s *MemoryPeerIdStore) purgeLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			s.log.Info("Stopping purge loop")
+			return
 		case <-ticker.C:
 			s.purgeExpired()
 		}

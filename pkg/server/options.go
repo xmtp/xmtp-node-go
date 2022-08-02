@@ -1,11 +1,15 @@
 package server
 
-import "time"
+import (
+	"time"
+
+	"github.com/xmtp/xmtp-node-go/pkg/api"
+)
 
 type RelayOptions struct {
 	Disable                bool     `long:"no-relay" description:"Disable relay protocol"`
 	Topics                 []string `long:"topics" description:"List of topics to listen"`
-	MinRelayPeersToPublish int      `long:"min-relay-peers-to-publish" description:"Minimum number of peers to publish to Relay" default:"1"`
+	MinRelayPeersToPublish int      `long:"min-relay-peers-to-publish" description:"Minimum number of peers to publish to Relay" default:"0"`
 }
 
 type FilterOptions struct {
@@ -83,6 +87,7 @@ type Options struct {
 	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 
+	API       api.Options      `group:"API Options" namespace:"api"`
 	Authz     AuthzOptions     `group:"Authz Options"`
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     StoreOptions     `group:"Store Options"`

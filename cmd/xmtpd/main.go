@@ -17,8 +17,6 @@ var Commit string
 
 var options server.Options
 
-var parser = flags.NewParser(&options, flags.Default)
-
 // Avoiding replacing the flag parser with something fancier like Viper or urfave/cli
 // This hack will work up to a point.
 func addEnvVars() {
@@ -32,8 +30,11 @@ func addEnvVars() {
 }
 
 func main() {
-	if _, err := parser.Parse(); err != nil {
-		log.Fatalf("Could not parse options: %s", err)
+	if _, err := flags.Parse(&options); err != nil {
+		if err, ok := err.(*flags.Error); !ok || err.Type != flags.ErrHelp {
+			log.Fatalf("Could not parse options: %s", err)
+		}
+		return
 	}
 
 	addEnvVars()
