@@ -182,7 +182,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 
 	// Initialize gRPC server.
 	server.grpc, err = api.New(
-		&api.Parameters{
+		&api.Config{
 			Options: options.API,
 			Log:     server.logger,
 			Waku:    server.wakuNode,

@@ -24,7 +24,7 @@ import (
 )
 
 type Server struct {
-	*Parameters
+	*Config
 
 	grpcListener net.Listener
 	httpListener net.Listener
@@ -35,13 +35,13 @@ type Server struct {
 	ctx          context.Context
 }
 
-func New(config *Parameters) (*Server, error) {
+func New(config *Config) (*Server, error) {
 	if err := config.check(); err != nil {
 		return nil, err
 	}
 
 	s := &Server{
-		Parameters: config,
+		Config: config,
 	}
 
 	// Initialize TLS.

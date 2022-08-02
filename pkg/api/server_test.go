@@ -162,7 +162,7 @@ func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
 
 func newTestServer(t *testing.T) (*Server, func()) {
 	waku, wakuCleanup := newTestNode(t, nil)
-	s, err := New(&Parameters{
+	s, err := New(&Config{
 		Options: Options{
 			GRPCAddress: "localhost",
 			GRPCPort:    0,

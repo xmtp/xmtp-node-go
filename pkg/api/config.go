@@ -21,13 +21,13 @@ type Options struct {
 	HTTPPort    uint   `long:"http-port" description:"API HTTP listening port" default:"5555"`
 }
 
-type Parameters struct {
+type Config struct {
 	Options
 	Waku *wakunode.WakuNode
 	Log  *zap.Logger
 }
 
-func (params *Parameters) check() error {
+func (params *Config) check() error {
 	if params.Log == nil {
 		return ErrMissingLog
 	}
