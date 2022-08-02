@@ -163,7 +163,7 @@ func (s *Server) Close() {
 		}
 	}
 
-	(&s.wg).Wait()
+	s.wg.Wait()
 	s.Log.Info("closed")
 }
 
