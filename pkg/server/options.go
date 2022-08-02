@@ -51,7 +51,7 @@ type MetricsOptions struct {
 	StatusPeriod time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 }
 
-// TracingOptions are settings controlling collection of DD APM profiling traces and error tracking.
+// TracingOptions are settings controlling collection of DD APM traces and error tracking.
 type TracingOptions struct {
 	Enable bool `long:"tracing" description:"Enable DD APM trace collection"`
 }
