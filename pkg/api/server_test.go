@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -223,16 +222,12 @@ func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStor
 }
 
 func httpClient(t *testing.T) *http.Client {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
+	transport := &http.Transport{}
 	return &http.Client{Transport: transport}
 }
 
 func httpURL(t *testing.T, server *Server, path string) string {
-	prefix := "https://" + server.httpListener.Addr().String()
+	prefix := "http://" + server.httpListener.Addr().String()
 	return prefix + path
 }
 
