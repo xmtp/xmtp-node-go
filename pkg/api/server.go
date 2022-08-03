@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,8 +26,6 @@ type Server struct {
 
 	grpcListener net.Listener
 	httpListener net.Listener
-	cert         *tls.Certificate
-	certPool     *x509.CertPool
 	messagev1    *messagev1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
