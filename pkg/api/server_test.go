@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"testing"
 	"time"
 
@@ -58,14 +59,8 @@ func TestGRPCServer_HTTP(t *testing.T) {
 			TimestampNs:  uint64(i * 1000000000), // i seconds
 		})
 	}
-	for _, env := range envs {
-		publishRes := httpPublish(t, server, &messageV1.PublishRequest{
-			ContentTopic: env.ContentTopic,
-			Message:      env.Message,
-			TimestampNs:  env.TimestampNs,
-		})
-		expectProtoEqual(t, &messageV1.PublishResponse{}, publishRes)
-	}
+	publishRes := httpPublish(t, server, &messageV1.PublishRequest{Envelopes: envs})
+	expectProtoEqual(t, &messageV1.PublishResponse{}, publishRes)
 
 	// Expect messages from subscribed topics.
 	subscribeExpect(t, envC, envs)
@@ -84,7 +79,7 @@ func TestGRPCServer_HTTP(t *testing.T) {
 	require.NotNil(t, queryRes)
 	require.Len(t, queryRes.Envelopes, len(envs))
 	for i, env := range queryRes.Envelopes {
-		messageEqual(t, envs[i], env)
+		requireEnvelopesEqual(t, envs[i], env)
 	}
 }
 
@@ -128,15 +123,9 @@ func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
 			TimestampNs:  uint64(i * 1000000000), // i seconds
 		})
 	}
-	for _, env := range envs {
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{
-			ContentTopic: env.ContentTopic,
-			Message:      env.Message,
-			TimestampNs:  env.TimestampNs,
-		})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
-	}
+	publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+	require.NoError(t, err)
+	require.NotNil(t, publishRes)
 	// Expect messages from subscribed topics.
 	subscribeExpect(t, envC, envs)
 
@@ -158,7 +147,7 @@ func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
 	require.NotNil(t, queryRes)
 	require.Len(t, queryRes.Envelopes, len(envs))
 	for i, env := range queryRes.Envelopes {
-		messageEqual(t, envs[i], env)
+		requireEnvelopesEqual(t, envs[i], env)
 	}
 
 	// Query for messages on a different topic.
@@ -328,6 +317,7 @@ func expectProtoEqual(t *testing.T, a, b proto.Message) {
 func subscribeExpect(t *testing.T, envC chan *messageV1.Envelope, expected []*messageV1.Envelope) {
 	received := []*messageV1.Envelope{}
 	var done bool
+	timer := time.After(3 * time.Second)
 	for !done {
 		select {
 		case env := <-envC:
@@ -335,25 +325,32 @@ func subscribeExpect(t *testing.T, envC chan *messageV1.Envelope, expected []*me
 			if len(received) == len(expected) {
 				done = true
 			}
-		case <-time.After(3 * time.Second):
+		case <-timer:
 			done = true
 		}
 	}
 	require.Equal(t, len(expected), len(received))
+	sortEnvelopes(received)
 	for i, env := range received {
-		messageEqual(t, expected[i], env)
+		requireEnvelopesEqual(t, expected[i], env, "mismatched message[%d]", i)
 	}
 }
 
-func messageEqual(t *testing.T, expected, actual *messageV1.Envelope) {
-	if expected.Id != "" {
-		require.Equal(t, expected.Id, actual.Id)
-	}
+func requireEnvelopesEqual(t *testing.T, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
 	if expected.TimestampNs != 0 {
-		require.Equal(t, expected.TimestampNs, actual.TimestampNs)
+		require.Equal(t, expected.TimestampNs, actual.TimestampNs, msgAndArgs...)
 	}
-	require.Equal(t, expected.ContentTopic, actual.ContentTopic)
-	require.Equal(t, expected.Message, actual.Message)
+	require.Equal(t, expected.ContentTopic, actual.ContentTopic, msgAndArgs...)
+	require.Equal(t, expected.Message, actual.Message, msgAndArgs...)
+}
+
+func sortEnvelopes(envelopes []*messageV1.Envelope) {
+	sort.SliceStable(envelopes, func(i, j int) bool {
+		a, b := envelopes[i], envelopes[j]
+		return a.ContentTopic < b.ContentTopic ||
+			a.ContentTopic == b.ContentTopic && a.TimestampNs < b.TimestampNs ||
+			a.ContentTopic == b.ContentTopic && a.TimestampNs == b.TimestampNs && bytes.Compare(a.Message, b.Message) < 0
+	})
 }
 
 func isEOF(err error) bool {

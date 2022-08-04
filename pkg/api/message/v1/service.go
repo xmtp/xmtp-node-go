@@ -74,19 +74,20 @@ func (s *Service) Close() {
 }
 
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
-	log := s.log.Named("publish").With(zap.String("content_topic", req.ContentTopic))
-	log.Info("started")
+	for _, env := range req.Envelopes {
+		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
+		log.Info("started")
 
-	wakuMsg := &wakupb.WakuMessage{
-		ContentTopic: req.ContentTopic,
-		Timestamp:    toWakuTimestamp(req.TimestampNs),
-		Payload:      req.Message,
+		wakuMsg := &wakupb.WakuMessage{
+			ContentTopic: env.ContentTopic,
+			Timestamp:    toWakuTimestamp(env.TimestampNs),
+			Payload:      env.Message,
+		}
+		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
 	}
-	_, err := s.waku.Relay().Publish(ctx, wakuMsg)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
-	}
-
 	return &proto.PublishResponse{}, nil
 }
 

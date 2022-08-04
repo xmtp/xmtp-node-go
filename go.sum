@@ -1966,6 +1966,8 @@ github.com/xmtp/go-waku v0.0.0-20220729151618-2904a4df4c29 h1:ZaVeVH0JOsl9k9G7LQ
 github.com/xmtp/go-waku v0.0.0-20220729151618-2904a4df4c29/go.mod h1:z498Zyc/u6sNiFQFuRLtYVQMUQurezgH36xBpE8ei6Q=
 github.com/xmtp/proto v1.0.0 h1:PPAWkbOr5M25RMxSIKdiHp27LQblAucS1s7vyAV7WbM=
 github.com/xmtp/proto v1.0.0/go.mod h1:p7WayY3MuWbU2CUVURGhozfp/KF1Zv17pxMcO8teBBc=
+github.com/xmtp/proto v1.0.1 h1:Ir+8wNApN3bc9lQTu9ea4wbaUNMigWRi7N2+aZO6MK8=
+github.com/xmtp/proto v1.0.1/go.mod h1:p7WayY3MuWbU2CUVURGhozfp/KF1Zv17pxMcO8teBBc=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/yoheimuta/go-protoparser/v4 v4.6.0 h1:uvz1e9/5Ihsm4Ku8AJeDImTpirKmIxubZdSn0QJNdnw=
 github.com/yoheimuta/go-protoparser/v4 v4.6.0/go.mod h1:AHNNnSWnb0UoL4QgHPiOAg2BniQceFscPI5X/BZNHl8=
