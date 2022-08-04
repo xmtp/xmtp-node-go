@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,7 +16,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 )
@@ -28,8 +26,6 @@ type Server struct {
 
 	grpcListener net.Listener
 	httpListener net.Listener
-	cert         *tls.Certificate
-	certPool     *x509.CertPool
 	messagev1    *messagev1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
@@ -44,17 +40,10 @@ func New(config *Config) (*Server, error) {
 		Config: config,
 	}
 
-	// Initialize TLS.
-	var err error
-	s.cert, s.certPool, err = generateCert()
-	if err != nil {
-		return nil, errors.Wrap(err, "generating tls")
-	}
-
 	s.ctx = context.Background()
 
 	// Start gRPC services.
-	err = s.startGRPC()
+	err := s.startGRPC()
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +66,7 @@ func (s *Server) startGRPC() error {
 	}
 
 	grpcServer := grpc.NewServer(
-		grpc.Creds(credentials.NewServerTLSFromCert(s.cert)),
+		grpc.Creds(insecure.NewCredentials()),
 		grpc.UnaryInterceptor(grpcvalidator.UnaryServerInterceptor()),
 		grpc.StreamInterceptor(grpcvalidator.StreamServerInterceptor()),
 	)
@@ -125,16 +114,13 @@ func (s *Server) startHTTP() error {
 	}
 
 	server := http.Server{
-		Addr: addr,
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{*s.cert},
-		},
+		Addr:    addr,
 		Handler: allowCORS(mux),
 	}
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "http", func(ctx context.Context) {
 		s.Log.Info("serving http", zap.String("address", s.httpListener.Addr().String()))
-		err = server.ServeTLS(s.httpListener, "", "")
+		err = server.Serve(s.httpListener)
 		if err != nil && err != http.ErrServerClosed && !isErrUseOfClosedConnection(err) {
 			s.Log.Error("serving http", zap.Error(err))
 		}
@@ -173,8 +159,7 @@ func (s *Server) dialGRPC(ctx context.Context) (*grpc.ClientConn, error) {
 	return grpc.DialContext(
 		ctx,
 		dialAddr,
-		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(s.certPool, "")),
-		// grpc.WithBlock(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 }
 
