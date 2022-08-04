@@ -79,7 +79,7 @@ func TestGRPCServer_HTTP(t *testing.T) {
 	require.NotNil(t, queryRes)
 	require.Len(t, queryRes.Envelopes, len(envs))
 	for i, env := range queryRes.Envelopes {
-		messageEqual(t, envs[i], env)
+		requireEnvelopesEqual(t, envs[i], env)
 	}
 }
 
@@ -147,7 +147,7 @@ func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
 	require.NotNil(t, queryRes)
 	require.Len(t, queryRes.Envelopes, len(envs))
 	for i, env := range queryRes.Envelopes {
-		messageEqual(t, envs[i], env)
+		requireEnvelopesEqual(t, envs[i], env)
 	}
 
 	// Query for messages on a different topic.
@@ -332,11 +332,11 @@ func subscribeExpect(t *testing.T, envC chan *messageV1.Envelope, expected []*me
 	require.Equal(t, len(expected), len(received))
 	sortEnvelopes(received)
 	for i, env := range received {
-		messageEqual(t, expected[i], env, "mismatched message[%d]", i)
+		requireEnvelopesEqual(t, expected[i], env, "mismatched message[%d]", i)
 	}
 }
 
-func messageEqual(t *testing.T, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
+func requireEnvelopesEqual(t *testing.T, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
 	if expected.TimestampNs != 0 {
 		require.Equal(t, expected.TimestampNs, actual.TimestampNs, msgAndArgs...)
 	}
