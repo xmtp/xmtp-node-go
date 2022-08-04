@@ -177,11 +177,12 @@ func buildPagingInfo(pi *wakupb.PagingInfo) *proto.PagingInfo {
 		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_ASCENDING
 	}
 	if index := pi.Cursor; index != nil {
-		pagingInfo.Cursor.Cursor = &proto.Cursor_Index{
-			Index: &proto.IndexCursor{
-				Digest:       index.Digest,
-				SenderTimeNs: uint64(index.SenderTime),
-			}}
+		pagingInfo.Cursor = &proto.Cursor{
+			Cursor: &proto.Cursor_Index{
+				Index: &proto.IndexCursor{
+					Digest:       index.Digest,
+					SenderTimeNs: uint64(index.SenderTime),
+				}}}
 	}
 	return &pagingInfo
 }

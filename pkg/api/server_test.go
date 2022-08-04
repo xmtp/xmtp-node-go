@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -48,38 +49,43 @@ func TestGRPCServer_HTTP(t *testing.T) {
 	})
 	time.Sleep(50 * time.Millisecond)
 
-	// Publish messages.
-	publishRes := httpPublish(t, server, &messageV1.PublishRequest{
-		ContentTopic: "test",
-		Message:      []byte("msg"),
-	})
-	expectProtoEqual(t, &messageV1.PublishResponse{}, publishRes)
+	// Publish 10 messages.
+	var envs []*messageV1.Envelope
+	for i := 0; i < 10; i++ {
+		envs = append(envs, &messageV1.Envelope{
+			ContentTopic: "test",
+			Message:      []byte(fmt.Sprintf("msg %d", i)),
+			TimestampNs:  uint64(i * 1000000000), // i seconds
+		})
+	}
+	for _, env := range envs {
+		publishRes := httpPublish(t, server, &messageV1.PublishRequest{
+			ContentTopic: env.ContentTopic,
+			Message:      env.Message,
+			TimestampNs:  env.TimestampNs,
+		})
+		expectProtoEqual(t, &messageV1.PublishResponse{}, publishRes)
+	}
 
 	// Expect messages from subscribed topics.
-	subscribeExpect(t, envC, []*messageV1.Envelope{
-		{
-			ContentTopic: "test",
-			Message:      []byte("msg"),
-		},
-	})
+	subscribeExpect(t, envC, envs)
 
 	// Query for messages.
 	var queryRes *messageV1.QueryResponse
 	require.Eventually(t, func() bool {
 		queryRes = httpQuery(t, server, &messageV1.QueryRequest{
 			ContentTopics: []string{"test"},
+			PagingInfo: &messageV1.PagingInfo{
+				Limit:     uint32(len(envs)),
+				Direction: messageV1.SortDirection_SORT_DIRECTION_ASCENDING},
 		})
-		return len(queryRes.Envelopes) == 1
+		return len(queryRes.Envelopes) == len(envs)
 	}, 2*time.Second, 100*time.Millisecond)
 	require.NotNil(t, queryRes)
-	require.Len(t, queryRes.Envelopes, 1)
-	require.True(t, messageEqual(
-		&messageV1.Envelope{
-			ContentTopic: "test",
-			Message:      []byte("msg"),
-		},
-		queryRes.Envelopes[0],
-	))
+	require.Len(t, queryRes.Envelopes, len(envs))
+	for i, env := range queryRes.Envelopes {
+		messageEqual(t, envs[i], env)
+	}
 }
 
 func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
@@ -113,42 +119,47 @@ func TestGRPCServer_GRPC_PublishSubscribeQuery(t *testing.T) {
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	// Publish messages.
-	publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{
-		ContentTopic: "topic",
-		Message:      []byte("msg"),
-	})
-	require.NoError(t, err)
-	require.NotNil(t, publishRes)
-
-	// Expect messages from subscribed topics.
-	subscribeExpect(t, envC, []*messageV1.Envelope{
-		{
+	// Publish 10 messages.
+	var envs []*messageV1.Envelope
+	for i := 0; i < 10; i++ {
+		envs = append(envs, &messageV1.Envelope{
 			ContentTopic: "topic",
-			Message:      []byte("msg"),
-		},
-	})
+			Message:      []byte(fmt.Sprintf("msg %d", i)),
+			TimestampNs:  uint64(i * 1000000000), // i seconds
+		})
+	}
+	for _, env := range envs {
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{
+			ContentTopic: env.ContentTopic,
+			Message:      env.Message,
+			TimestampNs:  env.TimestampNs,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+	}
+	// Expect messages from subscribed topics.
+	subscribeExpect(t, envC, envs)
 
 	// Query for messages.
 	var queryRes *messageV1.QueryResponse
 	require.Eventually(t, func() bool {
 		queryRes, err = client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"topic"},
+			PagingInfo: &messageV1.PagingInfo{
+				Limit:     uint32(len(envs)),
+				Direction: messageV1.SortDirection_SORT_DIRECTION_ASCENDING},
 		})
 		if err != nil {
 			return false
 		}
-		return len(queryRes.Envelopes) == 1
+		return len(queryRes.Envelopes) == len(envs)
 	}, 2*time.Second, 100*time.Millisecond)
 	require.NoError(t, err)
 	require.NotNil(t, queryRes)
-	require.Len(t, queryRes.Envelopes, 1)
-	require.True(t, messageEqual(
-		&messageV1.Envelope{
-			ContentTopic: "topic",
-			Message:      []byte("msg"),
-		}, queryRes.Envelopes[0],
-	))
+	require.Len(t, queryRes.Envelopes, len(envs))
+	for i, env := range queryRes.Envelopes {
+		messageEqual(t, envs[i], env)
+	}
 
 	// Query for messages on a different topic.
 	queryRes, err = client.Query(ctx, &messageV1.QueryRequest{
@@ -330,15 +341,19 @@ func subscribeExpect(t *testing.T, envC chan *messageV1.Envelope, expected []*me
 	}
 	require.Equal(t, len(expected), len(received))
 	for i, env := range received {
-		require.True(t, messageEqual(expected[i], env))
+		messageEqual(t, expected[i], env)
 	}
 }
 
-func messageEqual(expected, actual *messageV1.Envelope) bool {
-	return (expected.Id == "" || expected.Id == actual.Id) &&
-		(expected.TimestampNs == 0 || expected.TimestampNs == actual.TimestampNs) &&
-		expected.ContentTopic == actual.ContentTopic &&
-		bytes.Equal(expected.Message, actual.Message)
+func messageEqual(t *testing.T, expected, actual *messageV1.Envelope) {
+	if expected.Id != "" {
+		require.Equal(t, expected.Id, actual.Id)
+	}
+	if expected.TimestampNs != 0 {
+		require.Equal(t, expected.TimestampNs, actual.TimestampNs)
+	}
+	require.Equal(t, expected.ContentTopic, actual.ContentTopic)
+	require.Equal(t, expected.Message, actual.Message)
 }
 
 func isEOF(err error) bool {
