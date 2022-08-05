@@ -14,4 +14,15 @@ jobs:
         with:
           go-version-file: go.mod
       - run: dev/docker/up
-      - run: dev/test
+      - name: Run Tests
+        run: |
+          export GOPATH="${HOME}/go/"
+          export PATH="${PATH}:${GOPATH}/bin"
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          go test ./... | go-junit-report -set-exit-code -iocopy -out report.xml
+      - uses: datadog/junit-upload-github-action@v1
+        with:
+            api-key: ${{ secrets.DD_API_KEY }}
+            service: xmtp-node-go
+            files: report.xml
+            env: ci
