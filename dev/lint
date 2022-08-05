@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-SCRIPTS=$(find dev -type file -not -path "dev/.golangci.yaml" -not -path "dev/docker/*" -not -path "dev/e2e/Dockerfile")
-# shellcheck disable=SC2086 # Intended splitting of SCRIPTS
-shellcheck $SCRIPTS
+dev/lint-shellcheck
 
 if [[ $(gofmt -l .) ]]; then
     echo "gofmt errors, run 'gofmt -w .' and commit"

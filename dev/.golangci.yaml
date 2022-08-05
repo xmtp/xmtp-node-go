@@ -1,5 +1,3 @@
-run:
-  go: "1.17"
 linters:
   # Disable all linters.
   Default: true

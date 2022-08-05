@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+PROJECT_GO_VERSION="$(grep "^go " go.mod | { read -r _ v; echo "${v}"; })"
+if ! which go &>/dev/null; then brew install "go@${PROJECT_GO_VERSION}"; fi
+
+GO_VERSION_FULL="$(go version | { read -r _ _ v _; echo "${v#go}"; })"
+GO_VERSION="${GO_VERSION_FULL%.*}"
+
+if [ "${GO_VERSION}" != "${PROJECT_GO_VERSION}" ]; then
+    brew uninstall go
+    brew install "go@${PROJECT_GO_VERSION}"
+fi
+
 go mod tidy
 
 if ! which chronic &>/dev/null; then brew install moreutils; fi

@@ -11,10 +11,14 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - name: shellcheck
+        run: |
+          sudo apt-get -y install tree
+          dev/lint-shellcheck
       - uses: actions/setup-go@v2
         with:
-          go-version: "1.17.8" # The Go version to download (if necessary) and use.
-      - uses: actions/checkout@v2
+          go-version-file: go.mod
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:

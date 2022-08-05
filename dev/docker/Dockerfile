@@ -1,5 +1,6 @@
 # BUILD IMAGE --------------------------------------------------------
-FROM golang:1.17-alpine as builder
+ARG GO_VERSION=unknown
+FROM golang:${GO_VERSION}-alpine as builder
 
 # Get build tools and required header files
 RUN apk add --no-cache build-base
