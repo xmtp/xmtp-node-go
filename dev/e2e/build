@@ -4,7 +4,7 @@ set -e
 DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-dev}"
 DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/xmtpd-e2e}"
 GIT_COMMIT="$(git rev-parse HEAD)"
-GO_VERSION="$(go list -f {{.GoVersion}} -m)"
+GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
 
 DOCKER_IMAGE_SHA=$(docker buildx build \
     --platform linux/amd64 \
