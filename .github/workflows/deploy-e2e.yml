@@ -17,12 +17,12 @@ jobs:
           username: xmtpeng
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - uses: actions/setup-go@v2
-        with:
-          go-version: "1.17.8" # The Go version to download (if necessary) and use.
-
       - name: Git Checkout
         uses: actions/checkout@v1
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version-file: go.mod
 
       - name: Docker Publish
         id: docker-publish

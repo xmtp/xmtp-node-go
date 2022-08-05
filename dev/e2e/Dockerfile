@@ -1,10 +1,10 @@
-FROM golang:1.17-alpine as builder
+FROM golang:1.18-alpine as builder
 RUN apk add --no-cache build-base
 WORKDIR /code
 COPY . .
 RUN go test ./pkg/e2e/... -c -o build/xmtpd-e2e
 
-FROM golang:1.17-alpine
+FROM golang:1.18-alpine
 ARG GIT_COMMIT=unknown
 LABEL commit=$GIT_COMMIT
 COPY --from=builder /code/build/xmtpd-e2e /usr/bin/
