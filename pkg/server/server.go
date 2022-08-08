@@ -202,8 +202,6 @@ func (server *Server) WaitForShutdown() {
 func (server *Server) Shutdown() {
 	server.logger.Info("shutting down...")
 
-	server.cancel()
-
 	// shut the node down
 	server.wakuNode.Stop()
 
@@ -225,8 +223,11 @@ func (server *Server) Shutdown() {
 		server.grpc.Close()
 	}
 
+	// Cancel outstanding goroutines
+	server.cancel()
 	server.wg.Wait()
 	server.logger.Info("shutdown complete")
+
 }
 
 func (server *Server) staticNodesConnectLoop(staticNodes []string) {
