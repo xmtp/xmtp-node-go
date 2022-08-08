@@ -42,7 +42,9 @@ func GRPCAndHTTPRun(t *testing.T, f func(*testing.T, client, *Server)) {
 
 // stream is an abstraction of the subscribe response stream
 type stream interface {
+	// Next returns io.EOF when the stream ends or is closed from either side.
 	Next() (*messageV1.Envelope, error)
+	// Closing the stream terminates the subscription.
 	Close() error
 }
 
@@ -111,7 +113,7 @@ func (c *grpcClient) Query(t *testing.T, q *messageV1.QueryRequest) *messageV1.Q
 
 // HTTP implementation of stream and client
 //
-// It seems the gateway causes a very different behavior wrt to Subscribe.
+// It seems the gateway causes very different behavior wrt to Subscribe.
 // The POST has to happen when the Subscribe is called for the subscription to materialize,
 // but the GW doesn't send the response headers until the first message is actually pushed through it.
 // That's why the silly dance between Subscribe and httpStream, offloading the POST into a goroutine
