@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
@@ -97,6 +98,7 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 		NodeKey: newNodeKey(t),
 		Address: "localhost",
 		Store: StoreOptions{
+			Enable:             true,
 			DbConnectionString: dbDSN,
 		},
 		StaticNodes: staticNodes,
@@ -106,6 +108,10 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 		API: api.Options{
 			HTTPPort: 0,
 			GRPCPort: 0,
+		},
+		Metrics: MetricsOptions{
+			Enable:       true,
+			StatusPeriod: 5 * time.Second,
 		},
 	})
 	require.NotNil(t, s)

@@ -42,6 +42,7 @@ const (
 
 type XmtpStore struct {
 	ctx         context.Context
+	cancel      func()
 	MsgC        chan *protocol.Envelope
 	wg          sync.WaitGroup
 	db          *sql.DB
@@ -97,11 +98,11 @@ func (s *XmtpStore) Start(ctx context.Context) {
 		return
 	}
 	s.started = true
-	s.ctx = ctx
+	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	tracing.GoPanicWrap(ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	tracing.GoPanicWrap(ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoPanicWrap(s.ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
+	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -116,6 +117,7 @@ func (s *XmtpStore) Stop() {
 		s.host.RemoveStreamHandler(store.StoreID_v20beta4)
 	}
 
+	s.cancel()
 	s.wg.Wait()
 	s.log.Info("stopped")
 }
