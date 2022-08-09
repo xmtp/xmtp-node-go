@@ -34,7 +34,7 @@ type Service struct {
 func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
 	s = &Service{
 		waku: node,
-		log:  logger.Named("message"),
+		log:  logger.Named("message/v1"),
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
@@ -76,7 +76,7 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Info("started")
+		log.Info("received message")
 
 		wakuMsg := &wakupb.WakuMessage{
 			ContentTopic: env.ContentTopic,
@@ -94,6 +94,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("started")
+	defer log.Info("stopped")
 
 	subC := s.dispatcher.Register(req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
@@ -101,7 +102,10 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	for {
 		select {
 		case <-stream.Context().Done():
-			log.Debug("stream closed")
+			log.Info("stream closed")
+			return nil
+		case <-s.ctx.Done():
+			log.Info("service closed")
 			return nil
 		case obj := <-subC:
 			env, ok := obj.(*proto.Envelope)
@@ -119,7 +123,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
-	log.Info("started")
+	log.Info("received request")
 
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
@@ -161,6 +165,8 @@ func buildWakuQuery(req *proto.QueryRequest) *wakupb.HistoryQuery {
 
 	return &wakupb.HistoryQuery{
 		ContentFilters: contentFilters,
+		StartTime:      toWakuTimestamp(req.StartTimeNs),
+		EndTime:        toWakuTimestamp(req.EndTimeNs),
 		PagingInfo:     buildWakuPagingInfo(req.PagingInfo),
 	}
 }
