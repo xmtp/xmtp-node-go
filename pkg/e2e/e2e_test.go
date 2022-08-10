@@ -91,9 +91,8 @@ func testPublishSubscribeQuery(t *testing.T) {
 	for i, addr := range bootstrapAddrs {
 		c, cleanup := test.NewNode(t, nil,
 			// Specify libp2p options here to avoid using the waku-default that
-			// enables the NAT service, which currently creates peerstores without
-			// cleaning them up, and so leaks memory over time when creating many
-			// in-process.
+			// enables the NAT service, which currently leaks goroutines over
+			// time when creating and destroying many in-process.
 			// https://github.com/libp2p/go-libp2p/blob/8de2efdb5cfb32daaec7fac71e977761b24be46d/config/config.go#L302
 			wakunode.WithLibP2POptions(),
 			wakunode.WithoutWakuRelay(),
