@@ -9,11 +9,7 @@ import (
 	"testing"
 	"time"
 
-	leveldb "github.com/ipfs/go-ds-leveldb"
-	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -90,19 +86,14 @@ func testPublishSubscribeQuery(t *testing.T) {
 	// Create a client node for each bootstrap node, and connect to it.
 	clients := make([]*wakunode.WakuNode, len(bootstrapAddrs))
 	for i, addr := range bootstrapAddrs {
-		ps, cleanup := newPeerstore(t)
-		defer cleanup()
-		// Specify libp2p options here to avoid using the waku-default that
-		// enables the NAT service, which currently creates peerstores without
-		// cleaning them up, and so leaks memory over time when creating many
-		// in-process.
-		// https://github.com/libp2p/go-libp2p/blob/8de2efdb5cfb32daaec7fac71e977761b24be46d/config/config.go#L302
-		c, cleanup := test.NewNode(t, nil, wakunode.WithLibP2POptions(
-			// Specify our own peerstore to avoid using the libp2p-default that
-			// doesn't get cleaned up, so that we can clean up ours when done.
-			// https://github.com/libp2p/go-libp2p/blob/8de2efdb5cfb32daaec7fac71e977761b24be46d/defaults.go#L49-L55
-			libp2p.Peerstore(ps),
-		))
+		c, cleanup := test.NewNode(t, nil,
+			// Specify libp2p options here to avoid using the waku-default that
+			// enables the NAT service, which currently leaks goroutines over
+			// time when creating and destroying many in-process.
+			// https://github.com/libp2p/go-libp2p/blob/8de2efdb5cfb32daaec7fac71e977761b24be46d/config/config.go#L302
+			wakunode.WithLibP2POptions(),
+			wakunode.WithoutWakuRelay(),
+		)
 		defer cleanup()
 		test.ConnectWithAddr(t, c, addr)
 		clients[i] = c
@@ -209,15 +200,4 @@ func expectQueryMessagesEventually(t *testing.T, n *wakunode.WakuNode, peerAddr 
 	}, 3*time.Second, 500*time.Millisecond)
 	require.ElementsMatch(t, expectedMsgs, msgs)
 	return msgs
-}
-
-func newPeerstore(t *testing.T) (peerstore.Peerstore, func()) {
-	store, err := leveldb.NewDatastore("", nil)
-	require.NoError(t, err)
-	ps, err := pstoreds.NewPeerstore(context.Background(), store, pstoreds.DefaultOpts())
-	require.NoError(t, err)
-	return ps, func() {
-		ps.Close()
-		store.Close()
-	}
 }
