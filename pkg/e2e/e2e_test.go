@@ -22,9 +22,14 @@ import (
 	_ "net/http/pprof"
 )
 
+const (
+	localNetworkEnv = "local"
+	localNodesURL   = "http://localhost:8000"
+)
+
 var (
 	envShouldRunE2ETestsContinuously = envVarBool("E2E_CONTINUOUS")
-	envNetworkEnv                    = envVar("XMTPD_E2E_ENV", "dev")
+	envNetworkEnv                    = envVar("XMTPD_E2E_ENV", localNetworkEnv)
 	envBootstrapAddrs                = envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS")
 	envNodesURL                      = envVar("XMTPD_E2E_NODES_URL", "https://nodes.xmtp.com")
 	envDelayBetweenRunsSeconds       = envVarInt("XMTPD_E2E_DELAY", 5)
@@ -36,6 +41,9 @@ func TestE2E(t *testing.T) {
 		go func() {
 			log.Println(http.ListenAndServe("localhost:6060", nil))
 		}()
+	}
+	if envNetworkEnv == localNetworkEnv {
+		envNodesURL = localNodesURL
 	}
 	withMetricsServer(t, ctx, func(t *testing.T) {
 		for {

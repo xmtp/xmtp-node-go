@@ -1,0 +1,92 @@
+services:
+  nodes:
+    image: nginx
+    ports:
+      - 8000:80
+    volumes:
+      - ./nodes:/usr/share/nginx/html
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: xmtp
+  node1:
+    build:
+      context: ../../../
+      dockerfile: dev/docker/Dockerfile
+      args:
+        - GO_VERSION=${GO_VERSION}
+    ports:
+      - 16001:6001
+    command:
+    - --store
+    - --metrics
+    - --metrics-address=0.0.0.0
+    - --ws
+    - --ws-port=6001
+    - --port=6000
+    - --lightpush
+    - --filter
+    - --log-encoding=json
+    - --wait-for-db=10s
+    - --static-node=/dns4/node2/tcp/6000/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
+    - --static-node=/dns4/node3/tcp/6000/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
+    environment:
+      ENV: dev
+      GOLOG_LOG_FMT: json
+      MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      GOWAKU-NODEKEY: 8a30dcb604b0b53627a5adc054dbf434b446628d4bd1eccc681d223f0550ce67
+  node2:
+    build:
+      context: ../../../
+      dockerfile: dev/docker/Dockerfile
+      args:
+        - GO_VERSION=${GO_VERSION}
+    ports:
+      - 26001:6001
+    command:
+    - --store
+    - --metrics
+    - --metrics-address=0.0.0.0
+    - --ws
+    - --ws-port=6001
+    - --port=6000
+    - --lightpush
+    - --filter
+    - --log-encoding=json
+    - --wait-for-db=10s
+    - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
+    - --static-node=/dns4/node3/tcp/6000/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
+    environment:
+      ENV: dev
+      GOLOG_LOG_FMT: json
+      MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      GOWAKU-NODEKEY: 5757057f3daac3fa80e43a06d24edf15fcaba11eb16ede5fd53b78ba68ef1436
+  node3:
+    build:
+      context: ../../../
+      dockerfile: dev/docker/Dockerfile
+      args:
+        - GO_VERSION=${GO_VERSION}
+    ports:
+      - 36001:6001
+    command:
+    - --store
+    - --metrics
+    - --metrics-address=0.0.0.0
+    - --ws
+    - --ws-port=6001
+    - --port=6000
+    - --lightpush
+    - --filter
+    - --log-encoding=json
+    - --wait-for-db=10s
+    - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
+    - --static-node=/dns4/node2/tcp/6000/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
+    environment:
+      ENV: dev
+      GOLOG_LOG_FMT: json
+      MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      GOWAKU-NODEKEY: f643b771ad9e1bc9519d4dc754370c4ff32dd7a9f76f6026b5a6448289212fd7
