@@ -15,7 +15,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/jarcoal/httpmock v1.2.0
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/libp2p/go-libp2p v0.20.3
+	github.com/libp2p/go-libp2p v0.20.2
 	github.com/libp2p/go-libp2p-core v0.16.1
 	github.com/libp2p/go-libp2p-pubsub v0.6.1
 	github.com/libp2p/go-msgio v0.2.0
