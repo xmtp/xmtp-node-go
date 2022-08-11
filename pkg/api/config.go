@@ -6,6 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
+	"github.com/xmtp/xmtp-node-go/pkg/authn"
+	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"go.uber.org/zap"
 )
 
@@ -15,16 +17,18 @@ var (
 )
 
 type Options struct {
-	GRPCAddress string `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
-	GRPCPort    uint   `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
-	HTTPAddress string `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
-	HTTPPort    uint   `long:"http-port" description:"API HTTP listening port" default:"5555"`
+	GRPCAddress string        `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
+	GRPCPort    uint          `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
+	HTTPAddress string        `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
+	HTTPPort    uint          `long:"http-port" description:"API HTTP listening port" default:"5555"`
+	Authn       authn.Options `group:"API Authentication Options" namespace:"authn"`
 }
 
 type Config struct {
 	Options
-	Waku *wakunode.WakuNode
-	Log  *zap.Logger
+	Authorizer authz.WalletAllowLister
+	Waku       *wakunode.WakuNode
+	Log        *zap.Logger
 }
 
 func (params *Config) check() error {

@@ -7,7 +7,6 @@ require (
 	github.com/ethereum/go-ethereum v1.10.18
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.0
 	github.com/hashicorp/go-tfe v1.2.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
@@ -27,8 +26,7 @@ require (
 	github.com/uptrace/bun v1.1.3
 	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
-	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
-	github.com/xmtp/proto v1.0.1
+	github.com/xmtp/proto v1.2.0
 	github.com/yoheimuta/protolint v0.38.2
 	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.21.0

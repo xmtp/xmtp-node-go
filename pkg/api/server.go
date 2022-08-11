@@ -8,10 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	grpcvalidator "github.com/grpc-ecosystem/go-grpc-middleware/validator"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
 	proto "github.com/xmtp/proto/go/message_api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/authn"
+	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ type Server struct {
 	grpcListener net.Listener
 	httpListener net.Listener
 	messagev1    *messagev1.Service
+	authorizer   *authn.WalletAuthorizer
 	wg           sync.WaitGroup
 	ctx          context.Context
 }
@@ -65,11 +67,20 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating grpc listener")
 	}
 
-	grpcServer := grpc.NewServer(
-		grpc.Creds(insecure.NewCredentials()),
-		grpc.UnaryInterceptor(grpcvalidator.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(grpcvalidator.StreamServerInterceptor()),
-	)
+	options := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials())}
+	if s.Config.Authn.Enable {
+		s.authorizer = authn.NewWalletAuthorizer(&authn.Config{
+			Options:    s.Config.Authn,
+			Limiter:    ratelimiter.NewTokenBucketRateLimiter(s.Log),
+			Authorizer: s.Config.Authorizer,
+		})
+
+		options = append(options,
+			grpc.UnaryInterceptor(s.authorizer.Unary()),
+			grpc.StreamInterceptor(s.authorizer.Stream()),
+		)
+	}
+	grpcServer := grpc.NewServer(options...)
 
 	s.messagev1, err = messagev1.NewService(s.Waku, s.Log)
 	if err != nil {

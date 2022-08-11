@@ -22,14 +22,46 @@ type PublicKey *[65]byte
 type Signature *[64]byte
 type SignatureBytes []byte
 
+// GenerateKey generates a Secp256k1 key pair.
+func GenerateKeyPair() (pri PrivateKey, pub PublicKey, err error) {
+	ecdsaPri, err := ethcrypto.GenerateKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	pri = PrivateKey(ethcrypto.FromECDSA(ecdsaPri))
+	pub = PublicKey(ethcrypto.FromECDSAPub(&ecdsaPri.PublicKey))
+	return pri, pub, nil
+}
+
 // Verify evalutes a Secp256k1 signature to determine if the message provided was signed by the given publics
 // corresponding private key. It returns true if the message was signed by the corresponding keypair, as
 //well as any errors generated in the process
 func Verify(pub PublicKey, msg Message, sig Signature) bool {
 	digest := ethcrypto.Keccak256(msg)
-	isValid := secp256k1.VerifySignature((*pub)[:], digest[:], (*sig)[:])
+	return secp256k1.VerifySignature((*pub)[:], digest, (*sig)[:])
+}
 
-	return isValid
+// Sign generates an RFC1363 formatted signature for the unhashed message provided.
+// It returns a signature in IEEE p1363 Format [R||S],the recovery bit and any error encountered
+func Sign(privateKey PrivateKey, msg Message) (Signature, uint8, error) {
+	digest := ethcrypto.Keccak256(msg)
+	return SignDigest(privateKey, digest[:])
+}
+
+func SignDigest(privateKey PrivateKey, digest []byte) (Signature, uint8, error) {
+
+	signatureBytes, err := secp256k1.Sign(digest, (*[32]byte)(privateKey)[:])
+	if err != nil {
+		return nil, 0, err
+	}
+
+	signature, err := SignatureFromBytes(signatureBytes[:len(signatureBytes)-1])
+	if err != nil {
+		return nil, 0, ErrInvalidGeneratedSignatureLen
+	}
+
+	recovery := signatureBytes[len(signatureBytes)-1]
+	return signature, recovery, nil
 }
 
 // EtherHash implements the Ethereum hashing standard used to create signatures. Uses an Ethereum specific prefix and
@@ -53,6 +85,13 @@ func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (wal
 
 	addr := ethcrypto.PubkeyToAddress(*epk)
 	return types.WalletAddr(addr.String()), nil
+}
+
+// PublicKeyToAddress converts a public key to a wallet address
+func PublicKeyToAddress(pub PublicKey) types.WalletAddr {
+	epk, _ := ethcrypto.UnmarshalPubkey(pub[:])
+	addr := ethcrypto.PubkeyToAddress(*epk)
+	return types.WalletAddr(addr.String())
 }
 
 // PrivateKeyFromBytes converts from a byte slice to a PrivateKey Type

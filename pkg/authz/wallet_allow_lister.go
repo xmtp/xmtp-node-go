@@ -35,8 +35,8 @@ func (p Permission) String() string {
 	return "unknown"
 }
 
-// WalletAuthorizer interface
-type WalletAuthorizer interface {
+// WalletAllowLister interface
+type WalletAllowLister interface {
 	Start(ctx context.Context) error
 	Stop()
 	IsAllowListed(walletAddress string) bool
@@ -44,7 +44,7 @@ type WalletAuthorizer interface {
 	GetPermissions(walletAddress string) Permission
 }
 
-type DatabaseWalletAuthorizer struct {
+type DatabaseWalletAllowLister struct {
 	db              *bun.DB
 	log             *zap.Logger
 	permissions     map[string]Permission
@@ -54,8 +54,8 @@ type DatabaseWalletAuthorizer struct {
 	wg              sync.WaitGroup
 }
 
-func NewDatabaseWalletAuthorizer(db *bun.DB, log *zap.Logger) *DatabaseWalletAuthorizer {
-	result := new(DatabaseWalletAuthorizer)
+func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAllowLister {
+	result := new(DatabaseWalletAllowLister)
 	result.db = db
 	result.log = log.Named("wauthz")
 	result.permissions = make(map[string]Permission)
@@ -65,7 +65,7 @@ func NewDatabaseWalletAuthorizer(db *bun.DB, log *zap.Logger) *DatabaseWalletAut
 }
 
 // Get the permissions for a wallet address
-func (d *DatabaseWalletAuthorizer) GetPermissions(walletAddress string) Permission {
+func (d *DatabaseWalletAllowLister) GetPermissions(walletAddress string) Permission {
 	permission, hasPermission := d.permissions[walletAddress]
 	if !hasPermission {
 		return Unspecified
@@ -74,17 +74,17 @@ func (d *DatabaseWalletAuthorizer) GetPermissions(walletAddress string) Permissi
 }
 
 // Check if the wallet address is explicitly allow listed
-func (d *DatabaseWalletAuthorizer) IsAllowListed(walletAddress string) bool {
+func (d *DatabaseWalletAllowLister) IsAllowListed(walletAddress string) bool {
 	return d.GetPermissions(walletAddress) == Allowed
 }
 
 // Check if the wallet address is explicitly deny listed
-func (d *DatabaseWalletAuthorizer) IsDenyListed(walletAddress string) bool {
+func (d *DatabaseWalletAllowLister) IsDenyListed(walletAddress string) bool {
 	return d.GetPermissions(walletAddress) == Denied
 }
 
 // Load the permissions and start listening
-func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
+func (d *DatabaseWalletAllowLister) Start(ctx context.Context) error {
 	newCtx, cancel := context.WithCancel(ctx)
 	d.ctx = newCtx
 	d.cancelFunc = cancel
@@ -105,7 +105,7 @@ func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 // Actually load latest permissions from the database
 // Currently just loads absolutely everything, since n is going to be small enough for now.
 // Should be possible to do incrementally if we need to using the created_at field
-func (d *DatabaseWalletAuthorizer) loadPermissions() error {
+func (d *DatabaseWalletAllowLister) loadPermissions() error {
 	var wallets []WalletAddress
 	query := d.db.NewSelect().Model(&wallets).Where("deleted_at IS NULL")
 	if err := query.Scan(d.ctx); err != nil {
@@ -122,7 +122,7 @@ func (d *DatabaseWalletAuthorizer) loadPermissions() error {
 	return nil
 }
 
-func (d *DatabaseWalletAuthorizer) migrate(ctx context.Context) error {
+func (d *DatabaseWalletAllowLister) migrate(ctx context.Context) error {
 	migrator := migrate.NewMigrator(d.db, authz.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
@@ -131,7 +131,7 @@ func (d *DatabaseWalletAuthorizer) migrate(ctx context.Context) error {
 
 	group, err := migrator.Migrate(ctx)
 	if group.IsZero() {
-		d.log.Info("No new migrations to run for DatabaseWalletAuthorizer")
+		d.log.Info("No new migrations to run for DatabaseWalletAllowLister")
 	}
 
 	return err
@@ -148,7 +148,7 @@ func mapPermission(permission string) Permission {
 	}
 }
 
-func (d *DatabaseWalletAuthorizer) listenForChanges() {
+func (d *DatabaseWalletAllowLister) listenForChanges() {
 	ticker := time.NewTicker(d.refreshInterval)
 
 	for {
@@ -163,7 +163,7 @@ func (d *DatabaseWalletAuthorizer) listenForChanges() {
 	}
 }
 
-func (d *DatabaseWalletAuthorizer) Stop() {
+func (d *DatabaseWalletAllowLister) Stop() {
 	d.cancelFunc()
 	d.wg.Wait()
 	d.log.Info("stopped")
