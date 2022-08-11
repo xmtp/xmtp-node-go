@@ -24,3 +24,4 @@ if ! which protolint &>/dev/null; then go install github.com/yoheimuta/protolint
 
 dev/generate
 dev/docker/up
+dev/e2e/docker/up

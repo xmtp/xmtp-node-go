@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-export XMTPD_E2E_ENV="$1"
+export XMTPD_E2E_ENV="${1:-local}"
 export E2E="yes"
 
 go clean -testcache
