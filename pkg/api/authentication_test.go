@@ -9,7 +9,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/authn"
 )
 
-var authnOptions = Options{
+var authnEnabled = Options{
 	GRPCPort: 0,
 	HTTPPort: 0,
 	Authn: authn.Options{
@@ -18,7 +18,7 @@ var authnOptions = Options{
 }
 
 func Test_AuthnNoToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnOptions, func(t *testing.T, client client, server *Server) {
+	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
 		_, err := client.RawQuery(&messageV1.QueryRequest{
 			ContentTopics: []string{"some-random-topic"},
 		})
@@ -27,22 +27,30 @@ func Test_AuthnNoToken(t *testing.T) {
 	})
 }
 
+func Test_AuthnNoAuthn(t *testing.T) {
+	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
+		_, err := client.RawQuery(&messageV1.QueryRequest{
+			ContentTopics: []string{"privatestore-123"},
+		})
+		require.NoError(t, err)
+	})
+}
+
 func Test_AuthnValidToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnOptions, func(t *testing.T, client client, server *Server) {
+	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
 		token, _, err := authn.GenerateToken(time.Now())
 		require.NoError(t, err)
 		err = client.UseToken(token)
 		require.NoError(t, err)
-		resp := client.Query(t, &messageV1.QueryRequest{
+		_, err = client.RawQuery(&messageV1.QueryRequest{
 			ContentTopics: []string{"some-random-topic"},
 		})
-		require.NotNil(t, resp)
-		require.Len(t, resp.Envelopes, 0)
+		require.NoError(t, err)
 	})
 }
 
 func Test_AuthnExpiredToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnOptions, func(t *testing.T, client client, server *Server) {
+	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
 		token, _, err := authn.GenerateToken(time.Now().Add(-24 * time.Hour))
 		require.NoError(t, err)
 		err = client.UseToken(token)

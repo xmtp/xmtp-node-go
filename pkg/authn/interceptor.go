@@ -2,7 +2,6 @@ package authn
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -42,8 +40,11 @@ func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		if err := wa.authorize(ctx); err != nil {
-			return nil, err
+
+		if !wa.allowWithoutAuthorization(req) {
+			if err := wa.authorize(ctx); err != nil {
+				return nil, err
+			}
 		}
 		return handler(ctx, req)
 	}
@@ -61,6 +62,13 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 		}
 		return handler(srv, stream)
 	}
+}
+
+func (wa *WalletAuthorizer) allowWithoutAuthorization(req interface{}) bool {
+	query, ok := req.(*messagev1.QueryRequest)
+	return ok &&
+		len(query.ContentTopics) == 1 &&
+		strings.HasPrefix(query.ContentTopics[0], "privatestore-")
 }
 
 func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
@@ -114,29 +122,4 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	}
 	wa.Log.Debug("wallet rate limited", logging.WalletAddress(wallet.String()))
 	return status.Errorf(codes.ResourceExhausted, err.Error())
-}
-
-// DecodeToken is exported for testing purposes.
-// Not meant to be part of the package API.
-func DecodeToken(s string) (*messagev1.Token, error) {
-	b, err := base64.URLEncoding.DecodeString(s)
-	if err != nil {
-		return nil, err
-	}
-	var token messagev1.Token
-	err = proto.Unmarshal(b, &token)
-	if err != nil {
-		return nil, err
-	}
-	return &token, nil
-}
-
-// EncodeToken is exported for testing purposes.
-// Not meant to be part of the package API.
-func EncodeToken(token *messagev1.Token) (string, error) {
-	b, err := proto.Marshal(token)
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
 }
