@@ -26,7 +26,7 @@ require (
 	github.com/uptrace/bun v1.1.3
 	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
-	github.com/xmtp/proto v1.2.0
+	github.com/xmtp/proto v1.3.1
 	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.21.0
 	google.golang.org/grpc v1.48.0

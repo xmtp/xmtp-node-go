@@ -1935,8 +1935,8 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q
 github.com/xlab/treeprint v0.0.0-20180616005107-d6fb6747feb6/go.mod h1:ce1O1j6UtZfjr22oyGxGLbauSBp2YVXpARAosm7dHBg=
 github.com/xmtp/go-waku v0.0.0-20220810150132-1237437a419a h1:hIC6tybvfLRH/kuM7mDez1oPxecQDEVE3JWMhNjc9kQ=
 github.com/xmtp/go-waku v0.0.0-20220810150132-1237437a419a/go.mod h1:z498Zyc/u6sNiFQFuRLtYVQMUQurezgH36xBpE8ei6Q=
-github.com/xmtp/proto v1.2.0 h1:yQO5mdCvDgZImsI0VInAvgrypgfnbtkCrivs9UzaIl0=
-github.com/xmtp/proto v1.2.0/go.mod h1:p7WayY3MuWbU2CUVURGhozfp/KF1Zv17pxMcO8teBBc=
+github.com/xmtp/proto v1.3.1 h1:lS1/m1PA3eMLpYkq1Fu6oZ+PuOmo0Z5CkxkzzDdu5F8=
+github.com/xmtp/proto v1.3.1/go.mod h1:p7WayY3MuWbU2CUVURGhozfp/KF1Zv17pxMcO8teBBc=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d/go.mod h1:rHwXgn7JulP+udvsHwJoVG1YGAP6VLg4y9I5dyZdqmA=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
