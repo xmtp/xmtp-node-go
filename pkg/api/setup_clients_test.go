@@ -107,7 +107,7 @@ func (c *grpcClient) UseToken(token *messageV1.Token) error {
 	if err != nil {
 		return err
 	}
-	c.ctx = metadata.AppendToOutgoingContext(c.ctx, "authorization", et)
+	c.ctx = metadata.AppendToOutgoingContext(c.ctx, "authorization", "Bearer "+et)
 	return nil
 }
 
@@ -259,7 +259,7 @@ func (c *httpClient) Post(path string, req interface{}) (*http.Response, error) 
 		if err != nil {
 			return nil, err
 		}
-		post.Header.Set("Authorization", et)
+		post.Header.Set("Authorization", "Bearer "+et)
 	}
 	resp, err := c.http.Do(post)
 	if err != nil {

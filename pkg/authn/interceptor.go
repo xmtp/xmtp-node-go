@@ -3,6 +3,7 @@ package authn
 import (
 	"context"
 	"encoding/base64"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -57,12 +58,19 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
 		return status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
 
-	values := md["authorization"]
+	values := md.Get("authorization")
 	if len(values) == 0 {
 		return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}
 
-	token, err := DecodeToken(values[0])
+	words := strings.SplitN(values[0], " ", 2)
+	if len(words) != 2 {
+		return status.Errorf(codes.Unauthenticated, "invalid authorization header")
+	}
+	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
+		return status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
+	}
+	token, err := DecodeToken(strings.TrimSpace(words[1]))
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
 	}
