@@ -80,3 +80,9 @@ func Test_SignatureMismatch(t *testing.T) {
 	_, err = validateToken(ctx, token1, now)
 	require.Error(t, err)
 }
+
+func Test_DecodeToken(t *testing.T) {
+	encoded := "CpIBCNq0jcWqMBJECkIKQPZCm1Csbn4SjAE1jyn5AGaGXoOLMoVOTzjJxuSHlwO2fb3sdtfnezZnpF0YBcMmtKlVhSlEuw3vvYBtONWGK34aQwpBBISsYDcvnpmW5m1b6-rL0yfntnx6VeSMWm4OQ7fOXNOD7-1pbpWpEeTEZc6ww9WWfGg_9_juzP2TpvDKyv3pwx4SNgoqMHg5NDA5NTU5RGE0QzgzZmU3ZTc4YjBFOTE2MzBFZjAwNTQ2MDcyNzE4EMCN6uTjt_yFFxpGCkQKQJz75ZZhpGu15ZWruXSyNZFFaDf8JJSdAl8XYLDMLtg8F-85_ARF9Y9m2GoHn3c6QtbgUPe17HzXMAbHtTVd8MIQAQ"
+	_, err := DecodeToken(encoded)
+	require.NoError(t, err)
+}

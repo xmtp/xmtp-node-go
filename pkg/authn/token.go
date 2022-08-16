@@ -13,7 +13,7 @@ import (
 // DecodeToken is exported for testing purposes.
 // Not meant to be part of the package API.
 func DecodeToken(s string) (*messagev1.Token, error) {
-	b, err := base64.URLEncoding.DecodeString(s)
+	b, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func EncodeToken(token *messagev1.Token) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.URLEncoding.EncodeToString(b), nil
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // GenerateToken is exported for testing purposes.
