@@ -27,7 +27,8 @@ func Test_AuthnNoToken(t *testing.T) {
 	})
 }
 
-func Test_AuthnNoAuthn(t *testing.T) {
+// Private key topic queries must be let through without authn
+func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
 		_, err := client.RawQuery(&messageV1.QueryRequest{
 			ContentTopics: []string{"privatestore-123"},
