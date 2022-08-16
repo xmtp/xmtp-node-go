@@ -63,7 +63,8 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 	return recoveredWalletAddress, nil
 }
 
-func CreateIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
+//
+func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 	// We need a bare key to generate the key bytes to sign.
 	unsignedKey := &envelope.PublicKey{
 		Timestamp: identityKey.Timestamp,
@@ -77,7 +78,7 @@ func CreateIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 }
 
 func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) (wallet types.WalletAddr, err error) {
-	isrBytes := CreateIdentitySignRequest(identityKey)
+	isrBytes := createIdentitySignRequest(identityKey)
 	signature := identityKey.Signature
 	if signature == nil {
 		return "", ErrUnsignedKey
@@ -130,6 +131,8 @@ func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDa
 	}
 }
 
+// GenerateToken is exported so that pkg/api tests can use it.
+// This is not meant to be part of the package API
 func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
 	wPri, wPub, err := crypto.GenerateKeyPair()
 	if err != nil {
@@ -147,7 +150,7 @@ func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, 
 			},
 		},
 	}
-	keySig, keyRec, err := crypto.SignDigest(wPri, crypto.EtherHash(CreateIdentitySignRequest(key)))
+	keySig, keyRec, err := crypto.SignDigest(wPri, crypto.EtherHash(createIdentitySignRequest(key)))
 	key.Signature = &envelope.Signature{
 		Union: &envelope.Signature_EcdsaCompact{
 			EcdsaCompact: &envelope.Signature_ECDSACompact{

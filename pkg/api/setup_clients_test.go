@@ -107,6 +107,7 @@ func (c *grpcClient) UseToken(token *messageV1.Token) error {
 	if err != nil {
 		return err
 	}
+	// NB: This means it's not possible to reset the token once it's set.
 	c.ctx = metadata.AppendToOutgoingContext(c.ctx, "authorization", "Bearer "+et)
 	return nil
 }

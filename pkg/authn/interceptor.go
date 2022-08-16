@@ -3,6 +3,7 @@ package authn
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"time"
 
@@ -16,10 +17,19 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
+var ErrDenyListed = errors.New("wallet is deny listed")
+
+// WalletAuthorizer implements the authentication/authorization flow of client requests.
+// It is intended to be hooked up with a GRPC server as an interceptor.
+// It requires all requests to include an Authorization: Bearer header
+// carrying a base-64 encoded messagev1.Token.
+// The token ties the request to a wallet (authentication).
+// Authorization decisions are then based on the authenticated wallet.
 type WalletAuthorizer struct {
 	*Config
 }
 
+// NewWalletAuthorizer creates an authorizer configured based on the Config.
 func NewWalletAuthorizer(config *Config) *WalletAuthorizer {
 	return &WalletAuthorizer{Config: config}
 }
@@ -91,7 +101,10 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	}
 	var allowListed bool
 	if wa.AllowLists {
-		allowListed = wa.Authorizer.IsAllowListed(wallet.String())
+		if wa.AllowLister.IsDenyListed(wallet.String()) {
+			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
+		}
+		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
 	}
 	err := wa.Limiter.Spend(wallet.String(), allowListed)
 	if err == nil {
@@ -100,6 +113,8 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	return status.Errorf(codes.ResourceExhausted, err.Error())
 }
 
+// DecodeToken is exported for testing purposes.
+// Not meant to be part of the package API.
 func DecodeToken(s string) (*messagev1.Token, error) {
 	b, err := base64.URLEncoding.DecodeString(s)
 	if err != nil {
@@ -113,6 +128,8 @@ func DecodeToken(s string) (*messagev1.Token, error) {
 	return &token, nil
 }
 
+// EncodeToken is exported for testing purposes.
+// Not meant to be part of the package API.
 func EncodeToken(token *messagev1.Token) (string, error) {
 	b, err := proto.Marshal(token)
 	if err != nil {

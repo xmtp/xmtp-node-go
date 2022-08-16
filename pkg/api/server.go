@@ -70,9 +70,9 @@ func (s *Server) startGRPC() error {
 	options := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials())}
 	if s.Config.Authn.Enable {
 		s.authorizer = authn.NewWalletAuthorizer(&authn.Config{
-			Options:    s.Config.Authn,
-			Limiter:    ratelimiter.NewTokenBucketRateLimiter(s.Log),
-			Authorizer: s.Config.AllowLister,
+			Options:     s.Config.Authn,
+			Limiter:     ratelimiter.NewTokenBucketRateLimiter(s.Log),
+			AllowLister: s.Config.AllowLister,
 		})
 
 		options = append(options,

@@ -35,7 +35,7 @@ func (p Permission) String() string {
 	return "unknown"
 }
 
-// WalletAllowLister interface
+// WalletAllowLister maintains an allow list for wallets.
 type WalletAllowLister interface {
 	Start(ctx context.Context) error
 	Stop()
@@ -44,6 +44,7 @@ type WalletAllowLister interface {
 	GetPermissions(walletAddress string) Permission
 }
 
+// DatabaseWalletAllowLister implements database backed allow list.
 type DatabaseWalletAllowLister struct {
 	db              *bun.DB
 	log             *zap.Logger
