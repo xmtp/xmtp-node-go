@@ -41,7 +41,7 @@ func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
 
-		if !wa.allowWithoutAuthorization(req) {
+		if wa.requiresAuthorization(req) {
 			if err := wa.authorize(ctx); err != nil {
 				return nil, err
 			}
@@ -57,18 +57,14 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		if err := wa.authorize(stream.Context()); err != nil {
-			return err
-		}
+		// TODO(mk): Add metrics
 		return handler(srv, stream)
 	}
 }
 
-func (wa *WalletAuthorizer) allowWithoutAuthorization(req interface{}) bool {
-	query, ok := req.(*messagev1.QueryRequest)
-	return ok &&
-		len(query.ContentTopics) == 1 &&
-		strings.HasPrefix(query.ContentTopics[0], "privatestore-")
+func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
+	_, isPublish := req.(*messagev1.PublishRequest)
+	return isPublish
 }
 
 func (wa *WalletAuthorizer) authorize(ctx context.Context) error {

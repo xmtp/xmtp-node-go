@@ -63,6 +63,7 @@ type client interface {
 	Publish(*testing.T, *messageV1.PublishRequest) *messageV1.PublishResponse
 	Query(*testing.T, *messageV1.QueryRequest) *messageV1.QueryResponse
 	RawQuery(*messageV1.QueryRequest) (*messageV1.QueryResponse, error)
+	RawPublish(*messageV1.PublishRequest) (*messageV1.PublishResponse, error)
 }
 
 // GRPC implementation of stream and client
@@ -120,9 +121,13 @@ func (c *grpcClient) Subscribe(t *testing.T, r *messageV1.SubscribeRequest) stre
 }
 
 func (c *grpcClient) Publish(t *testing.T, r *messageV1.PublishRequest) *messageV1.PublishResponse {
-	resp, err := c.client.Publish(c.ctx, r)
+	resp, err := c.RawPublish(r)
 	require.NoError(t, err)
 	return resp
+}
+
+func (c *grpcClient) RawPublish(r *messageV1.PublishRequest) (*messageV1.PublishResponse, error) {
+	return c.client.Publish(c.ctx, r)
 }
 
 func (c *grpcClient) Query(t *testing.T, q *messageV1.QueryRequest) *messageV1.QueryResponse {
@@ -271,17 +276,30 @@ func (c *httpClient) Post(path string, req interface{}) (*http.Response, error) 
 }
 
 func (c *httpClient) Publish(t *testing.T, req *messageV1.PublishRequest) *messageV1.PublishResponse {
-	t.Log("Publishing")
+	res, err := c.RawPublish(req)
+	require.NoError(t, err)
+	return res
+}
+
+func (c *httpClient) RawPublish(req *messageV1.PublishRequest) (*messageV1.PublishResponse, error) {
 	var res messageV1.PublishResponse
 	resp, err := c.Post("/message/v1/publish", req)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode, string(body))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("%s: %s", resp.Status, string(body))
+	}
 	err = protojson.Unmarshal(body, &res)
-	require.NoError(t, err)
-	return &res
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 func (c *httpClient) Subscribe(t *testing.T, req *messageV1.SubscribeRequest) stream {

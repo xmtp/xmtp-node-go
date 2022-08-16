@@ -19,9 +19,7 @@ var authnEnabled = Options{
 
 func Test_AuthnNoToken(t *testing.T) {
 	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
-		_, err := client.RawQuery(&messageV1.QueryRequest{
-			ContentTopics: []string{"some-random-topic"},
-		})
+		_, err := client.RawPublish(&messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "authorization token is not provided")
 	})
@@ -43,9 +41,7 @@ func Test_AuthnValidToken(t *testing.T) {
 		require.NoError(t, err)
 		err = client.UseToken(token)
 		require.NoError(t, err)
-		_, err = client.RawQuery(&messageV1.QueryRequest{
-			ContentTopics: []string{"some-random-topic"},
-		})
+		_, err = client.RawPublish(&messageV1.PublishRequest{})
 		require.NoError(t, err)
 	})
 }
@@ -56,9 +52,7 @@ func Test_AuthnExpiredToken(t *testing.T) {
 		require.NoError(t, err)
 		err = client.UseToken(token)
 		require.NoError(t, err)
-		_, err = client.RawQuery(&messageV1.QueryRequest{
-			ContentTopics: []string{"some-random-topic"},
-		})
+		_, err = client.RawPublish(&messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "token expired")
 	})
