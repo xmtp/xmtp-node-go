@@ -42,16 +42,16 @@ import (
 )
 
 type Server struct {
-	logger           *zap.Logger
-	hostAddr         *net.TCPAddr
-	db               *sql.DB
-	metricsServer    *metrics.Server
-	wakuNode         *node.WakuNode
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-	walletAuthorizer authz.WalletAllowLister
-	grpc             *api.Server
+	logger        *zap.Logger
+	hostAddr      *net.TCPAddr
+	db            *sql.DB
+	metricsServer *metrics.Server
+	wakuNode      *node.WakuNode
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	allowLister   authz.WalletAllowLister
+	grpc          *api.Server
 }
 
 // Create a new Server
@@ -84,8 +84,8 @@ func New(ctx context.Context, options Options) (server *Server) {
 
 	if options.Authz.DbConnectionString != "" {
 		db := createBunDbOrFail(options.Authz.DbConnectionString, options.WaitForDB)
-		server.walletAuthorizer = authz.NewDatabaseWalletAllowLister(db, server.logger)
-		err = server.walletAuthorizer.Start(server.ctx)
+		server.allowLister = authz.NewDatabaseWalletAllowLister(db, server.logger)
+		err = server.allowLister.Start(server.ctx)
 		failOnErr(err, "wallet authorizer error")
 	}
 
@@ -181,7 +181,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 			Options:     options.API,
 			Log:         server.logger.Named("api"),
 			Waku:        server.wakuNode,
-			AllowLister: server.walletAuthorizer,
+			AllowLister: server.allowLister,
 		})
 	failOnErr(err, "initializing grpc server")
 	return server
@@ -201,8 +201,8 @@ func (server *Server) Shutdown() {
 	// shut the node down
 	server.wakuNode.Stop()
 
-	if server.walletAuthorizer != nil {
-		server.walletAuthorizer.Stop()
+	if server.allowLister != nil {
+		server.allowLister.Stop()
 	}
 
 	// Close the DB.
