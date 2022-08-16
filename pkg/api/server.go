@@ -73,6 +73,7 @@ func (s *Server) startGRPC() error {
 			Options:     s.Config.Authn,
 			Limiter:     ratelimiter.NewTokenBucketRateLimiter(s.Log),
 			AllowLister: s.Config.AllowLister,
+			Log:         s.Log.Named("authn"),
 		})
 
 		options = append(options,

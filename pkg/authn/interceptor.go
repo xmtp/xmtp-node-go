@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
@@ -102,6 +103,7 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	var allowListed bool
 	if wa.AllowLists {
 		if wa.AllowLister.IsDenyListed(wallet.String()) {
+			wa.Log.Debug("wallet deny listed", logging.WalletAddress(wallet.String()))
 			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
 		}
 		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
@@ -110,6 +112,7 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	if err == nil {
 		return nil
 	}
+	wa.Log.Debug("wallet rate limited", logging.WalletAddress(wallet.String()))
 	return status.Errorf(codes.ResourceExhausted, err.Error())
 }
 

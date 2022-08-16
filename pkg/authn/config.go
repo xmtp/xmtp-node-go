@@ -3,6 +3,7 @@ package authn
 import (
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
+	"go.uber.org/zap"
 )
 
 // Options bundle command line options associated with the authn package.
@@ -17,4 +18,5 @@ type Config struct {
 	Options
 	Limiter     ratelimiter.RateLimiter
 	AllowLister authz.WalletAllowLister
+	Log         *zap.Logger
 }

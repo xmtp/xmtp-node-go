@@ -10,9 +10,7 @@ import (
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
 	envelope "github.com/xmtp/proto/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,8 +27,6 @@ var (
 )
 
 func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
-	logger := logging.From(ctx)
-
 	// Validate IdentityKey signature.
 	pubKey := token.IdentityKey
 	recoveredWalletAddress, err := recoverWalletAddress(ctx, pubKey)
@@ -47,7 +43,6 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 
 	// To protect against spoofing, ensure the IdentityKey wallet address matches the AuthData wallet address.
 	if recoveredWalletAddress != suppliedWalletAddress {
-		logger.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
 		return wallet, ErrWalletMismatch
 	}
 
@@ -96,7 +91,6 @@ func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) 
 }
 
 func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDataBytes []byte, authSig *envelope.Signature) (data *messagev1.AuthData, err error) {
-
 	switch key := pubKey.Union.(type) {
 	case *envelope.PublicKey_Secp256K1Uncompressed_:
 		pub, err := crypto.PublicKeyFromBytes(key.Secp256K1Uncompressed.Bytes)

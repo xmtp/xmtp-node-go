@@ -179,7 +179,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	server.grpc, err = api.New(
 		&api.Config{
 			Options:     options.API,
-			Log:         server.logger,
+			Log:         server.logger.Named("api"),
 			Waku:        server.wakuNode,
 			AllowLister: server.walletAuthorizer,
 		})
