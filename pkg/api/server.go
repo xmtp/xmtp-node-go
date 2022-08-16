@@ -78,7 +78,7 @@ func (s *Server) startGRPC() error {
 
 		options = append(options,
 			grpc.UnaryInterceptor(s.authorizer.Unary()),
-			// grpc.StreamInterceptor(s.authorizer.Stream()),
+			grpc.StreamInterceptor(s.authorizer.Stream()),
 		)
 	}
 	grpcServer := grpc.NewServer(options...)
