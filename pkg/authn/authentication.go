@@ -19,31 +19,33 @@ import (
 var (
 	TokenExpiration = time.Hour
 
-	ErrTokenExpired      = errors.New("token expired")
-	ErrFutureToken       = errors.New("token timestamp is in the future")
-	ErrInvalidWalletAddr = errors.New("invalid walletAddress")
-	ErrInvalidSignature  = errors.New("invalid signature")
-	ErrWalletMismatch    = errors.New("wallet address mismatch")
+	ErrTokenExpired         = errors.New("token expired")
+	ErrFutureToken          = errors.New("token timestamp is in the future")
+	ErrInvalidSignature     = errors.New("invalid signature")
+	ErrWalletMismatch       = errors.New("wallet address mismatch")
+	ErrUnsignedKey          = errors.New("identity key is not signed")
+	ErrUnknownSignatureType = errors.New("unknown signature type")
+	ErrUnknownKeyType       = errors.New("unknown public key type")
 )
 
 func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
 	logger := logging.From(ctx)
 
-	// Validate WalletSignature
+	// Validate IdentityKey signature.
 	pubKey := token.IdentityKey
 	recoveredWalletAddress, err := recoverWalletAddress(ctx, pubKey)
 	if err != nil {
 		return wallet, err
 	}
 
-	// Validate AuthSignature
-	data, err := verifyAuthSignature(ctx, pubKey, token.AuthDataBytes, token.AuthDataSignature.GetEcdsaCompact())
+	// Validate AuthData signature.
+	data, err := verifyAuthSignature(ctx, pubKey, token.AuthDataBytes, token.AuthDataSignature)
 	if err != nil {
 		return wallet, err
 	}
 	suppliedWalletAddress := types.WalletAddr(data.WalletAddr)
 
-	// To protect against spoofing, ensure the walletAddresses match in both signatures
+	// To protect against spoofing, ensure the IdentityKey wallet address matches the AuthData wallet address.
 	if recoveredWalletAddress != suppliedWalletAddress {
 		logger.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
 		return wallet, ErrWalletMismatch
@@ -63,7 +65,6 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 
 func CreateIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 	// We need a bare key to generate the key bytes to sign.
-	// Make a copy of the key so that we can unset the signature.
 	unsignedKey := &envelope.PublicKey{
 		Timestamp: identityKey.Timestamp,
 		Union:     identityKey.Union,
@@ -77,38 +78,56 @@ func CreateIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 
 func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) (wallet types.WalletAddr, err error) {
 	isrBytes := CreateIdentitySignRequest(identityKey)
-	signature := identityKey.GetSignature().GetEcdsaCompact()
-	sig, err := crypto.SignatureFromBytes(signature.GetBytes())
-	if err != nil {
-		return wallet, err
+	signature := identityKey.Signature
+	if signature == nil {
+		return "", ErrUnsignedKey
 	}
-	return crypto.RecoverWalletAddress(isrBytes, sig, uint8(signature.GetRecovery()))
+	switch sig := signature.Union.(type) {
+	case *envelope.Signature_EcdsaCompact:
+		cSig, err := crypto.SignatureFromBytes(sig.EcdsaCompact.Bytes)
+		if err != nil {
+			return wallet, err
+		}
+		return crypto.RecoverWalletAddress(isrBytes, cSig, uint8(sig.EcdsaCompact.Recovery))
+	default:
+		return "", ErrUnknownSignatureType
+	}
 }
 
-func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDataBytes []byte, authSig *envelope.Signature_ECDSACompact) (data *messagev1.AuthData, err error) {
+func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDataBytes []byte, authSig *envelope.Signature) (data *messagev1.AuthData, err error) {
 
-	pub, err := crypto.PublicKeyFromBytes(pubKey.GetSecp256K1Uncompressed().Bytes)
-	if err != nil {
-		return nil, err
+	switch key := pubKey.Union.(type) {
+	case *envelope.PublicKey_Secp256K1Uncompressed_:
+		pub, err := crypto.PublicKeyFromBytes(key.Secp256K1Uncompressed.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		switch sig := authSig.Union.(type) {
+		case *envelope.Signature_EcdsaCompact:
+			signature, err := crypto.SignatureFromBytes(sig.EcdsaCompact.Bytes)
+			if err != nil {
+				return nil, err
+			}
+
+			isVerified := crypto.Verify(pub, authDataBytes, signature)
+			if !isVerified {
+				return nil, ErrInvalidSignature
+			}
+
+			var authData messagev1.AuthData
+			err = proto.Unmarshal(authDataBytes, &authData)
+			if err != nil {
+				return nil, err
+			}
+
+			return &authData, nil
+		default:
+			return nil, ErrUnknownSignatureType
+		}
+	default:
+		return nil, ErrUnknownKeyType
 	}
-
-	signature, err := crypto.SignatureFromBytes(authSig.GetBytes())
-	if err != nil {
-		return nil, err
-	}
-
-	isVerified := crypto.Verify(pub, authDataBytes, signature)
-	if !isVerified {
-		return nil, ErrInvalidSignature
-	}
-
-	var authData messagev1.AuthData
-	err = proto.Unmarshal(authDataBytes, &authData)
-	if err != nil {
-		return nil, err
-	}
-
-	return &authData, nil
 }
 
 func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {

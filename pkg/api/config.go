@@ -26,9 +26,9 @@ type Options struct {
 
 type Config struct {
 	Options
-	Authorizer authz.WalletAllowLister
-	Waku       *wakunode.WakuNode
-	Log        *zap.Logger
+	AllowLister authz.WalletAllowLister
+	Waku        *wakunode.WakuNode
+	Log         *zap.Logger
 }
 
 func (params *Config) check() error {
