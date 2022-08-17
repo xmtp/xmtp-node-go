@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"testing"
 	"time"
@@ -35,19 +34,29 @@ var (
 	envDelayBetweenRunsSeconds       = envVarInt("XMTPD_E2E_DELAY", 5)
 )
 
-func TestE2E(t *testing.T) {
+func TestMain(m *testing.M) {
 	ctx := context.Background()
+	log, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+
 	if envShouldRunE2ETestsContinuously {
 		go func() {
-			log.Println(http.ListenAndServe("localhost:6060", nil))
+			err := http.ListenAndServe("localhost:6060", nil)
+			if err != nil {
+				log.Fatal("serving profiler", zap.Error(err))
+			}
 		}()
 	}
 	if envNetworkEnv == localNetworkEnv {
 		envNodesURL = localNodesURL
 	}
-	withMetricsServer(t, ctx, func(t *testing.T) {
+
+	err = withMetricsServer(ctx, log, func() {
 		for {
-			runTest(t, ctx, "publish subscribe query", testPublishSubscribeQuery)
+			exitCode := m.Run()
+			log.Info("test suite complete", zap.Int("exit_code", exitCode))
 
 			if !envShouldRunE2ETestsContinuously {
 				break
@@ -55,6 +64,14 @@ func TestE2E(t *testing.T) {
 			time.Sleep(time.Duration(envDelayBetweenRunsSeconds) * time.Second)
 		}
 	})
+	if err != nil {
+		log.Fatal("creating metrics server", zap.Error(err))
+	}
+}
+
+func TestE2E(t *testing.T) {
+	ctx := context.Background()
+	runTest(t, ctx, "publish subscribe query", testPublishSubscribeQuery)
 }
 
 func runTest(t *testing.T, ctx context.Context, name string, fn func(t *testing.T)) {
