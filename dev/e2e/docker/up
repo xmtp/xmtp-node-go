@@ -6,3 +6,7 @@ export GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
 
 docker_compose build
 docker_compose up -d
+
+while ! echo exit | nc localhost 16001 &>/dev/null; do sleep 1; done
+while ! echo exit | nc localhost 26001 &>/dev/null; do sleep 1; done
+while ! echo exit | nc localhost 36001 &>/dev/null; do sleep 1; done
