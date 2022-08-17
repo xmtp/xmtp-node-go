@@ -14,20 +14,16 @@ import (
 )
 
 func newTestServer(t *testing.T) (*Server, func()) {
-	return newTestServerWithOptions(t, Options{
-		GRPCAddress: "localhost",
-		GRPCPort:    0,
-		HTTPAddress: "localhost",
-		HTTPPort:    0,
-	})
-}
-
-func newTestServerWithOptions(t *testing.T, options Options) (*Server, func()) {
 	waku, wakuCleanup := newTestNode(t, nil)
 	s, err := New(&Config{
-		Options: options,
-		Waku:    waku,
-		Log:     test.NewLog(t),
+		Options: Options{
+			GRPCAddress: "localhost",
+			GRPCPort:    0,
+			HTTPAddress: "localhost",
+			HTTPPort:    0,
+		},
+		Waku: waku,
+		Log:  test.NewLog(t),
 	})
 	require.NoError(t, err)
 	return s, func() {
