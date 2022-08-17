@@ -63,11 +63,14 @@ func (d *DBStore) migrate() error {
 	}
 
 	group, err := migrator.Migrate(ctx)
+	if err != nil {
+		return err
+	}
 	if group.IsZero() {
 		d.log.Info("No new migrations to run")
 	}
 
-	return err
+	return nil
 }
 
 // Closes a DB connection
