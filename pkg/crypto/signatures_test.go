@@ -4,9 +4,31 @@ import (
 	"encoding/hex"
 	"testing"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
+
+// Sign generates an RFC1363 formatted signature for the unhashed message provided.
+// It returns a signature in IEEE p1363 Format [R||S],the recovery bit and any error encountered
+func Sign(privateKey PrivateKey, msg Message) (Signature, uint8, error) {
+
+	digest := ethcrypto.Keccak256(msg)
+
+	signatureBytes, err := secp256k1.Sign(digest[:], (*[32]byte)(privateKey)[:])
+	if err != nil {
+		return nil, 0, err
+	}
+
+	signature, err := SignatureFromBytes(signatureBytes[:len(signatureBytes)-1])
+	if err != nil {
+		return nil, 0, ErrInvalidGeneratedSignatureLen
+	}
+
+	recovery := signatureBytes[len(signatureBytes)-1]
+	return signature, recovery, nil
+}
 
 // Tests that signature verification works for a given message and keys.
 func TestStaticSignatureRoundTrip(t *testing.T) {

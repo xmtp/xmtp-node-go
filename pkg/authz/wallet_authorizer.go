@@ -35,8 +35,8 @@ func (p Permission) String() string {
 	return "unknown"
 }
 
-// WalletAllowLister maintains an allow list for wallets.
-type WalletAllowLister interface {
+// WalletAuthorizer interface
+type WalletAuthorizer interface {
 	Start(ctx context.Context) error
 	Stop()
 	IsAllowListed(walletAddress string) bool
@@ -44,8 +44,7 @@ type WalletAllowLister interface {
 	GetPermissions(walletAddress string) Permission
 }
 
-// DatabaseWalletAllowLister implements database backed allow list.
-type DatabaseWalletAllowLister struct {
+type DatabaseWalletAuthorizer struct {
 	db              *bun.DB
 	log             *zap.Logger
 	permissions     map[string]Permission
@@ -55,8 +54,8 @@ type DatabaseWalletAllowLister struct {
 	wg              sync.WaitGroup
 }
 
-func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAllowLister {
-	result := new(DatabaseWalletAllowLister)
+func NewDatabaseWalletAuthorizer(db *bun.DB, log *zap.Logger) *DatabaseWalletAuthorizer {
+	result := new(DatabaseWalletAuthorizer)
 	result.db = db
 	result.log = log.Named("wauthz")
 	result.permissions = make(map[string]Permission)
@@ -66,7 +65,7 @@ func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAl
 }
 
 // Get the permissions for a wallet address
-func (d *DatabaseWalletAllowLister) GetPermissions(walletAddress string) Permission {
+func (d *DatabaseWalletAuthorizer) GetPermissions(walletAddress string) Permission {
 	permission, hasPermission := d.permissions[walletAddress]
 	if !hasPermission {
 		return Unspecified
@@ -75,17 +74,17 @@ func (d *DatabaseWalletAllowLister) GetPermissions(walletAddress string) Permiss
 }
 
 // Check if the wallet address is explicitly allow listed
-func (d *DatabaseWalletAllowLister) IsAllowListed(walletAddress string) bool {
+func (d *DatabaseWalletAuthorizer) IsAllowListed(walletAddress string) bool {
 	return d.GetPermissions(walletAddress) == Allowed
 }
 
 // Check if the wallet address is explicitly deny listed
-func (d *DatabaseWalletAllowLister) IsDenyListed(walletAddress string) bool {
+func (d *DatabaseWalletAuthorizer) IsDenyListed(walletAddress string) bool {
 	return d.GetPermissions(walletAddress) == Denied
 }
 
 // Load the permissions and start listening
-func (d *DatabaseWalletAllowLister) Start(ctx context.Context) error {
+func (d *DatabaseWalletAuthorizer) Start(ctx context.Context) error {
 	newCtx, cancel := context.WithCancel(ctx)
 	d.ctx = newCtx
 	d.cancelFunc = cancel
@@ -106,7 +105,7 @@ func (d *DatabaseWalletAllowLister) Start(ctx context.Context) error {
 // Actually load latest permissions from the database
 // Currently just loads absolutely everything, since n is going to be small enough for now.
 // Should be possible to do incrementally if we need to using the created_at field
-func (d *DatabaseWalletAllowLister) loadPermissions() error {
+func (d *DatabaseWalletAuthorizer) loadPermissions() error {
 	var wallets []WalletAddress
 	query := d.db.NewSelect().Model(&wallets).Where("deleted_at IS NULL")
 	if err := query.Scan(d.ctx); err != nil {
@@ -123,7 +122,7 @@ func (d *DatabaseWalletAllowLister) loadPermissions() error {
 	return nil
 }
 
-func (d *DatabaseWalletAllowLister) migrate(ctx context.Context) error {
+func (d *DatabaseWalletAuthorizer) migrate(ctx context.Context) error {
 	migrator := migrate.NewMigrator(d.db, authz.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
@@ -132,7 +131,7 @@ func (d *DatabaseWalletAllowLister) migrate(ctx context.Context) error {
 
 	group, err := migrator.Migrate(ctx)
 	if group.IsZero() {
-		d.log.Info("No new migrations to run for DatabaseWalletAllowLister")
+		d.log.Info("No new migrations to run for DatabaseWalletAuthorizer")
 	}
 
 	return err
@@ -149,7 +148,7 @@ func mapPermission(permission string) Permission {
 	}
 }
 
-func (d *DatabaseWalletAllowLister) listenForChanges() {
+func (d *DatabaseWalletAuthorizer) listenForChanges() {
 	ticker := time.NewTicker(d.refreshInterval)
 
 	for {
@@ -164,7 +163,7 @@ func (d *DatabaseWalletAllowLister) listenForChanges() {
 	}
 }
 
-func (d *DatabaseWalletAllowLister) Stop() {
+func (d *DatabaseWalletAuthorizer) Stop() {
 	d.cancelFunc()
 	d.wg.Wait()
 	d.log.Info("stopped")

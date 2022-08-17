@@ -26,12 +26,12 @@ func newDB() *bun.DB {
 	return db
 }
 
-func newAllowLister(t *testing.T) *DatabaseWalletAllowLister {
+func newAuthorizer(t *testing.T) *DatabaseWalletAuthorizer {
 	db := newDB()
 	logger, _ := zap.NewDevelopment()
-	allowLister := NewDatabaseWalletAllowLister(db, logger)
+	authorizer := NewDatabaseWalletAuthorizer(db, logger)
 
-	return allowLister
+	return authorizer
 }
 
 func fillDb(t *testing.T, db *bun.DB) (wallets []WalletAddress) {
@@ -55,20 +55,20 @@ func fillDb(t *testing.T, db *bun.DB) (wallets []WalletAddress) {
 }
 
 func TestPermissionCheck(t *testing.T) {
-	allowLister := newAllowLister(t)
-	err := allowLister.migrate(context.Background())
+	authorizer := newAuthorizer(t)
+	err := authorizer.migrate(context.Background())
 	require.NoError(t, err)
-	wallets := fillDb(t, allowLister.db)
-	err = allowLister.Start(context.Background())
+	wallets := fillDb(t, authorizer.db)
+	err = authorizer.Start(context.Background())
 	require.NoError(t, err)
 
-	defer allowLister.Stop()
+	defer authorizer.Stop()
 
 	for _, wallet := range wallets {
 		expectedValue := wallet.Permission
-		isAllowed := allowLister.IsAllowListed(wallet.WalletAddress)
-		isDenied := allowLister.IsDenyListed(wallet.WalletAddress)
-		permission := allowLister.GetPermissions(wallet.WalletAddress)
+		isAllowed := authorizer.IsAllowListed(wallet.WalletAddress)
+		isDenied := authorizer.IsDenyListed(wallet.WalletAddress)
+		permission := authorizer.GetPermissions(wallet.WalletAddress)
 		if expectedValue == "allow" {
 			require.Equal(t, isAllowed, true)
 			require.Equal(t, isDenied, false)
@@ -82,22 +82,22 @@ func TestPermissionCheck(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	allowLister := newAllowLister(t)
-	allowLister.refreshInterval = 100 * time.Millisecond
-	wallets := fillDb(t, allowLister.db)
+	authorizer := newAuthorizer(t)
+	authorizer.refreshInterval = 100 * time.Millisecond
+	wallets := fillDb(t, authorizer.db)
 	allowedWallet := wallets[0]
 
-	err := allowLister.Start(context.Background())
+	err := authorizer.Start(context.Background())
 	require.NoError(t, err)
-	defer allowLister.Stop()
+	defer authorizer.Stop()
 
-	require.Equal(t, allowLister.IsAllowListed(allowedWallet.WalletAddress), true)
+	require.Equal(t, authorizer.IsAllowListed(allowedWallet.WalletAddress), true)
 
 	// Delete the allowed wallet record
 	require.NotNil(t, allowedWallet.ID)
 	updateModel := WalletAddress{ID: allowedWallet.ID}
 	now := time.Now().UTC()
-	_, err = allowLister.db.NewUpdate().
+	_, err = authorizer.db.NewUpdate().
 		Model(&updateModel).Set("deleted_at = ?", now).
 		Where("id = ?", allowedWallet.ID).
 		Exec(context.Background())
@@ -105,18 +105,18 @@ func TestDelete(t *testing.T) {
 	require.NoError(t, err)
 	// Sleep to wait for the refresh to happen behind the scenes
 	time.Sleep(200 * time.Millisecond)
-	require.Equal(t, allowLister.IsAllowListed(allowedWallet.WalletAddress), false)
+	require.Equal(t, authorizer.IsAllowListed(allowedWallet.WalletAddress), false)
 }
 
 func TestUnknownWallet(t *testing.T) {
-	allowLister := newAllowLister(t)
-	err := allowLister.Start(context.Background())
+	authorizer := newAuthorizer(t)
+	err := authorizer.Start(context.Background())
 	require.NoError(t, err)
-	defer allowLister.Stop()
+	defer authorizer.Stop()
 
 	unknownWalletAddress := "0xfoo"
 
-	require.Equal(t, allowLister.GetPermissions(unknownWalletAddress), Unspecified)
-	require.Equal(t, allowLister.IsAllowListed(unknownWalletAddress), false)
-	require.Equal(t, allowLister.IsDenyListed(unknownWalletAddress), false)
+	require.Equal(t, authorizer.GetPermissions(unknownWalletAddress), Unspecified)
+	require.Equal(t, authorizer.IsAllowListed(unknownWalletAddress), false)
+	require.Equal(t, authorizer.IsDenyListed(unknownWalletAddress), false)
 }
