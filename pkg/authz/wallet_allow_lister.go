@@ -131,11 +131,14 @@ func (d *DatabaseWalletAllowLister) migrate(ctx context.Context) error {
 	}
 
 	group, err := migrator.Migrate(ctx)
+	if err != nil {
+		return err
+	}
 	if group.IsZero() {
 		d.log.Info("No new migrations to run for DatabaseWalletAllowLister")
 	}
 
-	return err
+	return nil
 }
 
 func mapPermission(permission string) Permission {
