@@ -31,6 +31,7 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
@@ -51,6 +52,7 @@ type Server struct {
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	allowLister   authz.WalletAllowLister
+	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
 }
 
@@ -154,6 +156,9 @@ func New(ctx context.Context, options Options) (server *Server) {
 	if err = server.wakuNode.Start(); err != nil {
 		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
 	}
+
+	server.authenticator = authn.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger)
+	server.authenticator.Start()
 
 	if len(options.Relay.Topics) == 0 {
 		options.Relay.Topics = []string{string(relay.DefaultWakuTopic)}

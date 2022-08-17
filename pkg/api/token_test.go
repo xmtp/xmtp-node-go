@@ -1,4 +1,4 @@
-package authn
+package api
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func Test_Nominal(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, data, err := GenerateToken(now.Add(-time.Minute))
+	token, data, err := generateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, token, now)
 	require.NoError(t, err)
@@ -37,7 +37,7 @@ func Test_XmtpjsToken(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Unix(0, tokenCreatedNs).Add(10 * time.Minute)
-	token, err := DecodeToken(tokenBytes)
+	token, err := decodeToken(tokenBytes)
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, token, now)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func Test_BadAuthSig(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, _, err := GenerateToken(now.Add(-time.Minute))
+	token, _, err := generateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
 	token.GetAuthDataSignature().GetEcdsaCompact().Bytes = randomBytes(64)
 	_, err = validateToken(ctx, token, now)
@@ -60,9 +60,9 @@ func Test_SignatureMismatch(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token1, _, err := GenerateToken(now.Add(-time.Minute))
+	token1, _, err := generateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
-	token2, _, err := GenerateToken(now.Add(-time.Minute))
+	token2, _, err := generateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
 
 	// Nominal Checks
@@ -83,6 +83,6 @@ func Test_SignatureMismatch(t *testing.T) {
 
 func Test_DecodeToken(t *testing.T) {
 	encoded := "CpIBCNq0jcWqMBJECkIKQPZCm1Csbn4SjAE1jyn5AGaGXoOLMoVOTzjJxuSHlwO2fb3sdtfnezZnpF0YBcMmtKlVhSlEuw3vvYBtONWGK34aQwpBBISsYDcvnpmW5m1b6-rL0yfntnx6VeSMWm4OQ7fOXNOD7-1pbpWpEeTEZc6ww9WWfGg_9_juzP2TpvDKyv3pwx4SNgoqMHg5NDA5NTU5RGE0QzgzZmU3ZTc4YjBFOTE2MzBFZjAwNTQ2MDcyNzE4EMCN6uTjt_yFFxpGCkQKQJz75ZZhpGu15ZWruXSyNZFFaDf8JJSdAl8XYLDMLtg8F-85_ARF9Y9m2GoHn3c6QtbgUPe17HzXMAbHtTVd8MIQAQ"
-	_, err := DecodeToken(encoded)
+	_, err := decodeToken(encoded)
 	require.NoError(t, err)
 }

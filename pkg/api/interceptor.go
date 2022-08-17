@@ -1,4 +1,4 @@
-package authn
+package api
 
 import (
 	"context"
@@ -25,12 +25,12 @@ var ErrDenyListed = errors.New("wallet is deny listed")
 // The token ties the request to a wallet (authentication).
 // Authorization decisions are then based on the authenticated wallet.
 type WalletAuthorizer struct {
-	*Config
+	*AuthnConfig
 }
 
 // NewWalletAuthorizer creates an authorizer configured based on the Config.
-func NewWalletAuthorizer(config *Config) *WalletAuthorizer {
-	return &WalletAuthorizer{Config: config}
+func NewWalletAuthorizer(config *AuthnConfig) *WalletAuthorizer {
+	return &WalletAuthorizer{AuthnConfig: config}
 }
 
 func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
@@ -85,7 +85,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
 	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
 		return status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
 	}
-	token, err := DecodeToken(strings.TrimSpace(words[1]))
+	token, err := decodeToken(strings.TrimSpace(words[1]))
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
 	}

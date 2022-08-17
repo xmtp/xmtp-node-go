@@ -8,3 +8,5 @@ if [[ $(gofmt -l .) ]]; then
 fi 
 
 golangci-lint --config dev/.golangci.yaml run ./... --deadline=5m
+
+protolint .

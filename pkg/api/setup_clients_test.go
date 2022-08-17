@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
-	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -104,7 +103,7 @@ func newGRPCClient(t *testing.T, ctx context.Context, server *Server) *grpcClien
 }
 
 func (c *grpcClient) UseToken(token *messageV1.Token) error {
-	et, err := authn.EncodeToken(token)
+	et, err := encodeToken(token)
 	if err != nil {
 		return err
 	}
@@ -261,7 +260,7 @@ func (c *httpClient) Post(path string, req interface{}) (*http.Response, error) 
 	}
 	post.Header.Set("Content-Type", "application/json")
 	if c.token != nil {
-		et, err := authn.EncodeToken(c.token)
+		et, err := encodeToken(c.token)
 		if err != nil {
 			return nil, err
 		}

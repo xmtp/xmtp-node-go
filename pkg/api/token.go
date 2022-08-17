@@ -1,4 +1,4 @@
-package authn
+package api
 
 import (
 	"encoding/base64"
@@ -10,9 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// DecodeToken is exported for testing purposes.
-// Not meant to be part of the package API.
-func DecodeToken(s string) (*messagev1.Token, error) {
+func decodeToken(s string) (*messagev1.Token, error) {
 	b, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
 		return nil, err
@@ -25,9 +23,7 @@ func DecodeToken(s string) (*messagev1.Token, error) {
 	return &token, nil
 }
 
-// EncodeToken is exported for testing purposes.
-// Not meant to be part of the package API.
-func EncodeToken(token *messagev1.Token) (string, error) {
+func encodeToken(token *messagev1.Token) (string, error) {
 	b, err := proto.Marshal(token)
 	if err != nil {
 		return "", err
@@ -35,9 +31,7 @@ func EncodeToken(token *messagev1.Token) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// GenerateToken is exported for testing purposes.
-// Not meant to be part of the package API.
-func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+func generateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
 	wPri, wPub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, nil, err
