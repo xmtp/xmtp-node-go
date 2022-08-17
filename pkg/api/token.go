@@ -11,7 +11,7 @@ import (
 )
 
 func decodeToken(s string) (*messagev1.Token, error) {
-	b, err := base64.RawURLEncoding.DecodeString(s)
+	b, err := base64.RawStdEncoding.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func encodeToken(token *messagev1.Token) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return base64.RawStdEncoding.EncodeToString(b), nil
 }
 
 func generateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {

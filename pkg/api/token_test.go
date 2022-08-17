@@ -30,9 +30,9 @@ func Test_Nominal(t *testing.T) {
 
 func Test_XmtpjsToken(t *testing.T) {
 	// This token was captured from xmtp-js Authn test suite run.
-	tokenBytes := "CpQBCJ-Sl5epMBJGCkQKQPW_UHrWPXGJfHgSmK8vuo9vfy358G7lCQT9ugdXX9W2QVtQz6PJb7aXtfrfsUIBMAQp23iMJdWMtQdsEfnkoPQQARpDCkEEkCxWmMaKJQQMllUYDNJsqPpG_nV-jMs3fuT7wX4oCZd7snbWF5_qI-XJbaCIjtTiDXBkHkih5p56YiEvhHuLURI2CioweEJCNTBEMjczMkZEOGQ0OTgyZUFDMzE0QmRBN2QzNTc5MDQyMDAzQTkQgLzBk6y_qYUXGkYKRApAo42fSDqHB4kY3SwClbGek7O4cxnleu52gHIWEjT3lrcI1RxlJK4KI69UtFd_YRTDzwLwZrbZLXXlYCWqJlev6xAB"
-	tokenAddress := "0xBB50D2732FD8d4982eAC314BdA7d3579042003A9"
-	tokenCreatedNs := int64(1660321909062000128)
+	tokenBytes := "CpQBCPe9zuiqMBJGCkQKQHOOPN+A8lNOnt42Pis2R6jkbDvhsC0EsLDCFf+VGh/yYssKafl7ma+4bmo/fEEvf435Wy/klBXOQN8Nu3lIW+kQARpDCkEEkqxMLK+SGTEE7lnXmOxUoWynlTBg8TAQNIXf2IcometsYfw2UO9C+IryDLH4utr2pHv726oFyuMhpSHi/YNM1hI2CioweDJEMGU2MTRlOERjOEFkZjgyYzcwMDkwRjkwNWU2Y0ZDMURFODQ5MDAQgKumuYqujYYXGkYKRApAQ+8Nug8k6TWLA/pNcPDgW01Sdn9o2h3484jSGlWkxDl1o8mFtsxofxOA5gUxt+/nw33kSER0Yukl1OO2Tfd68hAB"
+	tokenAddress := "0x2D0e614e8Dc8Adf82c70090F905e6cFC1DE84900"
+	tokenCreatedNs := int64(1660761120550000000)
 
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
@@ -79,10 +79,4 @@ func Test_SignatureMismatch(t *testing.T) {
 	require.Error(t, err)
 	_, err = validateToken(ctx, token1, now)
 	require.Error(t, err)
-}
-
-func Test_DecodeToken(t *testing.T) {
-	encoded := "CpIBCNq0jcWqMBJECkIKQPZCm1Csbn4SjAE1jyn5AGaGXoOLMoVOTzjJxuSHlwO2fb3sdtfnezZnpF0YBcMmtKlVhSlEuw3vvYBtONWGK34aQwpBBISsYDcvnpmW5m1b6-rL0yfntnx6VeSMWm4OQ7fOXNOD7-1pbpWpEeTEZc6ww9WWfGg_9_juzP2TpvDKyv3pwx4SNgoqMHg5NDA5NTU5RGE0QzgzZmU3ZTc4YjBFOTE2MzBFZjAwNTQ2MDcyNzE4EMCN6uTjt_yFFxpGCkQKQJz75ZZhpGu15ZWruXSyNZFFaDf8JJSdAl8XYLDMLtg8F-85_ARF9Y9m2GoHn3c6QtbgUPe17HzXMAbHtTVd8MIQAQ"
-	_, err := decodeToken(encoded)
-	require.NoError(t, err)
 }
