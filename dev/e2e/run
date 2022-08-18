@@ -4,5 +4,4 @@ set -e
 export XMTPD_E2E_ENV="${1:-local}"
 export E2E="yes"
 
-go clean -testcache
-go test -timeout=0 ./pkg/e2e/... -v
+go run cmd/xmtpd-e2e/main.go
