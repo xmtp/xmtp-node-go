@@ -2,11 +2,8 @@ package e2e
 
 import (
 	"context"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -46,21 +43,24 @@ var (
 	}
 )
 
-func withMetricsServer(t *testing.T, ctx context.Context, fn func(t *testing.T)) {
-	log, err := zap.NewDevelopment()
-	require.NoError(t, err)
-
+func withMetricsServer(ctx context.Context, log *zap.Logger, fn func()) error {
 	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, log)
 	go metrics.Start()
 	defer func() {
 		err := metrics.Stop(ctx)
-		assert.NoError(t, err)
+		if err != nil {
+			log.Error("stopping metrics server", zap.Error(err))
+		}
 	}()
 
-	err = view.Register(views...)
-	require.NoError(t, err)
+	err := view.Register(views...)
+	if err != nil {
+		return err
+	}
 
-	fn(t)
+	fn()
+
+	return nil
 }
 
 func recordSuccessfulRun(ctx context.Context, tags ...tag) error {
