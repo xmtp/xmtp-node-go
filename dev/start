@@ -9,4 +9,5 @@ dev/run \
     --lightpush \
     --ws \
     --ws-port="${PORT}" \
+    --api.authn.enable \
     "$@"

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
 	proto "github.com/xmtp/proto/go/message_api/v1"
@@ -66,7 +68,8 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating grpc listener")
 	}
 
-	options := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials())}
+	unary := []grpc.UnaryServerInterceptor{prometheus.UnaryServerInterceptor}
+	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 	if s.Config.Authn.Enable {
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
 			AuthnOptions: s.Config.Authn,
@@ -74,11 +77,13 @@ func (s *Server) startGRPC() error {
 			AllowLister:  s.Config.AllowLister,
 			Log:          s.Log.Named("authn"),
 		})
-
-		options = append(options,
-			grpc.UnaryInterceptor(s.authorizer.Unary()),
-			grpc.StreamInterceptor(s.authorizer.Stream()),
-		)
+		unary = append(unary, s.authorizer.Unary())
+		stream = append(stream, s.authorizer.Stream())
+	}
+	options := []grpc.ServerOption{
+		grpc.Creds(insecure.NewCredentials()),
+		grpc.UnaryInterceptor(middleware.ChainUnaryServer(unary...)),
+		grpc.StreamInterceptor(middleware.ChainStreamServer(stream...)),
 	}
 	grpcServer := grpc.NewServer(options...)
 
@@ -87,6 +92,7 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating message service")
 	}
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
+	prometheus.Register(grpcServer)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "grpc", func(ctx context.Context) {
 		s.Log.Info("serving grpc", zap.String("address", s.grpcListener.Addr().String()))

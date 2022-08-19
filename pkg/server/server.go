@@ -81,7 +81,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	if options.Metrics.Enable {
 		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
 		metrics.RegisterViews(server.logger)
-		go tracing.PanicWrap(server.ctx, "metrics server", func(_ context.Context) { server.metricsServer.Start() })
+		server.metricsServer.Start(server.ctx)
 	}
 
 	if options.Authz.DbConnectionString != "" {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/status-im/go-waku/waku/v2/node"
+
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
@@ -109,7 +109,7 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
 	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
 
-	n2, cleanup := newTestNode(t, []*node.WakuNode{n1}, true, nil)
+	n2, cleanup := newTestNode(t, []*wakunode.WakuNode{n1}, true, nil)
 	defer cleanup()
 
 	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
@@ -454,7 +454,7 @@ func TestNodes_Deployment(t *testing.T) {
 	}
 }
 
-func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool, db *sql.DB, opts ...node.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool, db *sql.DB, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	var dbCleanup func()
 	n, nodeCleanup := test.NewNode(t, storeNodes,
 		append(
@@ -519,7 +519,7 @@ func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []
 	return res.Messages
 }
 
-func expectStoreMessagesEventually(t *testing.T, n *node.WakuNode, contentTopics []string, expectedMsgs []*pb.WakuMessage) {
+func expectStoreMessagesEventually(t *testing.T, n *wakunode.WakuNode, contentTopics []string, expectedMsgs []*pb.WakuMessage) {
 
 	msgs := listMessages(t, n, contentTopics)
 	if len(msgs) == len(expectedMsgs) {
