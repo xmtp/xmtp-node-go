@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/status-im/go-waku/waku/metrics"
 	v2metrics "github.com/status-im/go-waku/waku/v2/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.opencensus.io/stats/view"
 	"go.uber.org/zap"
@@ -29,10 +30,11 @@ func NewMetricsServer(address string, port int, logger *zap.Logger) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) {
+	log := logging.From(ctx).Named("metrics")
 	go tracing.PanicWrap(ctx, "waku metrics server", func(_ context.Context) { s.waku.Start() })
 	s.http = &http.Server{Addr: ":8009", Handler: promhttp.Handler()}
 	go tracing.PanicWrap(ctx, "metrics server", func(_ context.Context) {
-		s.http.ListenAndServe()
+		log.Info("server stopped", zap.Error(s.http.ListenAndServe()))
 	})
 }
 
