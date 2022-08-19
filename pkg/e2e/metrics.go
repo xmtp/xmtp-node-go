@@ -43,13 +43,13 @@ var (
 	}
 )
 
-func withMetricsServer(ctx context.Context, log *zap.Logger, fn func()) error {
-	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, log)
+func (e *E2E) withMetricsServer(fn func()) error {
+	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, e.log)
 	go metrics.Start()
 	defer func() {
-		err := metrics.Stop(ctx)
+		err := metrics.Stop(e.ctx)
 		if err != nil {
-			log.Error("stopping metrics server", zap.Error(err))
+			e.log.Error("stopping metrics server", zap.Error(err))
 		}
 	}()
 

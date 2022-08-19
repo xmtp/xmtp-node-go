@@ -2,4 +2,6 @@
 set -e
 . dev/e2e/docker/env
 
+export GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
+
 docker_compose down
