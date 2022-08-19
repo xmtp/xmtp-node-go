@@ -30,7 +30,7 @@ func main() {
 	}
 
 	e := e2e.New(ctx, log, &e2e.Config{
-		ShouldRunContinuously:   envVarBool("E2E_CONTINUOUS"),
+		Continuous:              envVarBool("E2E_CONTINUOUS"),
 		NetworkEnv:              networkEnv,
 		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
 		NodesURL:                nodesURL,

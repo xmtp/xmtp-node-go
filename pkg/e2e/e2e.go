@@ -37,7 +37,7 @@ type E2E struct {
 }
 
 type Config struct {
-	ShouldRunContinuously   bool
+	Continuous              bool
 	NetworkEnv              string
 	BootstrapAddrs          []string
 	NodesURL                string
@@ -54,7 +54,7 @@ func New(ctx context.Context, log *zap.Logger, config *Config) *E2E {
 }
 
 func (e *E2E) Run() error {
-	if e.config.ShouldRunContinuously {
+	if e.config.Continuous {
 		go func() {
 			err := http.ListenAndServe("localhost:6060", nil)
 			if err != nil {
@@ -72,7 +72,7 @@ func (e *E2E) Run() error {
 				e.log.Info("test passed")
 			}
 
-			if !e.config.ShouldRunContinuously {
+			if !e.config.Continuous {
 				break
 			}
 			time.Sleep(time.Duration(e.config.DelayBetweenRunsSeconds) * time.Second)
