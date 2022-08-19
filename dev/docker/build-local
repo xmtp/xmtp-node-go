@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -e
+
+DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-dev}"
+DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/node-go}"
+GIT_COMMIT="$(git rev-parse HEAD)"
+GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
+
+docker build \
+    --tag "${DOCKER_IMAGE_NAME}:latest" \
+    --build-arg="GO_VERSION=${GO_VERSION}" \
+    --build-arg="GIT_COMMIT=${GIT_COMMIT}" \
+    -f dev/docker/Dockerfile \
+    .
