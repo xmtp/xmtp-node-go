@@ -64,12 +64,7 @@ func (e *E2E) Run() error {
 
 	err := e.withMetricsServer(func() {
 		for {
-			err := e.runTest("publish subscribe query", e.testPublishSubscribeQuery)
-			if err != nil {
-				e.log.Error("test failed", zap.Error(err))
-			} else {
-				e.log.Info("test passed")
-			}
+			e.runTest("publish subscribe query", e.testPublishSubscribeQuery)
 
 			if !e.config.Continuous {
 				break
@@ -84,31 +79,34 @@ func (e *E2E) Run() error {
 	return nil
 }
 
-func (e *E2E) runTest(name string, fn func() error) error {
+func (e *E2E) runTest(name string, fn func(log *zap.Logger) error) {
 	nameTag := newTag(testNameTagKey, name)
 	started := time.Now().UTC()
+	log := e.log.With(zap.String("test", name))
 
-	err := fn()
+	err := fn(log)
+	ended := time.Now().UTC()
+	duration := ended.Sub(started)
+	log = log.With(zap.Duration("duration", duration))
 	if err != nil {
 		recordErr := recordFailedRun(e.ctx, nameTag)
 		if recordErr != nil {
-			e.log.Error("recording failed run metric", zap.Error(err))
+			log.Error("recording failed run metric", zap.Error(err))
 		}
-		return err
+		log.Error("test failed", zap.Error(err))
+		return
 	}
-	ended := time.Now().UTC()
+	log.Info("test passed")
 
 	err = recordSuccessfulRun(e.ctx, nameTag)
 	if err != nil {
-		return err
+		log.Error("recording successful run metric", zap.Error(err))
 	}
 
-	err = recordRunDuration(e.ctx, ended.Sub(started), nameTag)
+	err = recordRunDuration(e.ctx, duration, nameTag)
 	if err != nil {
-		return err
+		log.Error("recording run duration", zap.Error(err))
 	}
-
-	return nil
 }
 
 func fetchBootstrapAddrs(nodesURL string, env string) ([]string, error) {

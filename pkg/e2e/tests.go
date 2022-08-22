@@ -7,9 +7,10 @@ import (
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"go.uber.org/zap"
 )
 
-func (e *E2E) testPublishSubscribeQuery() error {
+func (e *E2E) testPublishSubscribeQuery(log *zap.Logger) error {
 	// Fetch bootstrap node addresses.
 	var bootstrapAddrs []string
 	if len(e.config.BootstrapAddrs) == 0 {
@@ -29,7 +30,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 	clients := make([]*wakunode.WakuNode, len(bootstrapAddrs))
 	for i, addr := range bootstrapAddrs {
 		c, cleanup, err := newNode(
-			e.log,
+			log,
 			// Specify libp2p options here to avoid using the waku-default that
 			// enables the NAT service, which currently leaks goroutines over
 			// time when creating and destroying many in-process.
@@ -83,7 +84,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 
 	// Expect that they've all been stored on each node.
 	for i, c := range clients {
-		err := expectQueryMessagesEventually(e.log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
+		err := expectQueryMessagesEventually(log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
 		if err != nil {
 			return err
 		}
