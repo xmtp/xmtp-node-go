@@ -68,6 +68,7 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating grpc listener")
 	}
 
+	prometheus.EnableHandlingTimeHistogram()
 	unary := []grpc.UnaryServerInterceptor{prometheus.UnaryServerInterceptor}
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 	if s.Config.Authn.Enable {
