@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
+	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 )
 
 func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
@@ -22,7 +24,7 @@ func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
 	return envs
 }
 
-func subscribeExpect(t *testing.T, stream stream, expected []*messageV1.Envelope) {
+func subscribeExpect(t *testing.T, stream messageclient.Stream, expected []*messageV1.Envelope) {
 	received := []*messageV1.Envelope{}
 	for i := 0; i < len(expected); i++ {
 		env, err := stream.Next()
@@ -34,14 +36,16 @@ func subscribeExpect(t *testing.T, stream stream, expected []*messageV1.Envelope
 	requireEnvelopesEqual(t, expected, received)
 }
 
-func requireEventuallyStored(t *testing.T, client client, expected []*messageV1.Envelope) {
+func requireEventuallyStored(t *testing.T, ctx context.Context, client messageclient.Client, expected []*messageV1.Envelope) {
 	var queryRes *messageV1.QueryResponse
 	require.Eventually(t, func() bool {
-		queryRes = client.Query(t, &messageV1.QueryRequest{
+		var err error
+		queryRes, err = client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{expected[0].ContentTopic},
 			PagingInfo: &messageV1.PagingInfo{
 				Direction: messageV1.SortDirection_SORT_DIRECTION_ASCENDING},
 		})
+		require.NoError(t, err)
 		return len(queryRes.Envelopes) == len(expected)
 	}, 2*time.Second, 100*time.Millisecond)
 	require.NotNil(t, queryRes)

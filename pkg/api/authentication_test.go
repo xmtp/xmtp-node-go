@@ -1,24 +1,18 @@
 package api
 
 import (
+	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
+	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 )
 
-var authnEnabled = Options{
-	GRPCPort: 0,
-	HTTPPort: 0,
-	Authn: AuthnOptions{
-		Enable: true,
-	},
-}
-
 func Test_AuthnNoToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
-		_, err := client.RawPublish(&messageV1.PublishRequest{})
+	ctx := context.Background()
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "authorization token is not provided")
 	})
@@ -26,8 +20,9 @@ func Test_AuthnNoToken(t *testing.T) {
 
 // Private key topic queries must be let through without authn
 func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
-		_, err := client.RawQuery(&messageV1.QueryRequest{
+	ctx := context.Background()
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"privatestore-123"},
 		})
 		require.NoError(t, err)
@@ -35,23 +30,17 @@ func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 }
 
 func Test_AuthnValidToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
-		token, _, err := generateToken(time.Now())
-		require.NoError(t, err)
-		err = client.UseToken(token)
-		require.NoError(t, err)
-		_, err = client.RawPublish(&messageV1.PublishRequest{})
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.NoError(t, err)
 	})
 }
 
 func Test_AuthnExpiredToken(t *testing.T) {
-	GRPCAndHTTPRunWithOptions(t, authnEnabled, func(t *testing.T, client client, server *Server) {
-		token, _, err := generateToken(time.Now().Add(-24 * time.Hour))
-		require.NoError(t, err)
-		err = client.UseToken(token)
-		require.NoError(t, err)
-		_, err = client.RawPublish(&messageV1.PublishRequest{})
+	ctx := withExpiredAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "token expired")
 	})
