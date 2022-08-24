@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -273,7 +272,8 @@ func expectQueryMessagesEventually(log *zap.Logger, n *wakunode.WakuNode, peerAd
 			break
 		}
 		if time.Since(started) > timeout {
-			return errors.New("timeout")
+			diff := cmp.Diff(msgs, expectedMsgs, cmpopts.SortSlices(wakuMessagesLessFn))
+			return fmt.Errorf("timeout waiting for query expectation, diff: %s", diff)
 		}
 		time.Sleep(delay)
 	}
