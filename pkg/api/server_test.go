@@ -4,25 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
+	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 )
 
 func Test_HTTPRootPath(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	server, cleanup := newTestServer(t)
 	defer cleanup()
-	client := newHttpClient(t, ctx, server)
 
 	// Root path responds with 404.
 	var rootRes map[string]interface{}
-	resp, err := client.Post("", nil)
+	resp, err := http.Post(server.httpListenAddr(), "application/json", nil)
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -36,58 +35,67 @@ func Test_HTTPRootPath(t *testing.T) {
 }
 
 func Test_SubscribePublishQuery(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, _ *Server) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
-		stream := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream.Close()
 		time.Sleep(50 * time.Millisecond)
 
 		// publish 10 messages
 		envs := makeEnvelopes(10)
-		publishRes := client.Publish(t, &messageV1.PublishRequest{Envelopes: envs})
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 
 		// read subscription
 		subscribeExpect(t, stream, envs)
 
 		// query for messages
-		requireEventuallyStored(t, client, envs)
+		requireEventuallyStored(t, ctx, client, envs)
 	})
 }
 
 func Test_QueryNonExistentTopic(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, _ *Server) {
-		queryRes := client.Query(t, &messageV1.QueryRequest{
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"does-not-exist"},
 		})
+		require.NoError(t, err)
 		require.NotNil(t, queryRes)
 		require.Len(t, queryRes.Envelopes, 0)
 	})
 }
 
 func Test_SubscribeClientClose(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, _ *Server) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
-		stream := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream.Close()
 		time.Sleep(50 * time.Millisecond)
 
 		// publish 5 messages
 		envs := makeEnvelopes(10)
-		publishRes := client.Publish(t, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
-		err := stream.Close()
+		err = stream.Close()
 		require.NoError(t, err)
 
 		// publish another 5
-		publishRes = client.Publish(t, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 		time.Sleep(50 * time.Millisecond)
 
@@ -97,17 +105,20 @@ func Test_SubscribeClientClose(t *testing.T) {
 }
 
 func Test_SubscribeServerClose(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, server *Server) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
-		stream := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream.Close()
 		time.Sleep(50 * time.Millisecond)
 
 		// Publish 5 messages.
 		envs := makeEnvelopes(5)
-		publishRes := client.Publish(t, &messageV1.PublishRequest{Envelopes: envs})
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 
 		// Receive 5
@@ -116,27 +127,31 @@ func Test_SubscribeServerClose(t *testing.T) {
 		// stop Server
 		server.Close()
 
-		_, err := stream.Next()
+		_, err = stream.Next()
 		require.Equal(t, io.EOF, err)
 	})
 }
 
 func Test_MultipleSubscriptions(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, server *Server) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// start 2 streams
-		stream1 := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream1, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream1.Close()
-		stream2 := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream2, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream2.Close()
 		time.Sleep(50 * time.Millisecond)
 
 		// publish 5 envelopes
 		envs := makeEnvelopes(10)
-		publishRes := client.Publish(t, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 
 		// receive 5 envelopes on both streams
@@ -144,16 +159,18 @@ func Test_MultipleSubscriptions(t *testing.T) {
 		subscribeExpect(t, stream2, envs[:5])
 
 		// close stream1, start stream3
-		err := stream1.Close()
+		err = stream1.Close()
 		require.NoError(t, err)
-		stream3 := client.Subscribe(t, &messageV1.SubscribeRequest{
+		stream3, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
 		defer stream3.Close()
 		time.Sleep(50 * time.Millisecond)
 
 		// publish another 5 envelopes
-		publishRes = client.Publish(t, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 
 		// receive 5 on stream 2 and 3
@@ -163,13 +180,15 @@ func Test_MultipleSubscriptions(t *testing.T) {
 }
 
 func Test_QueryPaging(t *testing.T) {
-	GRPCAndHTTPRun(t, func(t *testing.T, client client, _ *Server) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// Store 10 envelopes with increasing SenderTimestamp
 		envs := makeEnvelopes(10)
-		publishRes := client.Publish(t, &messageV1.PublishRequest{Envelopes: envs})
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 		time.Sleep(50 * time.Millisecond)
-		requireEventuallyStored(t, client, envs)
+		requireEventuallyStored(t, ctx, client, envs)
 
 		// We want to page through envs[2]-envs[8] in pages of 3 in reverse order
 		result := make([]*messageV1.Envelope, 7)
@@ -188,19 +207,22 @@ func Test_QueryPaging(t *testing.T) {
 		}
 
 		// 1st page
-		queryRes := client.Query(t, query)
+		queryRes, err := client.Query(ctx, query)
+		require.NoError(t, err)
 		require.NotNil(t, queryRes)
 		requireEnvelopesEqual(t, result[0:3], queryRes.Envelopes)
 
 		// 2nd page
 		query.PagingInfo.Cursor = queryRes.PagingInfo.Cursor
-		queryRes = client.Query(t, query)
+		queryRes, err = client.Query(ctx, query)
+		require.NoError(t, err)
 		require.NotNil(t, queryRes)
 		requireEnvelopesEqual(t, result[3:6], queryRes.Envelopes)
 
 		// 3rd page (only 1 envelope left)
 		query.PagingInfo.Cursor = queryRes.PagingInfo.Cursor
-		queryRes = client.Query(t, query)
+		queryRes, err = client.Query(ctx, query)
+		require.NoError(t, err)
 		require.NotNil(t, queryRes)
 		requireEnvelopesEqual(t, result[6:], queryRes.Envelopes)
 	})

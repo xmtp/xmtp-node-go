@@ -73,7 +73,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
 		return status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
 
-	values := md.Get("authorization")
+	values := md.Get(authorizationMetadataKey)
 	if len(values) == 0 {
 		return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}

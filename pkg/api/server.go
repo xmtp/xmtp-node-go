@@ -23,6 +23,10 @@ import (
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 )
 
+const (
+	authorizationMetadataKey = "authorization"
+)
+
 type Server struct {
 	*Config
 
@@ -181,6 +185,10 @@ func (s *Server) dialGRPC(ctx context.Context) (*grpc.ClientConn, error) {
 		dialAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
+}
+
+func (s *Server) httpListenAddr() string {
+	return "http://" + s.httpListener.Addr().String()
 }
 
 func isErrUseOfClosedConnection(err error) bool {
