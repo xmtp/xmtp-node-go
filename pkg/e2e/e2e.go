@@ -22,9 +22,11 @@ import (
 	wakufilter "github.com/status-im/go-waku/waku/v2/protocol/filter"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
+	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/metadata"
 
 	_ "net/http/pprof"
 )
@@ -334,4 +336,17 @@ func queryMessages(log *zap.Logger, c *wakunode.WakuNode, peerAddr string, conte
 	}
 
 	return msgs, nil
+}
+
+func withAuth(ctx context.Context) (context.Context, error) {
+	token, _, err := api.GenerateToken(time.Now())
+	if err != nil {
+		return ctx, err
+	}
+	et, err := api.EncodeToken(token)
+	if err != nil {
+		return ctx, err
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+et)
+	return ctx, nil
 }

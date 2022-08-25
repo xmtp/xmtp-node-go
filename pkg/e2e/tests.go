@@ -16,11 +16,14 @@ import (
 
 func (e *E2E) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	ctx := context.Background()
-
-	client := messageclient.NewHTTPClient(ctx, "http://localhost:5555")
+	ctx, err := withAuth(ctx)
+	if err != nil {
+		return err
+	}
+	client := messageclient.NewHTTPClient(ctx, "http://localhost:8080")
 
 	contentTopic := "test-" + randomStringLower(5)
-	_, err := client.Publish(ctx, &messagev1.PublishRequest{
+	_, err = client.Publish(ctx, &messagev1.PublishRequest{
 		Envelopes: []*messagev1.Envelope{
 			{
 				ContentTopic: contentTopic,

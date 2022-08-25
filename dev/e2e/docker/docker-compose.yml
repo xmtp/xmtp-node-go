@@ -5,6 +5,12 @@ services:
       - 8000:80
     volumes:
       - ./nodes:/usr/share/nginx/html
+  api:
+    image: nginx
+    ports:
+      - 8080:80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
   db:
     image: postgres:13
     environment:
