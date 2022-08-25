@@ -23,6 +23,7 @@ type Config struct {
 	NetworkEnv              string
 	BootstrapAddrs          []string
 	NodesURL                string
+	APIURL                  string
 	DelayBetweenRunsSeconds int
 }
 

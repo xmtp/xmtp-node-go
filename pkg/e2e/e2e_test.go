@@ -11,6 +11,7 @@ import (
 const (
 	localNetworkEnv = "local"
 	localNodesURL   = "http://localhost:8000"
+	localAPIURL     = "http://localhost:8080"
 )
 
 func TestE2E(t *testing.T) {
@@ -21,6 +22,7 @@ func TestE2E(t *testing.T) {
 	s := NewSuite(ctx, log, &Config{
 		NetworkEnv: localNetworkEnv,
 		NodesURL:   localNodesURL,
+		APIURL:     localAPIURL,
 	})
 
 	for _, test := range s.Tests() {

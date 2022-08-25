@@ -15,7 +15,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	client := messageclient.NewHTTPClient(ctx, "http://localhost:8080")
+	client := messageclient.NewHTTPClient(ctx, s.config.APIURL)
 
 	contentTopic := "test-" + randomStringLower(5)
 	_, err = client.Publish(ctx, &messagev1.PublishRequest{
