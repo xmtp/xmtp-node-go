@@ -29,7 +29,7 @@ func main() {
 		nodesURL = remoteNodesURL
 	}
 
-	e := e2e.New(ctx, log, &e2e.Config{
+	runner := e2e.NewRunner(ctx, log, &e2e.Config{
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
 		NetworkEnv:              networkEnv,
 		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
@@ -37,7 +37,7 @@ func main() {
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 	})
 
-	err = e.Run()
+	err = runner.Start()
 	if err != nil {
 		log.Fatal("running e2e", zap.Error(err))
 	}

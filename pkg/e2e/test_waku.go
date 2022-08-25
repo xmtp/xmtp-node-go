@@ -1,50 +1,21 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
-	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"go.uber.org/zap"
 )
 
-func (e *E2E) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
-	ctx := context.Background()
-	ctx, err := withAuth(ctx)
-	if err != nil {
-		return err
-	}
-	client := messageclient.NewHTTPClient(ctx, "http://localhost:8080")
-
-	contentTopic := "test-" + randomStringLower(5)
-	_, err = client.Publish(ctx, &messagev1.PublishRequest{
-		Envelopes: []*messagev1.Envelope{
-			{
-				ContentTopic: contentTopic,
-				TimestampNs:  1,
-				Message:      []byte("msg1"),
-			},
-		},
-	})
-	if err != nil {
-		return errors.Wrap(err, "publishing")
-	}
-
-	return nil
-}
-
-func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
+func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	// Fetch bootstrap node addresses.
 	var bootstrapAddrs []string
-	if len(e.config.BootstrapAddrs) == 0 {
+	if len(s.config.BootstrapAddrs) == 0 {
 		var err error
-		bootstrapAddrs, err = fetchBootstrapAddrs(e.config.NodesURL, e.config.NetworkEnv)
+		bootstrapAddrs, err = fetchBootstrapAddrs(s.config.NodesURL, s.config.NetworkEnv)
 		if err != nil {
 			return err
 		}
@@ -52,7 +23,7 @@ func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 			return fmt.Errorf("expected bootstrap addrs length 3, got: %d", len(bootstrapAddrs))
 		}
 	} else {
-		bootstrapAddrs = e.config.BootstrapAddrs
+		bootstrapAddrs = s.config.BootstrapAddrs
 	}
 
 	// Create a client node for each bootstrap node, and connect to it.
@@ -71,7 +42,7 @@ func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 			return err
 		}
 		defer cleanup()
-		err = connectWithAddr(e.ctx, c, addr)
+		err = connectWithAddr(s.ctx, c, addr)
 		if err != nil {
 			return err
 		}
@@ -84,7 +55,7 @@ func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	envCs := make([]chan *wakuprotocol.Envelope, len(clients))
 	for i, c := range clients {
 		var err error
-		envCs[i], err = subscribeTo(e.ctx, c, []string{contentTopic})
+		envCs[i], err = subscribeTo(s.ctx, c, []string{contentTopic})
 		if err != nil {
 			return err
 		}
@@ -97,7 +68,7 @@ func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 		msgs[i] = newMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
 	}
 	for i, sender := range clients {
-		err := publish(e.ctx, sender, msgs[i])
+		err := publish(s.ctx, sender, msgs[i])
 		if err != nil {
 			return err
 		}

@@ -17,10 +17,18 @@ func TestE2E(t *testing.T) {
 	ctx := context.Background()
 	log, err := zap.NewDevelopment()
 	require.NoError(t, err)
-	e := New(ctx, log, &Config{
+
+	s := NewSuite(ctx, log, &Config{
 		NetworkEnv: localNetworkEnv,
 		NodesURL:   localNodesURL,
 	})
-	err = e.Run()
-	require.NoError(t, err)
+
+	for _, test := range s.Tests() {
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			err := test.Run(log)
+			require.NoError(t, err)
+		})
+	}
 }

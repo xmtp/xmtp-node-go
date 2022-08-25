@@ -43,13 +43,13 @@ var (
 	}
 )
 
-func (e *E2E) withMetricsServer(fn func() error) error {
-	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, e.log)
+func (r *Runner) withMetricsServer(fn func() error) error {
+	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, r.log)
 	metrics.Start(context.Background())
 	defer func() {
-		err := metrics.Stop(e.ctx)
+		err := metrics.Stop(r.ctx)
 		if err != nil {
-			e.log.Error("stopping metrics server", zap.Error(err))
+			r.log.Error("stopping metrics server", zap.Error(err))
 		}
 	}()
 
