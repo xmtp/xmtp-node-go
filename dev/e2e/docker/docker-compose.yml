@@ -23,6 +23,7 @@ services:
         - GO_VERSION=${GO_VERSION}
     ports:
       - 16001:6001
+      - 15555:5555
     restart: always
     command:
     - --store
@@ -51,6 +52,7 @@ services:
         - GO_VERSION=${GO_VERSION}
     ports:
       - 26001:6001
+      - 25555:5555
     restart: always
     command:
     - --store
@@ -79,6 +81,7 @@ services:
         - GO_VERSION=${GO_VERSION}
     ports:
       - 36001:6001
+      - 35555:5555
     restart: always
     command:
     - --store
