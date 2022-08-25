@@ -1,16 +1,42 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
+	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"go.uber.org/zap"
 )
 
-func (e *E2E) testPublishSubscribeQuery(log *zap.Logger) error {
+func (e *E2E) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
+	ctx := context.Background()
+
+	client := messageclient.NewHTTPClient(ctx, "http://localhost:5555")
+
+	contentTopic := "test-" + randomStringLower(5)
+	_, err := client.Publish(ctx, &messagev1.PublishRequest{
+		Envelopes: []*messagev1.Envelope{
+			{
+				ContentTopic: contentTopic,
+				TimestampNs:  1,
+				Message:      []byte("msg1"),
+			},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "publishing")
+	}
+
+	return nil
+}
+
+func (e *E2E) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	// Fetch bootstrap node addresses.
 	var bootstrapAddrs []string
 	if len(e.config.BootstrapAddrs) == 0 {

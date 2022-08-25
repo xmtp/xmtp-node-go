@@ -43,7 +43,7 @@ var (
 	}
 )
 
-func (e *E2E) withMetricsServer(fn func()) error {
+func (e *E2E) withMetricsServer(fn func() error) error {
 	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, e.log)
 	metrics.Start(context.Background())
 	defer func() {
@@ -58,9 +58,7 @@ func (e *E2E) withMetricsServer(fn func()) error {
 		return err
 	}
 
-	fn()
-
-	return nil
+	return fn()
 }
 
 func recordSuccessfulRun(ctx context.Context, tags ...tag) error {

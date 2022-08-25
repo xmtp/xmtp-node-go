@@ -24,6 +24,7 @@ import (
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	_ "net/http/pprof"
 )
@@ -62,24 +63,30 @@ func (e *E2E) Run() error {
 		}()
 	}
 
-	err := e.withMetricsServer(func() {
+	return e.withMetricsServer(func() error {
 		for {
-			e.runTest("publish subscribe query", e.testPublishSubscribeQuery)
+			g, _ := errgroup.WithContext(e.ctx)
+			g.Go(func() error {
+				return e.runTest("messagev1 publish subscribe query", e.testMessageV1PublishSubscribeQuery)
+			})
+			g.Go(func() error {
+				return e.runTest("waku publish subscribe query", e.testWakuPublishSubscribeQuery)
+			})
+			err := g.Wait()
+			if err != nil {
+				return err
+			}
 
 			if !e.config.Continuous {
 				break
 			}
 			time.Sleep(time.Duration(e.config.DelayBetweenRunsSeconds) * time.Second)
 		}
+		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
-func (e *E2E) runTest(name string, fn func(log *zap.Logger) error) {
+func (e *E2E) runTest(name string, fn func(log *zap.Logger) error) error {
 	nameTag := newTag(testNameTagKey, name)
 	started := time.Now().UTC()
 	log := e.log.With(zap.String("test", name))
@@ -94,19 +101,23 @@ func (e *E2E) runTest(name string, fn func(log *zap.Logger) error) {
 			log.Error("recording failed run metric", zap.Error(err))
 		}
 		log.Error("test failed", zap.Error(err))
-		return
+		return err
 	}
 	log.Info("test passed")
 
 	err = recordSuccessfulRun(e.ctx, nameTag)
 	if err != nil {
 		log.Error("recording successful run metric", zap.Error(err))
+		return err
 	}
 
 	err = recordRunDuration(e.ctx, duration, nameTag)
 	if err != nil {
 		log.Error("recording run duration", zap.Error(err))
+		return err
 	}
+
+	return nil
 }
 
 func fetchBootstrapAddrs(nodesURL string, env string) ([]string, error) {
