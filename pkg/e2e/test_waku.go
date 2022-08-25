@@ -42,7 +42,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 			return err
 		}
 		defer cleanup()
-		err = connectWithAddr(s.ctx, c, addr)
+		err = wakuConnectWithAddr(s.ctx, c, addr)
 		if err != nil {
 			return err
 		}
@@ -55,7 +55,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	envCs := make([]chan *wakuprotocol.Envelope, len(clients))
 	for i, c := range clients {
 		var err error
-		envCs[i], err = subscribeTo(s.ctx, c, []string{contentTopic})
+		envCs[i], err = wakuSubscribeTo(s.ctx, c, []string{contentTopic})
 		if err != nil {
 			return err
 		}
@@ -65,10 +65,10 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	// Send a message to every node.
 	msgs := make([]*wakupb.WakuMessage, len(clients))
 	for i := range clients {
-		msgs[i] = newMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
+		msgs[i] = newWakuMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
 	}
 	for i, sender := range clients {
-		err := publish(s.ctx, sender, msgs[i])
+		err := wakuPublish(s.ctx, sender, msgs[i])
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 
 	// Expect them to be relayed to all nodes.
 	for _, envC := range envCs {
-		err := subscribeExpect(envC, msgs)
+		err := wakuSubscribeExpect(envC, msgs)
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 
 	// Expect that they've all been stored on each node.
 	for i, c := range clients {
-		err := expectQueryMessagesEventually(log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
+		err := wakuExpectQueryMessagesEventually(log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
 		if err != nil {
 			return err
 		}

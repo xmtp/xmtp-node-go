@@ -26,6 +26,7 @@ func TestE2E(t *testing.T) {
 	})
 
 	for _, test := range s.Tests() {
+		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 

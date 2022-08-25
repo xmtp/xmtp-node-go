@@ -97,7 +97,7 @@ func newPrivateKey() (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func connectWithAddr(ctx context.Context, n *wakunode.WakuNode, addr string) error {
+func wakuConnectWithAddr(ctx context.Context, n *wakunode.WakuNode, addr string) error {
 	err := n.DialPeer(ctx, addr)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func randomStringLower(n int) string {
 	return strings.ToLower(randomString(n))
 }
 
-func subscribeTo(ctx context.Context, n *wakunode.WakuNode, contentTopics []string) (chan *wakuprotocol.Envelope, error) {
+func wakuSubscribeTo(ctx context.Context, n *wakunode.WakuNode, contentTopics []string) (chan *wakuprotocol.Envelope, error) {
 	_, f, err := n.Filter().Subscribe(ctx, wakufilter.ContentFilter{
 		ContentTopics: contentTopics,
 	})
@@ -134,7 +134,7 @@ func subscribeTo(ctx context.Context, n *wakunode.WakuNode, contentTopics []stri
 	return f.Chan, nil
 }
 
-func newMessage(contentTopic string, timestamp int64, content string) *wakupb.WakuMessage {
+func newWakuMessage(contentTopic string, timestamp int64, content string) *wakupb.WakuMessage {
 	return &wakupb.WakuMessage{
 		Payload:      []byte(content),
 		ContentTopic: contentTopic,
@@ -142,12 +142,12 @@ func newMessage(contentTopic string, timestamp int64, content string) *wakupb.Wa
 	}
 }
 
-func publish(ctx context.Context, n *wakunode.WakuNode, msg *wakupb.WakuMessage) error {
+func wakuPublish(ctx context.Context, n *wakunode.WakuNode, msg *wakupb.WakuMessage) error {
 	_, err := n.Relay().Publish(ctx, msg)
 	return err
 }
 
-func subscribeExpect(envC chan *wakuprotocol.Envelope, msgs []*wakupb.WakuMessage) error {
+func wakuSubscribeExpect(envC chan *wakuprotocol.Envelope, msgs []*wakupb.WakuMessage) error {
 	receivedMsgs := []*wakupb.WakuMessage{}
 	var done bool
 	for !done {
@@ -169,12 +169,12 @@ func subscribeExpect(envC chan *wakuprotocol.Envelope, msgs []*wakupb.WakuMessag
 	return nil
 }
 
-func expectQueryMessagesEventually(log *zap.Logger, n *wakunode.WakuNode, peerAddr string, contentTopics []string, expectedMsgs []*wakupb.WakuMessage) error {
+func wakuExpectQueryMessagesEventually(log *zap.Logger, n *wakunode.WakuNode, peerAddr string, contentTopics []string, expectedMsgs []*wakupb.WakuMessage) error {
 	timeout := 3 * time.Second
 	delay := 500 * time.Millisecond
 	started := time.Now()
 	for {
-		msgs, err := queryMessages(log, n, peerAddr, contentTopics)
+		msgs, err := wakuQueryMessages(log, n, peerAddr, contentTopics)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func wakuMessagesLessFn(a, b *wakupb.WakuMessage) bool {
 	return bytes.Compare(a.Payload, b.Payload) < 0
 }
 
-func queryMessages(log *zap.Logger, c *wakunode.WakuNode, peerAddr string, contentTopics []string) ([]*wakupb.WakuMessage, error) {
+func wakuQueryMessages(log *zap.Logger, c *wakunode.WakuNode, peerAddr string, contentTopics []string) ([]*wakupb.WakuMessage, error) {
 	pi, err := peer.AddrInfoFromString(peerAddr)
 	if err != nil {
 		return nil, err
