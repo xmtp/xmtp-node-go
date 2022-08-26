@@ -108,6 +108,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) error {
 	receivedEnvs := []*messagev1.Envelope{}
+	waitC := time.After(5 * time.Second)
 	var done bool
 	for !done {
 		select {
@@ -116,7 +117,7 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 			if len(receivedEnvs) == len(envs) {
 				done = true
 			}
-		case <-time.After(5 * time.Second):
+		case <-waitC:
 			done = true
 		}
 	}
