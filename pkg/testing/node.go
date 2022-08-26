@@ -10,7 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/status-im/go-waku/tests"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
@@ -27,9 +29,9 @@ func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protoco
 		require.NoError(t, err)
 	}
 
-	// This delay is necessary, but it's unclear why at this point. We see
-	// similar delays throughout the waku codebase as well for this reason.
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return n1.Host().Network().Connectedness(n2.Host().ID()) == network.Connected
+	}, 3*time.Second, 50*time.Millisecond, "timeout waiting for peer connection")
 }
 
 func ConnectWithAddr(t *testing.T, n *wakunode.WakuNode, addr string) {
@@ -37,9 +39,14 @@ func ConnectWithAddr(t *testing.T, n *wakunode.WakuNode, addr string) {
 	err := n.DialPeer(ctx, addr)
 	require.NoError(t, err)
 
-	// This delay is necessary, but it's unclear why at this point. We see
-	// similar delays throughout the waku codebase as well for this reason.
-	time.Sleep(100 * time.Millisecond)
+	ma, err := multiaddr.NewMultiaddr(addr)
+	require.NoError(t, err)
+	pi, err := peer.AddrInfoFromP2pAddr(ma)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return n.Host().Network().Connectedness(pi.ID) == network.Connected
+	}, 3*time.Second, 50*time.Millisecond, "timeout waiting for peer connection")
 }
 
 func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
@@ -50,6 +57,11 @@ func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	err = n2.ClosePeerById(n1.Host().ID())
 	require.NoError(t, err)
 	n2.Host().Peerstore().RemovePeer(n1.Host().ID())
+
+	require.Eventually(t, func() bool {
+		return n1.Host().Network().Connectedness(n2.Host().ID()) == network.NotConnected &&
+			n2.Host().Network().Connectedness(n1.Host().ID()) == network.NotConnected
+	}, 3*time.Second, 50*time.Millisecond)
 }
 
 func NewTopic() string {

@@ -132,7 +132,7 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 
 	n2, cleanup := newTestNode(t, nil, true, nil)
 	defer cleanup()
-	test.ConnectStoreNode(t, n2, n1)
+	test.Connect(t, n2, n1)
 
 	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
 		test.NewMessage(topic1, 1, "msg1"),
@@ -319,9 +319,11 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 		test.NewMessage(topic2, 7, "msg7"),
 	})
 
-	// Reconnect, resume is automatically triggered from node 2, and expect new
-	// messages.
-	test.ConnectStoreNode(t, n1, n2)
+	// Reconnect and resume on each node, and expect new stored messages.
+	test.Connect(t, n1, n2)
+	test.Connect(t, n2, n1)
+	storeResume(t, n1)
+	storeResume(t, n2)
 	test.ExpectPeers(t, n1, n2.Host().ID())
 	test.ExpectPeers(t, n2, n1.Host().ID())
 
@@ -503,6 +505,11 @@ func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *
 	return store, dbStore, store.Stop, dbCleanup
 }
 
+func storeResume(t *testing.T, n *wakunode.WakuNode) {
+	_, err := n.Store().Resume(context.Background(), relay.DefaultWakuTopic, nil)
+	require.NoError(t, err)
+}
+
 func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []*pb.WakuMessage {
 	s := n.Store().(*store.XmtpStore)
 	contentFilters := make([]*pb.ContentFilter, len(contentTopics))
@@ -520,7 +527,6 @@ func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []
 }
 
 func expectStoreMessagesEventually(t *testing.T, n *wakunode.WakuNode, contentTopics []string, expectedMsgs []*pb.WakuMessage) {
-
 	msgs := listMessages(t, n, contentTopics)
 	if len(msgs) == len(expectedMsgs) {
 		require.ElementsMatch(t, expectedMsgs, msgs)

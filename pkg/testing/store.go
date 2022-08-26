@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/status-im/go-waku/waku/v2/node"
-	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun/driver/pgdriver"
 )
@@ -30,8 +28,4 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 		require.NoError(t, err)
 		ctlDB.Close()
 	}
-}
-
-func ConnectStoreNode(t *testing.T, n1, n2 *node.WakuNode) {
-	Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
 }
