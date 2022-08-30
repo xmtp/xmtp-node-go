@@ -16,6 +16,14 @@ const (
 	remoteNodesURL  = "http://nodes.xmtp.com"
 )
 
+var (
+	remoteAPIURLByEnv = map[string]string{
+		"local":      "http://localhost:8080",
+		"dev":        "https://api.dev.xmtp.network",
+		"production": "https://api.prod.xmtp.network",
+	}
+)
+
 func main() {
 	ctx := context.Background()
 	log, err := zap.NewProduction()
@@ -29,15 +37,18 @@ func main() {
 		nodesURL = remoteNodesURL
 	}
 
-	e := e2e.New(ctx, log, &e2e.Config{
+	apiURL := envVar("XMTPD_E2E_API_URL", remoteAPIURLByEnv[networkEnv])
+
+	runner := e2e.NewRunner(ctx, log, &e2e.Config{
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
 		NetworkEnv:              networkEnv,
 		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
 		NodesURL:                nodesURL,
+		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 	})
 
-	err = e.Run()
+	err = runner.Start()
 	if err != nil {
 		log.Fatal("running e2e", zap.Error(err))
 	}

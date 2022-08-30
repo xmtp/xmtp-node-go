@@ -7,14 +7,15 @@ import (
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakuprotocol "github.com/status-im/go-waku/waku/v2/protocol"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"go.uber.org/zap"
 )
 
-func (e *E2E) testPublishSubscribeQuery() error {
+func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	// Fetch bootstrap node addresses.
 	var bootstrapAddrs []string
-	if len(e.config.BootstrapAddrs) == 0 {
+	if len(s.config.BootstrapAddrs) == 0 {
 		var err error
-		bootstrapAddrs, err = fetchBootstrapAddrs(e.config.NodesURL, e.config.NetworkEnv)
+		bootstrapAddrs, err = fetchBootstrapAddrs(s.config.NodesURL, s.config.NetworkEnv)
 		if err != nil {
 			return err
 		}
@@ -22,14 +23,14 @@ func (e *E2E) testPublishSubscribeQuery() error {
 			return fmt.Errorf("expected bootstrap addrs length 3, got: %d", len(bootstrapAddrs))
 		}
 	} else {
-		bootstrapAddrs = e.config.BootstrapAddrs
+		bootstrapAddrs = s.config.BootstrapAddrs
 	}
 
 	// Create a client node for each bootstrap node, and connect to it.
 	clients := make([]*wakunode.WakuNode, len(bootstrapAddrs))
 	for i, addr := range bootstrapAddrs {
 		c, cleanup, err := newNode(
-			e.log,
+			log,
 			// Specify libp2p options here to avoid using the waku-default that
 			// enables the NAT service, which currently leaks goroutines over
 			// time when creating and destroying many in-process.
@@ -41,7 +42,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 			return err
 		}
 		defer cleanup()
-		err = connectWithAddr(e.ctx, c, addr)
+		err = wakuConnectWithAddr(s.ctx, c, addr)
 		if err != nil {
 			return err
 		}
@@ -54,7 +55,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 	envCs := make([]chan *wakuprotocol.Envelope, len(clients))
 	for i, c := range clients {
 		var err error
-		envCs[i], err = subscribeTo(e.ctx, c, []string{contentTopic})
+		envCs[i], err = wakuSubscribeTo(s.ctx, c, []string{contentTopic})
 		if err != nil {
 			return err
 		}
@@ -64,10 +65,10 @@ func (e *E2E) testPublishSubscribeQuery() error {
 	// Send a message to every node.
 	msgs := make([]*wakupb.WakuMessage, len(clients))
 	for i := range clients {
-		msgs[i] = newMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
+		msgs[i] = newWakuMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
 	}
 	for i, sender := range clients {
-		err := publish(e.ctx, sender, msgs[i])
+		err := wakuPublish(s.ctx, sender, msgs[i])
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 
 	// Expect them to be relayed to all nodes.
 	for _, envC := range envCs {
-		err := subscribeExpect(envC, msgs)
+		err := wakuSubscribeExpect(envC, msgs)
 		if err != nil {
 			return err
 		}
@@ -83,7 +84,7 @@ func (e *E2E) testPublishSubscribeQuery() error {
 
 	// Expect that they've all been stored on each node.
 	for i, c := range clients {
-		err := expectQueryMessagesEventually(e.log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
+		err := wakuExpectQueryMessagesEventually(log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
 		if err != nil {
 			return err
 		}

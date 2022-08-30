@@ -11,16 +11,27 @@ import (
 const (
 	localNetworkEnv = "local"
 	localNodesURL   = "http://localhost:8000"
+	localAPIURL     = "http://localhost:8080"
 )
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
 	log, err := zap.NewDevelopment()
 	require.NoError(t, err)
-	e := New(ctx, log, &Config{
+
+	s := NewSuite(ctx, log, &Config{
 		NetworkEnv: localNetworkEnv,
 		NodesURL:   localNodesURL,
+		APIURL:     localAPIURL,
 	})
-	err = e.Run()
-	require.NoError(t, err)
+
+	for _, test := range s.Tests() {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			err := test.Run(log)
+			require.NoError(t, err)
+		})
+	}
 }

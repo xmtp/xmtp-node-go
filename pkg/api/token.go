@@ -23,7 +23,7 @@ func decodeToken(s string) (*messagev1.Token, error) {
 	return &token, nil
 }
 
-func encodeToken(token *messagev1.Token) (string, error) {
+func EncodeToken(token *messagev1.Token) (string, error) {
 	b, err := proto.Marshal(token)
 	if err != nil {
 		return "", err
@@ -31,7 +31,7 @@ func encodeToken(token *messagev1.Token) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func generateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
 	wPri, wPub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, nil, err
