@@ -15,7 +15,7 @@ type Client interface {
 // Stream is an abstraction of the subscribe response stream
 type Stream interface {
 	// Next returns io.EOF when the stream ends or is closed from either side.
-	Next() (*messagev1.Envelope, error)
+	Next(ctx context.Context) (*messagev1.Envelope, error)
 	// Closing the stream terminates the subscription.
 	Close() error
 }

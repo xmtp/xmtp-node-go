@@ -25,9 +25,10 @@ func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
 }
 
 func subscribeExpect(t *testing.T, stream messageclient.Stream, expected []*messageV1.Envelope) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	received := []*messageV1.Envelope{}
 	for i := 0; i < len(expected); i++ {
-		env, err := stream.Next()
+		env, err := stream.Next(ctx)
 		require.NoError(t, err)
 		t.Logf("got %d", i)
 		received = append(received, env)

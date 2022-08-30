@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ func newHTTPStream(respC chan *http.Response, errC chan error) (*httpStream, err
 	}, nil
 }
 
-func (s *httpStream) reader() (*bufio.Reader, error) {
+func (s *httpStream) reader(ctx context.Context) (*bufio.Reader, error) {
 	if s.bodyReader != nil {
 		return s.bodyReader, nil
 	}
@@ -35,25 +36,44 @@ func (s *httpStream) reader() (*bufio.Reader, error) {
 		s.body = resp.Body
 		s.bodyReader = bufio.NewReader(s.body)
 		return s.bodyReader, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
-func (s *httpStream) Next() (*messagev1.Envelope, error) {
-	reader, err := s.reader()
+func (s *httpStream) Next(ctx context.Context) (*messagev1.Envelope, error) {
+	reader, err := s.reader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if s.body == nil { // stream was closed
 		return nil, io.EOF
 	}
-	line, err := reader.ReadBytes('\n')
-	if err != nil {
-		if err != io.EOF || len(line) == 0 {
-			return nil, err
+	lineC := make(chan []byte)
+	errC := make(chan error)
+	go func() {
+		line, err := reader.ReadBytes('\n')
+		if ctx.Err() != nil {
+			// If the context has already closed, then just return out of this.
+			return
 		}
-	}
+		if err != nil {
+			errC <- err
+			return
+		}
+		lineC <- line
+	}()
 	var wrapper struct {
 		Result interface{}
+	}
+	var line []byte
+	select {
+	case v := <-lineC:
+		line = v
+	case err := <-errC:
+		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 	err = json.Unmarshal(line, &wrapper)
 	if err != nil {

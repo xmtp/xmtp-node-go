@@ -75,7 +75,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 		envC := make(chan *messagev1.Envelope, 100)
 		go func() {
 			for {
-				env, err := stream.Next()
+				env, err := stream.Next(ctx)
 				if err != nil {
 					if isErrUseOfClosedConnection(err) {
 						break

@@ -99,7 +99,8 @@ func Test_SubscribeClientClose(t *testing.T) {
 		require.NotNil(t, publishRes)
 		time.Sleep(50 * time.Millisecond)
 
-		_, err = stream.Next()
+		ctx, _ = context.WithTimeout(ctx, 1*time.Second)
+		_, err = stream.Next(ctx)
 		require.Equal(t, io.EOF, err)
 	})
 }
@@ -127,8 +128,25 @@ func Test_SubscribeServerClose(t *testing.T) {
 		// stop Server
 		server.Close()
 
-		_, err = stream.Next()
+		ctx, _ = context.WithTimeout(ctx, 1*time.Second)
+		_, err = stream.Next(ctx)
 		require.Equal(t, io.EOF, err)
+	})
+}
+
+func Test_SubscribeTimeout(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(100 * time.Millisecond)
+
+		ctx, _ = context.WithTimeout(context.Background(), 100*time.Millisecond)
+		_, err = stream.Next(ctx)
+		require.EqualError(t, err, context.DeadlineExceeded.Error())
 	})
 }
 
