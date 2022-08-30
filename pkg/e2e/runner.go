@@ -3,10 +3,10 @@ package e2e
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 type Runner struct {
@@ -37,17 +37,16 @@ func (r *Runner) Start() error {
 
 	return r.withMetricsServer(func() error {
 		for {
-			g, _ := errgroup.WithContext(r.ctx)
+			var wg sync.WaitGroup
 			for _, test := range r.suite.Tests() {
 				test := test
-				g.Go(func() error {
-					return r.runTest(test)
-				})
+				go func() {
+					// No need to check the error here since we log and emit
+					// metrics for it in the method already.
+					_ = r.runTest(test)
+				}()
 			}
-			err := g.Wait()
-			if err != nil {
-				return err
-			}
+			wg.Wait()
 
 			if !r.config.Continuous {
 				break
