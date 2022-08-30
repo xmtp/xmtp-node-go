@@ -20,7 +20,7 @@ var (
 	remoteAPIURLByEnv = map[string]string{
 		"local":      "http://localhost:8080",
 		"dev":        "https://api.dev.xmtp.network",
-		"production": "https://api.prod.xmtp.network",
+		"production": "https://api.production.xmtp.network",
 	}
 )
 
