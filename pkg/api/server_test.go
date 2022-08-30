@@ -99,7 +99,8 @@ func Test_SubscribeClientClose(t *testing.T) {
 		require.NotNil(t, publishRes)
 		time.Sleep(50 * time.Millisecond)
 
-		ctx, _ = context.WithTimeout(ctx, 1*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
 		_, err = stream.Next(ctx)
 		require.Equal(t, io.EOF, err)
 	})
@@ -128,7 +129,8 @@ func Test_SubscribeServerClose(t *testing.T) {
 		// stop Server
 		server.Close()
 
-		ctx, _ = context.WithTimeout(ctx, 1*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
 		_, err = stream.Next(ctx)
 		require.Equal(t, io.EOF, err)
 	})
@@ -144,7 +146,8 @@ func Test_SubscribeTimeout(t *testing.T) {
 		defer stream.Close()
 		time.Sleep(100 * time.Millisecond)
 
-		ctx, _ = context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
 		_, err = stream.Next(ctx)
 		require.EqualError(t, err, context.DeadlineExceeded.Error())
 	})
