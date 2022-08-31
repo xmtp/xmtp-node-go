@@ -20,6 +20,7 @@ type Suite struct {
 
 type Config struct {
 	Continuous              bool
+	ContinuousExitOnError   bool
 	NetworkEnv              string
 	BootstrapAddrs          []string
 	NodesURL                string
