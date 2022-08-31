@@ -10,6 +10,7 @@ type Client interface {
 	Publish(context.Context, *messagev1.PublishRequest) (*messagev1.PublishResponse, error)
 	Subscribe(context.Context, *messagev1.SubscribeRequest) (Stream, error)
 	Query(context.Context, *messagev1.QueryRequest) (*messagev1.QueryResponse, error)
+	Close() error
 }
 
 // Stream is an abstraction of the subscribe response stream

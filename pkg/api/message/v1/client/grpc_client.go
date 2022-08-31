@@ -21,6 +21,10 @@ func NewGRPCClient(ctx context.Context, dialFn func(context.Context) (*grpc.Clie
 	}, nil
 }
 
+func (c *grpcClient) Close() error {
+	return nil
+}
+
 func (c *grpcClient) Subscribe(ctx context.Context, r *messagev1.SubscribeRequest) (Stream, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	stream, err := c.grpc.Subscribe(ctx, r)

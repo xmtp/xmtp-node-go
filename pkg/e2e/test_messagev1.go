@@ -24,6 +24,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	clients := make([]messageclient.Client, clientCount)
 	for i := 0; i < clientCount; i++ {
 		clients[i] = messageclient.NewHTTPClient(ctx, s.config.APIURL)
+		defer clients[i].Close()
 	}
 
 	contentTopic := "test-" + randomStringLower(5)
@@ -77,7 +78,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 			for {
 				env, err := stream.Next(ctx)
 				if err != nil {
-					if isErrUseOfClosedConnection(err) {
+					if isErrClosedConnection(err) {
 						break
 					}
 					s.log.Error("getting next", zap.Error(err))
@@ -124,8 +125,8 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 	return envsDiff(envs, receivedEnvs)
 }
 
-func isErrUseOfClosedConnection(err error) bool {
-	return strings.Contains(err.Error(), "use of closed network connection")
+func isErrClosedConnection(err error) bool {
+	return strings.Contains(err.Error(), "use of closed network connection") || strings.Contains(err.Error(), "response body closed")
 }
 
 func expectQueryMessagesEventually(ctx context.Context, client messageclient.Client, contentTopics []string, expectedEnvs []*messagev1.Envelope) error {

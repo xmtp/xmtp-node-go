@@ -29,6 +29,11 @@ func NewHTTPClient(ctx context.Context, serverAddr string) *httpClient {
 	}
 }
 
+func (c *httpClient) Close() error {
+	c.http.CloseIdleConnections()
+	return nil
+}
+
 func (c *httpClient) Publish(ctx context.Context, req *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
 	res, err := c.rawPublish(ctx, req)
 	if err != nil {
