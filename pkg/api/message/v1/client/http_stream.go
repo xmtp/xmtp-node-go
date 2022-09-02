@@ -12,47 +12,46 @@ import (
 )
 
 type httpStream struct {
-	respC      chan *http.Response
-	errC       chan error
+	ctx        context.Context
 	bodyReader *bufio.Reader
 	body       io.ReadCloser
 }
 
-func newHTTPStream(respC chan *http.Response, errC chan error) (*httpStream, error) {
-	return &httpStream{
-		respC: respC,
-		errC:  errC,
-	}, nil
+func newHTTPStream(ctx context.Context, respC chan *http.Response, errC chan error) (*httpStream, error) {
+	s := &httpStream{
+		ctx: ctx,
+	}
+
+	go s.reader(ctx, respC, errC)
+
+	return s, nil
 }
 
-func (s *httpStream) reader(ctx context.Context) (*bufio.Reader, error) {
-	if s.bodyReader != nil {
-		return s.bodyReader, nil
-	}
+func (s *httpStream) reader(ctx context.Context, respC chan *http.Response, errC chan error) error {
 	select {
-	case err := <-s.errC:
-		return nil, err
-	case resp := <-s.respC:
+	case err := <-errC:
+		return err
+	case resp, ok := <-respC:
+		if !ok {
+			// Exit when channel is closed.
+			return nil
+		}
 		s.body = resp.Body
 		s.bodyReader = bufio.NewReader(s.body)
-		return s.bodyReader, nil
+		return nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
 }
 
 func (s *httpStream) Next(ctx context.Context) (*messagev1.Envelope, error) {
-	reader, err := s.reader(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if s.body == nil { // stream was closed
+	if s.body == nil || s.bodyReader == nil {
 		return nil, io.EOF
 	}
 	lineC := make(chan []byte)
 	errC := make(chan error)
 	go func() {
-		line, err := reader.ReadBytes('\n')
+		line, err := s.bodyReader.ReadBytes('\n')
 		if ctx.Err() != nil {
 			// If the context has already closed, then just return out of this.
 			return
@@ -75,7 +74,7 @@ func (s *httpStream) Next(ctx context.Context) (*messagev1.Envelope, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	err = json.Unmarshal(line, &wrapper)
+	err := json.Unmarshal(line, &wrapper)
 	if err != nil {
 		return nil, err
 	}
@@ -95,5 +94,6 @@ func (s *httpStream) Close() error {
 	}
 	err := s.body.Close()
 	s.body = nil
+	s.bodyReader = nil
 	return err
 }

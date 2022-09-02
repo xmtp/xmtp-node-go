@@ -65,7 +65,7 @@ func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequ
 		}
 		respC <- resp
 	}()
-	return newHTTPStream(respC, errC)
+	return newHTTPStream(ctx, respC, errC)
 }
 
 func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
