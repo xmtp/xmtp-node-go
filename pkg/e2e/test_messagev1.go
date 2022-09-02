@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -126,7 +127,7 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 }
 
 func isErrClosedConnection(err error) bool {
-	return strings.Contains(err.Error(), "use of closed network connection") || strings.Contains(err.Error(), "response body closed")
+	return errors.Is(err, io.EOF) || strings.Contains(err.Error(), "use of closed network connection") || strings.Contains(err.Error(), "response body closed")
 }
 
 func expectQueryMessagesEventually(ctx context.Context, client messageclient.Client, contentTopics []string, expectedEnvs []*messagev1.Envelope) error {
