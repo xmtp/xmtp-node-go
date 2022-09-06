@@ -1,4 +1,4 @@
-package messagev1
+package api
 
 import (
 	"sync"

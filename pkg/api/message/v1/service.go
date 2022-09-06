@@ -1,4 +1,4 @@
-package messagev1
+package api
 
 import (
 	"context"
@@ -98,6 +98,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 
 	subC := s.dispatcher.Register(req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
+
 	for {
 		select {
 		case <-stream.Context().Done():
