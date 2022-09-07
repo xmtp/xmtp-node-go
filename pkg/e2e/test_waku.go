@@ -51,7 +51,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	time.Sleep(500 * time.Millisecond)
 
 	// Subscribe to a topic on each client, connected to each node.
-	contentTopic := "test-" + randomStringLower(7)
+	contentTopic := "test-" + randomStringLower(12)
 	envCs := make([]chan *wakuprotocol.Envelope, len(clients))
 	for i, c := range clients {
 		var err error
