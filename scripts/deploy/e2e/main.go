@@ -10,12 +10,13 @@ Usage:
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
 
+	"github.com/hashicorp/go-tfe"
 	"github.com/jessevdk/go-flags"
 	"github.com/xmtp/xmtp-node-go/internal/terraform"
+	"go.uber.org/zap"
 )
 
 const (
@@ -26,38 +27,42 @@ var options struct {
 	TFToken        string `long:"tf-token" description:"Terraform token"`
 	Workspace      string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
 	Organization   string `long:"organization" default:"xmtp" choice:"xmtp"`
-	E2ERunnerImage string `long:"xmtpd-e2e-image"`
-	Apply          bool   `long:"apply"`
-	Commit         string `long:"git-commit"`
+	ContainerImage string `long:"container-image"`
+	GitCommit      string `long:"git-commit"`
 }
 
 func main() {
-	_, err := flags.NewParser(&options, flags.Default).Parse()
-	failIfError(err, "parsing options")
+	ctx := context.Background()
 
-	c, err := terraform.NewClient(&terraform.Config{
-		Token:        options.TFToken,
-		Workspace:    options.Workspace,
-		Organization: options.Organization,
+	log, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = flags.NewParser(&options, flags.Default).Parse()
+	if err != nil {
+		log.Fatal("parsing options", zap.Error(err))
+	}
+
+	tfc, err := tfe.NewClient(&tfe.Config{
+		Token: options.TFToken,
 	})
-	failIfError(err, "creating client")
-
-	if options.E2ERunnerImage == "" {
-		log.Fatal("Must specify xmtpd-e2e-image")
+	if err != nil {
+		log.Fatal("creating terraform client", zap.Error(err))
 	}
 
-	if !strings.HasPrefix(options.E2ERunnerImage, e2eRunnerImagePrefix) {
-		log.Fatalf("Invalid e2e image %s", options.E2ERunnerImage)
+	deployer, err := terraform.NewDeployer(ctx, log, tfc, options.Organization, options.TFToken)
+	if err != nil {
+		log.Fatal("creating deployer", zap.Error(err))
 	}
-	c.UpdateVar("xmtpd_e2e_image", options.E2ERunnerImage)
 
-	c.StartRun(options.Commit, options.Apply)
-}
-
-func failIfError(err error, msg string, params ...interface{}) {
-	if err == nil {
-		return
+	if options.ContainerImage == "" {
+		log.Fatal("Must specify container-image")
 	}
-	m := fmt.Sprintf(msg, params...)
-	log.Fatalf("%s:%s", m, err.Error())
+
+	if !strings.HasPrefix(options.ContainerImage, e2eRunnerImagePrefix) {
+		log.Fatal("Invalid e2e image %s", zap.String("image", options.ContainerImage))
+	}
+
+	deployer.Deploy("xmtpd_e2e_image", options.ContainerImage, options.GitCommit)
 }

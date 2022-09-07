@@ -10,12 +10,13 @@ Usage:
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
 
+	"github.com/hashicorp/go-tfe"
 	"github.com/jessevdk/go-flags"
 	"github.com/xmtp/xmtp-node-go/internal/terraform"
+	"go.uber.org/zap"
 )
 
 const (
@@ -23,41 +24,45 @@ const (
 )
 
 var options struct {
-	TFToken      string `long:"tf-token" description:"Terraform token"`
-	Workspace    string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
-	Organization string `long:"organization" default:"xmtp" choice:"xmtp"`
-	NodeImage    string `long:"xmtp-node-image"`
-	Apply        bool   `long:"apply"`
-	Commit       string `long:"git-commit"`
+	TFToken        string `long:"tf-token" description:"Terraform token"`
+	Workspace      string `long:"workspace" description:"TF cloud workspace" choice:"dev" choice:"production"`
+	Organization   string `long:"organization" default:"xmtp" choice:"xmtp"`
+	ContainerImage string `long:"container-image"`
+	GitCommit      string `long:"git-commit"`
 }
 
 func main() {
-	_, err := flags.NewParser(&options, flags.Default).Parse()
-	failIfError(err, "parsing options")
+	ctx := context.Background()
 
-	c, err := terraform.NewClient(&terraform.Config{
-		Token:        options.TFToken,
-		Workspace:    options.Workspace,
-		Organization: options.Organization,
+	log, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = flags.NewParser(&options, flags.Default).Parse()
+	if err != nil {
+		log.Fatal("parsing options", zap.Error(err))
+	}
+
+	tfc, err := tfe.NewClient(&tfe.Config{
+		Token: options.TFToken,
 	})
-	failIfError(err, "creating client")
-
-	if options.NodeImage == "" {
-		log.Fatal("Must specify xmtp-node-image")
+	if err != nil {
+		log.Fatal("creating terraform client", zap.Error(err))
 	}
 
-	if !strings.HasPrefix(options.NodeImage, nodeImagePrefix) {
-		log.Fatalf("Invalid node image %s", options.NodeImage)
+	deployer, err := terraform.NewDeployer(ctx, log, tfc, options.Organization, options.TFToken)
+	if err != nil {
+		log.Fatal("creating deployer", zap.Error(err))
 	}
-	c.UpdateVar("xmtp_node_image", options.NodeImage)
 
-	c.StartRun(options.Commit, options.Apply)
-}
-
-func failIfError(err error, msg string, params ...interface{}) {
-	if err == nil {
-		return
+	if options.ContainerImage == "" {
+		log.Fatal("Must specify container-image")
 	}
-	m := fmt.Sprintf(msg, params...)
-	log.Fatalf("%s:%s", m, err.Error())
+
+	if !strings.HasPrefix(options.ContainerImage, nodeImagePrefix) {
+		log.Fatal("Invalid node image %s", zap.String("image", options.ContainerImage))
+	}
+
+	deployer.Deploy("xmtp_node_image", options.ContainerImage, options.GitCommit)
 }
