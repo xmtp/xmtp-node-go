@@ -43,29 +43,13 @@ func (c *httpClient) Publish(ctx context.Context, req *messagev1.PublishRequest)
 }
 
 func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequest) (Stream, error) {
-	respC := make(chan *http.Response)
-	errC := make(chan error)
-	go func() {
-		defer close(respC)
-		defer close(errC)
-		resp, err := c.post(ctx, "/message/v1/subscribe", req)
-		if err != nil {
-			errC <- err
-			return
-		}
-		if resp.StatusCode != http.StatusOK {
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				errC <- err
-				return
-			}
-			errC <- fmt.Errorf("%s: %s", resp.Status, string(body))
-			return
-		}
-		respC <- resp
-	}()
-	return newHTTPStream(respC, errC)
+	stream, err := newHTTPStream(func() (*http.Response, error) {
+		return c.post(ctx, "/message/v1/subscribe", req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
 }
 
 func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
