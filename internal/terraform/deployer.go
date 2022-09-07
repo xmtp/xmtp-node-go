@@ -3,7 +3,6 @@ package terraform
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"time"
 
 	"github.com/hashicorp/go-tfe"
@@ -12,41 +11,50 @@ import (
 )
 
 var (
-	runWaitTimeout = 10 * time.Minute
-	runWaitDelay   = 5 * time.Second
+	defaultWaitTimeout = 10 * time.Minute
+	defaultWaitDelay   = 3 * time.Second
 )
 
-type deployer struct {
-	ctx context.Context
-	log *zap.Logger
-	tfe *tfe.Client
-	wsp *tfe.Workspace
+type Config struct {
+	Organization string
+	Workspace    string
+
+	WaitTimeout time.Duration
+	WaitDelay   time.Duration
 }
 
-func NewDeployer(ctx context.Context, log *zap.Logger, tfc *tfe.Client, organization, workspace string) (*deployer, error) {
-	wsp, err := tfc.Workspaces.Read(ctx, organization, workspace)
+type deployer struct {
+	config *Config
+	ctx    context.Context
+	log    *zap.Logger
+	tfe    *tfe.Client
+	wsp    *tfe.Workspace
+}
+
+func NewDeployer(ctx context.Context, log *zap.Logger, tfc *tfe.Client, config *Config) (*deployer, error) {
+	wsp, err := tfc.Workspaces.Read(ctx, config.Organization, config.Workspace)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("getting workspace %s/%s", organization, workspace))
+		return nil, errors.Wrap(err, fmt.Sprintf("getting workspace %s/%s", config.Organization, config.Workspace))
+	}
+
+	if config.WaitTimeout == 0 {
+		config.WaitTimeout = defaultWaitTimeout
+	}
+	if config.WaitDelay == 0 {
+		config.WaitDelay = defaultWaitDelay
 	}
 
 	return &deployer{
-		ctx: ctx,
-		log: log,
-		tfe: tfc,
-		wsp: wsp,
+		config: config,
+		ctx:    ctx,
+		log:    log,
+		tfe:    tfc,
+		wsp:    wsp,
 	}, nil
 }
 
-func (d *deployer) Deploy(varKey, varValue, gitCommit string) error {
-	msg := fmt.Sprintf("triggered from commit %s", gitCommit)
-	out, err := exec.Command("git", "log", "--oneline", "-n 1").Output()
-	if err != nil {
-		d.log.Error("getting git commit message", zap.Error(err))
-	} else {
-		msg = string(out)
-	}
-
-	err = d.updateVar(varKey, varValue)
+func (d *deployer) Deploy(varKey, varValue, msg string) error {
+	err := d.updateVar(varKey, varValue)
 	if err != nil {
 		return errors.Wrap(err, "updating variable")
 	}
@@ -111,11 +119,11 @@ func (d *deployer) runWait(runID string) error {
 			d.log.Info("waiting", zap.String("status", string(run.Status)))
 		}
 
-		if time.Since(started) > runWaitTimeout {
+		if time.Since(started) > d.config.WaitTimeout {
 			return fmt.Errorf("timeout waiting for run")
 		}
 
-		time.Sleep(runWaitDelay)
+		time.Sleep(d.config.WaitDelay)
 	}
 }
 

@@ -11,6 +11,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/hashicorp/go-tfe"
@@ -51,7 +53,10 @@ func main() {
 		log.Fatal("creating terraform client", zap.Error(err))
 	}
 
-	deployer, err := terraform.NewDeployer(ctx, log, tfc, options.Organization, options.TFToken)
+	deployer, err := terraform.NewDeployer(ctx, log, tfc, &terraform.Config{
+		Organization: options.Organization,
+		Workspace:    options.Workspace,
+	})
 	if err != nil {
 		log.Fatal("creating deployer", zap.Error(err))
 	}
@@ -64,5 +69,13 @@ func main() {
 		log.Fatal("Invalid node image %s", zap.String("image", options.ContainerImage))
 	}
 
-	deployer.Deploy("xmtp_node_image", options.ContainerImage, options.GitCommit)
+	msg := fmt.Sprintf("triggered from commit %s", options.GitCommit)
+	out, err := exec.Command("git", "log", "--oneline", "-n 1").Output()
+	if err != nil {
+		log.Error("getting git commit message", zap.Error(err))
+	} else {
+		msg = string(out)
+	}
+
+	deployer.Deploy("xmtp_node_image", options.ContainerImage, msg)
 }
