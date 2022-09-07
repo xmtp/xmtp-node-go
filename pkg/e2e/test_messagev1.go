@@ -28,7 +28,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 		defer clients[i].Close()
 	}
 
-	contentTopic := "test-" + randomStringLower(5)
+	contentTopic := "test-" + randomStringLower(7)
 
 	ctx, err := withAuth(ctx)
 	if err != nil {
