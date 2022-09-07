@@ -6,7 +6,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"time"
@@ -107,16 +106,6 @@ func wakuConnectWithAddr(ctx context.Context, n *wakunode.WakuNode, addr string)
 	time.Sleep(100 * time.Millisecond)
 
 	return nil
-}
-
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
-
-func randomStringLower(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
 }
 
 func wakuSubscribeTo(ctx context.Context, n *wakunode.WakuNode, contentTopics []string) (chan *wakuprotocol.Envelope, error) {

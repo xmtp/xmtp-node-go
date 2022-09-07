@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"math/rand"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
@@ -12,8 +13,9 @@ import (
 )
 
 type Suite struct {
-	ctx context.Context
-	log *zap.Logger
+	ctx  context.Context
+	log  *zap.Logger
+	rand *rand.Rand
 
 	config *Config
 }
@@ -39,6 +41,7 @@ func NewSuite(ctx context.Context, log *zap.Logger, config *Config) *Suite {
 	e := &Suite{
 		ctx:    ctx,
 		log:    log,
+		rand:   rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		config: config,
 	}
 	return e
@@ -57,6 +60,16 @@ func (s *Suite) newTest(name string, runFn testRunFunc) *Test {
 		Run:  runFn,
 	}
 }
+
+func (s *Suite) randomStringLower(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[s.rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
 func withAuth(ctx context.Context) (context.Context, error) {
 	token, _, err := api.GenerateToken(time.Now())
