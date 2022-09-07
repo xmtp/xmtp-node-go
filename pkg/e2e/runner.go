@@ -3,10 +3,10 @@ package e2e
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type Runner struct {
@@ -28,7 +28,7 @@ func NewRunner(ctx context.Context, log *zap.Logger, config *Config) *Runner {
 func (r *Runner) Start() error {
 	if r.config.Continuous {
 		go func() {
-			err := http.ListenAndServe("localhost:6060", nil)
+			err := http.ListenAndServe("0.0.0.0:6060", nil)
 			if err != nil {
 				r.log.Error("serving profiler", zap.Error(err))
 			}
@@ -37,16 +37,17 @@ func (r *Runner) Start() error {
 
 	return r.withMetricsServer(func() error {
 		for {
-			var wg sync.WaitGroup
+			g, _ := errgroup.WithContext(r.ctx)
 			for _, test := range r.suite.Tests() {
 				test := test
-				go func() {
-					// No need to check the error here since we log and emit
-					// metrics for it in the method already.
-					_ = r.runTest(test)
-				}()
+				g.Go(func() error {
+					return r.runTest(test)
+				})
 			}
-			wg.Wait()
+			err := g.Wait()
+			if err != nil && r.config.ContinuousExitOnError {
+				return err
+			}
 
 			if !r.config.Continuous {
 				break

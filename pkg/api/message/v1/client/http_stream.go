@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -16,13 +17,42 @@ type httpStream struct {
 	errC       chan error
 	bodyReader *bufio.Reader
 	body       io.ReadCloser
+	closed     bool
 }
 
-func newHTTPStream(respC chan *http.Response, errC chan error) (*httpStream, error) {
-	return &httpStream{
-		respC: respC,
-		errC:  errC,
-	}, nil
+func newHTTPStream(reqFn func() (*http.Response, error)) (*httpStream, error) {
+	s := &httpStream{
+		respC: make(chan *http.Response, 1),
+		errC:  make(chan error, 1),
+	}
+
+	go func() {
+		// Streaming requests block until the first byte is sent, at which
+		// point we can consume from the response body reader as a stream.
+		resp, err := reqFn()
+		if err != nil {
+			s.errC <- err
+			return
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				s.errC <- err
+				return
+			}
+			s.errC <- fmt.Errorf("%s: %s", resp.Status, string(body))
+			return
+		}
+
+		if s.closed {
+			return
+		}
+		s.respC <- resp
+	}()
+
+	return s, nil
 }
 
 func (s *httpStream) reader(ctx context.Context) (*bufio.Reader, error) {
@@ -90,6 +120,11 @@ func (s *httpStream) Next(ctx context.Context) (*messagev1.Envelope, error) {
 }
 
 func (s *httpStream) Close() error {
+	if !s.closed {
+		defer close(s.respC)
+		defer close(s.errC)
+	}
+	s.closed = true
 	if s.body == nil {
 		return nil
 	}

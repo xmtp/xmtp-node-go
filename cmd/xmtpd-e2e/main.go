@@ -41,6 +41,7 @@ func main() {
 
 	runner := e2e.NewRunner(ctx, log, &e2e.Config{
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
+		ContinuousExitOnError:   envVarBool("E2E_CONTINUOUS_EXIT_ON_ERROR"),
 		NetworkEnv:              networkEnv,
 		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
 		NodesURL:                nodesURL,
