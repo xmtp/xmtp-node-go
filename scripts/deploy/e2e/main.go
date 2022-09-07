@@ -77,5 +77,8 @@ func main() {
 		msg = string(out)
 	}
 
-	deployer.Deploy("xmtpd_e2e_image", options.ContainerImage, msg)
+	err = deployer.Deploy("xmtpd_e2e_image", options.ContainerImage, msg)
+	if err != nil {
+		log.Fatal("deploying", zap.Error(err))
+	}
 }
