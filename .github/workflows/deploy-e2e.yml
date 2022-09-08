@@ -34,20 +34,20 @@ jobs:
 
       - name: Deploy (production)
         run: |
-          go run ./scripts/deploy \
+          go run ./scripts/deploy/e2e \
             --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
             --apply \
             --workspace=production \
-            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
             --git-commit="$(git rev-parse HEAD)"
           echo Successfully deployed
 
       - name: Deploy (dev)
         run: |
-          go run ./scripts/deploy \
+          go run ./scripts/deploy/e2e \
             --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
             --apply \
             --workspace=dev \
-            --xmtpd-e2e-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
             --git-commit="$(git rev-parse HEAD)"
           echo Successfully deployed
