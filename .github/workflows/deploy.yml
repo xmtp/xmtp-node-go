@@ -1,4 +1,4 @@
-name: Push to Registry And Deploy
+name: Deploy Nodes
 on:
   push:
     branches:
@@ -32,7 +32,7 @@ jobs:
           export DOCKER_IMAGE_TAG=production
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --apply --workspace=production --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --workspace=production --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
       - name: Deploy (dev)
         if: ${{ github.ref_name == 'main' }}
@@ -42,5 +42,5 @@ jobs:
           export DOCKER_IMAGE_TAG=latest
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --apply --workspace=dev --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
+          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --workspace=dev --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
           echo Successfully deployed
