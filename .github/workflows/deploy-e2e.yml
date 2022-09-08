@@ -36,7 +36,6 @@ jobs:
         run: |
           go run ./scripts/deploy/e2e \
             --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
-            --apply \
             --workspace=production \
             --container-image=${{ env.IMAGE_TO_DEPLOY }} \
             --git-commit="$(git rev-parse HEAD)"
@@ -46,7 +45,6 @@ jobs:
         run: |
           go run ./scripts/deploy/e2e \
             --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
-            --apply \
             --workspace=dev \
             --container-image=${{ env.IMAGE_TO_DEPLOY }} \
             --git-commit="$(git rev-parse HEAD)"
