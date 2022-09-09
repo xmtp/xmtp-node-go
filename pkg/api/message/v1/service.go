@@ -99,6 +99,12 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	subC := s.dispatcher.Register(req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
 
+	// Send confirmation of the subscription.
+	err := stream.Send(&proto.Envelope{})
+	if err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-stream.Context().Done():

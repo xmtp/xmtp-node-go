@@ -49,7 +49,6 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 		streams[i] = stream
 		defer stream.Close()
 	}
-	time.Sleep(500 * time.Millisecond)
 
 	// Publish messages.
 	envs := make([]*messagev1.Envelope, 0, clientCount*1)

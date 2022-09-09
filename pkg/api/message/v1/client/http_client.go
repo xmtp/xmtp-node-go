@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/pkg/errors"
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -49,6 +51,18 @@ func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequ
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for confirmation of the subscription.
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	env, err := stream.Next(ctx)
+	cancel()
+	if err != nil {
+		return nil, errors.Wrap(err, "waiting for subscribe confirmation")
+	}
+	if !proto.Equal(env, &messagev1.Envelope{}) {
+		return nil, fmt.Errorf("expected empty env as subscribe confirmation, got: %s", env)
+	}
+
 	return stream, nil
 }
 
