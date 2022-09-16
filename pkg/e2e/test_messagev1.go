@@ -49,10 +49,48 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 		streams[i] = stream
 		defer stream.Close()
 	}
-	time.Sleep(500 * time.Millisecond)
+
+	// Wait for subscriptions to be set up.
+	syncEnvs := []*messagev1.Envelope{}
+	for {
+		syncEnv := &messagev1.Envelope{
+			ContentTopic: contentTopic,
+			Message:      []byte("sync-" + s.randomStringLower(12)),
+		}
+		_, err = clients[0].Publish(ctx, &messagev1.PublishRequest{
+			Envelopes: []*messagev1.Envelope{
+				syncEnv,
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "publishing")
+		}
+		syncEnvs = append(syncEnvs, syncEnv)
+
+		var waiting bool
+		for i := range clients {
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			env, err := streams[i].Next(ctx)
+			cancel()
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					s.log.Info("waiting for subscription sync", zap.Int("client", i))
+					waiting = true
+					continue
+				}
+				return err
+			}
+			if !proto.Equal(env, syncEnv) {
+				return fmt.Errorf("expected sync envelope, got: %s", env)
+			}
+		}
+		if !waiting {
+			break
+		}
+	}
 
 	// Publish messages.
-	envs := make([]*messagev1.Envelope, 0, clientCount*1)
+	envs := []*messagev1.Envelope{}
 	for i, client := range clients {
 		clientEnvs := make([]*messagev1.Envelope, msgsPerClientCount)
 		for j := 0; j < msgsPerClientCount; j++ {
@@ -99,7 +137,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	// Expect that they're stored.
 	for _, client := range clients {
-		err := expectQueryMessagesEventually(ctx, client, []string{contentTopic}, envs)
+		err := expectQueryMessagesEventually(ctx, client, []string{contentTopic}, append(syncEnvs, envs...))
 		if err != nil {
 			return err
 		}
@@ -115,6 +153,11 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 	for !done {
 		select {
 		case env := <-envC:
+			if isSyncEnv(env) {
+				// Ignore sync messages, since we may have only received a
+				// subset of them from setup.
+				continue
+			}
 			receivedEnvs = append(receivedEnvs, env)
 			if len(receivedEnvs) == len(envs) {
 				done = true
@@ -178,4 +221,8 @@ func envsDiff(a, b []*messagev1.Envelope) error {
 		return fmt.Errorf("expected equal, diff: %s", diff)
 	}
 	return nil
+}
+
+func isSyncEnv(env *messagev1.Envelope) bool {
+	return strings.HasPrefix(string(env.Message), "sync-")
 }
