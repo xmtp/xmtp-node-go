@@ -153,11 +153,6 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 	for !done {
 		select {
 		case env := <-envC:
-			if isSyncEnv(env) {
-				// Ignore sync messages, since we may have only received a
-				// subset of them from setup.
-				continue
-			}
 			receivedEnvs = append(receivedEnvs, env)
 			if len(receivedEnvs) == len(envs) {
 				done = true
@@ -221,8 +216,4 @@ func envsDiff(a, b []*messagev1.Envelope) error {
 		return fmt.Errorf("expected equal, diff: %s", diff)
 	}
 	return nil
-}
-
-func isSyncEnv(env *messagev1.Envelope) bool {
-	return strings.HasPrefix(string(env.Message), "sync-")
 }
