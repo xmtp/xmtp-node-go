@@ -37,7 +37,6 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	// Subscribe across nodes.
 	streams := make([]messageclient.Stream, clientCount)
-	syncEnvs := []*messagev1.Envelope{}
 	for i, client := range clients {
 		stream, err := client.Subscribe(ctx, &messagev1.SubscribeRequest{
 			ContentTopics: []string{
@@ -49,29 +48,34 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 		}
 		streams[i] = stream
 		defer stream.Close()
+	}
 
-		// Wait for subscription to be fully set up on the node.
-		for {
-			syncEnv := &messagev1.Envelope{
-				ContentTopic: contentTopic,
-				Message:      []byte("sync-" + s.randomStringLower(12)),
-			}
-			_, err = client.Publish(ctx, &messagev1.PublishRequest{
-				Envelopes: []*messagev1.Envelope{
-					syncEnv,
-				},
-			})
-			if err != nil {
-				return errors.Wrap(err, "publishing")
-			}
-			syncEnvs = append(syncEnvs, syncEnv)
+	// Wait for subscriptions to be set up.
+	syncEnvs := []*messagev1.Envelope{}
+	for {
+		syncEnv := &messagev1.Envelope{
+			ContentTopic: contentTopic,
+			Message:      []byte("sync-" + s.randomStringLower(12)),
+		}
+		_, err = clients[0].Publish(ctx, &messagev1.PublishRequest{
+			Envelopes: []*messagev1.Envelope{
+				syncEnv,
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "publishing")
+		}
+		syncEnvs = append(syncEnvs, syncEnv)
 
+		var waiting bool
+		for i := range clients {
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-			env, err := stream.Next(ctx)
+			env, err := streams[i].Next(ctx)
 			cancel()
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					s.log.Info("waiting for subscription sync", zap.Int("client", i))
+					waiting = true
 					continue
 				}
 				return err
@@ -79,6 +83,8 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 			if !proto.Equal(env, syncEnv) {
 				return fmt.Errorf("expected sync envelope, got: %s", env)
 			}
+		}
+		if !waiting {
 			break
 		}
 	}
