@@ -161,7 +161,11 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 			done = true
 		}
 	}
-	return envsDiff(envs, receivedEnvs)
+	err := envsDiff(envs, receivedEnvs)
+	if err != nil {
+		return errors.Wrap(err, "expected subscribe envelopes")
+	}
+	return nil
 }
 
 func isErrClosedConnection(err error) bool {
@@ -183,16 +187,16 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 		if len(envs) == len(expectedEnvs) {
 			err := envsDiff(envs, expectedEnvs)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "expected query envelopes")
 			}
 			break
 		}
 		if time.Since(started) > timeout {
 			err := envsDiff(envs, expectedEnvs)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "expected query envelopes")
 			}
-			return errors.Wrap(err, "timeout waiting for query expectation")
+			return fmt.Errorf("timeout waiting for query expectation with no diff")
 		}
 		time.Sleep(delay)
 	}
