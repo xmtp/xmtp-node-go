@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	defaultWaitTimeout = 10 * time.Minute
+	defaultWaitTimeout = 15 * time.Minute
 	defaultWaitDelay   = 3 * time.Second
 )
 

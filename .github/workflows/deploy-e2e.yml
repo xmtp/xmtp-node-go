@@ -1,8 +1,9 @@
 name: Deploy E2E
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Deploy Nodes"]
+    branches: [main]
+    types: [completed]
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -32,20 +33,20 @@ jobs:
           echo "IMAGE_TO_DEPLOY=${IMAGE_TO_DEPLOY}" >> ${GITHUB_ENV}
           echo Successfully pushed $IMAGE_TO_DEPLOY
 
-      - name: Deploy (production)
-        run: |
-          go run ./scripts/deploy/e2e \
-            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
-            --workspace=production \
-            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
-            --git-commit="$(git rev-parse HEAD)"
-          echo Successfully deployed
-
       - name: Deploy (dev)
         run: |
           go run ./scripts/deploy/e2e \
             --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
             --workspace=dev \
+            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
+            --git-commit="$(git rev-parse HEAD)"
+          echo Successfully deployed
+
+      - name: Deploy (production)
+        run: |
+          go run ./scripts/deploy/e2e \
+            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
+            --workspace=production \
             --container-image=${{ env.IMAGE_TO_DEPLOY }} \
             --git-commit="$(git rev-parse HEAD)"
           echo Successfully deployed
