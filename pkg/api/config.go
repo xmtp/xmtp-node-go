@@ -22,6 +22,7 @@ type Options struct {
 	HTTPAddress string       `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
 	HTTPPort    uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
 	Authn       AuthnOptions `group:"API Authentication Options" namespace:"authn"`
+	MaxMsgSize  int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
 }
 
 type Config struct {

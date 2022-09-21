@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func Test_HTTPRootPath(t *testing.T) {
@@ -56,6 +58,50 @@ func Test_SubscribePublishQuery(t *testing.T) {
 
 		// query for messages
 		requireEventuallyStored(t, ctx, client, envs)
+	})
+}
+
+func Test_MaxMessageSize(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish valid message
+		envs := []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize-100), // subtract some bytes for the rest of the envelope
+				TimestampNs:  1,
+			},
+		}
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		subscribeExpect(t, stream, envs)
+		requireEventuallyStored(t, ctx, client, envs)
+
+		// publish invalid message
+		envs = []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize+100),
+				TimestampNs:  1,
+			},
+		}
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.ResourceExhausted, grpcErr.Code())
+			require.Regexp(t, `grpc: received message larger than max \(\d+ vs\. \d+\)`, grpcErr.Message())
+		} else {
+			require.Regexp(t, `429 Too Many Requests: {"code"\s?:8,\s?"message":\s?"grpc: received message larger than max \(\d+ vs\. \d+\)",\s?"details":\s?\[\]}`, err.Error())
+		}
 	})
 }
 

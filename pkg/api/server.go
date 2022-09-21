@@ -89,6 +89,7 @@ func (s *Server) startGRPC() error {
 		grpc.Creds(insecure.NewCredentials()),
 		grpc.UnaryInterceptor(middleware.ChainUnaryServer(unary...)),
 		grpc.StreamInterceptor(middleware.ChainStreamServer(stream...)),
+		grpc.MaxRecvMsgSize(s.Config.Options.MaxMsgSize),
 	}
 	grpcServer := grpc.NewServer(options...)
 
@@ -111,7 +112,6 @@ func (s *Server) startGRPC() error {
 }
 
 func (s *Server) startHTTP() error {
-
 	mux := http.NewServeMux()
 	gwmux := runtime.NewServeMux(
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
@@ -184,6 +184,9 @@ func (s *Server) dialGRPC(ctx context.Context) (*grpc.ClientConn, error) {
 		ctx,
 		dialAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(s.Config.Options.MaxMsgSize),
+		),
 	)
 }
 

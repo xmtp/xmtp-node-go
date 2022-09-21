@@ -16,6 +16,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	testMaxMsgSize = 2 * 1024 * 1024
+)
+
 func newTestServer(t *testing.T) (*Server, func()) {
 	waku, wakuCleanup := newTestNode(t, nil)
 	s, err := New(&Config{
@@ -27,6 +31,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 			Authn: AuthnOptions{
 				Enable: true,
 			},
+			MaxMsgSize: testMaxMsgSize,
 		},
 		Waku: waku,
 		Log:  test.NewLog(t),
