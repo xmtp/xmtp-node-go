@@ -33,9 +33,10 @@ type Server struct {
 	grpcListener net.Listener
 	httpListener net.Listener
 	messagev1    *messagev1.Service
-	authorizer   *WalletAuthorizer
 	wg           sync.WaitGroup
 	ctx          context.Context
+
+	authorizer *WalletAuthorizer
 }
 
 func New(config *Config) (*Server, error) {
@@ -75,6 +76,7 @@ func (s *Server) startGRPC() error {
 	prometheus.EnableHandlingTimeHistogram()
 	unary := []grpc.UnaryServerInterceptor{prometheus.UnaryServerInterceptor}
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
+
 	if s.Config.Authn.Enable {
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
 			AuthnOptions: s.Config.Authn,
@@ -85,6 +87,11 @@ func (s *Server) startGRPC() error {
 		unary = append(unary, s.authorizer.Unary())
 		stream = append(stream, s.authorizer.Stream())
 	}
+
+	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
+	unary = append(unary, telemetryInterceptor.Unary())
+	stream = append(stream, telemetryInterceptor.Stream())
+
 	options := []grpc.ServerOption{
 		grpc.Creds(insecure.NewCredentials()),
 		grpc.UnaryInterceptor(middleware.ChainUnaryServer(unary...)),
@@ -116,6 +123,7 @@ func (s *Server) startHTTP() error {
 	gwmux := runtime.NewServeMux(
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
 		runtime.WithStreamErrorHandler(runtime.DefaultStreamErrorHandler),
+		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
 	)
 	mux.Handle("/", gwmux)
 
@@ -213,4 +221,13 @@ func allowCORS(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func incomingHeaderMatcher(key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case clientVersionMetadataKey:
+		return key, true
+	default:
+		return key, false
+	}
 }

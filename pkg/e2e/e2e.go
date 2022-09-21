@@ -28,6 +28,7 @@ type Config struct {
 	NodesURL                string
 	APIURL                  string
 	DelayBetweenRunsSeconds int
+	GitCommit               string
 }
 
 type testRunFunc func(log *zap.Logger) error

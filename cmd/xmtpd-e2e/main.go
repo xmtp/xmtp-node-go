@@ -22,6 +22,8 @@ var (
 		"dev":        "https://api.dev.xmtp.network",
 		"production": "https://api.production.xmtp.network",
 	}
+
+	GitCommit string // set during build
 )
 
 func main() {
@@ -47,6 +49,7 @@ func main() {
 		NodesURL:                nodesURL,
 		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
+		GitCommit:               GitCommit,
 	})
 
 	err = runner.Start()
