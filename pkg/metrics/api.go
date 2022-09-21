@@ -17,11 +17,15 @@ var clientVersionTag, _ = tag.NewKey("client-version")
 var apiRequestsMeasure = stats.Int64("api_requests", "Count api requests by client version", stats.UnitDimensionless)
 
 var apiRequestsView = &view.View{
-	Name:        "xmtp_api_requests_by_client_version",
+	Name:        "xmtp_api_requests",
 	Measure:     apiRequestsMeasure,
-	Description: "Count of api requests by client version",
+	Description: "Count of api requests",
 	Aggregation: view.Count(),
-	TagKeys:     []tag.Key{clientVersionTag},
+	TagKeys: []tag.Key{
+		serviceNameTag,
+		methodNameTag,
+		clientVersionTag,
+	},
 }
 
 func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion string) {
