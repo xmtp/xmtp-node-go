@@ -21,7 +21,11 @@ var apiRequestsView = &view.View{
 	Measure:     apiRequestsMeasure,
 	Description: "Count of api requests by client version",
 	Aggregation: view.Count(),
-	TagKeys:     []tag.Key{clientVersionTag},
+	TagKeys: []tag.Key{
+		serviceNameTag,
+		methodNameTag,
+		clientVersionTag,
+	},
 }
 
 func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion string) {
