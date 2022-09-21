@@ -71,7 +71,7 @@ func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) 
 	return nil
 }
 
-func splitMethodName(fullMethodName string) (string, string) {
+func splitMethodName(fullMethodName string) (serviceName string, methodName string) {
 	fullMethodName = strings.TrimPrefix(fullMethodName, "/") // remove leading slash
 	if i := strings.Index(fullMethodName, "/"); i >= 0 {
 		return fullMethodName[:i], fullMethodName[i+1:]
