@@ -57,11 +57,12 @@ type Server struct {
 }
 
 // Create a new Server
-func New(ctx context.Context, options Options) (server *Server) {
+func New(ctx context.Context, log *zap.Logger, options Options) (server *Server) {
 	server = new(Server)
 	var err error
 
-	server.logger = utils.Logger()
+	server.logger = log
+	failOnErr(err, "creating logger")
 	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	failOnErr(err, "invalid host address")
 	server.logger.Info("resolved host addr", zap.Stringer("addr", server.hostAddr))
@@ -92,7 +93,7 @@ func New(ctx context.Context, options Options) (server *Server) {
 	}
 
 	nodeOpts := []node.WakuNodeOption{
-		node.WithLogger(server.logger),
+		node.WithLogger(server.logger.Named("gowaku")),
 		node.WithPrivateKey(prvKey),
 		node.WithHostAddress(server.hostAddr),
 		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
