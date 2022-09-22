@@ -16,10 +16,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
-<<<<<<< HEAD
 	"go.uber.org/zap/zapcore"
-=======
->>>>>>> 7f28475 (Handle and log term signals)
 	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
@@ -126,12 +123,14 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	doneC := make(chan bool, 1)
 	tracing.GoPanicWrap(ctx, &wg, "main", func(ctx context.Context) {
 		s, err := server.New(ctx, log, options)
 		if err != nil {
 			log.Fatal("initializing server", zap.Error(err))
 		}
 		s.WaitForShutdown()
+		doneC <- true
 	})
 
 	sigC := make(chan os.Signal, 1)
@@ -141,8 +140,11 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
 	)
-	sig := <-sigC
-	utils.Logger().Info("ending on signal", zap.String("signal", sig.String()))
+	select {
+	case sig := <-sigC:
+		utils.Logger().Info("ending on signal", zap.String("signal", sig.String()))
+	case <-doneC:
+	}
 
 	cancel()
 	wg.Wait()
