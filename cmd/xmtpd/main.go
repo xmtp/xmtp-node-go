@@ -165,7 +165,7 @@ func buildLogger(options server.Options) (*zap.Logger, error) {
 	cfg := zap.Config{
 		Encoding:         options.LogEncoding,
 		Level:            atom,
-		OutputPaths:      []string{"stderr"},
+		OutputPaths:      []string{"stdout"},
 		ErrorOutputPaths: []string{"stderr"},
 		EncoderConfig: zapcore.EncoderConfig{
 			MessageKey:   "message",
