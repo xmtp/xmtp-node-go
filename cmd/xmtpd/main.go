@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	golog "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
@@ -118,13 +121,33 @@ func main() {
 		defer profiler.Stop()
 	}
 
-	tracing.PanicWrap(context.Background(), "main", func(ctx context.Context) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	doneC := make(chan bool, 1)
+	tracing.GoPanicWrap(ctx, &wg, "main", func(ctx context.Context) {
 		s, err := server.New(ctx, log, options)
 		if err != nil {
 			log.Fatal("initializing server", zap.Error(err))
 		}
 		s.WaitForShutdown()
+		doneC <- true
 	})
+
+	sigC := make(chan os.Signal, 1)
+	signal.Notify(sigC,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	select {
+	case sig := <-sigC:
+		utils.Logger().Info("ending on signal", zap.String("signal", sig.String()))
+	case <-doneC:
+	}
+
+	cancel()
+	wg.Wait()
 }
 
 func fatal(msg string, args ...any) {
