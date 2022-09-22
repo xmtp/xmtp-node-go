@@ -44,7 +44,9 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 		}
 	}
 	for proto, count := range byProtocol {
-		if err := stats.RecordWithTags(ctx, []tag.Mutator{tag.Insert(TagProto, proto)}, PeersByProto.M(count)); err != nil {
+		mutators := []tag.Mutator{tag.Insert(TagProto, proto)}
+		err := recordWithTags(ctx, mutators, PeersByProto.M(count))
+		if err != nil {
 			logging.From(ctx).Warn("recording metric", zap.String("metric", PeersByProto.Name()), zap.String("proto", proto), zap.Error(err))
 		}
 	}
@@ -57,5 +59,5 @@ func EmitBootstrapPeersConnected(ctx context.Context, host host.Host, bootstrapP
 			bootstrapPeersFound++
 		}
 	}
-	stats.Record(ctx, BootstrapPeers.M(float64(bootstrapPeersFound)/float64(len(bootstrapPeers))))
+	record(ctx, BootstrapPeers.M(float64(bootstrapPeersFound)/float64(len(bootstrapPeers))))
 }

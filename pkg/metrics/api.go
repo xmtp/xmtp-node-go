@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
-var serviceNameTag, _ = tag.NewKey("service-name")
-var methodNameTag, _ = tag.NewKey("method-name")
+var serviceNameTag, _ = tag.NewKey("service")
+var methodNameTag, _ = tag.NewKey("method")
 var clientVersionTag, _ = tag.NewKey("client-version")
 
 var apiRequestsMeasure = stats.Int64("api_requests", "Count api requests by client version", stats.UnitDimensionless)
@@ -34,9 +34,10 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion 
 		tag.Insert(serviceNameTag, serviceName),
 		tag.Insert(methodNameTag, methodName),
 	}
-	err := stats.RecordWithTags(ctx, mutators)
+	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
 		logging.From(ctx).Warn("recording metric",
+			zap.Error(err),
 			zap.String("service", serviceName),
 			zap.String("method", methodName),
 			zap.String("client_version", clientVersion),
