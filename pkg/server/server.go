@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
@@ -35,15 +36,15 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	authzMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
-	messageMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
-	xmtpStore "github.com/xmtp/xmtp-node-go/pkg/store"
+	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
+	messagemigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
+	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
 
 type Server struct {
-	logger        *zap.Logger
+	log           *zap.Logger
 	hostAddr      *net.TCPAddr
 	db            *sql.DB
 	metricsServer *metrics.Server
@@ -57,44 +58,60 @@ type Server struct {
 }
 
 // Create a new Server
-func New(ctx context.Context, options Options) (server *Server) {
-	server = new(Server)
-	var err error
+func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error) {
+	s := &Server{
+		log: log,
+	}
 
-	server.logger = utils.Logger()
-	server.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
-	failOnErr(err, "invalid host address")
-	server.logger.Info("resolved host addr", zap.Stringer("addr", server.hostAddr))
+	var err error
+	s.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving host address")
+	}
+	s.log.Info("resolved host addr", zap.Stringer("addr", s.hostAddr))
 
 	prvKey, err := getPrivKey(options)
-	failOnErr(err, "nodekey error")
+	if err != nil {
+		return nil, errors.Wrap(err, "getting private key")
+	}
 
 	p2pPrvKey := utils.EcdsaPrivKeyToSecp256k1PrivKey(prvKey)
 	id, err := peer.IDFromPublicKey(p2pPrvKey.GetPublic())
-	failOnErr(err, "deriving peer ID from private key")
-	server.logger = server.logger.With(logging.HostID("node", id))
-	server.ctx, server.cancel = context.WithCancel(logging.With(ctx, server.logger))
+	if err != nil {
+		return nil, errors.Wrap(err, "deriving peer id from private key")
+	}
+	s.log = s.log.With(logging.HostID("node", id))
 
-	server.db = createDbOrFail(options.Store.DbConnectionString, options.WaitForDB)
-	server.logger.Info("created DB")
+	s.ctx, s.cancel = context.WithCancel(logging.With(ctx, s.log))
+
+	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating db")
+	}
+	s.log.Info("created db")
 
 	if options.Metrics.Enable {
-		server.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, server.logger)
-		metrics.RegisterViews(server.logger)
-		server.metricsServer.Start(server.ctx)
+		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
+		metrics.RegisterViews(s.log)
+		s.metricsServer.Start(s.ctx)
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db := createBunDbOrFail(options.Authz.DbConnectionString, options.WaitForDB)
-		server.allowLister = authz.NewDatabaseWalletAllowLister(db, server.logger)
-		err = server.allowLister.Start(server.ctx)
-		failOnErr(err, "wallet authorizer error")
+		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating authz db")
+		}
+		s.allowLister = authz.NewDatabaseWalletAllowLister(db, s.log)
+		err = s.allowLister.Start(s.ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating wallet authorizer")
+		}
 	}
 
 	nodeOpts := []node.WakuNodeOption{
-		node.WithLogger(server.logger),
+		node.WithLogger(s.log.Named("gowaku")),
 		node.WithPrivateKey(prvKey),
-		node.WithHostAddress(server.hostAddr),
+		node.WithHostAddress(s.hostAddr),
 		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
 	}
 
@@ -119,22 +136,26 @@ func New(ctx context.Context, options Options) (server *Server) {
 
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
-		dbStore, err := xmtpStore.NewDBStore(server.logger, xmtpStore.WithDBStoreDB(server.db))
-		failOnErr(err, "DBStore")
+		dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
+		if err != nil {
+			return nil, errors.Wrap(err, "creating db store")
+		}
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
 		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			s, err := xmtpStore.NewXmtpStore(
-				xmtpStore.WithLog(server.logger),
-				xmtpStore.WithHost(w.Host()),
-				xmtpStore.WithDB(server.db),
-				xmtpStore.WithMessageProvider(dbStore),
-				xmtpStore.WithStatsPeriod(options.Metrics.StatusPeriod),
-				xmtpStore.WithResumeStartTime(options.Store.ResumeStartTime),
+			store, err := xmtpstore.NewXmtpStore(
+				xmtpstore.WithLog(s.log),
+				xmtpstore.WithHost(w.Host()),
+				xmtpstore.WithDB(s.db),
+				xmtpstore.WithMessageProvider(dbStore),
+				xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
+				xmtpstore.WithResumeStartTime(options.Store.ResumeStartTime),
 			)
-			failOnErr(err, "initializing store")
-			return s
+			if err != nil {
+				s.log.Fatal("initializing store", zap.Error(err))
+			}
+			return store
 		}))
 	}
 
@@ -142,23 +163,34 @@ func New(ctx context.Context, options Options) (server *Server) {
 		nodeOpts = append(nodeOpts, node.WithLightPush())
 	}
 
-	server.wakuNode, err = node.New(server.ctx, nodeOpts...)
-	failOnErr(err, "Wakunode")
+	s.wakuNode, err = node.New(s.ctx, nodeOpts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing waku node")
+	}
 
 	if options.Metrics.Enable {
-		tracing.GoPanicWrap(server.ctx, &server.wg, "status metrics", func(_ context.Context) { server.statusMetricsLoop(options) })
+		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
 	}
 
-	addPeers(server.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
-	addPeers(server.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
-	addPeers(server.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
-
-	if err = server.wakuNode.Start(); err != nil {
-		server.logger.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
+	err = addPeers(s.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
+	if err != nil {
+		return nil, errors.Wrap(err, "adding peer")
+	}
+	err = addPeers(s.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
+	if err != nil {
+		return nil, errors.Wrap(err, "adding peer")
+	}
+	err = addPeers(s.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
+	if err != nil {
+		return nil, errors.Wrap(err, "adding peer")
 	}
 
-	server.authenticator = authn.NewXmtpAuthentication(server.ctx, server.wakuNode.Host(), server.logger)
-	server.authenticator.Start()
+	if err = s.wakuNode.Start(); err != nil {
+		s.log.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
+	}
+
+	s.authenticator = authn.NewXmtpAuthentication(s.ctx, s.wakuNode.Host(), s.log)
+	s.authenticator.Start()
 
 	if len(options.Relay.Topics) == 0 {
 		options.Relay.Topics = []string{string(relay.DefaultWakuTopic)}
@@ -167,75 +199,82 @@ func New(ctx context.Context, options Options) (server *Server) {
 	if !options.Relay.Disable {
 		for _, nodeTopic := range options.Relay.Topics {
 			nodeTopic := nodeTopic
-			sub, err := server.wakuNode.Relay().SubscribeToTopic(server.ctx, nodeTopic)
-			failOnErr(err, "Error subscring to topic")
+			sub, err := s.wakuNode.Relay().SubscribeToTopic(s.ctx, nodeTopic)
+			if err != nil {
+				return nil, errors.Wrap(err, "subscribing to pubsub topic")
+			}
 			// Unregister from broadcaster. Otherwise this channel will fill until it blocks publishing
-			server.wakuNode.Broadcaster().Unregister(&nodeTopic, sub.C)
+			s.wakuNode.Broadcaster().Unregister(&nodeTopic, sub.C)
 		}
 	}
 
-	tracing.GoPanicWrap(server.ctx, &server.wg, "static-nodes-connect-loop", func(_ context.Context) { server.staticNodesConnectLoop(options.StaticNodes) })
+	tracing.GoPanicWrap(s.ctx, &s.wg, "static-nodes-connect-loop", func(_ context.Context) { s.staticNodesConnectLoop(options.StaticNodes) })
 
-	maddrs, err := server.wakuNode.Host().Network().InterfaceListenAddresses()
-	failOnErr(err, "getting listen addresses")
-	server.logger.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
+	maddrs, err := s.wakuNode.Host().Network().InterfaceListenAddresses()
+	if err != nil {
+		return nil, errors.Wrap(err, "getting listen addresses")
+	}
+	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
 	// Initialize gRPC server.
-	server.grpc, err = api.New(
+	s.grpc, err = api.New(
 		&api.Config{
 			Options:     options.API,
-			Log:         server.logger.Named("api"),
-			Waku:        server.wakuNode,
-			AllowLister: server.allowLister,
-		})
-	failOnErr(err, "initializing grpc server")
-	return server
+			Log:         s.log.Named("api"),
+			Waku:        s.wakuNode,
+			AllowLister: s.allowLister,
+		},
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing grpc server")
+	}
+	return s, nil
 }
 
-func (server *Server) WaitForShutdown() {
+func (s *Server) WaitForShutdown() {
 	// Wait for a SIGINT or SIGTERM signal
 	termChannel := make(chan os.Signal, 1)
 	signal.Notify(termChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-termChannel
-	server.Shutdown()
+	s.Shutdown()
 }
 
-func (server *Server) Shutdown() {
-	server.logger.Info("shutting down...")
+func (s *Server) Shutdown() {
+	s.log.Info("shutting down...")
 
 	// shut the node down
-	server.wakuNode.Stop()
+	s.wakuNode.Stop()
 
-	if server.allowLister != nil {
-		server.allowLister.Stop()
+	if s.allowLister != nil {
+		s.allowLister.Stop()
 	}
 
 	// Close the DB.
-	server.db.Close()
+	s.db.Close()
 
-	if server.metricsServer != nil {
-		if err := server.metricsServer.Stop(server.ctx); err != nil {
-			server.logger.Error("stopping metrics", zap.Error(err))
+	if s.metricsServer != nil {
+		if err := s.metricsServer.Stop(s.ctx); err != nil {
+			s.log.Error("stopping metrics", zap.Error(err))
 		}
 	}
 
-	// Close the gRPC server.
-	if server.grpc != nil {
-		server.grpc.Close()
+	// Close the gRPC s.
+	if s.grpc != nil {
+		s.grpc.Close()
 	}
 
 	// Cancel outstanding goroutines
-	server.cancel()
-	server.wg.Wait()
-	server.logger.Info("shutdown complete")
+	s.cancel()
+	s.wg.Wait()
+	s.log.Info("shutdown complete")
 
 }
 
-func (server *Server) staticNodesConnectLoop(staticNodes []string) {
+func (s *Server) staticNodesConnectLoop(staticNodes []string) {
 	dialPeer := func(peerAddr string) {
-		err := server.wakuNode.DialPeer(server.ctx, peerAddr)
+		err := s.wakuNode.DialPeer(s.ctx, peerAddr)
 		if err != nil {
-			server.logger.Error("dialing static node", zap.Error(err), zap.String("peer_addr", peerAddr))
+			s.log.Error("dialing static node", zap.Error(err), zap.String("peer_addr", peerAddr))
 		}
 	}
 
@@ -247,11 +286,11 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 	for i, peerAddr := range staticNodes {
 		ma, err := multiaddr.NewMultiaddr(peerAddr)
 		if err != nil {
-			server.logger.Error("building multiaddr from static node addr", zap.Error(err))
+			s.log.Error("building multiaddr from static node addr", zap.Error(err))
 		}
 		pi, err := peer.AddrInfoFromP2pAddr(ma)
 		if err != nil {
-			server.logger.Error("getting peer addr info from static node addr", zap.Error(err))
+			s.log.Error("getting peer addr info from static node addr", zap.Error(err))
 		}
 		staticNodePeerIDs[i] = pi.ID
 	}
@@ -259,11 +298,11 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
-		case <-server.ctx.Done():
+		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
 			peers := map[peer.ID]struct{}{}
-			for _, peerID := range server.wakuNode.Host().Network().Peers() {
+			for _, peerID := range s.wakuNode.Host().Network().Peers() {
 				peers[peerID] = struct{}{}
 			}
 			for i, peerAddr := range staticNodes {
@@ -277,14 +316,14 @@ func (server *Server) staticNodesConnectLoop(staticNodes []string) {
 	}
 }
 
-func (server *Server) statusMetricsLoop(options Options) {
-	server.logger.Info("starting status metrics loop", zap.Duration("period", options.Metrics.StatusPeriod))
+func (s *Server) statusMetricsLoop(options Options) {
+	s.log.Info("starting status metrics loop", zap.Duration("period", options.Metrics.StatusPeriod))
 	ticker := time.NewTicker(options.Metrics.StatusPeriod)
 	bootstrapPeers := map[peer.ID]bool{}
 	for _, addr := range options.StaticNodes {
 		maddr, err := multiaddr.NewMultiaddr(addr)
 		if err != nil {
-			server.logger.Error("parsing static node multiaddr", zap.String("addr", addr), zap.Error(err))
+			s.log.Error("parsing static node multiaddr", zap.String("addr", addr), zap.Error(err))
 			continue
 		}
 		_, pid := peer.SplitAddr(maddr)
@@ -293,29 +332,34 @@ func (server *Server) statusMetricsLoop(options Options) {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-server.ctx.Done():
+		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitPeersByProtocol(server.ctx, server.wakuNode.Host())
+			metrics.EmitPeersByProtocol(s.ctx, s.wakuNode.Host())
 			if len(bootstrapPeers) > 0 {
-				metrics.EmitBootstrapPeersConnected(server.ctx, server.wakuNode.Host(), bootstrapPeers)
+				metrics.EmitBootstrapPeersConnected(s.ctx, s.wakuNode.Host(), bootstrapPeers)
 			}
 		}
 	}
 }
 
-func addPeers(wakuNode *node.WakuNode, addresses []string, protocols ...string) {
+func addPeers(wakuNode *node.WakuNode, addresses []string, protocols ...string) error {
 	for _, addrString := range addresses {
 		if addrString == "" {
 			continue
 		}
 
 		addr, err := multiaddr.NewMultiaddr(addrString)
-		failOnErr(err, "invalid multiaddress")
+		if err != nil {
+			return errors.Wrap(err, "invalid multiaddress")
+		}
 
 		_, err = wakuNode.AddPeer(addr, protocols...)
-		failOnErr(err, "error adding peer")
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func loadPrivateKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
@@ -416,8 +460,11 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 }
 
 func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
-	db := createBunDbOrFail(dbConnectionString, waitForDb)
-	migrator := migrate.NewMigrator(db, messageMigrations.Migrations)
+	db, err := createBunDB(dbConnectionString, waitForDb)
+	if err != nil {
+		return err
+	}
+	migrator := migrate.NewMigrator(db, messagemigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
 		fmt.Printf("created message migration %s (%s)\n", mf.Name, mf.Path)
@@ -427,8 +474,11 @@ func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb 
 }
 
 func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
-	db := createBunDbOrFail(dbConnectionString, waitForDb)
-	migrator := migrate.NewMigrator(db, authzMigrations.Migrations)
+	db, err := createBunDB(dbConnectionString, waitForDb)
+	if err != nil {
+		return err
+	}
+	migrator := migrate.NewMigrator(db, authzmigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
 		fmt.Printf("created authz migration %s (%s)\n", mf.Name, mf.Path)
@@ -437,20 +487,15 @@ func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb ti
 	return err
 }
 
-func failOnErr(err error, msg string) {
+func createBunDB(dsn string, waitForDB time.Duration) (*bun.DB, error) {
+	db, err := createDB(dsn, waitForDB)
 	if err != nil {
-		if msg != "" {
-			msg = msg + ": "
-		}
-		utils.Logger().Fatal(msg, zap.Error(err))
+		return nil, err
 	}
+	return bun.NewDB(db, pgdialect.New()), nil
 }
 
-func createBunDbOrFail(dsn string, waitForDB time.Duration) *bun.DB {
-	return bun.NewDB(createDbOrFail(dsn, waitForDB), pgdialect.New())
-}
-
-func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
+func createDB(dsn string, waitForDB time.Duration) (*sql.DB, error) {
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	waitUntil := time.Now().Add(waitForDB)
 	err := db.Ping()
@@ -459,9 +504,9 @@ func createDbOrFail(dsn string, waitForDB time.Duration) *sql.DB {
 		err = db.Ping()
 	}
 	if err != nil {
-		failOnErr(err, "timeout waiting for DB")
+		return nil, errors.New("timeout waiting for db")
 	}
-	return db
+	return db, nil
 }
 
 func hexToECDSA(key string) (*ecdsa.PrivateKey, error) {

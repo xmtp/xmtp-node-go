@@ -24,6 +24,7 @@ services:
     ports:
       - 16001:6001
       - 15555:5555
+      - 18008:8008
     restart: always
     command:
     - --store
