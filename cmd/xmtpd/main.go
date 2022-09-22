@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	golog "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
@@ -13,7 +16,10 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
+<<<<<<< HEAD
 	"go.uber.org/zap/zapcore"
+=======
+>>>>>>> 7f28475 (Handle and log term signals)
 	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
@@ -118,13 +124,28 @@ func main() {
 		defer profiler.Stop()
 	}
 
-	tracing.PanicWrap(context.Background(), "main", func(ctx context.Context) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	tracing.GoPanicWrap(ctx, &wg, "main", func(ctx context.Context) {
 		s, err := server.New(ctx, log, options)
 		if err != nil {
 			log.Fatal("initializing server", zap.Error(err))
 		}
 		s.WaitForShutdown()
 	})
+
+	sigC := make(chan os.Signal, 1)
+	signal.Notify(sigC,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	sig := <-sigC
+	utils.Logger().Info("ending on signal", zap.String("signal", sig.String()))
+
+	cancel()
+	wg.Wait()
 }
 
 func fatal(msg string, args ...any) {
