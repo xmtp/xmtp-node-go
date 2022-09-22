@@ -9,7 +9,9 @@ import (
 	v2metrics "github.com/status-im/go-waku/waku/v2/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
 	"go.uber.org/zap"
 )
 
@@ -56,4 +58,12 @@ func RegisterViews(logger *zap.Logger) {
 	); err != nil {
 		logger.Fatal("registering metrics views", zap.Error(err))
 	}
+}
+
+func record(ctx context.Context, measurement stats.Measurement) {
+	stats.Record(ctx, measurement)
+}
+
+func recordWithTags(ctx context.Context, mutators []tag.Mutator, measurement stats.Measurement) error {
+	return stats.RecordWithTags(ctx, mutators, measurement)
 }

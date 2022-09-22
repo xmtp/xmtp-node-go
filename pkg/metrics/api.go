@@ -34,7 +34,7 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion 
 		tag.Insert(serviceNameTag, serviceName),
 		tag.Insert(methodNameTag, methodName),
 	}
-	err := stats.RecordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
+	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
 		logging.From(ctx).Warn("recording metric",
 			zap.Error(err),
