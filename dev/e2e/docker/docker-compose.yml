@@ -34,6 +34,7 @@ services:
     - --port=6000
     - --lightpush
     - --filter
+    - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node2/tcp/6000/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
@@ -63,6 +64,7 @@ services:
     - --port=6000
     - --lightpush
     - --filter
+    - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
@@ -92,6 +94,7 @@ services:
     - --port=6000
     - --lightpush
     - --filter
+    - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
