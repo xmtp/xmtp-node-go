@@ -119,7 +119,11 @@ func main() {
 	}
 
 	tracing.PanicWrap(context.Background(), "main", func(ctx context.Context) {
-		server.New(ctx, log, options).WaitForShutdown()
+		s, err := server.New(ctx, log, options)
+		if err != nil {
+			log.Fatal("initializing server", zap.Error(err))
+		}
+		s.WaitForShutdown()
 	})
 }
 
