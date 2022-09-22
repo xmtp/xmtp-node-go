@@ -12,6 +12,7 @@ import (
 
 var serviceNameTag, _ = tag.NewKey("service")
 var methodNameTag, _ = tag.NewKey("method")
+var clientNameTag, _ = tag.NewKey("client")
 var clientVersionTag, _ = tag.NewKey("client-version")
 
 var apiRequestsMeasure = stats.Int64("api_requests", "Count api requests by client version", stats.UnitDimensionless)
@@ -24,12 +25,14 @@ var apiRequestsView = &view.View{
 	TagKeys: []tag.Key{
 		serviceNameTag,
 		methodNameTag,
+		clientNameTag,
 		clientVersionTag,
 	},
 }
 
-func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion string) {
+func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion string) {
 	mutators := []tag.Mutator{
+		tag.Insert(clientNameTag, clientName),
 		tag.Insert(clientVersionTag, clientVersion),
 		tag.Insert(serviceNameTag, serviceName),
 		tag.Insert(methodNameTag, methodName),
@@ -40,6 +43,7 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientVersion 
 			zap.Error(err),
 			zap.String("service", serviceName),
 			zap.String("method", methodName),
+			zap.String("client", clientName),
 			zap.String("client_version", clientVersion),
 		)
 	}
