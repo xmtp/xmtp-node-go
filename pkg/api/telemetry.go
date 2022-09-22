@@ -62,12 +62,18 @@ func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) 
 	if len(vals) > 0 {
 		clientVersion = vals[0]
 	}
+	parts := strings.Split(clientVersion, "/")
+	var clientName string
+	if len(parts) > 0 {
+		clientName = parts[0]
+	}
 	ti.log.Info("api request",
 		zap.String("service", serviceName),
 		zap.String("method", methodName),
+		zap.String("client", clientName),
 		zap.String("client_version", clientVersion),
 	)
-	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientVersion)
+	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion)
 	return nil
 }
 
