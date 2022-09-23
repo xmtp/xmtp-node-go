@@ -142,7 +142,7 @@ func main() {
 	)
 	select {
 	case sig := <-sigC:
-		utils.Logger().Info("ending on signal", zap.String("signal", sig.String()))
+		log.Info("ending on signal", zap.String("signal", sig.String()))
 	case <-doneC:
 	}
 
