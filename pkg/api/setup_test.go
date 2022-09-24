@@ -25,6 +25,7 @@ const (
 func newTestServer(t *testing.T) (*Server, func()) {
 	log := test.NewLog(t)
 	waku, wakuCleanup := newTestNode(t, nil)
+	tm, tmCleanup := test.NewTendermintNode(t)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
 	s, err := New(&Config{
@@ -41,6 +42,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 		},
 		Waku:        waku,
 		Log:         test.NewLog(t),
+		Tendermint:  tm,
 		AllowLister: allowLister,
 	})
 	require.NoError(t, err)
@@ -48,6 +50,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 		s.Close()
 		wakuCleanup()
 		authzDBCleanup()
+		tmCleanup()
 	}
 }
 
@@ -96,7 +99,7 @@ func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStor
 
 func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {
 	t.Run("grpc", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -110,7 +113,7 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 	})
 
 	t.Run("http", func(t *testing.T) {
-		t.Parallel()
+		// t.Parallel()
 
 		server, cleanup := newTestServer(t)
 		defer cleanup()

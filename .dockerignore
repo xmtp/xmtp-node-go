@@ -10,3 +10,5 @@ LICENSE*
 tests
 examples
 *.db
+.tendermint/*
+data/*

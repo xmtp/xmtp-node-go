@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -74,6 +75,7 @@ func (r *Runner) runTest(test *Test) error {
 		if recordErr != nil {
 			log.Error("recording failed run metric", zap.Error(err))
 		}
+		fmt.Println(err)
 		log.Error("test failed", zap.Error(err))
 		return err
 	}

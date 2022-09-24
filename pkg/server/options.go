@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	xtm "github.com/xmtp/xmtp-node-go/pkg/tendermint"
 )
 
 type RelayOptions struct {
@@ -96,13 +97,14 @@ type Options struct {
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 
-	API       api.Options      `group:"API Options" namespace:"api"`
-	Authz     AuthzOptions     `group:"Authz Options"`
-	Relay     RelayOptions     `group:"Relay Options"`
-	Store     StoreOptions     `group:"Store Options"`
-	Filter    FilterOptions    `group:"Filter Options"`
-	LightPush LightpushOptions `group:"LightPush Options"`
-	Metrics   MetricsOptions   `group:"Metrics Options"`
-	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
-	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
+	API        api.Options      `group:"API Options" namespace:"api"`
+	Tendermint xtm.Options      `group:"Tendermint Options" namespace:"tm"`
+	Authz      AuthzOptions     `group:"Authz Options"`
+	Relay      RelayOptions     `group:"Relay Options"`
+	Store      StoreOptions     `group:"Store Options"`
+	Filter     FilterOptions    `group:"Filter Options"`
+	LightPush  LightpushOptions `group:"LightPush Options"`
+	Metrics    MetricsOptions   `group:"Metrics Options"`
+	Tracing    TracingOptions   `group:"DD APM Tracing Options"`
+	Profiling  ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
 }

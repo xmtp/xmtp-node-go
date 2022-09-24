@@ -39,6 +39,7 @@ import (
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 	messagemigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
 	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
+	xtm "github.com/xmtp/xmtp-node-go/pkg/tendermint"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
@@ -55,6 +56,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
+	tm            *xtm.Node
 }
 
 // Create a new Server
@@ -208,13 +210,20 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	tracing.GoPanicWrap(s.ctx, &s.wg, "static-nodes-connect-loop", func(_ context.Context) { s.staticNodesConnectLoop(options.StaticNodes) })
-
 	maddrs, err := s.wakuNode.Host().Network().InterfaceListenAddresses()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting listen addresses")
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
+
+	// Initialize tendermint app and node.
+	s.tm, err = xtm.NewNode(&xtm.Config{
+		Log:     log,
+		Options: options.Tendermint,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing tendermint node")
+	}
 
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
@@ -222,12 +231,14 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Options:     options.API,
 			Log:         s.log.Named("api"),
 			Waku:        s.wakuNode,
+			Tendermint:  s.tm,
 			AllowLister: s.allowLister,
 		},
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing grpc server")
 	}
+
 	return s, nil
 }
 
@@ -263,57 +274,16 @@ func (s *Server) Shutdown() {
 		s.grpc.Close()
 	}
 
+	// Close tendermint node.
+	if s.tm != nil {
+		s.tm.Close()
+	}
+
 	// Cancel outstanding goroutines
 	s.cancel()
 	s.wg.Wait()
 	s.log.Info("shutdown complete")
 
-}
-
-func (s *Server) staticNodesConnectLoop(staticNodes []string) {
-	dialPeer := func(peerAddr string) {
-		err := s.wakuNode.DialPeer(s.ctx, peerAddr)
-		if err != nil {
-			s.log.Error("dialing static node", zap.Error(err), zap.String("peer_addr", peerAddr))
-		}
-	}
-
-	for _, peerAddr := range staticNodes {
-		dialPeer(peerAddr)
-	}
-
-	staticNodePeerIDs := make([]peer.ID, len(staticNodes))
-	for i, peerAddr := range staticNodes {
-		ma, err := multiaddr.NewMultiaddr(peerAddr)
-		if err != nil {
-			s.log.Error("building multiaddr from static node addr", zap.Error(err))
-		}
-		pi, err := peer.AddrInfoFromP2pAddr(ma)
-		if err != nil {
-			s.log.Error("getting peer addr info from static node addr", zap.Error(err))
-		}
-		staticNodePeerIDs[i] = pi.ID
-	}
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-ticker.C:
-			peers := map[peer.ID]struct{}{}
-			for _, peerID := range s.wakuNode.Host().Network().Peers() {
-				peers[peerID] = struct{}{}
-			}
-			for i, peerAddr := range staticNodes {
-				peerID := staticNodePeerIDs[i]
-				if _, exists := peers[peerID]; exists {
-					continue
-				}
-				dialPeer(peerAddr)
-			}
-		}
-	}
 }
 
 func (s *Server) statusMetricsLoop(options Options) {

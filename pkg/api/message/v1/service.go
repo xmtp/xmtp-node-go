@@ -6,24 +6,22 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	"github.com/tendermint/tendermint/types"
+	messagev1 "github.com/xmtp/proto/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/store"
+	xtm "github.com/xmtp/xmtp-node-go/pkg/tendermint"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type Service struct {
-	proto.UnimplementedMessageApiServer
+	messagev1.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log  *zap.Logger
-	waku *wakunode.WakuNode
+	log *zap.Logger
+	tm  *xtm.Node
 
 	// Configured internally.
 	ctx        context.Context
@@ -33,28 +31,39 @@ type Service struct {
 	relaySub   *wakurelay.Subscription
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
+func NewService(log *zap.Logger, tm *xtm.Node) (s *Service, err error) {
 	s = &Service{
-		waku: node,
-		log:  logger.Named("message/v1"),
+		log: log.Named("message/v1"),
+		tm:  tm,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "subscribing to relay")
 	}
 	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
+		resC, err := s.tm.HTTP().Subscribe(ctx, "1", "tm.event='Tx'", 100)
+		if err != nil {
+			s.log.Error("subscribing", zap.Error(err))
+			return
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case wakuEnv := <-s.relaySub.C:
-				if wakuEnv == nil {
+			case res := <-resC:
+				event, ok := res.Data.(types.EventDataTx)
+				if !ok {
+					s.log.Error("event is not a types.EventDataTx")
 					continue
 				}
-				env := buildEnvelope(wakuEnv.Message())
-				s.dispatcher.Submit(env.ContentTopic, env)
+				var env messagev1.Envelope
+				err = proto.Unmarshal(event.Tx, &env)
+				if err != nil {
+					s.log.Error("parsing event", zap.Error(err))
+					continue
+				}
+				s.dispatcher.Submit(env.ContentTopic, &env)
 			}
 		}
 	})
@@ -78,26 +87,32 @@ func (s *Service) Close() {
 	s.log.Info("closed")
 }
 
-func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
+func (s *Service) Publish(ctx context.Context, req *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
 		log.Info("received message")
 
-		wakuMsg := &wakupb.WakuMessage{
-			ContentTopic: env.ContentTopic,
-			Timestamp:    toWakuTimestamp(env.TimestampNs),
-			Payload:      env.Message,
-		}
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		envJSON, err := proto.Marshal(env)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, err
 		}
 		metrics.EmitPublishedEnvelope(ctx, env)
+		_, err = s.tm.HTTP().BroadcastTxAsync(ctx, envJSON)
+		if err != nil {
+			return nil, err
+		}
+		// if res.CheckTx.IsErr() || res.DeliverTx.IsErr() {
+		// 	log := res.CheckTx.Log
+		// 	if res.DeliverTx.Log != "" {
+		// 		log = res.DeliverTx.Log
+		// 	}
+		// 	return nil, errors.New(log)
+		// }
 	}
-	return &proto.PublishResponse{}, nil
+	return &messagev1.PublishResponse{}, nil
 }
 
-func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {
+func (s *Service) Subscribe(req *messagev1.SubscribeRequest, stream messagev1.MessageApi_SubscribeServer) error {
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("started")
 	defer log.Info("stopped")
@@ -114,7 +129,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			log.Info("service closed")
 			return nil
 		case obj := <-subC:
-			env, ok := obj.(*proto.Envelope)
+			env, ok := obj.(*messagev1.Envelope)
 			if !ok {
 				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
 				continue
@@ -127,135 +142,72 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	}
 }
 
-func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
-	log := s.log.Named("subscribeAll")
-	log.Info("started")
-	defer log.Info("stopped")
+// func (s *Service) SubscribeAll(req *messagev1.SubscribeAllRequest, stream messagev1.MessageApi_SubscribeAllServer) error {
+// 	log := s.log.Named("subscribeAll")
+// 	log.Info("started")
+// 	defer log.Info("stopped")
 
-	relaySub, err := s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return err
-	}
+// 	relaySub, err := s.waku.Relay().Subscribe(s.ctx)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	defer relaySub.Unsubscribe()
+// 	defer relaySub.Unsubscribe()
 
-	for {
-		select {
-		case <-stream.Context().Done():
-			log.Info("stream closed")
-			return nil
-		case <-s.ctx.Done():
-			log.Info("service closed")
-			return nil
-		case wakuEnv := <-relaySub.C:
-			if wakuEnv == nil {
-				continue
-			}
-			env := buildEnvelope(wakuEnv.Message())
-			if env == nil || !isValidTopic(env.ContentTopic) {
-				continue
-			}
-			err := stream.Send(env)
-			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
-			}
-		}
-	}
-}
+// 	for {
+// 		select {
+// 		case <-stream.Context().Done():
+// 			log.Info("stream closed")
+// 			return nil
+// 		case <-s.ctx.Done():
+// 			log.Info("service closed")
+// 			return nil
+// 		case wakuEnv := <-relaySub.C:
+// 			if wakuEnv == nil {
+// 				continue
+// 			}
+// 			env := buildEnvelope(wakuEnv.Message())
+// 			if env == nil || !isValidTopic(env.ContentTopic) {
+// 				continue
+// 			}
+// 			err := stream.Send(env)
+// 			if err != nil {
+// 				log.Error("sending envelope to subscriber", zap.Error(err))
+// 			}
+// 		}
+// 	}
+// }
 
-func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
+func (s *Service) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("received request")
 
-	store, ok := s.waku.Store().(*store.XmtpStore)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
+	// TODO: query multiple topics or update the request type to just have .Topic
+	var limit uint32
+	var cursor *messagev1.IndexCursor
+	var reverse bool
+	if req.PagingInfo != nil {
+		limit = req.PagingInfo.Limit
+		cursor = req.PagingInfo.Cursor.GetIndex()
+		reverse = req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING
 	}
-	res, err := store.FindMessages(buildWakuQuery(req))
+	envs, _, err := s.tm.Query(ctx, req.ContentTopics[0], limit, cursor, reverse, req.StartTimeNs, req.EndTimeNs)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, err
 	}
+	// pageInfo := req.PagingInfo
+	// if pageInfo != nil {
+	// 	pageInfo.Cursor = &messagev1.Cursor{
+	// 		Cursor: &messagev1.Cursor_Index{
+	// 			Index: cursor,
+	// 		},
+	// 	}
+	// }
 
-	envs := make([]*proto.Envelope, 0, len(res.Messages))
-	for _, msg := range res.Messages {
-		envs = append(envs, buildEnvelope(msg))
-	}
-
-	return &proto.QueryResponse{
-		Envelopes:  envs,
-		PagingInfo: buildPagingInfo(res.PagingInfo),
+	return &messagev1.QueryResponse{
+		Envelopes: envs,
+		// PagingInfo: pageInfo,
 	}, nil
-}
-
-func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
-	return &proto.Envelope{
-		ContentTopic: msg.ContentTopic,
-		TimestampNs:  fromWakuTimestamp(msg.Timestamp),
-		Message:      msg.Payload,
-	}
-}
-
-func buildWakuQuery(req *proto.QueryRequest) *wakupb.HistoryQuery {
-	contentFilters := []*wakupb.ContentFilter{}
-	for _, contentTopic := range req.ContentTopics {
-		if contentTopic != "" {
-			contentFilters = append(contentFilters, &wakupb.ContentFilter{
-				ContentTopic: contentTopic,
-			})
-		}
-	}
-
-	return &wakupb.HistoryQuery{
-		ContentFilters: contentFilters,
-		StartTime:      toWakuTimestamp(req.StartTimeNs),
-		EndTime:        toWakuTimestamp(req.EndTimeNs),
-		PagingInfo:     buildWakuPagingInfo(req.PagingInfo),
-	}
-}
-
-func buildPagingInfo(pi *wakupb.PagingInfo) *proto.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	var pagingInfo proto.PagingInfo
-	pagingInfo.Limit = uint32(pi.PageSize)
-	switch pi.Direction {
-	case wakupb.PagingInfo_BACKWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_DESCENDING
-	case wakupb.PagingInfo_FORWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_ASCENDING
-	}
-	if index := pi.Cursor; index != nil {
-		pagingInfo.Cursor = &proto.Cursor{
-			Cursor: &proto.Cursor_Index{
-				Index: &proto.IndexCursor{
-					Digest:       index.Digest,
-					SenderTimeNs: uint64(index.SenderTime),
-				}}}
-	}
-	return &pagingInfo
-}
-
-func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	pagingInfo := &wakupb.PagingInfo{
-		PageSize: uint64(pi.Limit),
-	}
-	switch pi.Direction {
-	case proto.SortDirection_SORT_DIRECTION_ASCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_FORWARD
-	case proto.SortDirection_SORT_DIRECTION_DESCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_BACKWARD
-	}
-	if ic := pi.Cursor.GetIndex(); ic != nil {
-		pagingInfo.Cursor = &wakupb.Index{
-			Digest:     ic.Digest,
-			SenderTime: toWakuTimestamp(ic.SenderTimeNs),
-		}
-	}
-	return pagingInfo
 }
 
 func isValidTopic(topic string) bool {

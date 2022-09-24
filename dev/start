@@ -9,6 +9,6 @@ dev/run \
     --lightpush \
     --ws \
     --ws-port="${PORT}" \
-    --api.authn.enable \
-    --api.authn.allowlists \
+    # --api.authn.enable \
+    # --api.authn.allowlists \
     "$@"

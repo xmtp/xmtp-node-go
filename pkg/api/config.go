@@ -4,16 +4,19 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
+	xtm "github.com/xmtp/xmtp-node-go/pkg/tendermint"
 	"go.uber.org/zap"
 )
 
 var (
-	ErrMissingLog  = errors.New("missing log config")
-	ErrMissingWaku = errors.New("missing waku config")
+	ErrMissingLog        = errors.New("missing log config")
+	ErrMissingWaku       = errors.New("missing waku config")
+	ErrMissingTendermint = errors.New("missing tendermint config")
 )
 
 type Options struct {
@@ -29,7 +32,9 @@ type Config struct {
 	Options
 	AllowLister authz.WalletAllowLister
 	Waku        *wakunode.WakuNode
+	Tendermint  *xtm.Node
 	Log         *zap.Logger
+	DB          *badger.DB
 }
 
 // Options bundle command line options associated with the authn package.
@@ -54,6 +59,9 @@ func (params *Config) check() error {
 	}
 	if params.Waku == nil {
 		return ErrMissingWaku
+	}
+	if params.Tendermint == nil {
+		return ErrMissingTendermint
 	}
 	if err := validateAddr(params.HTTPAddress, params.HTTPPort); err != nil {
 		return errors.Wrap(err, "Invalid HTTP Address")

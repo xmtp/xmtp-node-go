@@ -20,3 +20,7 @@ bin/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Tendermint config and data directory.
+.tendermint/
+data/

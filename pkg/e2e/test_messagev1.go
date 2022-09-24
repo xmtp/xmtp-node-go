@@ -73,7 +73,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 		var waiting bool
 		for i := range clients {
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 2000*time.Millisecond)
 			env, err := streams[i].Next(ctx)
 			cancel()
 			if err != nil {
@@ -158,6 +158,10 @@ func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) 
 		select {
 		case env := <-envC:
 			receivedEnvs = append(receivedEnvs, env)
+			err := envsDiff(envs, receivedEnvs)
+			if err == nil {
+				done = true
+			}
 			if len(receivedEnvs) == len(envs) {
 				done = true
 			}
@@ -216,7 +220,7 @@ func query(ctx context.Context, client messageclient.Client, contentTopics []str
 			return nil, err
 		}
 		envs = append(envs, res.Envelopes...)
-		if len(res.Envelopes) == 0 || res.PagingInfo.Cursor == nil {
+		if len(res.Envelopes) == 0 || res.PagingInfo == nil || res.PagingInfo.Cursor == nil {
 			break
 		}
 		pagingInfo = res.PagingInfo

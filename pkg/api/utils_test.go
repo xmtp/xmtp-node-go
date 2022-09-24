@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
@@ -31,10 +34,9 @@ func subscribeExpect(t *testing.T, stream messageclient.Stream, expected []*mess
 	for i := 0; i < len(expected); i++ {
 		env, err := stream.Next(ctx)
 		require.NoError(t, err)
-		t.Logf("got %d", i)
 		received = append(received, env)
 	}
-	sortEnvelopes(received)
+
 	requireEnvelopesEqual(t, expected, received)
 }
 
@@ -56,6 +58,8 @@ func requireEventuallyStored(t *testing.T, ctx context.Context, client messagecl
 
 func requireEnvelopesEqual(t *testing.T, expected, received []*messageV1.Envelope) {
 	require.Equal(t, len(expected), len(received), "length mismatch")
+	sortEnvelopes(received)
+	sortEnvelopes(expected)
 	for i, env := range received {
 		requireEnvelopeEqual(t, expected[i], env, "mismatched message[%d]", i)
 	}
@@ -64,16 +68,22 @@ func requireEnvelopesEqual(t *testing.T, expected, received []*messageV1.Envelop
 func requireEnvelopeEqual(t *testing.T, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
 	require.Equal(t, expected.ContentTopic, actual.ContentTopic, msgAndArgs...)
 	require.Equal(t, expected.Message, actual.Message, msgAndArgs...)
-	if expected.TimestampNs != 0 {
-		require.Equal(t, expected.TimestampNs, actual.TimestampNs, msgAndArgs...)
-	}
+	require.Equal(t, expected.TimestampNs, actual.TimestampNs, msgAndArgs...)
 }
 
 func sortEnvelopes(envelopes []*messageV1.Envelope) {
 	sort.SliceStable(envelopes, func(i, j int) bool {
 		a, b := envelopes[i], envelopes[j]
-		return a.ContentTopic < b.ContentTopic ||
-			a.ContentTopic == b.ContentTopic && a.TimestampNs < b.TimestampNs ||
-			a.ContentTopic == b.ContentTopic && a.TimestampNs == b.TimestampNs && bytes.Compare(a.Message, b.Message) < 0
+		if a.ContentTopic == b.ContentTopic {
+			if a.TimestampNs == b.TimestampNs {
+				return bytes.Compare(a.Message, b.Message) < 0
+			}
+			return a.TimestampNs < b.TimestampNs
+		}
+		return a.ContentTopic < b.ContentTopic
 	})
+}
+
+func isErrClosedConnection(err error) bool {
+	return errors.Is(err, io.EOF) || strings.Contains(err.Error(), "use of closed network connection") || strings.Contains(err.Error(), "response body closed")
 }
