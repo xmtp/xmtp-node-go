@@ -173,7 +173,7 @@ func isErrClosedConnection(err error) bool {
 }
 
 func expectQueryMessagesEventually(ctx context.Context, client messageclient.Client, contentTopics []string, expectedEnvs []*messagev1.Envelope) error {
-	timeout := 3 * time.Second
+	timeout := 10 * time.Second
 	delay := 500 * time.Millisecond
 	started := time.Now()
 	for {
