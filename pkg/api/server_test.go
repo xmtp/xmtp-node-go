@@ -182,7 +182,7 @@ func Test_SubscribeServerClose(t *testing.T) {
 	})
 }
 
-func Test_SubscribeTimeout(t *testing.T) {
+func Test_Subscribe_ContextTimeout(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -192,10 +192,30 @@ func Test_SubscribeTimeout(t *testing.T) {
 		defer stream.Close()
 		time.Sleep(100 * time.Millisecond)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer cancel()
 		_, err = stream.Next(ctx)
 		require.EqualError(t, err, context.DeadlineExceeded.Error())
+	})
+}
+
+func Test_Subscribe_ContextCancel(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(100 * time.Millisecond)
+
+		ctx, cancel := context.WithCancel(ctx)
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+		_, err = stream.Next(ctx)
+		require.EqualError(t, err, context.Canceled.Error())
 	})
 }
 

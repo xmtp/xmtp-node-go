@@ -38,8 +38,8 @@ services:
     - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node2/tcp/6000/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
-    - --static-node=/dns4/node3/tcp/6000/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
+    - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
+    - --static-node=/dns4/node3/tcp/6001/ws/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
@@ -68,8 +68,8 @@ services:
     - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
-    - --static-node=/dns4/node3/tcp/6000/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
+    - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
+    - --static-node=/dns4/node3/tcp/6001/ws/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
@@ -98,8 +98,8 @@ services:
     - --api.authn.enable
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node1/tcp/6000/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
-    - --static-node=/dns4/node2/tcp/6000/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
+    - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
+    - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json

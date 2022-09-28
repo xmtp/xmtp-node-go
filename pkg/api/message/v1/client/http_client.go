@@ -15,7 +15,6 @@ import (
 )
 
 type httpClient struct {
-	ctx     context.Context
 	url     string
 	http    *http.Client
 	version string
@@ -25,14 +24,13 @@ const (
 	clientVersionHeaderKey = "x-client-version"
 )
 
-func NewHTTPClient(ctx context.Context, serverAddr string, gitCommit string) *httpClient {
+func NewHTTPClient(serverAddr string, gitCommit string) *httpClient {
 	transport := &http.Transport{}
 	version := "xmtp-go/"
 	if len(gitCommit) > 0 {
 		version += gitCommit[:7]
 	}
 	return &httpClient{
-		ctx:     ctx,
 		http:    &http.Client{Transport: transport},
 		url:     serverAddr,
 		version: version,
@@ -130,7 +128,7 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 
 	url := c.url + path
 
-	post, err := http.NewRequest("POST", url, bytes.NewBuffer(reqJSON))
+	post, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqJSON))
 	if err != nil {
 		return nil, err
 	}
