@@ -28,7 +28,9 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	contentTopic := "test-" + s.randomStringLower(12)
 
-	ctx, err := withAuth(s.ctx)
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+	ctx, err := withAuth(ctx)
 	if err != nil {
 		return err
 	}
