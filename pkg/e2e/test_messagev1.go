@@ -18,19 +18,17 @@ import (
 )
 
 func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
-	ctx := context.Background()
-
 	clientCount := 5
 	msgsPerClientCount := 3
 	clients := make([]messageclient.Client, clientCount)
 	for i := 0; i < clientCount; i++ {
-		clients[i] = messageclient.NewHTTPClient(ctx, s.config.APIURL, s.config.GitCommit)
+		clients[i] = messageclient.NewHTTPClient(s.config.APIURL, s.config.GitCommit)
 		defer clients[i].Close()
 	}
 
 	contentTopic := "test-" + s.randomStringLower(12)
 
-	ctx, err := withAuth(ctx)
+	ctx, err := withAuth(s.ctx)
 	if err != nil {
 		return err
 	}

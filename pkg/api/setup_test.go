@@ -104,12 +104,10 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 	t.Run("http", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		server, cleanup := newTestServer(t)
 		defer cleanup()
 
-		client := messageclient.NewHTTPClient(ctx, server.httpListenAddr(), "")
+		client := messageclient.NewHTTPClient(server.httpListenAddr(), "")
 		defer client.Close()
 		f(t, client, server)
 	})
