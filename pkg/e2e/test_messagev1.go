@@ -177,13 +177,10 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 	delay := 500 * time.Millisecond
 	started := time.Now()
 	for {
-		res, err := client.Query(ctx, &messagev1.QueryRequest{
-			ContentTopics: contentTopics,
-		})
+		envs, err := query(ctx, client, contentTopics)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "querying")
 		}
-		envs := res.Envelopes
 		if len(envs) == len(expectedEnvs) {
 			err := envsDiff(envs, expectedEnvs)
 			if err != nil {
@@ -201,6 +198,26 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 		time.Sleep(delay)
 	}
 	return nil
+}
+
+func query(ctx context.Context, client messageclient.Client, contentTopics []string) ([]*messagev1.Envelope, error) {
+	var envs []*messagev1.Envelope
+	var pagingInfo *messagev1.PagingInfo
+	for {
+		res, err := client.Query(ctx, &messagev1.QueryRequest{
+			ContentTopics: contentTopics,
+			PagingInfo:    pagingInfo,
+		})
+		if err != nil {
+			return nil, err
+		}
+		envs = append(envs, res.Envelopes...)
+		if len(res.Envelopes) == 0 || res.PagingInfo.Cursor == nil {
+			break
+		}
+		pagingInfo = res.PagingInfo
+	}
+	return envs, nil
 }
 
 func envsDiff(a, b []*messagev1.Envelope) error {
