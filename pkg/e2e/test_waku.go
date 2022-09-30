@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,11 @@ import (
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"go.uber.org/zap"
 )
+
+type wakuClient struct {
+	addr string
+	node *wakunode.WakuNode
+}
 
 func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	// Fetch bootstrap node addresses.
@@ -27,8 +33,8 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	}
 
 	// Create a client node for each bootstrap node, and connect to it.
-	clients := make([]*wakunode.WakuNode, len(bootstrapAddrs))
-	for i, addr := range bootstrapAddrs {
+	clients := make([]*wakuClient, 0, len(bootstrapAddrs))
+	for _, addr := range bootstrapAddrs {
 		c, cleanup, err := newNode(
 			log,
 			// Specify libp2p options here to avoid using the waku-default that
@@ -44,9 +50,16 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 		defer cleanup()
 		err = wakuConnectWithAddr(s.ctx, c, addr)
 		if err != nil {
-			return err
+			log.Info("ignoring error while connecting to bootstrap node", zap.Error(err))
+			continue
 		}
-		clients[i] = c
+		clients = append(clients, &wakuClient{
+			addr: addr,
+			node: c,
+		})
+	}
+	if len(clients) == 0 {
+		return errors.New("no bootstrap nodes available")
 	}
 	time.Sleep(500 * time.Millisecond)
 
@@ -55,7 +68,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	envCs := make([]chan *wakuprotocol.Envelope, len(clients))
 	for i, c := range clients {
 		var err error
-		envCs[i], err = wakuSubscribeTo(s.ctx, c, []string{contentTopic})
+		envCs[i], err = wakuSubscribeTo(s.ctx, c.node, []string{contentTopic})
 		if err != nil {
 			return err
 		}
@@ -68,7 +81,7 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 		msgs[i] = newWakuMessage(contentTopic, int64(i+1), fmt.Sprintf("msg%d", i+1))
 	}
 	for i, sender := range clients {
-		err := wakuPublish(s.ctx, sender, msgs[i])
+		err := wakuPublish(s.ctx, sender.node, msgs[i])
 		if err != nil {
 			return err
 		}
@@ -83,8 +96,8 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	}
 
 	// Expect that they've all been stored on each node.
-	for i, c := range clients {
-		err := wakuExpectQueryMessagesEventually(log, c, bootstrapAddrs[i], []string{contentTopic}, msgs)
+	for _, c := range clients {
+		err := wakuExpectQueryMessagesEventually(log, c.node, c.addr, []string{contentTopic}, msgs)
 		if err != nil {
 			return err
 		}

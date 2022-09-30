@@ -9,12 +9,14 @@ import (
 	"net/http"
 
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 type httpClient struct {
+	log     *zap.Logger
 	url     string
 	http    *http.Client
 	version string
@@ -24,13 +26,14 @@ const (
 	clientVersionHeaderKey = "x-client-version"
 )
 
-func NewHTTPClient(serverAddr string, gitCommit string) *httpClient {
+func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string) *httpClient {
 	transport := &http.Transport{}
 	version := "xmtp-go/"
 	if len(gitCommit) > 0 {
 		version += gitCommit[:7]
 	}
 	return &httpClient{
+		log:     log,
 		http:    &http.Client{Transport: transport},
 		url:     serverAddr,
 		version: version,
@@ -51,7 +54,7 @@ func (c *httpClient) Publish(ctx context.Context, req *messagev1.PublishRequest)
 }
 
 func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequest) (Stream, error) {
-	stream, err := newHTTPStream(func() (*http.Response, error) {
+	stream, err := newHTTPStream(c.log, func() (*http.Response, error) {
 		return c.post(ctx, "/message/v1/subscribe", req)
 	})
 	if err != nil {
