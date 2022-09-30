@@ -22,7 +22,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	msgsPerClientCount := 3
 	clients := make([]messageclient.Client, clientCount)
 	for i := 0; i < clientCount; i++ {
-		clients[i] = messageclient.NewHTTPClient(s.config.APIURL, s.config.GitCommit)
+		clients[i] = messageclient.NewHTTPClient(s.log, s.config.APIURL, s.config.GitCommit)
 		defer clients[i].Close()
 	}
 

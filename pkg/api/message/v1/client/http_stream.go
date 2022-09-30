@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -20,7 +21,7 @@ type httpStream struct {
 	closed     bool
 }
 
-func newHTTPStream(reqFn func() (*http.Response, error)) (*httpStream, error) {
+func newHTTPStream(log *zap.Logger, reqFn func() (*http.Response, error)) (*httpStream, error) {
 	s := &httpStream{
 		respC: make(chan *http.Response, 1),
 		errC:  make(chan error, 1),
@@ -31,18 +32,25 @@ func newHTTPStream(reqFn func() (*http.Response, error)) (*httpStream, error) {
 		// point we can consume from the response body reader as a stream.
 		resp, err := reqFn()
 		if err != nil {
-			s.errC <- err
+			if !s.closed {
+				s.errC <- err
+			} else {
+				log.Error("requesting", zap.Error(err))
+			}
 			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				s.errC <- err
-				return
+			if err == nil {
+				err = fmt.Errorf("%s: %s", resp.Status, string(body))
 			}
-			s.errC <- fmt.Errorf("%s: %s", resp.Status, string(body))
+			if !s.closed {
+				s.errC <- err
+			} else {
+				log.Error("reading body", zap.Error(err))
+			}
 			return
 		}
 

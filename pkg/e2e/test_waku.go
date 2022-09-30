@@ -96,8 +96,8 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 	}
 
 	// Expect that they've all been stored on each node.
-	for i, c := range clients {
-		err := wakuExpectQueryMessagesEventually(log, c.node, bootstrapAddrs[i], []string{contentTopic}, msgs)
+	for _, c := range clients {
+		err := wakuExpectQueryMessagesEventually(log, c.node, c.addr, []string{contentTopic}, msgs)
 		if err != nil {
 			return err
 		}
