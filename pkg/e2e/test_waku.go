@@ -25,8 +25,8 @@ func (s *Suite) testWakuPublishSubscribeQuery(log *zap.Logger) error {
 		if err != nil {
 			return err
 		}
-		if len(bootstrapAddrs) != 3 {
-			return fmt.Errorf("expected bootstrap addrs length 3, got: %d", len(bootstrapAddrs))
+		if len(bootstrapAddrs) != 4 {
+			return fmt.Errorf("expected bootstrap addrs length 4, got: %d", len(bootstrapAddrs))
 		}
 	} else {
 		bootstrapAddrs = s.config.BootstrapAddrs
