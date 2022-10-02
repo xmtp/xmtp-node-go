@@ -87,6 +87,7 @@ func (d *DBStore) Put(env *protocol.Envelope) error {
 	if err != nil {
 		return err
 	}
+	defer stmt.Close()
 	_, err = stmt.Exec(cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version)
 	if err != nil {
 		return err
