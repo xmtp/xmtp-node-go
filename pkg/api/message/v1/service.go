@@ -65,6 +65,9 @@ func (s *Service) Close() {
 	if s.relaySub != nil {
 		s.relaySub.Unsubscribe()
 	}
+	if s.dispatcher != nil {
+		s.dispatcher.Close()
+	}
 
 	if s.ctxCancel != nil {
 		s.ctxCancel()
