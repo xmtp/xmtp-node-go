@@ -7,6 +7,8 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	_ "net/http/pprof"
 )
 
 type Runner struct {
@@ -28,7 +30,7 @@ func NewRunner(ctx context.Context, log *zap.Logger, config *Config) *Runner {
 func (r *Runner) Start() error {
 	if r.config.Continuous {
 		go func() {
-			err := http.ListenAndServe("0.0.0.0:6060", nil)
+			err := http.ListenAndServe("0.0.0.0:6061", nil)
 			if err != nil {
 				r.log.Error("serving profiler", zap.Error(err))
 			}

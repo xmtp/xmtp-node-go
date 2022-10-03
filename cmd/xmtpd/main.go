@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -18,6 +19,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
+
+	_ "net/http/pprof"
 )
 
 var Commit string
@@ -50,6 +53,16 @@ func main() {
 	}
 
 	addEnvVars()
+
+	if options.GoProfiling {
+		// Spin up a default HTTP server for https://pkg.go.dev/net/http/pprof
+		go func() {
+			err := http.ListenAndServe("0.0.0.0:6060", nil)
+			if err != nil {
+				log.Error("serving profiler", zap.Error(err))
+			}
+		}()
+	}
 
 	cleanup, err := initWakuLogging(options)
 	if err != nil {

@@ -8,8 +8,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
-
-	_ "net/http/pprof"
 )
 
 type Suite struct {

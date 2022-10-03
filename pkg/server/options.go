@@ -94,6 +94,7 @@ type Options struct {
 	CreateAuthzMigration   string        `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
 	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
 	Version                bool          `long:"version" description:"Output binary version and exit"`
+	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 
 	API       api.Options      `group:"API Options" namespace:"api"`
 	Authz     AuthzOptions     `group:"Authz Options"`
