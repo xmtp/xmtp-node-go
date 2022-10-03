@@ -54,12 +54,15 @@ func main() {
 
 	addEnvVars()
 
-	go func() {
-		err := http.ListenAndServe("0.0.0.0:6060", nil)
-		if err != nil {
-			log.Error("serving profiler", zap.Error(err))
-		}
-	}()
+	if options.GoProfiling {
+		// Spin up a default HTTP server for https://pkg.go.dev/net/http/pprof
+		go func() {
+			err := http.ListenAndServe("0.0.0.0:6060", nil)
+			if err != nil {
+				log.Error("serving profiler", zap.Error(err))
+			}
+		}()
+	}
 
 	cleanup, err := initWakuLogging(options)
 	if err != nil {
