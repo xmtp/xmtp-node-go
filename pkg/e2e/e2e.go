@@ -49,7 +49,6 @@ func NewSuite(ctx context.Context, log *zap.Logger, config *Config) *Suite {
 func (s *Suite) Tests() []*Test {
 	return []*Test{
 		s.newTest("messagev1 publish subscribe query", s.testMessageV1PublishSubscribeQuery),
-		s.newTest("waku publish subscribe query", s.testWakuPublishSubscribeQuery),
 	}
 }
 
