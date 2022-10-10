@@ -48,7 +48,7 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 
 	// Check expiration
 	created := time.Unix(0, int64(data.CreatedNs))
-	if created.After(now) {
+	if created.After(now.Add(5 * time.Second)) {
 		return wallet, ErrFutureToken
 	}
 	if now.Sub(created) > TokenExpiration {
