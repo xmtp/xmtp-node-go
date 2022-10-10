@@ -86,7 +86,7 @@ func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStor
 	return store, dbStore, store.Stop, dbCleanup
 }
 
-func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {
+func testGRPCAndHTTP(t *testing.T, f func(*testing.T, messageclient.Client, *Server)) {
 	t.Run("grpc", func(t *testing.T) {
 		t.Parallel()
 
