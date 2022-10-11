@@ -48,6 +48,8 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 
 	// Check expiration
 	created := time.Unix(0, int64(data.CreatedNs))
+
+	// Add some time to the current time to mitigate skew between clients and servers.
 	if created.After(now.Add(5 * time.Second)) {
 		return wallet, ErrFutureToken
 	}
