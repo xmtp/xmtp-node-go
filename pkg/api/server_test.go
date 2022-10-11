@@ -37,9 +37,8 @@ func Test_HTTPRootPath(t *testing.T) {
 }
 
 func Test_SubscribePublishQuery(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, _ *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -63,9 +62,8 @@ func Test_SubscribePublishQuery(t *testing.T) {
 }
 
 func Test_MaxMessageSize(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, _ *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -108,8 +106,8 @@ func Test_MaxMessageSize(t *testing.T) {
 }
 
 func Test_QueryNonExistentTopic(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, _ *Server) {
-		ctx := withAuth(t, context.Background())
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"does-not-exist"},
 		})
@@ -120,9 +118,8 @@ func Test_QueryNonExistentTopic(t *testing.T) {
 }
 
 func Test_SubscribeClientClose(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, _ *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -156,9 +153,8 @@ func Test_SubscribeClientClose(t *testing.T) {
 }
 
 func Test_SubscribeServerClose(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -187,9 +183,8 @@ func Test_SubscribeServerClose(t *testing.T) {
 }
 
 func Test_Subscribe_ContextTimeout(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
@@ -205,8 +200,8 @@ func Test_Subscribe_ContextTimeout(t *testing.T) {
 }
 
 func Test_Subscribe_ContextCancel(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withAuth(t, context.Background())
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
@@ -225,9 +220,8 @@ func Test_Subscribe_ContextCancel(t *testing.T) {
 }
 
 func Test_MultipleSubscriptions(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// start 2 streams
 		stream1, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -273,9 +267,8 @@ func Test_MultipleSubscriptions(t *testing.T) {
 }
 
 func Test_QueryPaging(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, _ *Server) {
-		ctx := withAuth(t, context.Background())
-
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// Store 10 envelopes with increasing SenderTimestamp
 		envs := makeEnvelopes(10)
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})

@@ -10,8 +10,8 @@ import (
 )
 
 func Test_AuthnNoToken(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := context.Background()
+	ctx := context.Background()
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "authorization token is not provided")
@@ -20,8 +20,8 @@ func Test_AuthnNoToken(t *testing.T) {
 
 // Private key topic queries must be let through without authn
 func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := context.Background()
+	ctx := context.Background()
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"privatestore-123"},
 		})
@@ -30,16 +30,16 @@ func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 }
 
 func Test_AuthnValidToken(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withAuth(t, context.Background())
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.NoError(t, err)
 	})
 }
 
 func Test_AuthnExpiredToken(t *testing.T) {
-	testGRPCAndHTTP(t, func(t *testing.T, client messageclient.Client, server *Server) {
-		ctx := withExpiredAuth(t, context.Background())
+	ctx := withExpiredAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "token expired")
