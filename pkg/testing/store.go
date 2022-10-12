@@ -16,7 +16,7 @@ const (
 func NewDB(t *testing.T) (*sql.DB, string, func()) {
 	dsn := localTestDBDSNPrefix + localTestDBDSNSuffix
 	ctlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
-	dbName := "test_" + RandomStringLower(5)
+	dbName := "test_" + RandomStringLower(12)
 	_, err := ctlDB.Exec("CREATE DATABASE " + dbName)
 	require.NoError(t, err)
 
