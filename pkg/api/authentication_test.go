@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
@@ -43,5 +44,34 @@ func Test_AuthnExpiredToken(t *testing.T) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "token expired")
+	})
+}
+
+func Test_AuthnRestrictedTopicAllowed(t *testing.T) {
+	ctx, data := withAuthTime(t, context.Background(), time.Now())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{
+			Envelopes: []*messageV1.Envelope{
+				{
+					ContentTopic: "contact-" + data.WalletAddr,
+				},
+			},
+		})
+		require.NoError(t, err)
+	})
+}
+
+func Test_AuthnRestrictedTopicDisallowed(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{
+			Envelopes: []*messageV1.Envelope{
+				{
+					ContentTopic: "contact-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
+				},
+			},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "publishing to restricted topic")
 	})
 }

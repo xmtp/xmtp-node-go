@@ -10,6 +10,7 @@ import (
 	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
+	v1 "github.com/xmtp/proto/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
@@ -115,17 +116,19 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 }
 
 func withAuth(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := GenerateToken(time.Now())
-	require.NoError(t, err)
-	et, err := EncodeToken(token)
-	require.NoError(t, err)
-	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
+	ctx, _ = withAuthTime(t, ctx, time.Now())
+	return ctx
 }
 
 func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := GenerateToken(time.Now().Add(-24 * time.Hour))
+	ctx, _ = withAuthTime(t, ctx, time.Now().Add(-24*time.Hour))
+	return ctx
+}
+
+func withAuthTime(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
+	token, data, err := GenerateToken(when)
 	require.NoError(t, err)
 	et, err := EncodeToken(token)
 	require.NoError(t, err)
-	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
+	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et), data
 }
