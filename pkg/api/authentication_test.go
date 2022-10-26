@@ -50,28 +50,34 @@ func Test_AuthnExpiredToken(t *testing.T) {
 func Test_AuthnRestrictedTopicAllowed(t *testing.T) {
 	ctx, data := withAuthTime(t, context.Background(), time.Now())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
-		_, err := client.Publish(ctx, &messageV1.PublishRequest{
-			Envelopes: []*messageV1.Envelope{
-				{
-					ContentTopic: "contact-" + data.WalletAddr,
-				},
-			},
-		})
-		require.NoError(t, err)
+		for _, topic := range []string{
+			"contact-" + data.WalletAddr,
+			"privatestore-" + data.WalletAddr,
+			"dm-xxx-yyy",
+			"m-09238409",
+			"invite-0x80980980s",
+			"intro-0xdsl8d09s8df0s",
+		} {
+			_, err := client.Publish(ctx, &messageV1.PublishRequest{
+				Envelopes: []*messageV1.Envelope{{ContentTopic: topic}},
+			})
+			require.NoError(t, err)
+		}
 	})
 }
 
 func Test_AuthnRestrictedTopicDisallowed(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
-		_, err := client.Publish(ctx, &messageV1.PublishRequest{
-			Envelopes: []*messageV1.Envelope{
-				{
-					ContentTopic: "contact-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
-				},
-			},
-		})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "publishing to restricted topic")
+		for _, topic := range []string{
+			"contact-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
+			"privatestore-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
+		} {
+			_, err := client.Publish(ctx, &messageV1.PublishRequest{
+				Envelopes: []*messageV1.Envelope{{ContentTopic: topic}},
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "publishing to restricted topic")
+		}
 	})
 }
