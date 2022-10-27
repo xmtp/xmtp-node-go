@@ -42,7 +42,7 @@ func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
 	) (interface{}, error) {
 
 		if wa.requiresAuthorization(req) {
-			if err := wa.authorize(ctx); err != nil {
+			if err := wa.authorize(ctx, req); err != nil {
 				return nil, err
 			}
 		}
@@ -67,7 +67,7 @@ func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
 	return isPublish
 }
 
-func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
+func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) error {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return status.Errorf(codes.Unauthenticated, "metadata is not provided")
@@ -95,6 +95,14 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context) error {
 		return status.Errorf(codes.Unauthenticated, "validating token: %s", err)
 	}
 
+	if pub, isPublish := req.(*messagev1.PublishRequest); isPublish {
+		for _, env := range pub.Envelopes {
+			if !allowedToPublish(env.ContentTopic, wallet) {
+				return status.Errorf(codes.PermissionDenied, "publishing to restricted topic")
+			}
+		}
+	}
+
 	return wa.authorizeWallet(ctx, wallet)
 }
 
@@ -118,4 +126,11 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	}
 	wa.Log.Debug("wallet rate limited", logging.WalletAddress(wallet.String()))
 	return status.Errorf(codes.ResourceExhausted, err.Error())
+}
+
+func allowedToPublish(topic string, wallet types.WalletAddr) bool {
+	parts := strings.Split(topic, "-")
+	return len(parts) != 2 ||
+		(parts[0] != "contact" && parts[0] != "privatestore") ||
+		types.WalletAddr(parts[1]) == wallet
 }
