@@ -48,7 +48,7 @@ func Test_AuthnExpiredToken(t *testing.T) {
 }
 
 func Test_AuthnRestrictedTopicAllowed(t *testing.T) {
-	ctx, data := withAuthTime(t, context.Background(), time.Now())
+	ctx, data := withAuthWithDetails(t, context.Background(), time.Now())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		for _, topic := range []string{
 			"contact-" + data.WalletAddr,

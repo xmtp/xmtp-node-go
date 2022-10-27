@@ -116,16 +116,16 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 }
 
 func withAuth(t *testing.T, ctx context.Context) context.Context {
-	ctx, _ = withAuthTime(t, ctx, time.Now())
+	ctx, _ = withAuthWithDetails(t, ctx, time.Now())
 	return ctx
 }
 
 func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
-	ctx, _ = withAuthTime(t, ctx, time.Now().Add(-24*time.Hour))
+	ctx, _ = withAuthWithDetails(t, ctx, time.Now().Add(-24*time.Hour))
 	return ctx
 }
 
-func withAuthTime(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
+func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
 	token, data, err := GenerateToken(when)
 	require.NoError(t, err)
 	et, err := EncodeToken(token)
