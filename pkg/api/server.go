@@ -207,7 +207,19 @@ func isErrUseOfClosedConnection(err error) bool {
 }
 
 func preflightHandler(w http.ResponseWriter, r *http.Request) {
-	headers := []string{"Content-Type", "Accept", "Authorization", "X-Client-Version"}
+	headers := []string{
+		"Content-Type",
+		"Accept",
+		"Authorization",
+		"X-Client-Version",
+		"Baggage",
+		"DNT",
+		"Sec-CH-UA",
+		"Sec-CH-UA-Mobile",
+		"Sec-CH-UA-Platform",
+		"Sentry-Trace",
+		"User-Agent",
+	}
 	w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ","))
 	methods := []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
 	w.Header().Set("Access-Control-Allow-Methods", strings.Join(methods, ","))
