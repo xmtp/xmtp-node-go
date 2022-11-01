@@ -16,17 +16,19 @@ import (
 )
 
 type httpClient struct {
-	log     *zap.Logger
-	url     string
-	http    *http.Client
-	version string
+	log        *zap.Logger
+	url        string
+	http       *http.Client
+	version    string
+	appVersion string
 }
 
 const (
 	clientVersionHeaderKey = "x-client-version"
+	appVersionHeaderKey    = "x-app-version"
 )
 
-func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string) *httpClient {
+func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string, appVersion string) *httpClient {
 	transport := &http.Transport{}
 	version := "xmtp-go/"
 	if len(gitCommit) > 0 {
@@ -145,6 +147,10 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 	clientVersion := post.Header.Get(clientVersionHeaderKey)
 	if clientVersion == "" {
 		post.Header.Set(clientVersionHeaderKey, c.version)
+	}
+	appVersion := post.Header.Get(clientVersionHeaderKey)
+	if appVersion == "" {
+		post.Header.Set(appVersionHeaderKey, c.appVersion)
 	}
 	resp, err := c.http.Do(post)
 	if err != nil {

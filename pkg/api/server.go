@@ -212,6 +212,7 @@ func preflightHandler(w http.ResponseWriter, r *http.Request) {
 		"Accept",
 		"Authorization",
 		"X-Client-Version",
+		"X-App-Version",
 		"Baggage",
 		"DNT",
 		"Sec-CH-UA",
