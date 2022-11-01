@@ -1,11 +1,16 @@
 package testing
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 )
 
 const (
@@ -28,4 +33,18 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 		require.NoError(t, err)
 		ctlDB.Close()
 	}
+}
+
+func NewAuthzDB(t *testing.T) (*bun.DB, string, func()) {
+	db, dsn, cleanup := NewDB(t)
+	bunDB := bun.NewDB(db, pgdialect.New())
+
+	ctx := context.Background()
+	migrator := migrate.NewMigrator(bunDB, authz.Migrations)
+	err := migrator.Init(ctx)
+	require.NoError(t, err)
+	_, err = migrator.Migrate(ctx)
+	require.NoError(t, err)
+
+	return bunDB, dsn, cleanup
 }

@@ -109,9 +109,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) erro
 func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.WalletAddr) error {
 	// * for limit exhaustion return status.Errorf(codes.ResourceExhausted, ...)
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
-	if !wa.Ratelimits {
-		return nil
-	}
+
 	var allowListed bool
 	if wa.AllowLists {
 		if wa.AllowLister.IsDenyListed(wallet.String()) {
@@ -119,6 +117,10 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
 		}
 		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
+	}
+
+	if !wa.Ratelimits {
+		return nil
 	}
 	err := wa.Limiter.Spend(wallet.String(), allowListed)
 	if err == nil {

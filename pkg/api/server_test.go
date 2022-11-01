@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	messageV1 "github.com/xmtp/proto/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -313,4 +315,41 @@ func Test_QueryPaging(t *testing.T) {
 		require.NotNil(t, queryRes)
 		requireEnvelopesEqual(t, result[6:], queryRes.Envelopes)
 	})
+}
+
+func Test_Publish_DenyListed(t *testing.T) {
+	token, data, err := GenerateToken(time.Now())
+	require.NoError(t, err)
+	et, err := EncodeToken(token)
+	require.NoError(t, err)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), authorizationMetadataKey, "Bearer "+et)
+
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, s *Server) {
+		err := s.AllowLister.Deny(ctx, data.WalletAddr)
+		require.NoError(t, err)
+
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{})
+		expectWalletDenied(t, err)
+		require.Nil(t, publishRes)
+	})
+}
+
+func expectWalletDenied(t *testing.T, err error) {
+	grpcErr, ok := status.FromError(err)
+	if ok {
+		require.Equal(t, codes.PermissionDenied, grpcErr.Code())
+		require.Equal(t, "wallet is deny listed", grpcErr.Message())
+	} else {
+		parts := strings.SplitN(err.Error(), ": ", 2)
+		reason, msgJSON := parts[0], parts[1]
+		require.Equal(t, "403 Forbidden", reason)
+		var msg map[string]interface{}
+		err := json.Unmarshal([]byte(msgJSON), &msg)
+		require.NoError(t, err)
+		require.Equal(t, map[string]interface{}{
+			"code":    float64(codes.PermissionDenied),
+			"message": "wallet is deny listed",
+			"details": []interface{}{},
+		}, msg)
+	}
 }
