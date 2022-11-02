@@ -50,6 +50,7 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, cl
 	if err != nil {
 		logging.From(ctx).Error("recording metric",
 			zap.Error(err),
+			zap.String("metric", apiRequestsView.Name),
 			zap.String("service", serviceName),
 			zap.String("method", methodName),
 			zap.String("client", clientName),
