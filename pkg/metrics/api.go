@@ -87,15 +87,14 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 }
 
 func categoryFromPrefix(prefix string) string {
-	category, found := map[string]string{
+	if category, found := map[string]string{
 		"contact":      "contact",
 		"intro":        "v1-intro",
 		"dm":           "v1-conversation",
 		"invite":       "v2-invite",
 		"m":            "v2-conversation",
 		"privatestore": "private",
-	}[prefix]
-	if found {
+	}[prefix]; found {
 		return category
 	}
 	return "invalid"
