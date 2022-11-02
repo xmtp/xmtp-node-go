@@ -35,6 +35,7 @@ services:
     - --lightpush
     - --filter
     - --api.authn.enable
+    - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
@@ -65,6 +66,7 @@ services:
     - --lightpush
     - --filter
     - --api.authn.enable
+    - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
@@ -95,6 +97,7 @@ services:
     - --lightpush
     - --filter
     - --api.authn.enable
+    - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
@@ -125,6 +128,7 @@ services:
     - --lightpush
     - --filter
     - --api.authn.enable
+    - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
     - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
