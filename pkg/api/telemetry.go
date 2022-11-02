@@ -89,7 +89,7 @@ func parseVersionHeaderValue(vals []string) (name string, version string, full s
 	if len(parts) > 0 {
 		name = parts[0]
 		if len(parts) > 1 {
-			name = parts[1]
+			version = parts[1]
 		}
 	}
 	return
