@@ -12,6 +12,7 @@ import (
 
 const (
 	clientVersionMetadataKey = "x-client-version"
+	appVersionMetadataKey    = "x-app-version"
 )
 
 type TelemetryInterceptor struct {
@@ -57,23 +58,17 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) error {
 	serviceName, methodName := splitMethodName(fullMethod)
 	md, _ := metadata.FromIncomingContext(ctx)
-	vals := md.Get(clientVersionMetadataKey)
-	var clientVersion string
-	if len(vals) > 0 {
-		clientVersion = vals[0]
-	}
-	parts := strings.Split(clientVersion, "/")
-	var clientName string
-	if len(parts) > 0 {
-		clientName = parts[0]
-	}
+	clientName, _, clientVersion := parseVersionHeaderValue(md.Get(clientVersionMetadataKey))
+	appName, _, appVersion := parseVersionHeaderValue(md.Get(appVersionMetadataKey))
 	ti.log.Info("api request",
 		zap.String("service", serviceName),
 		zap.String("method", methodName),
 		zap.String("client", clientName),
 		zap.String("client_version", clientVersion),
+		zap.String("app", appName),
+		zap.String("app_version", appVersion),
 	)
-	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion)
+	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion, appName, appVersion)
 	return nil
 }
 
@@ -83,4 +78,19 @@ func splitMethodName(fullMethodName string) (serviceName string, methodName stri
 		return fullMethodName[:i], fullMethodName[i+1:]
 	}
 	return "unknown", "unknown"
+}
+
+func parseVersionHeaderValue(vals []string) (name string, version string, full string) {
+	if len(vals) == 0 {
+		return
+	}
+	full = vals[0]
+	parts := strings.Split(full, "/")
+	if len(parts) > 0 {
+		name = parts[0]
+		if len(parts) > 1 {
+			version = parts[1]
+		}
+	}
+	return
 }
