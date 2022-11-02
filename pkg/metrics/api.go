@@ -37,6 +37,29 @@ var apiRequestsView = &view.View{
 	},
 }
 
+func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion, appName, appVersion string) {
+	mutators := []tag.Mutator{
+		tag.Insert(clientNameTag, clientName),
+		tag.Insert(clientVersionTag, clientVersion),
+		tag.Insert(appNameTag, appName),
+		tag.Insert(appVersionTag, appVersion),
+		tag.Insert(serviceNameTag, serviceName),
+		tag.Insert(methodNameTag, methodName),
+	}
+	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
+	if err != nil {
+		logging.From(ctx).Error("recording metric",
+			zap.Error(err),
+			zap.String("service", serviceName),
+			zap.String("method", methodName),
+			zap.String("client", clientName),
+			zap.String("client_version", clientVersion),
+			zap.String("app", appName),
+			zap.String("app_version", appVersion),
+		)
+	}
+}
+
 var topicCategoryTag, _ = tag.NewKey("topic-category")
 var publishedEnvelopeMeasure = stats.Int64("published_envelope", "size of a published envelope", stats.UnitBytes)
 var publishedEnvelopeView = &view.View{
@@ -58,29 +81,6 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 			zap.String("metric", publishedEnvelopeView.Name),
 			zap.Int64("size", size),
 			zap.String("topic_category", topicCategory),
-		)
-	}
-}
-
-func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion, appName, appVersion string) {
-	mutators := []tag.Mutator{
-		tag.Insert(clientNameTag, clientName),
-		tag.Insert(clientVersionTag, clientVersion),
-		tag.Insert(appNameTag, appName),
-		tag.Insert(appVersionTag, appVersion),
-		tag.Insert(serviceNameTag, serviceName),
-		tag.Insert(methodNameTag, methodName),
-	}
-	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
-	if err != nil {
-		logging.From(ctx).Error("recording metric",
-			zap.Error(err),
-			zap.String("service", serviceName),
-			zap.String("method", methodName),
-			zap.String("client", clientName),
-			zap.String("client_version", clientVersion),
-			zap.String("app", appName),
-			zap.String("app_version", appVersion),
 		)
 	}
 }
