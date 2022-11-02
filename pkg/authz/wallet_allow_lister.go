@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const REFRESH_INTERVAL_MINUTES = 5
+const REFRESH_INTERVAL_SECONDS = 5
 
 type Permission int64
 
@@ -42,6 +42,7 @@ type WalletAllowLister interface {
 	IsAllowListed(walletAddress string) bool
 	IsDenyListed(walletAddress string) bool
 	GetPermissions(walletAddress string) Permission
+	Deny(ctx context.Context, WalletAddress string) error
 }
 
 // DatabaseWalletAllowLister implements database backed allow list.
@@ -60,7 +61,7 @@ func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAl
 	result.db = db
 	result.log = log.Named("wauthz")
 	result.permissions = make(map[string]Permission)
-	result.refreshInterval = time.Minute * REFRESH_INTERVAL_MINUTES
+	result.refreshInterval = time.Second * REFRESH_INTERVAL_SECONDS
 
 	return result
 }
@@ -82,6 +83,20 @@ func (d *DatabaseWalletAllowLister) IsAllowListed(walletAddress string) bool {
 // Check if the wallet address is explicitly deny listed
 func (d *DatabaseWalletAllowLister) IsDenyListed(walletAddress string) bool {
 	return d.GetPermissions(walletAddress) == Denied
+}
+
+// Add an address to the deny list.
+func (d *DatabaseWalletAllowLister) Deny(ctx context.Context, walletAddress string) error {
+	wallet := WalletAddress{
+		WalletAddress: walletAddress,
+		Permission:    "deny",
+	}
+	_, err := d.db.NewInsert().Model(&wallet).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	d.permissions[walletAddress] = mapPermission(wallet.Permission)
+	return nil
 }
 
 // Load the permissions and start listening
@@ -118,7 +133,7 @@ func (d *DatabaseWalletAllowLister) loadPermissions() error {
 	}
 	d.permissions = newPermissionMap
 
-	d.log.Info("Updated allow/deny lists from the database", zap.Int("num_values", len(newPermissionMap)))
+	d.log.Debug("Updated allow/deny lists from the database", zap.Int("num_values", len(newPermissionMap)))
 
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "github.com/xmtp/proto/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/metadata"
@@ -22,7 +23,10 @@ const (
 )
 
 func newTestServer(t *testing.T) (*Server, func()) {
+	log := test.NewLog(t)
 	waku, wakuCleanup := newTestNode(t, nil)
+	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
+	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
 	s, err := New(&Config{
 		Options: Options{
 			GRPCAddress: "localhost",
@@ -30,17 +34,20 @@ func newTestServer(t *testing.T) (*Server, func()) {
 			HTTPAddress: "localhost",
 			HTTPPort:    0,
 			Authn: AuthnOptions{
-				Enable: true,
+				Enable:     true,
+				AllowLists: true,
 			},
 			MaxMsgSize: testMaxMsgSize,
 		},
-		Waku: waku,
-		Log:  test.NewLog(t),
+		Waku:        waku,
+		Log:         test.NewLog(t),
+		AllowLister: allowLister,
 	})
 	require.NoError(t, err)
 	return s, func() {
 		s.Close()
 		wakuCleanup()
+		authzDBCleanup()
 	}
 }
 
