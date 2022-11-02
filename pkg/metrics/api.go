@@ -86,24 +86,21 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 	}
 }
 
-func categoryFromPrefix(prefix string) string {
-	if category, found := map[string]string{
-		"contact":      "contact",
-		"intro":        "v1-intro",
-		"dm":           "v1-conversation",
-		"invite":       "v2-invite",
-		"m":            "v2-conversation",
-		"privatestore": "private",
-	}[prefix]; found {
-		return category
-	}
-	return "invalid"
+var topicCategoryByPrefix = map[string]string{
+	"contact":      "contact",
+	"intro":        "v1-intro",
+	"dm":           "v1-conversation",
+	"invite":       "v2-invite",
+	"m":            "v2-conversation",
+	"privatestore": "private",
 }
 
 func categoryFromTopic(topic string) string {
 	prefix, _, hasPrefix := strings.Cut(topic, "-")
 	if hasPrefix {
-		return categoryFromPrefix(prefix)
+		if category, found := topicCategoryByPrefix[prefix]; found {
+			return category
+		}
 	}
 	return "invalid"
 }
