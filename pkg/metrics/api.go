@@ -86,18 +86,17 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 	}
 }
 
-func categoryFromPrefix(topicPrefix string) string {
-	for prefix, category := range map[string]string{
+func categoryFromPrefix(prefix string) string {
+	category, found := map[string]string{
 		"contact":      "contact",
 		"intro":        "v1-intro",
 		"dm":           "v1-conversation",
 		"invite":       "v2-invite",
 		"m":            "v2-conversation",
 		"privatestore": "private",
-	} {
-		if topicPrefix == prefix {
-			return category
-		}
+	}[prefix]
+	if found {
+		return category
 	}
 	return "invalid"
 }
