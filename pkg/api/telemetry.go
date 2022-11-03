@@ -67,13 +67,12 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		zap.String("app_version", appVersion),
 	}
 
-	var errCode string
 	if err != nil {
+		fields = append(fields, zap.Error(err))
 		grpcErr, _ := status.FromError(err)
 		if grpcErr != nil {
 			errCode := grpcErr.Code().String()
 			fields = append(fields, []zapcore.Field{
-				zap.Error(err),
 				zap.String("error_code", errCode),
 				zap.String("error_message", grpcErr.Message()),
 			}...)
@@ -81,7 +80,7 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 	}
 
 	ti.log.Info("api request", fields...)
-	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion, appName, appVersion, errCode)
+	metrics.EmitAPIRequest(ctx, fields)
 }
 
 func splitMethodName(fullMethodName string) (serviceName string, methodName string) {

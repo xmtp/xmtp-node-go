@@ -11,15 +11,22 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-var serviceNameTag, _ = tag.NewKey("service")
-var methodNameTag, _ = tag.NewKey("method")
-var clientNameTag, _ = tag.NewKey("client")
-var clientVersionTag, _ = tag.NewKey("client-version")
-var appNameTag, _ = tag.NewKey("app")
-var appVersionTag, _ = tag.NewKey("app-version")
-var errorCodeTag, _ = tag.NewKey("error-code")
+var (
+	apiRequestTagKeys = []tag.Key{
+		newTagKey("service"),
+		newTagKey("method"),
+		newTagKey("client"),
+		newTagKey("client_version"),
+		newTagKey("app"),
+		newTagKey("app_version"),
+		newTagKey("error_code"),
+	}
+
+	apiRequestTagKeysByName = buildTagKeysByName(apiRequestTagKeys)
+)
 
 var apiRequestsMeasure = stats.Int64("api_requests", "Count api requests", stats.UnitDimensionless)
 
@@ -28,40 +35,21 @@ var apiRequestsView = &view.View{
 	Measure:     apiRequestsMeasure,
 	Description: "Count of api requests",
 	Aggregation: view.Count(),
-	TagKeys: []tag.Key{
-		serviceNameTag,
-		methodNameTag,
-		clientNameTag,
-		clientVersionTag,
-		appNameTag,
-		appVersionTag,
-		errorCodeTag,
-	},
+	TagKeys:     apiRequestTagKeys,
 }
 
-func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion, appName, appVersion, errCode string) {
-	mutators := []tag.Mutator{
-		tag.Insert(clientNameTag, clientName),
-		tag.Insert(clientVersionTag, clientVersion),
-		tag.Insert(appNameTag, appName),
-		tag.Insert(appVersionTag, appVersion),
-		tag.Insert(serviceNameTag, serviceName),
-		tag.Insert(methodNameTag, methodName),
-		tag.Insert(errorCodeTag, errCode),
+func EmitAPIRequest(ctx context.Context, fields []zapcore.Field) {
+	mutators := make([]tag.Mutator, 0, len(fields))
+	for _, field := range fields {
+		key, ok := apiRequestTagKeysByName[field.Key]
+		if !ok {
+			continue
+		}
+		mutators = append(mutators, tag.Insert(key, field.String))
 	}
 	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
-			zap.Error(err),
-			zap.String("metric", apiRequestsView.Name),
-			zap.String("service", serviceName),
-			zap.String("method", methodName),
-			zap.String("client", clientName),
-			zap.String("client_version", clientVersion),
-			zap.String("app", appName),
-			zap.String("app_version", appVersion),
-			zap.String("error_code", errCode),
-		)
+		logging.From(ctx).Error("recording metric", fields...)
 	}
 }
 
@@ -115,4 +103,17 @@ func categoryFromTopic(contentTopic string) string {
 		}
 	}
 	return "invalid"
+}
+
+func buildTagKeysByName(keys []tag.Key) map[string]tag.Key {
+	m := map[string]tag.Key{}
+	for _, key := range keys {
+		m[key.Name()] = key
+	}
+	return m
+}
+
+func newTagKey(str string) tag.Key {
+	key, _ := tag.NewKey(str)
+	return key
 }
