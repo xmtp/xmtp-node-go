@@ -35,10 +35,11 @@ func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string, appVers
 		version += gitCommit[:7]
 	}
 	return &httpClient{
-		log:     log,
-		http:    &http.Client{Transport: transport},
-		url:     serverAddr,
-		version: version,
+		log:        log,
+		http:       &http.Client{Transport: transport},
+		url:        serverAddr,
+		version:    version,
+		appVersion: appVersion,
 	}
 }
 
