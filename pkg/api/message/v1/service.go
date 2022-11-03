@@ -9,6 +9,7 @@ import (
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/go/message_api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -90,6 +91,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
+		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
 }
