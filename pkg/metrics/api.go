@@ -19,6 +19,7 @@ var clientNameTag, _ = tag.NewKey("client")
 var clientVersionTag, _ = tag.NewKey("client-version")
 var appNameTag, _ = tag.NewKey("app")
 var appVersionTag, _ = tag.NewKey("app-version")
+var errorCodeTag, _ = tag.NewKey("error-code")
 
 var apiRequestsMeasure = stats.Int64("api_requests", "Count api requests", stats.UnitDimensionless)
 
@@ -34,10 +35,11 @@ var apiRequestsView = &view.View{
 		clientVersionTag,
 		appNameTag,
 		appVersionTag,
+		errorCodeTag,
 	},
 }
 
-func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion, appName, appVersion string) {
+func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, clientVersion, appName, appVersion, errCode string) {
 	mutators := []tag.Mutator{
 		tag.Insert(clientNameTag, clientName),
 		tag.Insert(clientVersionTag, clientVersion),
@@ -45,6 +47,7 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, cl
 		tag.Insert(appVersionTag, appVersion),
 		tag.Insert(serviceNameTag, serviceName),
 		tag.Insert(methodNameTag, methodName),
+		tag.Insert(errorCodeTag, errCode),
 	}
 	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
@@ -57,6 +60,7 @@ func EmitAPIRequest(ctx context.Context, serviceName, methodName, clientName, cl
 			zap.String("client_version", clientVersion),
 			zap.String("app", appName),
 			zap.String("app_version", appVersion),
+			zap.String("error_code", errCode),
 		)
 	}
 }
