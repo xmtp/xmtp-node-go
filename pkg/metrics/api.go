@@ -87,6 +87,7 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 }
 
 var topicCategoryByPrefix = map[string]string{
+	"test":         "test",
 	"contact":      "contact",
 	"intro":        "v1-intro",
 	"dm":           "v1-conversation",
@@ -95,7 +96,14 @@ var topicCategoryByPrefix = map[string]string{
 	"privatestore": "private",
 }
 
-func categoryFromTopic(topic string) string {
+func categoryFromTopic(contentTopic string) string {
+	if strings.HasPrefix(contentTopic, "test-") {
+		return "test"
+	}
+	topic := strings.TrimPrefix(contentTopic, "/xmtp/0/")
+	if len(topic) == len(contentTopic) {
+		return "invalid"
+	}
 	prefix, _, hasPrefix := strings.Cut(topic, "-")
 	if hasPrefix {
 		if category, found := topicCategoryByPrefix[prefix]; found {
