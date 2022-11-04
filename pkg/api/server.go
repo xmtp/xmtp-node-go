@@ -241,6 +241,8 @@ func incomingHeaderMatcher(key string) (string, bool) {
 	switch strings.ToLower(key) {
 	case clientVersionMetadataKey:
 		return key, true
+	case appVersionMetadataKey:
+		return key, true
 	default:
 		return key, false
 	}
