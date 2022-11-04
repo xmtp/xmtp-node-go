@@ -22,7 +22,11 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	msgsPerClientCount := 3
 	clients := make([]messageclient.Client, clientCount)
 	for i := 0; i < clientCount; i++ {
-		clients[i] = messageclient.NewHTTPClient(s.log, s.config.APIURL, s.config.GitCommit, "e2e/"+s.config.GitCommit[:7])
+		appVersion := "xmtp-e2e/"
+		if len(s.config.GitCommit) > 0 {
+			appVersion += s.config.GitCommit[:7]
+		}
+		clients[i] = messageclient.NewHTTPClient(s.log, s.config.APIURL, s.config.GitCommit, appVersion)
 		defer clients[i].Close()
 	}
 
