@@ -17,6 +17,10 @@ const (
 	appVersionMetadataKey    = "x-app-version"
 )
 
+var sensitiveHeaders = map[string]bool{
+	authorizationMetadataKey: true,
+}
+
 type TelemetryInterceptor struct {
 	log *zap.Logger
 
@@ -87,7 +91,9 @@ func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) 
 func (ti *TelemetryInterceptor) logSample(fullMethod string, md metadata.MD) {
 	fields := []zapcore.Field{zap.String("method", fullMethod)}
 	for key, data := range md {
-		fields = append(fields, zap.Strings(key, data))
+		if !sensitiveHeaders[key] {
+			fields = append(fields, zap.Strings(key, data))
+		}
 	}
 	ti.log.Info("request metadata sample", fields...)
 }
