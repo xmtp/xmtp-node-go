@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -17,11 +19,16 @@ const (
 
 type TelemetryInterceptor struct {
 	log *zap.Logger
+
+	samplingTimer <-chan time.Time
 }
 
 func NewTelemetryInterceptor(log *zap.Logger) *TelemetryInterceptor {
 	return &TelemetryInterceptor{
 		log: log,
+		// Note that this will leak the timer if the executable
+		// does not exit after shutting down the server
+		samplingTimer: time.Tick(time.Minute),
 	}
 }
 
@@ -69,7 +76,20 @@ func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) 
 		zap.String("app_version", appVersion),
 	)
 	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion, appName, appVersion)
+	select {
+	case <-ti.samplingTimer:
+		ti.logSample(fullMethod, md)
+	default:
+	}
 	return nil
+}
+
+func (ti *TelemetryInterceptor) logSample(fullMethod string, md metadata.MD) {
+	fields := []zapcore.Field{zap.String("method", fullMethod)}
+	for key, data := range md {
+		fields = append(fields, zap.Strings(key, data))
+	}
+	ti.log.Info("request metadata sample", fields...)
 }
 
 func splitMethodName(fullMethodName string) (serviceName string, methodName string) {
