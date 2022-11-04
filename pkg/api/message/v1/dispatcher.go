@@ -71,6 +71,8 @@ func (d *dispatcher) Submit(topic string, obj interface{}) bool {
 }
 
 func (d *dispatcher) Close() error {
+	d.l.Lock()
+	defer d.l.Unlock()
 	for topic, bc := range d.bcs {
 		bc.Close()
 		delete(d.bcs, topic)
