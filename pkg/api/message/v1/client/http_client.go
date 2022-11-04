@@ -149,7 +149,7 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 	if clientVersion == "" {
 		post.Header.Set(clientVersionHeaderKey, c.version)
 	}
-	appVersion := post.Header.Get(clientVersionHeaderKey)
+	appVersion := post.Header.Get(appVersionHeaderKey)
 	if appVersion == "" {
 		post.Header.Set(appVersionHeaderKey, c.appVersion)
 	}
