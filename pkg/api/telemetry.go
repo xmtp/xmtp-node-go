@@ -67,7 +67,9 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		zap.String("app_version", appVersion),
 	}
 	if ips := md.Get("x-forwarded-for"); len(ips) > 0 {
-		fields = append(fields, zap.String("client_ip", ips[0]))
+		// There are potentially multiple comma separated IPs bundled in that first value
+		ips := strings.Split(ips[0], ",")
+		fields = append(fields, zap.String("client_ip", strings.TrimSpace(ips[0])))
 	}
 	if err != nil {
 		fields = append(fields, zap.Error(err))
