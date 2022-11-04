@@ -6,8 +6,10 @@ import (
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -32,11 +34,9 @@ func (ti *TelemetryInterceptor) Unary() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		err := ti.execute(ctx, info.FullMethod)
-		if err != nil {
-			return nil, err
-		}
-		return handler(ctx, req)
+		res, err := handler(ctx, req)
+		ti.record(ctx, info.FullMethod, err)
+		return res, err
 	}
 }
 
@@ -47,29 +47,40 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		err := ti.execute(stream.Context(), info.FullMethod)
-		if err != nil {
-			return err
-		}
-		return handler(srv, stream)
+		res := handler(srv, stream)
+		ti.record(stream.Context(), info.FullMethod, nil)
+		return res
 	}
 }
 
-func (ti *TelemetryInterceptor) execute(ctx context.Context, fullMethod string) error {
+func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, err error) {
 	serviceName, methodName := splitMethodName(fullMethod)
 	md, _ := metadata.FromIncomingContext(ctx)
 	clientName, _, clientVersion := parseVersionHeaderValue(md.Get(clientVersionMetadataKey))
 	appName, _, appVersion := parseVersionHeaderValue(md.Get(appVersionMetadataKey))
-	ti.log.Info("api request",
+	fields := []zapcore.Field{
 		zap.String("service", serviceName),
 		zap.String("method", methodName),
 		zap.String("client", clientName),
 		zap.String("client_version", clientVersion),
 		zap.String("app", appName),
 		zap.String("app_version", appVersion),
-	)
-	metrics.EmitAPIRequest(ctx, serviceName, methodName, clientName, clientVersion, appName, appVersion)
-	return nil
+	}
+
+	if err != nil {
+		fields = append(fields, zap.Error(err))
+		grpcErr, _ := status.FromError(err)
+		if grpcErr != nil {
+			errCode := grpcErr.Code().String()
+			fields = append(fields, []zapcore.Field{
+				zap.String("error_code", errCode),
+				zap.String("error_message", grpcErr.Message()),
+			}...)
+		}
+	}
+
+	ti.log.Info("api request", fields...)
+	metrics.EmitAPIRequest(ctx, fields)
 }
 
 func splitMethodName(fullMethodName string) (serviceName string, methodName string) {
