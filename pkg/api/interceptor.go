@@ -90,7 +90,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) erro
 		return status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
 	}
 
-	wallet, err := validateToken(ctx, token, time.Now())
+	wallet, err := validateToken(ctx, wa.Log, token, time.Now())
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "validating token: %s", err)
 	}
