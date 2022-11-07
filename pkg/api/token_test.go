@@ -23,7 +23,7 @@ func Test_Nominal(t *testing.T) {
 	now := time.Now()
 	token, data, err := GenerateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
-	walletAddr, err := validateToken(ctx, token, now)
+	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
 	require.Equal(t, data.WalletAddr, string(walletAddr), "wallet address mismatch")
 }
@@ -39,7 +39,7 @@ func Test_XmtpjsToken(t *testing.T) {
 	now := time.Unix(0, tokenCreatedNs).Add(10 * time.Minute)
 	token, err := decodeToken(tokenBytes)
 	require.NoError(t, err)
-	walletAddr, err := validateToken(ctx, token, now)
+	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
 	require.Equal(t, tokenAddress, string(walletAddr))
 }
@@ -51,7 +51,7 @@ func Test_BadAuthSig(t *testing.T) {
 	token, _, err := GenerateToken(now.Add(-time.Minute))
 	require.NoError(t, err)
 	token.GetAuthDataSignature().GetEcdsaCompact().Bytes = randomBytes(64)
-	_, err = validateToken(ctx, token, now)
+	_, err = validateToken(ctx, logger, token, now)
 	require.Error(t, err)
 	require.Equal(t, err, ErrInvalidSignature)
 }
@@ -66,18 +66,18 @@ func Test_SignatureMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// Nominal Checks
-	_, err = validateToken(ctx, token1, now)
+	_, err = validateToken(ctx, logger, token1, now)
 	require.NoError(t, err)
-	_, err = validateToken(ctx, token2, now)
+	_, err = validateToken(ctx, logger, token2, now)
 	require.NoError(t, err)
 
 	// Swap Signatures to check for valid but mismatched signatures
 	token1.IdentityKey.Signature, token2.AuthDataSignature = token2.AuthDataSignature, token1.IdentityKey.Signature
 
 	// Expect Errors as the derived walletAddr will not match the one supplied in AuthData
-	_, err = validateToken(ctx, token1, now)
+	_, err = validateToken(ctx, logger, token1, now)
 	require.Error(t, err)
-	_, err = validateToken(ctx, token1, now)
+	_, err = validateToken(ctx, logger, token1, now)
 	require.Error(t, err)
 }
 

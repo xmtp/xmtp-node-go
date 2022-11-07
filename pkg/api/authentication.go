@@ -11,6 +11,7 @@ import (
 	envelope "github.com/xmtp/proto/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,7 +27,7 @@ var (
 	ErrUnknownKeyType       = errors.New("unknown public key type")
 )
 
-func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
+func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
 	// Validate IdentityKey signature.
 	pubKey := token.IdentityKey
 	recoveredWalletAddress, err := recoverWalletAddress(ctx, pubKey)
@@ -51,6 +52,7 @@ func validateToken(ctx context.Context, token *messagev1.Token, now time.Time) (
 
 	// Add some time to the current time to mitigate skew between clients and servers.
 	if created.After(now.Add(5 * time.Second)) {
+		log.Info("token timestamp is in the future", zap.Time("now", now), zap.Time("created", created))
 		return wallet, ErrFutureToken
 	}
 	if now.Sub(created) > TokenExpiration {
