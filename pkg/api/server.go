@@ -77,6 +77,10 @@ func (s *Server) startGRPC() error {
 	unary := []grpc.UnaryServerInterceptor{prometheus.UnaryServerInterceptor}
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 
+	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
+	unary = append(unary, telemetryInterceptor.Unary())
+	stream = append(stream, telemetryInterceptor.Stream())
+
 	if s.Config.Authn.Enable {
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
 			AuthnOptions: s.Config.Authn,
@@ -87,10 +91,6 @@ func (s *Server) startGRPC() error {
 		unary = append(unary, s.authorizer.Unary())
 		stream = append(stream, s.authorizer.Stream())
 	}
-
-	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
-	unary = append(unary, telemetryInterceptor.Unary())
-	stream = append(stream, telemetryInterceptor.Stream())
 
 	options := []grpc.ServerOption{
 		grpc.Creds(insecure.NewCredentials()),
