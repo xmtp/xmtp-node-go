@@ -66,12 +66,17 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		zap.String("app", appName),
 		zap.String("app_version", appVersion),
 	}
+
 	if ips := md.Get("x-forwarded-for"); len(ips) > 0 {
 		// There are potentially multiple comma separated IPs bundled in that first value
 		ips := strings.Split(ips[0], ",")
 		fields = append(fields, zap.String("client_ip", strings.TrimSpace(ips[0])))
 	}
+
+	logFn := ti.log.Info
+
 	if err != nil {
+		logFn = ti.log.Error
 		fields = append(fields, zap.Error(err))
 		grpcErr, _ := status.FromError(err)
 		if grpcErr != nil {
@@ -83,7 +88,7 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		}
 	}
 
-	ti.log.Info("api request", fields...)
+	logFn("api request", fields...)
 	metrics.EmitAPIRequest(ctx, fields)
 }
 
