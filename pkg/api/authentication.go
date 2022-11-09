@@ -19,7 +19,6 @@ var (
 	TokenExpiration = time.Hour
 
 	ErrTokenExpired         = errors.New("token expired")
-	ErrFutureToken          = errors.New("token timestamp is in the future")
 	ErrInvalidSignature     = errors.New("invalid signature")
 	ErrWalletMismatch       = errors.New("wallet address mismatch")
 	ErrUnsignedKey          = errors.New("identity key is not signed")
@@ -49,12 +48,6 @@ func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token,
 
 	// Check expiration
 	created := time.Unix(0, int64(data.CreatedNs))
-
-	// Add some time to the current time to mitigate skew between clients and servers.
-	if created.After(now.Add(5 * time.Second)) {
-		log.Info("token timestamp is in the future", zap.Time("now", now), zap.Time("created", created))
-		return wallet, ErrFutureToken
-	}
 	if now.Sub(created) > TokenExpiration {
 		return wallet, ErrTokenExpired
 	}
