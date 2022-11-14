@@ -31,7 +31,7 @@ require (
 	github.com/uptrace/bun/dialect/pgdialect v1.1.3
 	github.com/uptrace/bun/driver/pgdriver v1.1.3
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
-	github.com/xmtp/proto v1.3.2-0.20221114153823-18bf62451d74
+	github.com/xmtp/proto v1.3.2-0.20221114211142-5de75035720f
 	github.com/yoheimuta/protolint v0.39.0
 	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.21.0
