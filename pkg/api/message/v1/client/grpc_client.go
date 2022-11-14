@@ -38,6 +38,20 @@ func (c *grpcClient) Subscribe(ctx context.Context, r *messagev1.SubscribeReques
 	}, nil
 }
 
+func (c *grpcClient) SubscribeAll(ctx context.Context) (Stream, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	stream, err := c.grpc.SubscribeAll(ctx, &messagev1.SubscribeAllRequest{})
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	return &grpcStream{
+		cancel: cancel,
+		stream: stream,
+	}, nil
+}
+
 func (c *grpcClient) Publish(ctx context.Context, r *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
 	return c.grpc.Publish(ctx, r)
 }
