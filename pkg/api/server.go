@@ -15,6 +15,8 @@ import (
 	proto "github.com/xmtp/proto/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -99,6 +101,8 @@ func (s *Server) startGRPC() error {
 		grpc.MaxRecvMsgSize(s.Config.Options.MaxMsgSize),
 	}
 	grpcServer := grpc.NewServer(options...)
+	healthcheck := health.NewServer()
+	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
 	s.messagev1, err = messagev1.NewService(s.Waku, s.Log)
 	if err != nil {
