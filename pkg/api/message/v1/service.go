@@ -126,6 +126,39 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	}
 }
 
+func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
+	log := s.log.Named("subscribeAll")
+	log.Info("started")
+	defer log.Info("stopped")
+
+	relaySub, err := s.waku.Relay().Subscribe(s.ctx)
+	if err != nil {
+		return err
+	}
+
+	defer relaySub.Unsubscribe()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			log.Info("stream closed")
+			return nil
+		case <-s.ctx.Done():
+			log.Info("service closed")
+			return nil
+		case wakuEnv := <-relaySub.C:
+			if wakuEnv == nil {
+				continue
+			}
+			env := buildEnvelope(wakuEnv.Message())
+			err := stream.Send(env)
+			if err != nil {
+				log.Error("sending envelope to subscriber", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("received request")

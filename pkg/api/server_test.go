@@ -154,6 +154,39 @@ func Test_SubscribeClientClose(t *testing.T) {
 	})
 }
 
+func Test_SubscribeAllClientClose(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.SubscribeAll(ctx)
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish 5 messages
+		envs := makeEnvelopes(10)
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+
+		// receive 5 and close the stream
+		subscribeExpect(t, stream, envs[:5])
+		err = stream.Close()
+		require.NoError(t, err)
+
+		// publish another 5
+		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		time.Sleep(50 * time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
+		_, err = stream.Next(ctx)
+		require.Equal(t, io.EOF, err)
+	})
+}
+
 func Test_SubscribeServerClose(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
@@ -161,6 +194,34 @@ func Test_SubscribeServerClose(t *testing.T) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
 		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// Publish 5 messages.
+		envs := makeEnvelopes(5)
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+
+		// Receive 5
+		subscribeExpect(t, stream, envs[:5])
+
+		// stop Server
+		server.Close()
+
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
+		_, err = stream.Next(ctx)
+		require.Equal(t, io.EOF, err)
+	})
+}
+
+func Test_SubscribeAllServerClose(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		// Subscribe to topics.
+		stream, err := client.SubscribeAll(ctx)
 		require.NoError(t, err)
 		defer stream.Close()
 		time.Sleep(50 * time.Millisecond)

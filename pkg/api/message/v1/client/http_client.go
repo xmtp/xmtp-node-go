@@ -66,6 +66,17 @@ func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequ
 	return stream, nil
 }
 
+func (c *httpClient) SubscribeAll(ctx context.Context) (Stream, error) {
+	stream, err := newHTTPStream(c.log, func() (*http.Response, error) {
+		return c.post(ctx, "/message/v1/subscribe-all", &messagev1.SubscribeAllRequest{})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return stream, nil
+}
+
 func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	res, err := c.rawQuery(ctx, req)
 	if err != nil {
