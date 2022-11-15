@@ -18,12 +18,14 @@ import (
 var (
 	TokenExpiration = time.Hour
 
-	ErrTokenExpired         = errors.New("token expired")
-	ErrInvalidSignature     = errors.New("invalid signature")
-	ErrWalletMismatch       = errors.New("wallet address mismatch")
-	ErrUnsignedKey          = errors.New("identity key is not signed")
-	ErrUnknownSignatureType = errors.New("unknown signature type")
-	ErrUnknownKeyType       = errors.New("unknown public key type")
+	ErrTokenExpired             = errors.New("token expired")
+	ErrMissingAuthData          = errors.New("missing auth data")
+	ErrMissingAuthDataSignature = errors.New("missing auth data signature")
+	ErrInvalidSignature         = errors.New("invalid signature")
+	ErrWalletMismatch           = errors.New("wallet address mismatch")
+	ErrUnsignedKey              = errors.New("identity key is not signed")
+	ErrUnknownSignatureType     = errors.New("unknown signature type")
+	ErrUnknownKeyType           = errors.New("unknown public key type")
 )
 
 func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
@@ -88,6 +90,12 @@ func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) 
 }
 
 func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDataBytes []byte, authSig *envelope.Signature) (data *messagev1.AuthData, err error) {
+	if authDataBytes == nil {
+		return nil, ErrMissingAuthData
+	}
+	if authSig == nil {
+		return nil, ErrMissingAuthDataSignature
+	}
 	switch key := pubKey.Union.(type) {
 	case *envelope.PublicKey_Secp256K1Uncompressed_:
 		pub, err := crypto.PublicKeyFromBytes(key.Secp256K1Uncompressed.Bytes)

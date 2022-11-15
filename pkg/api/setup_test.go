@@ -132,6 +132,16 @@ func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
 	return ctx
 }
 
+func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
+	token, _, err := GenerateToken(time.Now())
+	require.NoError(t, err)
+	token.AuthDataBytes = nil
+	token.AuthDataSignature = nil
+	et, err := EncodeToken(token)
+	require.NoError(t, err)
+	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
+}
+
 func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
 	token, data, err := GenerateToken(when)
 	require.NoError(t, err)
