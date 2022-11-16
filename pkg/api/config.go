@@ -34,9 +34,10 @@ type Config struct {
 
 // Options bundle command line options associated with the authn package.
 type AuthnOptions struct {
-	Enable     bool `long:"enable" description:"require client authentication via wallet tokens"`
-	Ratelimits bool `long:"ratelimits" description:"apply rate limits per wallet"`
-	AllowLists bool `long:"allowlists" description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
+	Enable              bool     `long:"enable" description:"require client authentication via wallet tokens"`
+	Ratelimits          bool     `long:"ratelimits" description:"apply rate limits per wallet"`
+	AllowLists          bool     `long:"allowlists" description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
+	PrivilegedAddresses []string `long:"privileged-address" description:"allow this address to publish into other user's topics"`
 }
 
 // Config bundles Options and other parameters needed to set up an authorizer.

@@ -26,11 +26,16 @@ var ErrDenyListed = errors.New("wallet is deny listed")
 // Authorization decisions are then based on the authenticated wallet.
 type WalletAuthorizer struct {
 	*AuthnConfig
+	privilegedAddresses map[types.WalletAddr]bool
 }
 
 // NewWalletAuthorizer creates an authorizer configured based on the Config.
 func NewWalletAuthorizer(config *AuthnConfig) *WalletAuthorizer {
-	return &WalletAuthorizer{AuthnConfig: config}
+	privilegedAddresses := make(map[types.WalletAddr]bool)
+	for _, address := range config.PrivilegedAddresses {
+		privilegedAddresses[types.WalletAddr(address)] = true
+	}
+	return &WalletAuthorizer{AuthnConfig: config, privilegedAddresses: privilegedAddresses}
 }
 
 func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
@@ -97,7 +102,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) erro
 
 	if pub, isPublish := req.(*messagev1.PublishRequest); isPublish {
 		for _, env := range pub.Envelopes {
-			if !allowedToPublish(env.ContentTopic, wallet) {
+			if !wa.privilegedAddresses[wallet] && !allowedToPublish(env.ContentTopic, wallet) {
 				return status.Errorf(codes.PermissionDenied, "publishing to restricted topic")
 			}
 		}
