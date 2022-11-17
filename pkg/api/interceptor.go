@@ -135,9 +135,47 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 	return status.Errorf(codes.ResourceExhausted, err.Error())
 }
 
+const (
+	TopicCategoryPermissionUnknown        int = 0
+	TopicCategoryPermissionAuthRequired       = 1
+	TopicCategoryPermissionNoAuthRequired     = 2
+)
+
+var TopicCategoryPermissions = map[string]int{
+	"privatestore": TopicCategoryPermissionAuthRequired,
+	"contact":      TopicCategoryPermissionAuthRequired,
+	"m":            TopicCategoryPermissionNoAuthRequired,
+	"dm":           TopicCategoryPermissionNoAuthRequired,
+	"intro":        TopicCategoryPermissionNoAuthRequired,
+	"invite":       TopicCategoryPermissionNoAuthRequired,
+}
+
 func allowedToPublish(topic string, wallet types.WalletAddr) bool {
-	parts := strings.Split(topic, "-")
-	return len(parts) != 2 ||
-		(parts[0] != "contact" && parts[0] != "privatestore") ||
-		types.WalletAddr(parts[1]) == wallet
+	// The `topic` contains something like
+	//   "/xmtp/0/privatestore-0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/key_bundle/proto"
+	//   "/xmtp/0/contact-0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/proto"
+	//   "/xmtp/0/m-111122223333444455556666/proto"
+
+	// The rules only apply to things that start with "/xmtp/0/..."
+	if !strings.HasPrefix(topic, "/xmtp/0/") {
+		return true
+	}
+	// e.g. segment[3] = "privatestore-0x12345.." or "m-11-22-33..."
+	segments := strings.Split(topic, "/")
+
+	// e.g. parts[0] = "privatestore" or "dm"
+	// note: some segments have multiple parts ("m-11-22-33...")
+	parts := strings.Split(segments[3], "-")
+
+	permission := TopicCategoryPermissions[parts[0]]
+
+	if permission == TopicCategoryPermissionAuthRequired {
+		// If auth is required, then the second part (after the hyphen)
+		// must be the verified wallet address of the caller.
+		if len(parts) < 2 || types.WalletAddr(parts[1]) != wallet {
+			return false
+		}
+	}
+
+	return true
 }

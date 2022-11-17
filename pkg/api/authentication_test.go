@@ -60,12 +60,12 @@ func Test_AuthnRestrictedTopicAllowed(t *testing.T) {
 	ctx, data := withAuthWithDetails(t, context.Background(), time.Now())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		for _, topic := range []string{
-			"contact-" + data.WalletAddr,
-			"privatestore-" + data.WalletAddr,
-			"dm-xxx-yyy",
-			"m-09238409",
-			"invite-0x80980980s",
-			"intro-0xdsl8d09s8df0s",
+			"/xmtp/0/contact-" + data.WalletAddr + "/proto",
+			"/xmtp/0/privatestore-" + data.WalletAddr + "/key_bundle/proto",
+			"/xmtp/0/dm-xxx-yyy/proto",
+			"/xmtp/0/m-09238409/proto",
+			"/xmtp/0/invite-0x80980980s/proto",
+			"/xmtp/0/intro-0xdsl8d09s8df0s/proto",
 		} {
 			_, err := client.Publish(ctx, &messageV1.PublishRequest{
 				Envelopes: []*messageV1.Envelope{{ContentTopic: topic}},
@@ -79,8 +79,8 @@ func Test_AuthnRestrictedTopicDisallowed(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		for _, topic := range []string{
-			"contact-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
-			"privatestore-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8",
+			"/xmtp/0/contact-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8/proto",
+			"/xmtp/0/privatestore-0x9d0asadf0a9sdf09a0d97f0a97df0a9sdf0a9sd8/key_bundle/proto",
 		} {
 			_, err := client.Publish(ctx, &messageV1.PublishRequest{
 				Envelopes: []*messageV1.Envelope{{ContentTopic: topic}},
