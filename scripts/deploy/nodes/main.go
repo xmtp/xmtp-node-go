@@ -77,15 +77,9 @@ func main() {
 		msg = string(out)
 	}
 
-	log.Info("deploying group1", zap.String("image", options.ContainerImage))
-	err = deployer.Deploy("xmtp_node_image_group1", options.ContainerImage, msg)
+	log.Info("deploying", zap.String("image", options.ContainerImage))
+	err = deployer.Deploy("xmtp_node_image", options.ContainerImage, msg)
 	if err != nil {
-		log.Fatal("deploying group1", zap.Error(err))
-	}
-
-	log.Info("deploying group2", zap.String("image", options.ContainerImage))
-	err = deployer.Deploy("xmtp_node_image_group2", options.ContainerImage, msg)
-	if err != nil {
-		log.Fatal("deploying group2", zap.Error(err))
+		log.Fatal("deploying", zap.Error(err))
 	}
 }
