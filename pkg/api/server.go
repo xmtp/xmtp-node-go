@@ -12,7 +12,7 @@ import (
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"google.golang.org/grpc/health"

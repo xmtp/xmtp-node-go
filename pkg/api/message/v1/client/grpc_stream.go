@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

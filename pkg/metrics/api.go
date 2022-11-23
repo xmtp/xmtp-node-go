@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"

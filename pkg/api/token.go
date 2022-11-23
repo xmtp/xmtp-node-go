@@ -4,8 +4,8 @@ import (
 	"encoding/base64"
 	"time"
 
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
-	envelope "github.com/xmtp/proto/go/message_contents"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	envelope "github.com/xmtp/proto/v3/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"google.golang.org/protobuf/proto"
 )

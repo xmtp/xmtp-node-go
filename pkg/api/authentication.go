@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
-	envelope "github.com/xmtp/proto/go/message_contents"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	envelope "github.com/xmtp/proto/v3/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
