@@ -165,6 +165,9 @@ func Test_SubscribeAllClientClose(t *testing.T) {
 
 		// publish 5 messages
 		envs := makeEnvelopes(10)
+		for i, env := range envs {
+			envs[i].ContentTopic = "/xmtp/0/" + env.ContentTopic
+		}
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
@@ -228,6 +231,9 @@ func Test_SubscribeAllServerClose(t *testing.T) {
 
 		// Publish 5 messages.
 		envs := makeEnvelopes(5)
+		for i, env := range envs {
+			envs[i].ContentTopic = "/xmtp/0/" + env.ContentTopic
+		}
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
