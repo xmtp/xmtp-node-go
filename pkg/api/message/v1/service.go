@@ -259,7 +259,7 @@ func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
 }
 
 func isValidTopic(topic string) bool {
-	return strings.HasPrefix(env.ContentTopic, "/xmtp/0/")
+	return strings.HasPrefix(topic, "/xmtp/0/")
 }
 
 func fromWakuTimestamp(ts int64) uint64 {
