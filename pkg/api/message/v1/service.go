@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -151,6 +152,9 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 				continue
 			}
 			env := buildEnvelope(wakuEnv.Message())
+			if env == nil || !strings.HasPrefix(env.ContentTopic, "/xmtp/0/") {
+				continue
+			}
 			err := stream.Send(env)
 			if err != nil {
 				log.Error("sending envelope to subscriber", zap.Error(err))
