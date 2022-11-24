@@ -3,7 +3,7 @@ package api
 import (
 	"sync"
 
-	bc "github.com/dustin/go-broadcast"
+	gbc "github.com/dustin/go-broadcast"
 )
 
 const (
@@ -11,59 +11,97 @@ const (
 )
 
 // dispatcher broadcasts messages to all channels registered for given topic.
+// A channel represents a subscription, it can be subscribed to multiple topics.
 type dispatcher struct {
-	bcs  map[string]bc.Broadcaster
-	subs map[string]map[chan interface{}]struct{}
-	l    sync.RWMutex
+	// broadcaster for each topic
+	bcsByTopic map[string]gbc.Broadcaster
+	// sets of channels subscribed to each topic
+	subsByTopic map[string]map[chan interface{}]bool
+	// sets of subscribed topics for each channel
+	topicsBySub map[chan interface{}]map[string]bool
+	l           sync.RWMutex
 }
 
 func newDispatcher() *dispatcher {
 	return &dispatcher{
-		bcs:  map[string]bc.Broadcaster{},
-		subs: map[string]map[chan interface{}]struct{}{},
+		bcsByTopic:  make(map[string]gbc.Broadcaster),
+		subsByTopic: make(map[string]map[chan interface{}]bool),
+		topicsBySub: make(map[chan interface{}]map[string]bool),
 	}
 }
 
-func (d *dispatcher) Register(topics ...string) chan interface{} {
+// Register updates subscriptions of ch to include topics.
+// If ch is nil, it is created.
+func (d *dispatcher) Register(ch chan interface{}, topics ...string) chan interface{} {
+	if len(topics) == 0 {
+		return nil
+	}
 	d.l.Lock()
 	defer d.l.Unlock()
-	ch := make(chan interface{})
+	if ch == nil {
+		ch = make(chan interface{})
+	}
+	subTopics, exists := d.topicsBySub[ch]
+	if !exists {
+		subTopics = make(map[string]bool)
+		d.topicsBySub[ch] = subTopics
+	}
 	for _, topic := range topics {
-		if _, exists := d.bcs[topic]; !exists {
-			d.bcs[topic] = bc.NewBroadcaster(bufLen)
+		if subTopics[topic] {
+			continue // already subscribed
 		}
-		bc := d.bcs[topic]
+		bc, exists := d.bcsByTopic[topic]
+		if !exists {
+			bc = gbc.NewBroadcaster(bufLen)
+			d.bcsByTopic[topic] = bc
+			d.subsByTopic[topic] = make(map[chan interface{}]bool)
+		}
 		bc.Register(ch)
-		if _, exists := d.subs[topic]; !exists {
-			d.subs[topic] = map[chan interface{}]struct{}{}
-		}
-		d.subs[topic][ch] = struct{}{}
+		d.subsByTopic[topic][ch] = true
+		subTopics[topic] = true
 	}
 	return ch
 }
 
+// Unregister updates the subscriptions of ch to exclude topics.
+// If topics is empty, unsubscribe all current subscriptions of ch.
 func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
 	d.l.Lock()
 	defer d.l.Unlock()
+	subTopics := d.topicsBySub[ch]
+	if len(subTopics) == 0 {
+		return
+	}
+	if len(topics) == 0 {
+		// unsubscribe all current subscriptions
+		for topic := range subTopics {
+			topics = append(topics, topic)
+		}
+	}
 	for _, topic := range topics {
-		bc, exists := d.bcs[topic]
-		if exists {
-			bc.Unregister(ch)
+		if !subTopics[topic] {
+			continue
 		}
-		if subs, exists := d.subs[topic]; exists {
-			delete(subs, ch)
-			if len(subs) == 0 && bc != nil {
-				bc.Close()
-				delete(d.bcs, topic)
-			}
+		bc := d.bcsByTopic[topic]
+		bc.Unregister(ch)
+		subs := d.subsByTopic[topic]
+		delete(subs, ch)
+		if len(subs) == 0 {
+			bc.Close()
+			delete(d.bcsByTopic, topic)
+			delete(d.subsByTopic, topic)
 		}
+		delete(subTopics, topic)
+	}
+	if len(subTopics) == 0 {
+		delete(d.topicsBySub, ch)
 	}
 }
 
 func (d *dispatcher) Submit(topic string, obj interface{}) bool {
 	d.l.RLock()
 	defer d.l.RUnlock()
-	bc, exists := d.bcs[topic]
+	bc, exists := d.bcsByTopic[topic]
 	if !exists {
 		return false
 	}
@@ -73,9 +111,9 @@ func (d *dispatcher) Submit(topic string, obj interface{}) bool {
 func (d *dispatcher) Close() error {
 	d.l.Lock()
 	defer d.l.Unlock()
-	for topic, bc := range d.bcs {
+	for topic, bc := range d.bcsByTopic {
 		bc.Close()
-		delete(d.bcs, topic)
+		delete(d.bcsByTopic, topic)
 	}
 	return nil
 }
