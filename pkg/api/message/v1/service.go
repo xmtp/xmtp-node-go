@@ -152,7 +152,7 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 				continue
 			}
 			env := buildEnvelope(wakuEnv.Message())
-			if env == nil || !strings.HasPrefix(env.ContentTopic, "/xmtp/0/") {
+			if env == nil || !isValidTopic(env.ContentTopic) {
 				continue
 			}
 			err := stream.Send(env)
@@ -256,6 +256,10 @@ func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
 		}
 	}
 	return pagingInfo
+}
+
+func isValidTopic(topic string) bool {
+	return strings.HasPrefix(env.ContentTopic, "/xmtp/0/")
 }
 
 func fromWakuTimestamp(ts int64) uint64 {
