@@ -76,6 +76,17 @@ func Test_DispatcherUpdates(t *testing.T) {
 	require.Equal(t, 0, len(d.subsByTopic))
 }
 
+func Test_DispatcherClose(t *testing.T) {
+	d := newDispatcher()
+	d.Register(nil, "a", "b", "c")
+	d.Register(nil, "c", "d")
+	d.Register(nil, "c", "d", "e", "a")
+	d.Close()
+	require.Equal(t, 0, len(d.bcsByTopic))
+	require.Equal(t, 0, len(d.subsByTopic))
+	require.Equal(t, 0, len(d.topicsBySub))
+}
+
 func requireSubsEqual(t *testing.T, subs1 map[chan interface{}]bool, subs2 ...chan interface{}) {
 	t.Helper()
 	require.Equal(t, len(subs2), len(subs1), "lengths different")
