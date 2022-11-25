@@ -68,6 +68,10 @@ func (d *dispatcher) Register(ch chan interface{}, topics ...string) chan interf
 func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
 	d.l.Lock()
 	defer d.l.Unlock()
+	d.unregister(ch, topics...)
+}
+
+func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 	subTopics := d.topicsBySub[ch]
 	if len(subTopics) == 0 {
 		return
@@ -111,9 +115,8 @@ func (d *dispatcher) Submit(topic string, obj interface{}) bool {
 func (d *dispatcher) Close() error {
 	d.l.Lock()
 	defer d.l.Unlock()
-	for topic, bc := range d.bcsByTopic {
-		bc.Close()
-		delete(d.bcsByTopic, topic)
+	for ch := range d.topicsBySub {
+		d.unregister(ch)
 	}
 	return nil
 }

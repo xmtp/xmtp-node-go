@@ -120,6 +120,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	//TODO: if request has subscription ID)
 	if false {
 		s.subsById["TODO: id from request"] = subC
+		defer delete(s.subsById, "id")
 	}
 
 	for {
