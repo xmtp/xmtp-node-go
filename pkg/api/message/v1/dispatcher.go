@@ -10,14 +10,17 @@ const (
 	bufLen = 100
 )
 
-// dispatcher broadcasts messages to all channels registered for given topic.
+// dispatcher manages topic subscriptions.
 // A channel represents a subscription, it can be subscribed to multiple topics.
+// A broadcaster is used to broadcast messages from a given topic to all subscribed channels.
 type dispatcher struct {
 	// broadcaster for each topic
 	bcsByTopic map[string]gbc.Broadcaster
 	// sets of channels subscribed to each topic
+	// parallels bcsByTopic, tracks which channels are subscribed to each topic
 	subsByTopic map[string]map[chan interface{}]bool
 	// sets of subscribed topics for each channel
+	// this is the inverse of subsByTopic
 	topicsBySub map[chan interface{}]map[string]bool
 	l           sync.RWMutex
 }
@@ -34,11 +37,12 @@ func newDispatcher() *dispatcher {
 // If ch is nil, it is created.
 func (d *dispatcher) Register(ch chan interface{}, topics ...string) chan interface{} {
 	if len(topics) == 0 {
-		return nil
+		return nil // nothing to do
 	}
 	d.l.Lock()
 	defer d.l.Unlock()
 	if ch == nil {
+		// create a channel if we weren't given one
 		ch = make(chan interface{})
 	}
 	subTopics, exists := d.topicsBySub[ch]
@@ -52,6 +56,7 @@ func (d *dispatcher) Register(ch chan interface{}, topics ...string) chan interf
 		}
 		bc, exists := d.bcsByTopic[topic]
 		if !exists {
+			// new topic, set up a broadcaster
 			bc = gbc.NewBroadcaster(bufLen)
 			d.bcsByTopic[topic] = bc
 			d.subsByTopic[topic] = make(map[chan interface{}]bool)
@@ -66,6 +71,9 @@ func (d *dispatcher) Register(ch chan interface{}, topics ...string) chan interf
 // Unregister updates the subscriptions of ch to exclude topics.
 // If topics is empty, unsubscribe all current subscriptions of ch.
 func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
+	if ch == nil {
+		return
+	}
 	d.l.Lock()
 	defer d.l.Unlock()
 	d.unregister(ch, topics...)
@@ -74,7 +82,7 @@ func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
 func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 	subTopics := d.topicsBySub[ch]
 	if len(subTopics) == 0 {
-		return
+		return // nothing to unsubscribe
 	}
 	if len(topics) == 0 {
 		// unsubscribe all current subscriptions
@@ -84,13 +92,14 @@ func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 	}
 	for _, topic := range topics {
 		if !subTopics[topic] {
-			continue
+			continue // not a subscribed topic
 		}
 		bc := d.bcsByTopic[topic]
 		bc.Unregister(ch)
 		subs := d.subsByTopic[topic]
 		delete(subs, ch)
 		if len(subs) == 0 {
+			// no subscribers left, clean up topic
 			bc.Close()
 			delete(d.bcsByTopic, topic)
 			delete(d.subsByTopic, topic)
@@ -98,6 +107,7 @@ func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 		delete(subTopics, topic)
 	}
 	if len(subTopics) == 0 {
+		// no subscribed topics, drop the subscription
 		delete(d.topicsBySub, ch)
 	}
 }
