@@ -30,7 +30,6 @@ type Service struct {
 	ctxCancel  func()
 	wg         sync.WaitGroup
 	dispatcher *dispatcher
-	subsById   map[string]chan interface{}
 	relaySub   *wakurelay.Subscription
 }
 
@@ -41,7 +40,6 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	s.subsById = make(map[string]chan interface{})
 	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "subscribing to relay")
@@ -99,29 +97,13 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 	return &proto.PublishResponse{}, nil
 }
 
-func (s *Service) UpdateSubscription(ctx context.Context, req *proto.SubscribeRequest) (*proto.PublishResponse, error) {
-	sub, exists := s.subsById["TODO: id from request"]
-	if !exists {
-		return nil, status.Error(codes.NotFound, "subscription not found")
-	}
-	s.dispatcher.Register(sub, req.ContentTopics...)   // TODO: subscribe topics from request
-	s.dispatcher.Unregister(sub, req.ContentTopics...) // TODO: unsubscribe topics from request
-	return &proto.PublishResponse{}, nil
-}
-
 func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("started")
 	defer log.Info("stopped")
 
-	subC := s.dispatcher.Register(nil, req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC)
-
-	//TODO: if request has subscription ID)
-	if false {
-		s.subsById["TODO: id from request"] = subC
-		defer delete(s.subsById, "id")
-	}
+	subC := s.dispatcher.Register(req.ContentTopics...)
+	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
 
 	for {
 		select {

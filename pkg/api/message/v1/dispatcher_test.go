@@ -81,10 +81,11 @@ func Test_DispatcherClose(t *testing.T) {
 	d.Register(nil, "a", "b", "c")
 	d.Register(nil, "c", "d")
 	d.Register(nil, "c", "d", "e", "a")
-	d.Close()
+	require.NoError(t, d.Close())
 	require.Equal(t, 0, len(d.bcsByTopic))
 	require.Equal(t, 0, len(d.subsByTopic))
 	require.Equal(t, 0, len(d.topicsBySub))
+	require.NoError(t, d.Close())
 }
 
 func requireSubsEqual(t *testing.T, subs1 map[chan interface{}]bool, subs2 ...chan interface{}) {
