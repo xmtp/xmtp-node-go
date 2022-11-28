@@ -102,8 +102,8 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log.Info("started")
 	defer log.Info("stopped")
 
-	subC := s.dispatcher.Register(req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
+	subC := s.dispatcher.Register(nil, req.ContentTopics...)
+	defer s.dispatcher.Unregister(subC)
 
 	for {
 		select {
