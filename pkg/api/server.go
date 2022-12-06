@@ -104,7 +104,7 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log)
+	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.CRDT, s.Options.WriteToCRDTDS, s.Options.ReadFromCRDTDS)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}

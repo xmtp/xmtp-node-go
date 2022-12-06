@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"path"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/metadata"
@@ -27,6 +29,12 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	waku, wakuCleanup := newTestNode(t, nil)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
+	dataDir := path.Join(t.TempDir(), "crdt-data", test.RandomStringLower(13))
+	crdtNode, err := crdt.NewNode(context.Background(), log, crdt.Options{
+		DataPath: dataDir,
+		P2PPort:  0,
+	})
+	require.NoError(t, err)
 	s, err := New(&Config{
 		Options: Options{
 			GRPCAddress: "localhost",
@@ -37,17 +45,21 @@ func newTestServer(t *testing.T) (*Server, func()) {
 				Enable:     true,
 				AllowLists: true,
 			},
-			MaxMsgSize: testMaxMsgSize,
+			MaxMsgSize:     testMaxMsgSize,
+			WriteToCRDTDS:  true,
+			ReadFromCRDTDS: true,
 		},
 		Waku:        waku,
 		Log:         test.NewLog(t),
 		AllowLister: allowLister,
+		CRDT:        crdtNode,
 	})
 	require.NoError(t, err)
 	return s, func() {
 		s.Close()
 		wakuCleanup()
 		authzDBCleanup()
+		crdtNode.Close()
 	}
 }
 

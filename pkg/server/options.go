@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 )
 
 type RelayOptions struct {
@@ -51,7 +52,8 @@ func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
 type MetricsOptions struct {
 	Enable       bool          `long:"metrics" description:"Enable the metrics server"`
 	Address      string        `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
-	Port         int           `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
+	WakuPort     int           `long:"metrics-waku-port" description:"Listening HTTP port of the waku metrics server" default:"8008"`
+	Port         int           `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8009"`
 	StatusPeriod time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 }
 
@@ -95,6 +97,8 @@ type Options struct {
 	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
+
+	CRDT crdt.Options `group:"CRDT options" namespace:"crdt"`
 
 	API       api.Options      `group:"API Options" namespace:"api"`
 	Authz     AuthzOptions     `group:"Authz Options"`

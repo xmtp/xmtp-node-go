@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"go.uber.org/zap"
 )
@@ -17,12 +18,14 @@ var (
 )
 
 type Options struct {
-	GRPCAddress string       `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
-	GRPCPort    uint         `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
-	HTTPAddress string       `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
-	HTTPPort    uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
-	Authn       AuthnOptions `group:"API Authentication Options" namespace:"authn"`
-	MaxMsgSize  int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
+	GRPCAddress    string       `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
+	GRPCPort       uint         `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
+	HTTPAddress    string       `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
+	HTTPPort       uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
+	Authn          AuthnOptions `group:"API Authentication Options" namespace:"authn"`
+	MaxMsgSize     int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
+	WriteToCRDTDS  bool         `long:"write-to-crdt-ds" description:"write new messages to crdt datastore for publish, in addition waku relay/store"`
+	ReadFromCRDTDS bool         `long:"read-from-crdt-ds" description:"read from crdt datastore for query and subscribe"`
 }
 
 type Config struct {
@@ -30,6 +33,7 @@ type Config struct {
 	AllowLister authz.WalletAllowLister
 	Waku        *wakunode.WakuNode
 	Log         *zap.Logger
+	CRDT        *crdt.Node
 }
 
 // Options bundle command line options associated with the authn package.

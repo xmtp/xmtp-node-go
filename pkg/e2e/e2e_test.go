@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,10 +20,14 @@ func TestE2E(t *testing.T) {
 	log, err := zap.NewDevelopment()
 	require.NoError(t, err)
 
+	apiURL := os.Getenv("XMTPD_E2E_API_URL")
+	if apiURL == "" {
+		apiURL = localAPIURL
+	}
 	s := NewSuite(ctx, log, &Config{
 		NetworkEnv: localNetworkEnv,
 		NodesURL:   localNodesURL,
-		APIURL:     localAPIURL,
+		APIURL:     apiURL,
 	})
 
 	for _, test := range s.Tests() {

@@ -25,7 +25,7 @@ func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
 }
 
 func subscribeExpect(t *testing.T, stream messageclient.Stream, expected []*messageV1.Envelope) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	received := []*messageV1.Envelope{}
 	for i := 0; i < len(expected); i++ {

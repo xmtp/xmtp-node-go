@@ -26,6 +26,13 @@ services:
       - 18008:8008
     restart: always
     command:
+    - --api.write-to-crdt-ds
+    - --api.read-from-crdt-ds
+    - --crdt.p2p-port=9001
+    - --crdt.p2p-bootstrap-node=/dns4/node1/tcp/9001/ipfs/12D3KooWAtBwqDPWcqZEU8jsDqL337exfKsZmtvLkXhFRhNMndmW
+    - --crdt.p2p-bootstrap-node=/dns4/node2/tcp/9001/ipfs/12D3KooWCQ4aVeSARB6zzTtoikA4S5s4X7tDN9FhwBmKHr7k2wkJ
+    - --crdt.p2p-bootstrap-node=/dns4/node3/tcp/9001/ipfs/12D3KooWLToobuz2KNkADutdE4DpHyjdj3k2Ld5VySKGWJZEu8U9
+    - --crdt.p2p-bootstrap-node=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --store
     - --metrics
     - --metrics-address=0.0.0.0
@@ -47,6 +54,7 @@ services:
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 8a30dcb604b0b53627a5adc054dbf434b446628d4bd1eccc681d223f0550ce67
+      XMTP_NODE_KEY: 080112405e330cf117c7796b2cda8600a6200a5ce10ec0517ce02c494ba6a94bab0aed540fd6738f0c49989be763241b0fc26cab3a305dff93a3683905c0880049c49b8d
   node2:
     build:
       context: ../../../
@@ -57,6 +65,13 @@ services:
       - 25555:5555
     restart: always
     command:
+    - --api.write-to-crdt-ds
+    - --api.read-from-crdt-ds
+    - --crdt.p2p-port=9001
+    - --crdt.p2p-bootstrap-node=/dns4/node1/tcp/9001/ipfs/12D3KooWAtBwqDPWcqZEU8jsDqL337exfKsZmtvLkXhFRhNMndmW
+    - --crdt.p2p-bootstrap-node=/dns4/node2/tcp/9001/ipfs/12D3KooWCQ4aVeSARB6zzTtoikA4S5s4X7tDN9FhwBmKHr7k2wkJ
+    - --crdt.p2p-bootstrap-node=/dns4/node3/tcp/9001/ipfs/12D3KooWLToobuz2KNkADutdE4DpHyjdj3k2Ld5VySKGWJZEu8U9
+    - --crdt.p2p-bootstrap-node=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --store
     - --metrics
     - --metrics-address=0.0.0.0
@@ -78,6 +93,7 @@ services:
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 5757057f3daac3fa80e43a06d24edf15fcaba11eb16ede5fd53b78ba68ef1436
+      XMTP_NODE_KEY: 08011240f1c9e7e3287423ae305bf0cdcf403bf0604fb52022473a553b1aedba5e7ec58026593b5103e10dda184890680c64f4855c0f52a1fac5c379d6bfeae606d2f93f
   node3:
     build:
       context: ../../../
@@ -88,6 +104,13 @@ services:
       - 35555:5555
     restart: always
     command:
+    - --api.write-to-crdt-ds
+    - --api.read-from-crdt-ds
+    - --crdt.p2p-port=9001
+    - --crdt.p2p-bootstrap-node=/dns4/node1/tcp/9001/ipfs/12D3KooWAtBwqDPWcqZEU8jsDqL337exfKsZmtvLkXhFRhNMndmW
+    - --crdt.p2p-bootstrap-node=/dns4/node2/tcp/9001/ipfs/12D3KooWCQ4aVeSARB6zzTtoikA4S5s4X7tDN9FhwBmKHr7k2wkJ
+    - --crdt.p2p-bootstrap-node=/dns4/node3/tcp/9001/ipfs/12D3KooWLToobuz2KNkADutdE4DpHyjdj3k2Ld5VySKGWJZEu8U9
+    - --crdt.p2p-bootstrap-node=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --store
     - --metrics
     - --metrics-address=0.0.0.0
@@ -109,6 +132,7 @@ services:
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: f643b771ad9e1bc9519d4dc754370c4ff32dd7a9f76f6026b5a6448289212fd7
+      XMTP_NODE_KEY: 08011240c8006631c8d7795e6b6d5886a9b5ffec410e0593b0a28579dfb3ef78ff3f704a9e2c5868189cfa3d96c2abadff9b57312a79d9eaefd05d58b1044541a1ee11d2
   node4:
     build:
       context: ../../../
@@ -119,6 +143,13 @@ services:
       - 45555:5555
     restart: always
     command:
+    - --api.write-to-crdt-ds
+    - --api.read-from-crdt-ds
+    - --crdt.p2p-port=9001
+    - --crdt.p2p-bootstrap-node=/dns4/node1/tcp/9001/ipfs/12D3KooWAtBwqDPWcqZEU8jsDqL337exfKsZmtvLkXhFRhNMndmW
+    - --crdt.p2p-bootstrap-node=/dns4/node2/tcp/9001/ipfs/12D3KooWCQ4aVeSARB6zzTtoikA4S5s4X7tDN9FhwBmKHr7k2wkJ
+    - --crdt.p2p-bootstrap-node=/dns4/node3/tcp/9001/ipfs/12D3KooWLToobuz2KNkADutdE4DpHyjdj3k2Ld5VySKGWJZEu8U9
+    - --crdt.p2p-bootstrap-node=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --store
     - --metrics
     - --metrics-address=0.0.0.0
@@ -140,3 +171,4 @@ services:
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 3ec2707fdd0584ad441fabcfbe928966378f797f929b3293ac8dc6a37206f3da
+      XMTP_NODE_KEY: 08011240961505279d23983059fafb6ce4ccd13b6af1658159f0e19f344bf4d45df3e5513d883b2c669d77e81677d49f40e4dda434795cb1e4be62040335ef8ea6dbc5e7

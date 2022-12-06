@@ -212,7 +212,7 @@ func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
 
 func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) error {
 	receivedEnvs := []*messagev1.Envelope{}
-	waitC := time.After(5 * time.Second)
+	waitC := time.After(10 * time.Second)
 	var done bool
 	for !done {
 		select {
@@ -304,7 +304,7 @@ func query(ctx context.Context, client messageclient.Client, contentTopics []str
 			return nil, err
 		}
 		envs = append(envs, res.Envelopes...)
-		if len(res.Envelopes) == 0 || res.PagingInfo.Cursor == nil {
+		if len(res.Envelopes) == 0 || res.PagingInfo == nil || res.PagingInfo.Cursor == nil {
 			break
 		}
 		pagingInfo = res.PagingInfo
