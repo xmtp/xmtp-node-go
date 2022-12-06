@@ -115,6 +115,12 @@ func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 func (d *dispatcher) Submit(topic string, obj interface{}) bool {
 	d.l.RLock()
 	defer d.l.RUnlock()
+
+	allBC, exists := d.bcsByTopic[contentTopicAll]
+	if exists && isValidTopic(topic) {
+		allBC.TrySubmit(obj)
+	}
+
 	bc, exists := d.bcsByTopic[topic]
 	if !exists {
 		return false

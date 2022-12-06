@@ -112,6 +112,8 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 		Metrics: MetricsOptions{
 			Enable:       true,
 			StatusPeriod: 5 * time.Second,
+			Port:         0,
+			WakuPort:     0,
 		},
 	})
 	require.NoError(t, err)

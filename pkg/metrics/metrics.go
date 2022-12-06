@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -27,14 +28,19 @@ var (
 	RecordMessage    = v2metrics.RecordMessage
 )
 
-func NewMetricsServer(address string, port int, logger *zap.Logger) *Server {
-	return &Server{waku: metrics.NewMetricsServer(address, port, logger)}
+func NewMetricsServer(address string, wakuPort, port int, logger *zap.Logger) *Server {
+	return &Server{
+		waku: metrics.NewMetricsServer(address, wakuPort, logger),
+		http: &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: promhttp.Handler(),
+		},
+	}
 }
 
 func (s *Server) Start(ctx context.Context) {
 	log := logging.From(ctx).Named("metrics")
 	go tracing.PanicWrap(ctx, "waku metrics server", func(_ context.Context) { s.waku.Start() })
-	s.http = &http.Server{Addr: ":8009", Handler: promhttp.Handler()}
 	go tracing.PanicWrap(ctx, "metrics server", func(_ context.Context) {
 		log.Info("server stopped", zap.Error(s.http.ListenAndServe()))
 	})

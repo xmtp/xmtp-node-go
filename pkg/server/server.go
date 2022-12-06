@@ -34,6 +34,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
@@ -55,6 +56,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
+	crdt          *crdt.Node
 }
 
 // Create a new Server
@@ -91,7 +93,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	s.log.Info("created db")
 
 	if options.Metrics.Enable {
-		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
+		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.WakuPort, options.Metrics.Port, s.log)
 		metrics.RegisterViews(s.log)
 		s.metricsServer.Start(s.ctx)
 	}
@@ -216,6 +218,22 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
+	if options.API.WriteToCRDTDS || options.API.ReadFromCRDTDS {
+		if options.CRDT.NodeKey == "" {
+			nodeKey := os.Getenv("XMTP_NODE_KEY")
+			if nodeKey != "" {
+				options.CRDT.NodeKey = nodeKey
+			}
+		}
+
+		// Initialize CRDT ds node.
+		crdt, err := crdt.NewNode(ctx, log, options.CRDT)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing crdt")
+		}
+		s.crdt = crdt
+	}
+
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
 		&api.Config{
@@ -223,6 +241,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:         s.log.Named("api"),
 			Waku:        s.wakuNode,
 			AllowLister: s.allowLister,
+			CRDT:        s.crdt,
 		},
 	)
 	if err != nil {
@@ -261,6 +280,14 @@ func (s *Server) Shutdown() {
 	// Close the gRPC s.
 	if s.grpc != nil {
 		s.grpc.Close()
+	}
+
+	// Close crdt.
+	if s.crdt != nil {
+		err := s.crdt.Close()
+		if err != nil {
+			s.log.Error("closing crdt", zap.Error(err))
+		}
 	}
 
 	// Cancel outstanding goroutines
