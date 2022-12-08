@@ -23,3 +23,6 @@ bin/
 
 # Embedded db data files
 data/
+
+# Temporary files.
+tmp/

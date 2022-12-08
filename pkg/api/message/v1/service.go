@@ -5,14 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
-	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	messagev1 "github.com/xmtp/proto/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -28,56 +23,30 @@ type Service struct {
 	messagev1.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log            *zap.Logger
-	waku           *wakunode.WakuNode
-	crdt           *crdt.Node
-	writeToCRDTDS  bool
-	readFromCRDTDS bool
+	log  *zap.Logger
+	crdt *crdt.Node
 
 	// Configured internally.
 	ctx        context.Context
 	ctxCancel  func()
 	wg         sync.WaitGroup
 	dispatcher *dispatcher
-	relaySub   *wakurelay.Subscription
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, crdt *crdt.Node, writeToCRDTDS, readFromCRDTDS bool) (s *Service, err error) {
+func NewService(log *zap.Logger, crdt *crdt.Node) (s *Service, err error) {
 	s = &Service{
-		waku:           node,
-		log:            logger.Named("message/v1"),
-		crdt:           crdt,
-		writeToCRDTDS:  writeToCRDTDS,
-		readFromCRDTDS: readFromCRDTDS,
+		log:  log.Named("message/v1"),
+		crdt: crdt,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "subscribing to relay")
-	}
 	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-		if s.crdt != nil && s.readFromCRDTDS {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case env := <-s.crdt.EnvC:
-					s.dispatcher.Submit(env.ContentTopic, env)
-				}
-			}
-		} else {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case wakuEnv := <-s.relaySub.C:
-					if wakuEnv == nil {
-						continue
-					}
-					env := buildEnvelope(wakuEnv.Message())
-					s.dispatcher.Submit(env.ContentTopic, env)
-				}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case env := <-s.crdt.EnvC:
+				s.dispatcher.Submit(env.ContentTopic, env)
 			}
 		}
 	})
@@ -87,9 +56,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger, crdt *crdt.Node, wr
 
 func (s *Service) Close() {
 	s.log.Info("closing")
-	if s.relaySub != nil {
-		s.relaySub.Unsubscribe()
-	}
+
 	if s.dispatcher != nil {
 		s.dispatcher.Close()
 	}
@@ -97,6 +64,7 @@ func (s *Service) Close() {
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
+
 	s.wg.Wait()
 	s.log.Info("closed")
 }
@@ -106,24 +74,12 @@ func (s *Service) Publish(ctx context.Context, req *messagev1.PublishRequest) (*
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
 		log.Info("received message")
 
-		wakuMsg := &wakupb.WakuMessage{
-			ContentTopic: env.ContentTopic,
-			Timestamp:    toWakuTimestamp(env.TimestampNs),
-			Payload:      env.Message,
-		}
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		err := s.crdt.Publish(ctx, env)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 
-		if s.crdt != nil && s.writeToCRDTDS {
-			err := s.crdt.Publish(ctx, env)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
-			}
-		}
-
-		metrics.EmitPublishedEnvelope(ctx, env)
+		metrics.EmitPublishedEnvelope(ctx, log, env)
 	}
 	return &messagev1.PublishResponse{}, nil
 }
@@ -163,71 +119,18 @@ func (s *Service) SubscribeAll(req *messagev1.SubscribeAllRequest, stream messag
 	log.Info("started")
 	defer log.Info("stopped")
 
-	if s.crdt != nil && s.readFromCRDTDS {
-		return s.Subscribe(&messagev1.SubscribeRequest{
-			ContentTopics: []string{contentTopicAllXMTP},
-		}, stream)
-	} else {
-		relaySub, err := s.waku.Relay().Subscribe(s.ctx)
-		if err != nil {
-			return err
-		}
-
-		defer relaySub.Unsubscribe()
-
-		for {
-			select {
-			case <-stream.Context().Done():
-				log.Info("stream closed")
-				return nil
-			case <-s.ctx.Done():
-				log.Info("service closed")
-				return nil
-			case wakuEnv := <-relaySub.C:
-				if wakuEnv == nil {
-					continue
-				}
-				env := buildEnvelope(wakuEnv.Message())
-				if env == nil || !isValidTopic(env.ContentTopic) {
-					continue
-				}
-				err := stream.Send(env)
-				if err != nil {
-					log.Error("sending envelope to subscriber", zap.Error(err))
-				}
-			}
-		}
-	}
+	return s.Subscribe(&messagev1.SubscribeRequest{
+		ContentTopics: []string{contentTopicAllXMTP},
+	}, stream)
 }
 
 func (s *Service) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Info("received request")
 
-	envs := []*messagev1.Envelope{}
-	var pagingInfo *messagev1.PagingInfo
-
-	if s.crdt != nil && s.readFromCRDTDS {
-		var err error
-		envs, pagingInfo, err = s.crdt.Query(ctx, req)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-	} else {
-		store, ok := s.waku.Store().(*store.XmtpStore)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-		}
-		res, err := store.FindMessages(buildWakuQuery(req))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-
-		for _, msg := range res.Messages {
-			envs = append(envs, buildEnvelope(msg))
-		}
-
-		pagingInfo = buildPagingInfo(res.PagingInfo)
+	envs, pagingInfo, err := s.crdt.Query(ctx, req)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
 	return &messagev1.QueryResponse{
@@ -259,88 +162,6 @@ func (s *Service) BatchQuery(ctx context.Context, req *messagev1.BatchQueryReque
 	}, nil
 }
 
-func buildEnvelope(msg *wakupb.WakuMessage) *messagev1.Envelope {
-	return &messagev1.Envelope{
-		ContentTopic: msg.ContentTopic,
-		TimestampNs:  fromWakuTimestamp(msg.Timestamp),
-		Message:      msg.Payload,
-	}
-}
-
-func buildWakuQuery(req *messagev1.QueryRequest) *wakupb.HistoryQuery {
-	contentFilters := []*wakupb.ContentFilter{}
-	for _, contentTopic := range req.ContentTopics {
-		if contentTopic != "" {
-			contentFilters = append(contentFilters, &wakupb.ContentFilter{
-				ContentTopic: contentTopic,
-			})
-		}
-	}
-
-	return &wakupb.HistoryQuery{
-		ContentFilters: contentFilters,
-		StartTime:      toWakuTimestamp(req.StartTimeNs),
-		EndTime:        toWakuTimestamp(req.EndTimeNs),
-		PagingInfo:     buildWakuPagingInfo(req.PagingInfo),
-	}
-}
-
-func buildPagingInfo(pi *wakupb.PagingInfo) *messagev1.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	var pagingInfo messagev1.PagingInfo
-	pagingInfo.Limit = uint32(pi.PageSize)
-	switch pi.Direction {
-	case wakupb.PagingInfo_BACKWARD:
-		pagingInfo.Direction = messagev1.SortDirection_SORT_DIRECTION_DESCENDING
-	case wakupb.PagingInfo_FORWARD:
-		pagingInfo.Direction = messagev1.SortDirection_SORT_DIRECTION_ASCENDING
-	}
-	if index := pi.Cursor; index != nil {
-		pagingInfo.Cursor = &messagev1.Cursor{
-			Cursor: &messagev1.Cursor_Index{
-				Index: &messagev1.IndexCursor{
-					Digest:       index.Digest,
-					SenderTimeNs: uint64(index.SenderTime),
-				}}}
-	}
-	return &pagingInfo
-}
-
-func buildWakuPagingInfo(pi *messagev1.PagingInfo) *wakupb.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	pagingInfo := &wakupb.PagingInfo{
-		PageSize: uint64(pi.Limit),
-	}
-	switch pi.Direction {
-	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_FORWARD
-	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_BACKWARD
-	}
-	if ic := pi.Cursor.GetIndex(); ic != nil {
-		pagingInfo.Cursor = &wakupb.Index{
-			Digest:     ic.Digest,
-			SenderTime: toWakuTimestamp(ic.SenderTimeNs),
-		}
-	}
-	return pagingInfo
-}
-
 func isValidTopic(topic string) bool {
 	return strings.HasPrefix(topic, validXMTPTopicPrefix)
-}
-
-func fromWakuTimestamp(ts int64) uint64 {
-	if ts < 0 {
-		return 0
-	}
-	return uint64(ts)
-}
-
-func toWakuTimestamp(ts uint64) int64 {
-	return int64(ts)
 }

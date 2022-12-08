@@ -15,7 +15,7 @@ import (
 )
 
 func newDB() *bun.DB {
-	dsn, hasDsn := os.LookupEnv("AUTHZ_POSTGRES_CONNECTION_STRING")
+	dsn, hasDsn := os.LookupEnv("AUTHZ_POSTGRES_DSN")
 	if !hasDsn {
 		dsn = "postgres://postgres:xmtp@localhost:6543/postgres?sslmode=disable"
 	}

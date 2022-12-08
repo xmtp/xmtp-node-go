@@ -89,7 +89,7 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 	}
 
 	logFn("api request", fields...)
-	metrics.EmitAPIRequest(ctx, fields)
+	metrics.EmitAPIRequest(ctx, ti.log, fields)
 }
 
 func splitMethodName(fullMethodName string) (serviceName string, methodName string) {

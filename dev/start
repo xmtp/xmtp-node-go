@@ -4,11 +4,8 @@ set -e
 PORT="${PORT:-9002}"
 
 dev/run \
-    --api.write-to-crdt-ds \
-    --api.read-from-crdt-ds \
-    --store \
-    --filter \
-    --lightpush \
-    --ws \
-    --ws-port="${PORT}" \
+    --message-db-dsn "${MESSAGE_DB_DSN}" \
+    --authz-db-dsn "${AUTHZ_DB_DSN}" \
+    --metrics \
+    --metrics-period 5s \
     "$@"

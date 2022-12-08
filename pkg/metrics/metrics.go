@@ -6,9 +6,6 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/status-im/go-waku/waku/metrics"
-	v2metrics "github.com/status-im/go-waku/waku/v2/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -16,21 +13,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// Server wraps go-waku metrics server, so that we don't need to reference the go-waku package anywhere
 type Server struct {
-	waku *metrics.Server
+	log  *zap.Logger
 	http *http.Server
 }
 
-// re-export go-waku functions
-var (
-	RecordStoreError = v2metrics.RecordStoreError
-	RecordMessage    = v2metrics.RecordMessage
-)
-
-func NewMetricsServer(address string, wakuPort, port int, logger *zap.Logger) *Server {
+func NewMetricsServer(log *zap.Logger, address string, port int) *Server {
 	return &Server{
-		waku: metrics.NewMetricsServer(address, wakuPort, logger),
+		log: log.Named("metrics"),
 		http: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: promhttp.Handler(),
@@ -39,20 +29,13 @@ func NewMetricsServer(address string, wakuPort, port int, logger *zap.Logger) *S
 }
 
 func (s *Server) Start(ctx context.Context) {
-	log := logging.From(ctx).Named("metrics")
-	go tracing.PanicWrap(ctx, "waku metrics server", func(_ context.Context) { s.waku.Start() })
 	go tracing.PanicWrap(ctx, "metrics server", func(_ context.Context) {
-		log.Info("server stopped", zap.Error(s.http.ListenAndServe()))
+		s.log.Info("server stopped", zap.Error(s.http.ListenAndServe()))
 	})
 }
 
 func (s *Server) Stop(ctx context.Context) error {
-	wErr := s.waku.Stop(ctx)
-	err := s.http.Shutdown(ctx)
-	if wErr != nil {
-		return wErr
-	}
-	return err
+	return s.http.Shutdown(ctx)
 }
 
 func RegisterViews(logger *zap.Logger) {

@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
@@ -55,8 +54,9 @@ func Stop() {
 func Wrap(ctx context.Context, operation string, action func(context.Context, Span) error) error {
 	span, ctx := tracer.StartSpanFromContext(ctx, operation)
 	defer span.Finish()
-	log := logging.From(ctx).With(zap.String("span", operation))
-	ctx = logging.With(ctx, Link(span, log))
+	// TODO: fix this
+	// log := logging.From(ctx).With(zap.String("span", operation))
+	// ctx = logging.With(ctx, Link(span, log))
 	err := action(ctx, span)
 	if err != nil {
 		span.Finish(WithError(err))

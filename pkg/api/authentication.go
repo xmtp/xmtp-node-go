@@ -57,7 +57,6 @@ func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token,
 	return recoveredWalletAddress, nil
 }
 
-//
 func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 	// We need a bare key to generate the key bytes to sign.
 	unsignedKey := &envelope.PublicKey{

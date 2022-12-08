@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
@@ -41,6 +40,13 @@ type Node struct {
 	EnvC chan *messagev1.Envelope
 }
 
+type Options struct {
+	NodeKey            string
+	DataPath           string
+	P2PPort            int
+	P2PPersistentPeers []string
+}
+
 func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, error) {
 	log = log.Named("crdt")
 
@@ -62,11 +68,11 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "creating libp2p crypto key")
 	}
-	pid, err := peer.IDFromPublicKey(privKey.GetPublic())
+	nodeId, err := peer.IDFromPublicKey(privKey.GetPublic())
 	if err != nil {
 		return nil, errors.Wrap(err, "getting peer id from key")
 	}
-	log.Info("starting", zap.String("peer_id", pid.Pretty()))
+	log.Info("starting", zap.String("peer_id", nodeId.Pretty()))
 
 	// Initialize IPFS-lite libp2p.
 	listenAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", options.P2PPort))
@@ -84,6 +90,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing ipfslite libp2p")
 	}
+	log.Info("listening", zap.Strings("addresses", listenAddresses(host)))
 	ipfs, err := ipfslite.New(ctx, store, nil, host, dht, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing ipfslite")
@@ -105,24 +112,27 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	}()
 
 	// Configure bootstrap peers.
-	bootstrapPeers := make([]peer.AddrInfo, len(options.P2PBootstrapNodes))
-	for i, addr := range options.P2PBootstrapNodes {
+	persistentPeers := make([]peer.AddrInfo, 0, len(options.P2PPersistentPeers))
+	for _, addr := range options.P2PPersistentPeers {
 		maddr, err := multiaddr.NewMultiaddr(addr)
 		if err != nil {
-			return nil, errors.Wrap(err, "parsing bootstrap node address")
+			return nil, errors.Wrap(err, "parsing persistent peer address")
 		}
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		peer, err := peer.AddrInfoFromP2pAddr(maddr)
 		if err != nil {
-			return nil, errors.Wrap(err, "getting bootstrap node address info")
+			return nil, errors.Wrap(err, "getting persistent peer address info")
 		}
-		if info == nil {
-			return nil, fmt.Errorf("bootstrap node address info is nil: %s", addr)
+		if peer == nil {
+			return nil, fmt.Errorf("persistent peer address info is nil: %s", addr)
 		}
-		bootstrapPeers[i] = *info
-		host.ConnManager().TagPeer(info.ID, "keep", 100)
+		if peer.ID == nodeId {
+			continue
+		}
+		persistentPeers = append(persistentPeers, *peer)
+		host.ConnManager().TagPeer(peer.ID, "keep", 100)
 	}
-	if len(bootstrapPeers) > 0 {
-		ipfs.Bootstrap(bootstrapPeers)
+	if len(persistentPeers) > 0 {
+		ipfs.Bootstrap(persistentPeers)
 	}
 
 	// Initialize pubsub broadcaster.
@@ -165,7 +175,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 		EnvC:  envC,
 	}
 
-	go n.bootstrapNodesConnectLoop(options.P2PBootstrapNodes)
+	go n.persistentPeersConnectLoop(persistentPeers)
 
 	return n, nil
 }
@@ -263,16 +273,10 @@ func (n *Node) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messa
 
 func getOrCreatePrivateKey(key string) (crypto.PrivKey, error) {
 	if key == "" {
-		priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, 1)
+		priv, err := GenerateNodeKey()
 		if err != nil {
 			return nil, err
 		}
-
-		// keyBytes, err := crypto.MarshalPrivateKey(priv)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// fmt.Println("NODE KEY:", hex.EncodeToString(keyBytes))
 
 		return priv, nil
 	}
@@ -284,34 +288,15 @@ func getOrCreatePrivateKey(key string) (crypto.PrivKey, error) {
 	return crypto.UnmarshalPrivateKey(keyBytes)
 }
 
-func (n *Node) bootstrapNodesConnectLoop(bootstrapNodes []string) {
-	peers := make([]peer.AddrInfo, len(bootstrapNodes))
-
-	var selfAddr string
-	for i, peerAddr := range bootstrapNodes {
-		maddr, err := multiaddr.NewMultiaddr(peerAddr)
+func (n *Node) persistentPeersConnectLoop(peers []peer.AddrInfo) {
+	for _, peer := range peers {
+		err := n.host.Connect(n.ctx, peer)
 		if err != nil {
-			n.log.Error("parsing bootstrap address", zap.Error(err), zap.String("peer_addr", peerAddr))
-		}
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			n.log.Error("getting bootstrap node address info", zap.Error(err), zap.String("peer_addr", peerAddr))
-		}
-		if info == nil {
-			n.log.Error("bootstrap node address info is nil", zap.Error(err), zap.String("peer_addr", peerAddr))
-		} else {
-			peers[i] = *info
-			err := n.host.Connect(n.ctx, *info)
-			if err != nil {
-				if strings.Contains(err.Error(), "dial to self") {
-					selfAddr = peerAddr
-				}
-				n.log.Error("dialing bootstrap node", zap.Error(err), zap.String("peer_addr", info.String()))
-			}
+			n.log.Error("dialing persistent peer", zap.Error(err), zap.String("peer_addr", peer.String()))
 		}
 	}
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(2 * time.Second)
 	for {
 		select {
 		case <-n.ctx.Done():
@@ -321,19 +306,30 @@ func (n *Node) bootstrapNodesConnectLoop(bootstrapNodes []string) {
 			for _, peerID := range n.host.Network().Peers() {
 				peerIDs[peerID] = struct{}{}
 			}
-			for i, addr := range bootstrapNodes {
-				if addr == selfAddr {
+			for _, peer := range peers {
+				if _, exists := peerIDs[peer.ID]; exists {
 					continue
 				}
-				pi := peers[i]
-				if _, exists := peerIDs[pi.ID]; exists {
-					continue
-				}
-				err := n.host.Connect(n.ctx, pi)
+				err := n.host.Connect(n.ctx, peer)
 				if err != nil {
-					n.log.Error("dialing bootstrap node", zap.Error(err), zap.String("peer_addr", pi.String()))
+					n.log.Error("dialing persistent peer", zap.Error(err), zap.String("peer_addr", peer.String()))
 				}
 			}
 		}
 	}
+}
+
+func listenAddresses(host host.Host) []string {
+	exclude := map[string]bool{
+		"/p2p-circuit": true,
+	}
+	addrs := []string{}
+	for _, ma := range host.Network().ListenAddresses() {
+		addr := ma.String()
+		if exclude[addr] {
+			continue
+		}
+		addrs = append(addrs, addr)
+	}
+	return addrs
 }
