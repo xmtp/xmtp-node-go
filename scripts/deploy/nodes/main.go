@@ -1,6 +1,7 @@
 /*
 This is a tool for triggering TF Cloud runs/deploys from master commits.
 Usage:
+
 	go run ./scripts/deploy/nodes \
 		--tf-token XXX \
 		--workspace dev \

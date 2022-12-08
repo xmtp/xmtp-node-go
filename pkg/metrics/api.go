@@ -6,7 +6,6 @@ import (
 
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -38,7 +37,7 @@ var apiRequestsView = &view.View{
 	TagKeys:     apiRequestTagKeys,
 }
 
-func EmitAPIRequest(ctx context.Context, fields []zapcore.Field) {
+func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field) {
 	mutators := make([]tag.Mutator, 0, len(fields))
 	for _, field := range fields {
 		key, ok := apiRequestTagKeysByName[field.Key]
@@ -49,7 +48,7 @@ func EmitAPIRequest(ctx context.Context, fields []zapcore.Field) {
 	}
 	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
-		logging.From(ctx).Error("recording metric", fields...)
+		log.Error("recording metric", fields...)
 	}
 }
 
@@ -63,13 +62,13 @@ var publishedEnvelopeView = &view.View{
 	TagKeys:     []tag.Key{topicCategoryTag},
 }
 
-func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
+func EmitPublishedEnvelope(ctx context.Context, log *zap.Logger, env *proto.Envelope) {
 	topicCategory := categoryFromTopic(env.ContentTopic)
 	size := int64(len(env.Message))
 	mutators := []tag.Mutator{tag.Insert(topicCategoryTag, topicCategory)}
 	err := recordWithTags(ctx, mutators, publishedEnvelopeMeasure.M(size))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
+		log.Error("recording metric",
 			zap.Error(err),
 			zap.String("metric", publishedEnvelopeView.Name),
 			zap.Int64("size", size),

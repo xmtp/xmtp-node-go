@@ -3,13 +3,11 @@ package metrics
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
-	"go.uber.org/zap"
 )
 
 var TagProto, _ = tag.NewKey("protocol")
@@ -29,27 +27,6 @@ var BootstrapPeersView = &view.View{
 	Measure:     BootstrapPeers,
 	Description: "Percentage of bootstrap peers connected",
 	Aggregation: view.LastValue(),
-}
-
-func EmitPeersByProtocol(ctx context.Context, host host.Host) {
-	byProtocol := map[string]int64{}
-	ps := host.Peerstore()
-	for _, peer := range ps.Peers() {
-		protos, err := ps.GetProtocols(peer)
-		if err != nil {
-			continue
-		}
-		for _, proto := range protos {
-			byProtocol[proto]++
-		}
-	}
-	for proto, count := range byProtocol {
-		mutators := []tag.Mutator{tag.Insert(TagProto, proto)}
-		err := recordWithTags(ctx, mutators, PeersByProto.M(count))
-		if err != nil {
-			logging.From(ctx).Warn("recording metric", zap.String("metric", PeersByProto.Name()), zap.String("proto", proto), zap.Error(err))
-		}
-	}
 }
 
 func EmitBootstrapPeersConnected(ctx context.Context, host host.Host, bootstrapPeers map[peer.ID]bool) {

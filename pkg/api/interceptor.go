@@ -62,7 +62,6 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		// TODO(mk): Add metrics
 		return handler(srv, stream)
 	}
 }
@@ -137,8 +136,8 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 
 const (
 	TopicCategoryPermissionUnknown        int = 0
-	TopicCategoryPermissionAuthRequired       = 1
-	TopicCategoryPermissionNoAuthRequired     = 2
+	TopicCategoryPermissionAuthRequired   int = 1
+	TopicCategoryPermissionNoAuthRequired int = 2
 )
 
 var TopicCategoryPermissions = map[string]int{

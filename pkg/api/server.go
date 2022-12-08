@@ -104,7 +104,7 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.CRDT, s.Options.WriteToCRDTDS, s.Options.ReadFromCRDTDS)
+	s.messagev1, err = messagev1.NewService(s.Log, s.CRDT)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}
@@ -174,7 +174,6 @@ func (s *Server) Close() {
 		if err != nil {
 			s.Log.Error("closing http listener", zap.Error(err))
 		}
-		s.httpListener = nil
 	}
 
 	if s.grpcListener != nil {
@@ -182,7 +181,6 @@ func (s *Server) Close() {
 		if err != nil {
 			s.Log.Error("closing grpc listener", zap.Error(err))
 		}
-		s.grpcListener = nil
 	}
 
 	s.wg.Wait()

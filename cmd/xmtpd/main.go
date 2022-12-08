@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,10 +11,9 @@ import (
 	"sync"
 	"syscall"
 
-	golog "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
-	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -30,12 +30,12 @@ var options server.Options
 // Avoiding replacing the flag parser with something fancier like Viper or urfave/cli
 // This hack will work up to a point.
 func addEnvVars() {
-	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_CONNECTION_STRING"); hasConnstr {
-		options.Store.DbConnectionString = connStr
+	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_DSN"); hasConnstr {
+		options.MessageDBDSN = connStr
 	}
 
-	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
-		options.Authz.DbConnectionString = connStr
+	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_DSN"); hasConnstr {
+		options.Authz.DBDSN = connStr
 	}
 }
 
@@ -64,33 +64,47 @@ func main() {
 		}()
 	}
 
-	cleanup, err := initWakuLogging(options)
-	if err != nil {
-		log.Fatal("initializing waku logger", zap.Error(err))
-	}
-	defer cleanup()
-
 	if options.Version {
 		fmt.Printf("Version: %s", Commit)
 		return
 	}
 
 	if options.GenerateKey {
-		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatal("writing private key file", zap.Error(err))
+		privKey, err := crdt.GenerateNodeKey()
+		if err != nil {
+			log.Fatal("generating node private key", zap.Error(err))
 		}
+		privKeyHex, err := crdt.HexEncodeNodeKey(privKey)
+		if err != nil {
+			log.Fatal("encoding node key", zap.Error(err))
+		}
+
+		nodeId, err := peer.IDFromPublicKey(privKey.GetPublic())
+		if err != nil {
+			log.Fatal("creating node id from key", zap.Error(err))
+		}
+
+		output := map[string]string{
+			"private_node_key": privKeyHex,
+			"public_node_id":   nodeId.Pretty(),
+		}
+		outputJSON, err := json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			log.Fatal("marshaling json", zap.Error(err))
+		}
+		fmt.Println(string(outputJSON))
 		return
 	}
 
-	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
-		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB); err != nil {
+	if options.CreateMessageMigration != "" && options.MessageDBDSN != "" {
+		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.MessageDBDSN, options.WaitForDB); err != nil {
 			log.Fatal("creating message db migration", zap.Error(err))
 		}
 		return
 	}
 
-	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
-		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB); err != nil {
+	if options.CreateAuthzMigration != "" && options.Authz.DBDSN != "" {
+		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DBDSN, options.WaitForDB); err != nil {
 			log.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return
@@ -98,7 +112,7 @@ func main() {
 
 	if options.Tracing.Enable {
 		log.Info("starting tracer")
-		tracing.Start(Commit, utils.Logger())
+		tracing.Start(Commit, log)
 		defer func() {
 			log.Info("stopping tracer")
 			tracing.Stop()
@@ -165,28 +179,6 @@ func main() {
 
 func fatal(msg string, args ...any) {
 	log.Fatalf(msg, args...)
-}
-
-func initWakuLogging(options server.Options) (func(), error) {
-	err := utils.SetLogLevel(options.LogLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "parsing log level")
-	}
-	utils.InitLogger(options.LogEncoding)
-
-	lvl, err := golog.LevelFromString(options.LogLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "parsing log level")
-	}
-	golog.SetAllLoggers(lvl)
-
-	// Note that libp2p reads the encoding from GOLOG_LOG_FMT env var.
-	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
-		utils.Logger().Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
-	}
-
-	cleanup := func() { _ = utils.Logger().Sync() }
-	return cleanup, nil
 }
 
 func buildLogger(options server.Options) (*zap.Logger, error) {
