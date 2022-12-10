@@ -123,18 +123,20 @@ func (s *Server) startGRPC() error {
 }
 
 func (s *Server) startHTTP() error {
-	mux := http.NewServeMux()
-	gwmux := runtime.NewServeMux(
-		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
-		runtime.WithStreamErrorHandler(runtime.DefaultStreamErrorHandler),
-		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
-	)
-	mux.Handle("/", gwmux)
-
 	conn, err := s.dialGRPC(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "dialing grpc server")
 	}
+
+	mux := http.NewServeMux()
+	healthClient := healthgrpc.NewHealthClient(conn)
+	gwmux := runtime.NewServeMux(
+		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
+		runtime.WithStreamErrorHandler(runtime.DefaultStreamErrorHandler),
+		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
+		runtime.WithHealthzEndpoint(healthClient),
+	)
+	mux.Handle("/", gwmux)
 
 	err = proto.RegisterMessageApiHandler(s.ctx, gwmux, conn)
 	if err != nil {
