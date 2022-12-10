@@ -10,7 +10,7 @@ import (
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/crdt"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"

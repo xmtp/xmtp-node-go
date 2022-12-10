@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eo pipefail
+
+DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-dev}"
+DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/xmtpd-e2e}"
+
+DOCKER_E2E_IMAGE="${DOCKER_E2E_IMAGE:-${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}}"
+
+GIT_COMMIT="$(git rev-parse HEAD)"
+GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
+
+DOCKER_IMAGE_SHA=$(docker build \
+    --tag "${DOCKER_E2E_IMAGE}" \
+    --build-arg="GO_VERSION=${GO_VERSION}" \
+    --build-arg="GIT_COMMIT=${GIT_COMMIT}" \
+    -f dev/docker/e2e/Dockerfile \
+    .)
+
+echo "${DOCKER_IMAGE_NAME}@${DOCKER_IMAGE_SHA}"

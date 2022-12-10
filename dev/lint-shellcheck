@@ -1,5 +1,12 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
-read -ra shellcheck_paths <<< "$(grep -rIzl '^#!' dev)"
-shellcheck "${shellcheck_paths[@]}"
+files=""
+while IFS= read -r file; do
+    if head "${file}" | grep -q "#!"; then
+        files="${files} ${file}"
+    fi
+done < <(printf '%s\n' "$(find dev -type f)")
+
+# shellcheck disable=SC2086 # Intended splitting of files
+shellcheck ${files}

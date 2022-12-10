@@ -1,0 +1,13 @@
+# Default values for xmtp-node.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nodeImage: xmtp/node-go:dev
+storageClassName: standard
+storageSize: 1Gi
+p2pPort: 9001
+apiHttpPort: 5555
+nodeKey: ''
+messageDbDsn: ''
+authzDbDsn: ''
+persistentPeers: []

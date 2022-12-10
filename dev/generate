@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
-set -e
+#!/bin/bash
+set -eo pipefail
 
 go generate ./...

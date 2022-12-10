@@ -13,8 +13,6 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version-file: go.mod
-      - run: dev/docker/up
-      - run: dev/e2e/docker/up
       - name: Run Tests
         run: |
           export GOPATH="${HOME}/go/"

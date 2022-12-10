@@ -1,0 +1,20 @@
+storageClassName: do-block-storage
+storageSize: 50Gi
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: doks.digitalocean.com/node-pool
+          operator: In
+          values:
+          - xmtp-nodes
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - xmtp-node
+      topologyKey: kubernetes.io/hostname

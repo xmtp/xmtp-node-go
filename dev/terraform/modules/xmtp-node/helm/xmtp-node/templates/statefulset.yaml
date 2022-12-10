@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "xmtp-node.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "xmtp-node.selectorLabels" . | nindent 6 }}
+  serviceName: {{ .Release.Name }}
+  replicas: 1
+  minReadySeconds: 10
+  template:
+    metadata:
+      labels:
+        {{- include "xmtp-node.selectorLabels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 10
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: node
+        image: {{ .Values.nodeImage }}
+        ports:
+        - name: http-api
+          containerPort: 5555
+          protocol: TCP
+        - name: p2p
+          containerPort: 9001
+          protocol: TCP
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        envFrom:
+        - secretRef:
+            name: {{ .Release.Name }}
+        command:
+        - xmtpd
+        - --p2p-port={{ .Values.p2pPort }}
+        {{  range .Values.persistentPeers }}
+        - --p2p-persistent-peer={{ . }}
+        {{ end }}
+        - --metrics
+        - --metrics-address=0.0.0.0
+        - --api.http-port={{ .Values.apiHttpPort }}
+        - --log-encoding=json
+        - --data-path=/data
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http-api
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: {{ .Values.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.storageSize }}

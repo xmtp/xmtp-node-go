@@ -1,0 +1,9 @@
+#!/bin/bash
+set -eo pipefail
+
+NAMESPACE="${NAMESPACE:-xmtp-nodes}"
+# TODO: fix this snormorexmtp repo org reference
+DOCKER_E2E_IMAGE="${DOCKER_E2E_IMAGE:-snormorexmtp/xmtpd-e2e:dev}"
+
+echo "Running e2e test in k8s pod in namespace ${NAMESPACE}..."
+kubectl -n "${NAMESPACE}" run --rm -it --restart=Never --image "${DOCKER_E2E_IMAGE}" --env "XMTP_API_URL=http://nodes-api:5555" "e2e-run-$(date +%s)"

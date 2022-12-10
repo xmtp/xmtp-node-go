@@ -20,7 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -72,7 +72,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "getting peer id from key")
 	}
-	log.Info("starting", zap.String("peer_id", nodeId.Pretty()))
+	log.Info("starting", zap.String("node_id", nodeId.Pretty()))
 
 	// Initialize IPFS-lite libp2p.
 	listenAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", options.P2PPort))
@@ -105,10 +105,10 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 			for _, conn := range host.Network().Conns() {
 				peerID := conn.RemotePeer()
 				if peersByID[peerID.Pretty()] > 0 {
-					log.Warn("Duplicate peer connection found, disconnecting peer", zap.String("peer_id", peerID.Pretty()))
+					log.Warn("Duplicate peer connection found, disconnecting peer", zap.String("node_id", peerID.Pretty()))
 					err := host.Network().ClosePeer(peerID)
 					if err != nil {
-						log.Info("closing peer", zap.Error(err), zap.String("peer_id", peerID.Pretty()))
+						log.Info("closing peer", zap.Error(err), zap.String("node_id", peerID.Pretty()))
 					}
 					break
 				}
@@ -257,8 +257,13 @@ func (n *Node) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messa
 		topic = req.ContentTopics[0] // TODO
 	}
 	// TODO: sorting, start/end time filtering
+	orders := []query.Order{}
+	if req.PagingInfo != nil && req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
+		orders = append(orders, query.OrderByKeyDescending{})
+	}
 	res, err := n.crdt.Query(ctx, query.Query{
 		Prefix: buildMessageQueryPrefix(topic),
+		Orders: orders,
 	})
 	if err != nil {
 		return nil, nil, err

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 go mod tidy
 
@@ -11,5 +11,3 @@ if ! which mockgen &>/dev/null; then go install github.com/golang/mock/mockgen@l
 if ! which protolint &>/dev/null; then go install github.com/yoheimuta/protolint/cmd/protolint@latest; fi
 
 dev/generate
-dev/docker/up
-dev/e2e/docker/up
