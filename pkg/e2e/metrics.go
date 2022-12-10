@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -44,8 +45,10 @@ var (
 )
 
 func (r *Runner) withMetricsServer(fn func() error) error {
-	metrics := metrics.NewMetricsServer(r.log, "0.0.0.0", 9009)
-	metrics.Start(context.Background())
+	metrics, err := metrics.NewMetricsServer(r.ctx, r.log, "0.0.0.0", 9009)
+	if err != nil {
+		return errors.Wrap(err, "initializing metrics server")
+	}
 	defer func() {
 		err := metrics.Stop(r.ctx)
 		if err != nil {
@@ -53,7 +56,7 @@ func (r *Runner) withMetricsServer(fn func() error) error {
 		}
 	}()
 
-	err := view.Register(views...)
+	err = view.Register(views...)
 	if err != nil {
 		return err
 	}

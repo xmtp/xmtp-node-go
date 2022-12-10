@@ -15,13 +15,13 @@ import (
 
 var (
 	apiRequestTagKeys = []tag.Key{
-		newTagKey("service"),
-		newTagKey("method"),
-		newTagKey("client"),
-		newTagKey("client_version"),
-		newTagKey("app"),
-		newTagKey("app_version"),
-		newTagKey("error_code"),
+		newTagKey("grpc_service"),
+		newTagKey("grpc_method"),
+		newTagKey("grpc_error_code"),
+		newTagKey("api_client"),
+		newTagKey("api_client_version"),
+		newTagKey("api_app"),
+		newTagKey("api_app_version"),
 	}
 
 	apiRequestTagKeysByName = buildTagKeysByName(apiRequestTagKeys)

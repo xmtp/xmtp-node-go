@@ -25,15 +25,15 @@ import (
 )
 
 type Server struct {
-	log           *zap.Logger
-	db            *sql.DB
-	metricsServer *metrics.Server
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	allowLister   authz.WalletAllowLister
-	grpc          *api.Server
-	crdt          *crdt.Node
+	log         *zap.Logger
+	db          *sql.DB
+	metrics     *metrics.Server
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	allowLister authz.WalletAllowLister
+	grpc        *api.Server
+	crdt        *crdt.Node
 }
 
 // Create a new Server
@@ -53,9 +53,11 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Metrics.Enable {
-		s.metricsServer = metrics.NewMetricsServer(s.log, options.Metrics.Address, options.Metrics.Port)
-		metrics.RegisterViews(s.log)
-		s.metricsServer.Start(s.ctx)
+		var err error
+		s.metrics, err = metrics.NewMetricsServer(s.ctx, s.log, options.Metrics.Address, options.Metrics.Port)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing metrics server")
+		}
 	}
 
 	if options.Authz.DBDSN != "" {
@@ -122,8 +124,8 @@ func (s *Server) Shutdown() {
 	// Close the DB.
 	s.db.Close()
 
-	if s.metricsServer != nil {
-		if err := s.metricsServer.Stop(s.ctx); err != nil {
+	if s.metrics != nil {
+		if err := s.metrics.Stop(s.ctx); err != nil {
 			s.log.Error("stopping metrics", zap.Error(err))
 		}
 	}

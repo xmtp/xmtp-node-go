@@ -59,12 +59,12 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 	clientName, _, clientVersion := parseVersionHeaderValue(md.Get(clientVersionMetadataKey))
 	appName, _, appVersion := parseVersionHeaderValue(md.Get(appVersionMetadataKey))
 	fields := []zapcore.Field{
-		zap.String("service", serviceName),
-		zap.String("method", methodName),
-		zap.String("client", clientName),
-		zap.String("client_version", clientVersion),
-		zap.String("app", appName),
-		zap.String("app_version", appVersion),
+		zap.String("grpc_service", serviceName),
+		zap.String("grpc_method", methodName),
+		zap.String("api_client", clientName),
+		zap.String("api_client_version", clientVersion),
+		zap.String("api_app", appName),
+		zap.String("api_app_version", appVersion),
 	}
 
 	if ips := md.Get("x-forwarded-for"); len(ips) > 0 {
