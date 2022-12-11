@@ -20,7 +20,7 @@ const (
 func buildMessageQueryPrefix(topic string) string {
 	return strings.Join([]string{
 		envelopesKeyNamespace,
-		topic,
+		encodeTopicForStoreKey(topic),
 	}, "/") + "/"
 }
 
@@ -32,11 +32,15 @@ func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
 
 	key := datastore.NewKey(strings.Join([]string{
 		envelopesKeyNamespace,
-		base64.StdEncoding.EncodeToString([]byte(env.ContentTopic)),
+		encodeTopicForStoreKey(env.ContentTopic),
 		fmt.Sprintf("%020d", env.TimestampNs),
 		cID.String(),
 	}, "/"))
 	return key, nil
+}
+
+func encodeTopicForStoreKey(topic string) string {
+	return base64.StdEncoding.EncodeToString([]byte(topic))
 }
 
 func newCID(val []byte) (cid.Cid, error) {
