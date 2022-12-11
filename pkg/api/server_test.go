@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -39,7 +37,7 @@ func Test_HTTPRootPath(t *testing.T) {
 }
 
 func Test_SubscribePublishQuery(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -64,7 +62,7 @@ func Test_SubscribePublishQuery(t *testing.T) {
 }
 
 func Test_MaxMessageSize(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -108,7 +106,7 @@ func Test_MaxMessageSize(t *testing.T) {
 }
 
 func Test_QueryNonExistentTopic(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"does-not-exist"},
@@ -120,7 +118,7 @@ func Test_QueryNonExistentTopic(t *testing.T) {
 }
 
 func Test_SubscribeClientClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -155,7 +153,7 @@ func Test_SubscribeClientClose(t *testing.T) {
 }
 
 func Test_SubscribeAllClientClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.SubscribeAll(ctx)
@@ -191,7 +189,7 @@ func Test_SubscribeAllClientClose(t *testing.T) {
 }
 
 func Test_SubscribeServerClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -221,7 +219,7 @@ func Test_SubscribeServerClose(t *testing.T) {
 }
 
 func Test_SubscribeAllServerClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
 		stream, err := client.SubscribeAll(ctx)
@@ -252,7 +250,7 @@ func Test_SubscribeAllServerClose(t *testing.T) {
 }
 
 func Test_Subscribe_ContextTimeout(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -269,7 +267,7 @@ func Test_Subscribe_ContextTimeout(t *testing.T) {
 }
 
 func Test_Subscribe_ContextCancel(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -289,7 +287,7 @@ func Test_Subscribe_ContextCancel(t *testing.T) {
 }
 
 func Test_MultipleSubscriptions(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// start 2 streams
 		stream1, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -337,7 +335,7 @@ func Test_MultipleSubscriptions(t *testing.T) {
 
 // TODO
 // func Test_QueryPaging(t *testing.T) {
-// 	ctx := withAuth(t, context.Background())
+// 	ctx := context.Background()
 // 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 // 		// Store 10 envelopes with increasing SenderTimestamp
 // 		envs := makeEnvelopes(10)
@@ -384,40 +382,3 @@ func Test_MultipleSubscriptions(t *testing.T) {
 // 		requireEnvelopesEqual(t, result[6:], queryRes.Envelopes)
 // 	})
 // }
-
-func Test_Publish_DenyListed(t *testing.T) {
-	token, data, err := GenerateToken(time.Now(), false)
-	require.NoError(t, err)
-	et, err := EncodeToken(token)
-	require.NoError(t, err)
-	ctx := metadata.AppendToOutgoingContext(context.Background(), authorizationMetadataKey, "Bearer "+et)
-
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, s *Server) {
-		err := s.AllowLister.Deny(ctx, data.WalletAddr)
-		require.NoError(t, err)
-
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{})
-		expectWalletDenied(t, err)
-		require.Nil(t, publishRes)
-	})
-}
-
-func expectWalletDenied(t *testing.T, err error) {
-	grpcErr, ok := status.FromError(err)
-	if ok {
-		require.Equal(t, codes.PermissionDenied, grpcErr.Code())
-		require.Equal(t, "wallet is deny listed", grpcErr.Message())
-	} else {
-		parts := strings.SplitN(err.Error(), ": ", 2)
-		reason, msgJSON := parts[0], parts[1]
-		require.Equal(t, "403 Forbidden", reason)
-		var msg map[string]interface{}
-		err := json.Unmarshal([]byte(msgJSON), &msg)
-		require.NoError(t, err)
-		require.Equal(t, map[string]interface{}{
-			"code":    float64(codes.PermissionDenied),
-			"message": "wallet is deny listed",
-			"details": []interface{}{},
-		}, msg)
-	}
-}

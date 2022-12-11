@@ -4,8 +4,6 @@ set -e
 PORT="${PORT:-9002}"
 
 dev/run \
-    --message-db-dsn "${MESSAGE_DB_DSN}" \
-    --authz-db-dsn "${AUTHZ_DB_DSN}" \
     --metrics \
     --metrics-period 5s \
     "$@"

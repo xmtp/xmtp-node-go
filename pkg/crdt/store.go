@@ -1,6 +1,7 @@
 package crdt
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -28,9 +29,10 @@ func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
 	if err != nil {
 		return datastore.Key{}, errors.Wrap(err, "creating cid")
 	}
+
 	key := datastore.NewKey(strings.Join([]string{
 		envelopesKeyNamespace,
-		env.ContentTopic,
+		base64.StdEncoding.EncodeToString([]byte(env.ContentTopic)),
 		fmt.Sprintf("%020d", env.TimestampNs),
 		cID.String(),
 	}, "/"))

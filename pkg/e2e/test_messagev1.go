@@ -34,10 +34,6 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
 	defer cancel()
-	ctx, err := withAuth(ctx)
-	if err != nil {
-		return err
-	}
 
 	// Subscribe across nodes.
 	streams := make([]messageclient.Stream, clientCount)
@@ -61,7 +57,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 			ContentTopic: contentTopic,
 			Message:      []byte("sync-" + s.randomStringLower(12)),
 		}
-		_, err = clients[0].Publish(ctx, &messagev1.PublishRequest{
+		_, err := clients[0].Publish(ctx, &messagev1.PublishRequest{
 			Envelopes: []*messagev1.Envelope{
 				syncEnv,
 			},
@@ -105,7 +101,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 			}
 		}
 		envs = append(envs, clientEnvs...)
-		_, err = client.Publish(ctx, &messagev1.PublishRequest{
+		_, err := client.Publish(ctx, &messagev1.PublishRequest{
 			Envelopes: clientEnvs,
 		})
 		if err != nil {
@@ -133,7 +129,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 				envC <- env
 			}
 		}()
-		err = subscribeExpect(envC, envs)
+		err := subscribeExpect(envC, envs)
 		if err != nil {
 			return err
 		}

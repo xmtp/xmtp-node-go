@@ -26,6 +26,8 @@ LABEL commit=$GIT_COMMIT
 # color, nocolor, json
 ENV GOLOG_LOG_FMT=nocolor
 
+ENV ENV=dev
+
 COPY --from=builder /app/bin/xmtpd /usr/bin/
 
 ENTRYPOINT ["/usr/bin/xmtpd"]

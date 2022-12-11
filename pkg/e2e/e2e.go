@@ -5,9 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/metadata"
 )
 
 type Suite struct {
@@ -68,16 +66,3 @@ func (s *Suite) randomStringLower(n int) string {
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
-
-func withAuth(ctx context.Context) (context.Context, error) {
-	token, _, err := api.GenerateToken(time.Now(), false)
-	if err != nil {
-		return ctx, err
-	}
-	et, err := api.EncodeToken(token)
-	if err != nil {
-		return ctx, err
-	}
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+et)
-	return ctx, nil
-}

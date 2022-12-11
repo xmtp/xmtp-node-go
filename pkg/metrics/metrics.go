@@ -74,9 +74,7 @@ func (s *Server) Stop(ctx context.Context) error {
 
 func registerViews(logger *zap.Logger) {
 	if err := view.Register(
-		PeersByProtoView,
 		BootstrapPeersView,
-		StoredMessageView,
 		apiRequestsView,
 		publishedEnvelopeView,
 	); err != nil {

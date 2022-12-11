@@ -16,14 +16,6 @@ XMTP node software
 
 1. `dev/start`
 
-### Create a migration for the message database
-
-1. `dev/migrate-message $MIGRATION_NAME`
-
-### Create a migration for the authz database
-
-1. `dev/migrate-authz $MIGRATION_NAME`
-
 ### Debugging metrics
 
 1. `dev/run --metrics`

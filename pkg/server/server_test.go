@@ -19,9 +19,7 @@ func TestServer_NewShutdown(t *testing.T) {
 }
 
 func newTestServer(t *testing.T) (*Server, func()) {
-	_, dbDSN, dbCleanup := test.NewDB(t)
 	s, err := New(context.Background(), test.NewLog(t), Options{
-		MessageDBDSN: dbDSN,
 		API: api.Options{
 			HTTPPort: 0,
 			GRPCPort: 0,
@@ -37,6 +35,5 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	require.NotNil(t, s)
 	return s, func() {
 		s.Shutdown()
-		dbCleanup()
 	}
 }

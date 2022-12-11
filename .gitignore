@@ -26,3 +26,6 @@ data/
 
 # Temporary files.
 tmp/
+
+# XMTP node files.
+.xmtp/

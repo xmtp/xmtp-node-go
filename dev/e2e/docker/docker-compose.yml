@@ -23,7 +23,6 @@ services:
         - GO_VERSION=${GO_VERSION}
     ports:
       - 15555:5555
-      - 18008:8008
     restart: always
     command:
     - --p2p-port=9001
@@ -33,14 +32,8 @@ services:
     - --p2p-persistent-peer=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --metrics
     - --metrics-address=0.0.0.0
-    - --api.authn.enable
-    - --api.authn.allowlists
     - --log-encoding=json
-    - --wait-for-db=10s
     environment:
-      ENV: dev
-      MESSAGE_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      AUTHZ_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       XMTP_NODE_KEY: 080112405e330cf117c7796b2cda8600a6200a5ce10ec0517ce02c494ba6a94bab0aed540fd6738f0c49989be763241b0fc26cab3a305dff93a3683905c0880049c49b8d
   node2:
     build:
@@ -59,14 +52,8 @@ services:
     - --p2p-persistent-peer=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --metrics
     - --metrics-address=0.0.0.0
-    - --api.authn.enable
-    - --api.authn.allowlists
     - --log-encoding=json
-    - --wait-for-db=10s
     environment:
-      ENV: dev
-      MESSAGE_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      AUTHZ_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       XMTP_NODE_KEY: 08011240f1c9e7e3287423ae305bf0cdcf403bf0604fb52022473a553b1aedba5e7ec58026593b5103e10dda184890680c64f4855c0f52a1fac5c379d6bfeae606d2f93f
   node3:
     build:
@@ -85,14 +72,8 @@ services:
     - --p2p-persistent-peer=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --metrics
     - --metrics-address=0.0.0.0
-    - --api.authn.enable
-    - --api.authn.allowlists
     - --log-encoding=json
-    - --wait-for-db=10s
     environment:
-      ENV: dev
-      MESSAGE_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      AUTHZ_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       XMTP_NODE_KEY: 08011240c8006631c8d7795e6b6d5886a9b5ffec410e0593b0a28579dfb3ef78ff3f704a9e2c5868189cfa3d96c2abadff9b57312a79d9eaefd05d58b1044541a1ee11d2
   node4:
     build:
@@ -111,12 +92,6 @@ services:
     - --p2p-persistent-peer=/dns4/node4/tcp/9001/ipfs/12D3KooWDxZXDtgjrPowPCyFqqkj7DK63FdFCqqZHXw6HtHCQ3ev
     - --metrics
     - --metrics-address=0.0.0.0
-    - --api.authn.enable
-    - --api.authn.allowlists
     - --log-encoding=json
-    - --wait-for-db=10s
     environment:
-      ENV: dev
-      MESSAGE_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      AUTHZ_DB_DSN: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       XMTP_NODE_KEY: 08011240961505279d23983059fafb6ce4ccd13b6af1658159f0e19f344bf4d45df3e5513d883b2c669d77e81677d49f40e4dda434795cb1e4be62040335ef8ea6dbc5e7
