@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -39,7 +37,7 @@ func Test_HTTPRootPath(t *testing.T) {
 }
 
 func Test_SubscribePublishQuery(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -64,7 +62,7 @@ func Test_SubscribePublishQuery(t *testing.T) {
 }
 
 func Test_MaxMessageSize(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -108,7 +106,7 @@ func Test_MaxMessageSize(t *testing.T) {
 }
 
 func Test_QueryNonExistentTopic(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"does-not-exist"},
@@ -120,7 +118,7 @@ func Test_QueryNonExistentTopic(t *testing.T) {
 }
 
 func Test_SubscribeClientClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -155,7 +153,7 @@ func Test_SubscribeClientClose(t *testing.T) {
 }
 
 func Test_SubscribeAllClientClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.SubscribeAll(ctx)
@@ -191,7 +189,7 @@ func Test_SubscribeAllClientClose(t *testing.T) {
 }
 
 func Test_SubscribeServerClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -221,7 +219,7 @@ func Test_SubscribeServerClose(t *testing.T) {
 }
 
 func Test_SubscribeAllServerClose(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// Subscribe to topics.
 		stream, err := client.SubscribeAll(ctx)
@@ -252,7 +250,7 @@ func Test_SubscribeAllServerClose(t *testing.T) {
 }
 
 func Test_Subscribe_ContextTimeout(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -269,7 +267,7 @@ func Test_Subscribe_ContextTimeout(t *testing.T) {
 }
 
 func Test_Subscribe_ContextCancel(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -289,7 +287,7 @@ func Test_Subscribe_ContextCancel(t *testing.T) {
 }
 
 func Test_MultipleSubscriptions(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		// start 2 streams
 		stream1, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
@@ -337,7 +335,7 @@ func Test_MultipleSubscriptions(t *testing.T) {
 
 // TODO
 // func Test_QueryPaging(t *testing.T) {
-// 	ctx := withAuth(t, context.Background())
+// 	ctx := context.Background()
 // 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 // 		// Store 10 envelopes with increasing SenderTimestamp
 // 		envs := makeEnvelopes(10)
@@ -385,124 +383,87 @@ func Test_MultipleSubscriptions(t *testing.T) {
 // 	})
 // }
 
-func Test_BatchQuery(t *testing.T) {
-	ctx := withAuth(t, context.Background())
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
-		// Store 10 envelopes with increasing SenderTimestamp
-		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
-		requireEventuallyStored(t, ctx, client, envs)
+// func Test_BatchQuery(t *testing.T) {
+// 	ctx := context.Background()
+// 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+// 		// Store 10 envelopes with increasing SenderTimestamp
+// 		envs := makeEnvelopes(10)
+// 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+// 		require.NoError(t, err)
+// 		require.NotNil(t, publishRes)
+// 		requireEventuallyStored(t, ctx, client, envs)
 
-		batchSize := 50
-		// Spam a bunch of batch queries with the same topic
-		repeatedQueries := make([]*messageV1.QueryRequest, 0)
-		for i := 0; i < batchSize; i++ {
-			// Alternate sort directions to test that individual paging info is respected
-			direction := messageV1.SortDirection_SORT_DIRECTION_ASCENDING
-			if i%2 == 1 {
-				direction = messageV1.SortDirection_SORT_DIRECTION_DESCENDING
-			}
-			query := &messageV1.QueryRequest{
-				ContentTopics: []string{"topic"},
-				PagingInfo: &messageV1.PagingInfo{
-					Direction: direction,
-				},
-			}
-			repeatedQueries = append(repeatedQueries, query)
-		}
-		batchQueryRes, err := client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
-			Requests: repeatedQueries,
-		})
-		require.NoError(t, err)
-		require.NotNil(t, batchQueryRes)
+// 		batchSize := 50
+// 		// Spam a bunch of batch queries with the same topic
+// 		repeatedQueries := make([]*messageV1.QueryRequest, 0)
+// 		for i := 0; i < batchSize; i++ {
+// 			// Alternate sort directions to test that individual paging info is respected
+// 			direction := messageV1.SortDirection_SORT_DIRECTION_ASCENDING
+// 			if i%2 == 1 {
+// 				direction = messageV1.SortDirection_SORT_DIRECTION_DESCENDING
+// 			}
+// 			query := &messageV1.QueryRequest{
+// 				ContentTopics: []string{"topic"},
+// 				PagingInfo: &messageV1.PagingInfo{
+// 					Direction: direction,
+// 				},
+// 			}
+// 			repeatedQueries = append(repeatedQueries, query)
+// 		}
+// 		batchQueryRes, err := client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
+// 			Requests: repeatedQueries,
+// 		})
+// 		require.NoError(t, err)
+// 		require.NotNil(t, batchQueryRes)
 
-		// Descending envs
-		descendingEnvs := make([]*messageV1.Envelope, len(envs))
-		for i := 0; i < len(envs); i++ {
-			descendingEnvs[len(envs)-i-1] = envs[i]
-		}
+// 		// Descending envs
+// 		descendingEnvs := make([]*messageV1.Envelope, len(envs))
+// 		for i := 0; i < len(envs); i++ {
+// 			descendingEnvs[len(envs)-i-1] = envs[i]
+// 		}
 
-		for i, response := range batchQueryRes.Responses {
-			if i%2 == 1 {
-				// Reverse the response.Envelopes
-				requireEnvelopesEqual(t, descendingEnvs, response.Envelopes)
-			} else {
-				requireEnvelopesEqual(t, envs, response.Envelopes)
-			}
-		}
-	})
-}
+// 		for i, response := range batchQueryRes.Responses {
+// 			if i%2 == 1 {
+// 				// Reverse the response.Envelopes
+// 				requireEnvelopesEqual(t, descendingEnvs, response.Envelopes)
+// 			} else {
+// 				requireEnvelopesEqual(t, envs, response.Envelopes)
+// 			}
+// 		}
+// 	})
+// }
 
-func Test_BatchQueryOverLimitError(t *testing.T) {
-	ctx := withAuth(t, context.Background())
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
-		// Store 10 envelopes with increasing SenderTimestamp
-		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
-		requireEventuallyStored(t, ctx, client, envs)
+// func Test_BatchQueryOverLimitError(t *testing.T) {
+// 	ctx := context.Background()
+// 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+// 		// Store 10 envelopes with increasing SenderTimestamp
+// 		envs := makeEnvelopes(10)
+// 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+// 		require.NoError(t, err)
+// 		require.NotNil(t, publishRes)
+// 		requireEventuallyStored(t, ctx, client, envs)
 
-		// Limit is 50 queries implicitly so 100 should result in an error
-		batchSize := 100
+// 		// Limit is 50 queries implicitly so 100 should result in an error
+// 		batchSize := 100
 
-		// Spam a bunch of batch queries with the same topic
-		repeatedQueries := make([]*messageV1.QueryRequest, 0)
-		for i := 0; i < batchSize; i++ {
-			query := &messageV1.QueryRequest{
-				ContentTopics: []string{"topic"},
-				PagingInfo:    &messageV1.PagingInfo{},
-			}
-			repeatedQueries = append(repeatedQueries, query)
-		}
-		_, err = client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
-			Requests: repeatedQueries,
-		})
-		grpcErr, ok := status.FromError(err)
-		if ok {
-			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
-			require.Regexp(t, `cannot exceed \d+ requests in single batch`, grpcErr.Message())
-		} else {
-			require.Regexp(t, `cannot exceed \d+ requests in single batch`, err.Error())
-		}
-	})
-}
-
-func Test_Publish_DenyListed(t *testing.T) {
-	token, data, err := GenerateToken(time.Now(), false)
-	require.NoError(t, err)
-	et, err := EncodeToken(token)
-	require.NoError(t, err)
-	ctx := metadata.AppendToOutgoingContext(context.Background(), authorizationMetadataKey, "Bearer "+et)
-
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, s *Server) {
-		err := s.AllowLister.Deny(ctx, data.WalletAddr)
-		require.NoError(t, err)
-
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{})
-		expectWalletDenied(t, err)
-		require.Nil(t, publishRes)
-	})
-}
-
-func expectWalletDenied(t *testing.T, err error) {
-	grpcErr, ok := status.FromError(err)
-	if ok {
-		require.Equal(t, codes.PermissionDenied, grpcErr.Code())
-		require.Equal(t, "wallet is deny listed", grpcErr.Message())
-	} else {
-		parts := strings.SplitN(err.Error(), ": ", 2)
-		reason, msgJSON := parts[0], parts[1]
-		require.Equal(t, "403 Forbidden", reason)
-		var msg map[string]interface{}
-		err := json.Unmarshal([]byte(msgJSON), &msg)
-		require.NoError(t, err)
-		require.Equal(t, map[string]interface{}{
-			"code":    float64(codes.PermissionDenied),
-			"message": "wallet is deny listed",
-			"details": []interface{}{},
-		}, msg)
-	}
-}
+// 		// Spam a bunch of batch queries with the same topic
+// 		repeatedQueries := make([]*messageV1.QueryRequest, 0)
+// 		for i := 0; i < batchSize; i++ {
+// 			query := &messageV1.QueryRequest{
+// 				ContentTopics: []string{"topic"},
+// 				PagingInfo:    &messageV1.PagingInfo{},
+// 			}
+// 			repeatedQueries = append(repeatedQueries, query)
+// 		}
+// 		_, err = client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
+// 			Requests: repeatedQueries,
+// 		})
+// 		grpcErr, ok := status.FromError(err)
+// 		if ok {
+// 			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+// 			require.Regexp(t, `cannot exceed \d+ requests in single batch`, grpcErr.Message())
+// 		} else {
+// 			require.Regexp(t, `cannot exceed \d+ requests in single batch`, err.Error())
+// 		}
+// 	})
+// }

@@ -5,9 +5,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/crdt"
-	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"go.uber.org/zap"
 )
 
@@ -16,35 +14,17 @@ var (
 )
 
 type Options struct {
-	GRPCAddress string       `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
-	GRPCPort    uint         `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
-	HTTPAddress string       `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
-	HTTPPort    uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
-	Authn       AuthnOptions `group:"API Authentication Options" namespace:"authn"`
-	MaxMsgSize  int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
+	GRPCAddress string `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
+	GRPCPort    uint   `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
+	HTTPAddress string `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
+	HTTPPort    uint   `long:"http-port" description:"API HTTP listening port" default:"5555"`
+	MaxMsgSize  int    `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
 }
 
 type Config struct {
 	Options
-	AllowLister authz.WalletAllowLister
-	Log         *zap.Logger
-	CRDT        *crdt.Node
-}
-
-// Options bundle command line options associated with the authn package.
-type AuthnOptions struct {
-	Enable              bool     `long:"enable" description:"require client authentication via wallet tokens"`
-	Ratelimits          bool     `long:"ratelimits" description:"apply rate limits per wallet"`
-	AllowLists          bool     `long:"allowlists" description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
-	PrivilegedAddresses []string `long:"privileged-address" description:"allow this address to publish into other user's topics"`
-}
-
-// Config bundles Options and other parameters needed to set up an authorizer.
-type AuthnConfig struct {
-	AuthnOptions
-	Limiter     ratelimiter.RateLimiter
-	AllowLister authz.WalletAllowLister
-	Log         *zap.Logger
+	Log  *zap.Logger
+	CRDT *crdt.Node
 }
 
 func (params *Config) check() error {

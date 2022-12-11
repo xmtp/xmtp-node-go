@@ -27,18 +27,6 @@ var Commit string
 
 var options server.Options
 
-// Avoiding replacing the flag parser with something fancier like Viper or urfave/cli
-// This hack will work up to a point.
-func addEnvVars() {
-	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_DSN"); hasConnstr {
-		options.MessageDBDSN = connStr
-	}
-
-	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_DSN"); hasConnstr {
-		options.Authz.DBDSN = connStr
-	}
-}
-
 func main() {
 	if _, err := flags.Parse(&options); err != nil {
 		if err, ok := err.(*flags.Error); !ok || err.Type != flags.ErrHelp {
@@ -51,8 +39,6 @@ func main() {
 	if err != nil {
 		fatal("Could not build logger: %s", err)
 	}
-
-	addEnvVars()
 
 	if options.GoProfiling {
 		// Spin up a default HTTP server for https://pkg.go.dev/net/http/pprof
@@ -93,20 +79,6 @@ func main() {
 			log.Fatal("marshaling json", zap.Error(err))
 		}
 		fmt.Println(string(outputJSON))
-		return
-	}
-
-	if options.CreateMessageMigration != "" && options.MessageDBDSN != "" {
-		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.MessageDBDSN, options.WaitForDB); err != nil {
-			log.Fatal("creating message db migration", zap.Error(err))
-		}
-		return
-	}
-
-	if options.CreateAuthzMigration != "" && options.Authz.DBDSN != "" {
-		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DBDSN, options.WaitForDB); err != nil {
-			log.Fatal("creating authz db migration", zap.Error(err))
-		}
 		return
 	}
 

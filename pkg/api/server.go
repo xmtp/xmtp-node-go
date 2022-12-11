@@ -13,7 +13,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
-	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -25,10 +24,6 @@ import (
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 )
 
-const (
-	authorizationMetadataKey = "authorization"
-)
-
 type Server struct {
 	*Config
 
@@ -37,8 +32,6 @@ type Server struct {
 	messagev1    *messagev1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
-
-	authorizer *WalletAuthorizer
 }
 
 func New(config *Config) (*Server, error) {
@@ -82,17 +75,6 @@ func (s *Server) startGRPC() error {
 	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
 	unary = append(unary, telemetryInterceptor.Unary())
 	stream = append(stream, telemetryInterceptor.Stream())
-
-	if s.Config.Authn.Enable {
-		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
-			AuthnOptions: s.Config.Authn,
-			Limiter:      ratelimiter.NewTokenBucketRateLimiter(s.Log),
-			AllowLister:  s.Config.AllowLister,
-			Log:          s.Log.Named("authn"),
-		})
-		unary = append(unary, s.authorizer.Unary())
-		stream = append(stream, s.authorizer.Stream())
-	}
 
 	options := []grpc.ServerOption{
 		grpc.Creds(insecure.NewCredentials()),
