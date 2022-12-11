@@ -55,6 +55,10 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, err error) {
 	serviceName, methodName := splitMethodName(fullMethod)
+	if serviceName == "grpc.health.v1.Health" {
+		return
+	}
+
 	md, _ := metadata.FromIncomingContext(ctx)
 	clientName, _, clientVersion := parseVersionHeaderValue(md.Get(clientVersionMetadataKey))
 	appName, _, appVersion := parseVersionHeaderValue(md.Get(appVersionMetadataKey))
