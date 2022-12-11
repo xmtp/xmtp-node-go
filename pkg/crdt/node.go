@@ -99,14 +99,24 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	// Log connected peers periodically.
 	go func() {
 		for {
+			peersByID := map[string]int{}
 			peers := []*peer.AddrInfo{}
-			for _, c := range host.Network().Conns() {
+			peerAddrs := []string{}
+			for _, conn := range host.Network().Conns() {
+				peerID := conn.RemotePeer()
+				if peersByID[peerID.Pretty()] > 0 {
+					log.Warn("Duplicate peer connection found, disconnecting peer", zap.String("peer_id", peerID.Pretty()))
+					host.Network().ClosePeer(peerID)
+					break
+				}
+				peersByID[peerID.Pretty()]++
 				peers = append(peers, &peer.AddrInfo{
-					ID:    c.RemotePeer(),
-					Addrs: []multiaddr.Multiaddr{c.RemoteMultiaddr()},
+					ID:    conn.RemotePeer(),
+					Addrs: []multiaddr.Multiaddr{conn.RemoteMultiaddr()},
 				})
+				peerAddrs = append(peerAddrs, fmt.Sprintf("%s/%s", conn.RemoteMultiaddr().String(), conn.RemotePeer().Pretty()))
 			}
-			log.Info("total connected peers", zap.Int("total_peers", len(peers)))
+			log.Info("total connected peers", zap.Int("total_peers", len(peers)), zap.Strings("peers", peerAddrs))
 			time.Sleep(10 * time.Second)
 		}
 	}()
