@@ -69,7 +69,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 		var waiting bool
 		for i := range clients {
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			env, err := streams[i].Next(ctx)
 			cancel()
 			if err != nil {
