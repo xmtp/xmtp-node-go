@@ -106,7 +106,10 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 				peerID := conn.RemotePeer()
 				if peersByID[peerID.Pretty()] > 0 {
 					log.Warn("Duplicate peer connection found, disconnecting peer", zap.String("peer_id", peerID.Pretty()))
-					host.Network().ClosePeer(peerID)
+					err := host.Network().ClosePeer(peerID)
+					if err != nil {
+						log.Info("closing peer", zap.Error(err), zap.String("peer_id", peerID.Pretty()))
+					}
 					break
 				}
 				peersByID[peerID.Pretty()]++
