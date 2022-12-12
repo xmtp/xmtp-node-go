@@ -22,11 +22,10 @@ type Config struct {
 	Continuous              bool
 	ContinuousExitOnError   bool
 	NetworkEnv              string
-	BootstrapAddrs          []string
-	NodesURL                string
 	APIURL                  string
 	DelayBetweenRunsSeconds int
 	GitCommit               string
+	MetricsPort             int
 }
 
 type testRunFunc func(log *zap.Logger) error

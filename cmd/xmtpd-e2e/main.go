@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/xmtp/xmtp-node-go/pkg/e2e"
 	"go.uber.org/zap"
@@ -12,13 +11,13 @@ import (
 
 const (
 	localNetworkEnv = "local"
-	localNodesURL   = "http://localhost:8000"
 	remoteNodesURL  = "http://nodes.xmtp.com"
 )
 
 var (
 	remoteAPIURLByEnv = map[string]string{
-		"local":      "http://localhost:8080",
+		// "local":      "http://localhost:5555",
+		"local":      "http://localhost",
 		"dev":        "https://api.dev.xmtp.network",
 		"production": "https://api.production.xmtp.network",
 	}
@@ -34,22 +33,17 @@ func main() {
 	}
 
 	networkEnv := envVar("XMTPD_E2E_ENV", localNetworkEnv)
-	nodesURL := envVar("XMTPD_E2E_NODES_URL", localNodesURL)
-	if networkEnv != localNetworkEnv {
-		nodesURL = remoteNodesURL
-	}
 
-	apiURL := envVar("XMTPD_E2E_API_URL", remoteAPIURLByEnv[networkEnv])
+	apiURL := envVar("XMTP_API_URL", remoteAPIURLByEnv[networkEnv])
 
 	runner := e2e.NewRunner(ctx, log, &e2e.Config{
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
 		ContinuousExitOnError:   envVarBool("E2E_CONTINUOUS_EXIT_ON_ERROR"),
 		NetworkEnv:              networkEnv,
-		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
-		NodesURL:                nodesURL,
 		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 		GitCommit:               GitCommit,
+		MetricsPort:             envVarInt("XMTPD_E2E_METRICS_PORT", 9009),
 	})
 
 	err = runner.Start()
@@ -64,19 +58,6 @@ func envVar(name, defaultVal string) string {
 		return defaultVal
 	}
 	return val
-}
-
-func envVarStrings(name string) []string {
-	val := os.Getenv(name)
-	vals := strings.Split(val, ",")
-	retVals := make([]string, 0, len(vals))
-	for _, v := range vals {
-		if v == "" {
-			continue
-		}
-		retVals = append(retVals, v)
-	}
-	return retVals
 }
 
 func envVarBool(name string) bool {

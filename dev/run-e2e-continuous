@@ -1,0 +1,4 @@
+#!/bin/bash
+set -eo pipefail
+
+E2E_CONTINUOUS=1 dev/run-e2e

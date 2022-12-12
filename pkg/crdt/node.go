@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
@@ -12,15 +13,15 @@ import (
 	"github.com/ipfs/go-datastore/query"
 	badger "github.com/ipfs/go-ds-badger"
 	crdt "github.com/ipfs/go-ds-crdt"
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -72,7 +73,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "getting peer id from key")
 	}
-	log.Info("starting", zap.String("peer_id", nodeId.Pretty()))
+	log.Info("starting", zap.String("node_id", nodeId.Pretty()))
 
 	// Initialize IPFS-lite libp2p.
 	listenAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", options.P2PPort))
@@ -90,6 +91,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing ipfslite libp2p")
 	}
+	log = log.With(zap.String("node", host.ID().Pretty()))
 	log.Info("listening", zap.Strings("addresses", listenAddresses(host)))
 	ipfs, err := ipfslite.New(ctx, store, nil, host, dht, nil)
 	if err != nil {
@@ -99,17 +101,9 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	// Log connected peers periodically.
 	go func() {
 		for {
-			peersByID := map[string]int{}
 			peers := []*peer.AddrInfo{}
 			peerAddrs := []string{}
 			for _, conn := range host.Network().Conns() {
-				peerID := conn.RemotePeer()
-				if peersByID[peerID.Pretty()] > 0 {
-					log.Warn("Duplicate peer connection found, disconnecting peer", zap.String("peer_id", peerID.Pretty()))
-					host.Network().ClosePeer(peerID)
-					break
-				}
-				peersByID[peerID.Pretty()]++
 				peers = append(peers, &peer.AddrInfo{
 					ID:    conn.RemotePeer(),
 					Addrs: []multiaddr.Multiaddr{conn.RemoteMultiaddr()},
@@ -117,7 +111,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 				peerAddrs = append(peerAddrs, fmt.Sprintf("%s/%s", conn.RemoteMultiaddr().String(), conn.RemotePeer().Pretty()))
 			}
 			log.Info("total connected peers", zap.Int("total_peers", len(peers)), zap.Strings("peers", peerAddrs))
-			time.Sleep(10 * time.Second)
+			time.Sleep(60 * time.Second)
 		}
 	}()
 
@@ -145,8 +139,63 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 		ipfs.Bootstrap(persistentPeers)
 	}
 
+	// Add a ping service and ping persistent peers regularly, reconnecting if
+	// necessary.
+	pinger := ping.NewPingService(host)
+	for _, pp := range persistentPeers {
+		go func(pp peer.AddrInfo) {
+			log := log.With(zap.String("peer_id", pp.ID.Pretty()))
+			pingCtx, cancel := context.WithCancel(ctx)
+			pingC := pinger.Ping(pingCtx, pp.ID)
+			for {
+				connected := map[peer.ID]bool{}
+				for _, conn := range host.Network().Conns() {
+					connected[conn.RemotePeer()] = true
+				}
+				if !connected[pp.ID] {
+					log.Info("reconnecting to peer")
+					err = host.Connect(ctx, pp)
+					if err != nil {
+						log.Warn("error connecting to peer", zap.Error(err))
+					}
+					cancel()
+					pingCtx, cancel = context.WithCancel(ctx)
+					pingC = pinger.Ping(pingCtx, pp.ID)
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				log.Debug("pinging peer")
+				select {
+				case <-ctx.Done():
+					cancel()
+					return
+				case res := <-pingC:
+					if res.Error != nil {
+						log.Warn("peer ping error", zap.Error(res.Error))
+						if strings.Contains(res.Error.Error(), "resource scope closed") {
+							err := host.Network().ClosePeer(pp.ID)
+							if err != nil {
+								log.Info("error closing peer", zap.Error(err))
+							}
+							cancel()
+							pingCtx, cancel = context.WithCancel(ctx)
+							pingC = pinger.Ping(pingCtx, pp.ID)
+						}
+					} else {
+						log.Debug("peer ping ok", zap.Duration("rtt", res.RTT))
+					}
+					time.Sleep(5 * time.Second)
+				case <-time.After(time.Second * 5):
+					log.Warn("peer ping timeout")
+				}
+			}
+		}(pp)
+	}
+
 	// Initialize pubsub broadcaster.
 	psub, err := pubsub.NewGossipSub(ctx, host)
+	// psub, err := pubsub.NewFloodSub(ctx, host)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing libp2p gossipsub")
 	}
@@ -157,8 +206,9 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 
 	// Initialize crdt/dag server.
 	opts := crdt.DefaultOptions()
-	opts.Logger = logging.Logger("xmtpd")
+	opts.Logger = &logger{log}
 	opts.RebroadcastInterval = 5 * time.Second
+	opts.MultiHeadProcessing = true
 
 	envC := make(chan *messagev1.Envelope)
 	opts.PutHook = func(key datastore.Key, value []byte) {
@@ -184,8 +234,6 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 		dht:   dht,
 		EnvC:  envC,
 	}
-
-	go n.persistentPeersConnectLoop(persistentPeers)
 
 	return n, nil
 }
@@ -254,8 +302,13 @@ func (n *Node) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messa
 		topic = req.ContentTopics[0] // TODO
 	}
 	// TODO: sorting, start/end time filtering
+	orders := []query.Order{}
+	if req.PagingInfo != nil && req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
+		orders = append(orders, query.OrderByKeyDescending{})
+	}
 	res, err := n.crdt.Query(ctx, query.Query{
 		Prefix: buildMessageQueryPrefix(topic),
+		Orders: orders,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -296,37 +349,6 @@ func getOrCreatePrivateKey(key string) (crypto.PrivKey, error) {
 		return nil, errors.Wrap(err, "decoding node key")
 	}
 	return crypto.UnmarshalPrivateKey(keyBytes)
-}
-
-func (n *Node) persistentPeersConnectLoop(peers []peer.AddrInfo) {
-	for _, peer := range peers {
-		err := n.host.Connect(n.ctx, peer)
-		if err != nil {
-			n.log.Error("dialing persistent peer", zap.Error(err), zap.String("peer_addr", peer.String()))
-		}
-	}
-
-	ticker := time.NewTicker(2 * time.Second)
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		case <-ticker.C:
-			peerIDs := map[peer.ID]struct{}{}
-			for _, peerID := range n.host.Network().Peers() {
-				peerIDs[peerID] = struct{}{}
-			}
-			for _, peer := range peers {
-				if _, exists := peerIDs[peer.ID]; exists {
-					continue
-				}
-				err := n.host.Connect(n.ctx, peer)
-				if err != nil {
-					n.log.Error("dialing persistent peer", zap.Error(err), zap.String("peer_addr", peer.String()))
-				}
-			}
-		}
-	}
 }
 
 func listenAddresses(host host.Host) []string {

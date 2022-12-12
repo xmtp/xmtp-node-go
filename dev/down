@@ -1,5 +1,0 @@
-#!/bin/bash
-set -e
-
-dev/docker/down
-dev/e2e/docker/down

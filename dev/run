@@ -1,4 +1,7 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
-go run cmd/xmtpd/main.go --go-profiling "$@"
+go run cmd/xmtpd/main.go \
+    --go-profiling \
+    --data-path=tmp/data \
+    "$@"

@@ -1,5 +1,0 @@
-#!/usr/bin/env sh
-set -e
-. dev/docker/env
-
-docker_compose down

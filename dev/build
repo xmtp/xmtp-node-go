@@ -1,15 +1,19 @@
-#!/usr/bin/env sh
-set -e
+#!/bin/bash
+set -eo pipefail
 
 go mod download
 
 COMMIT=$(git rev-parse --short HEAD)
 LD_FLAGS="-X 'main.Commit=${COMMIT}'"
 
+pids=()
 for dir in ./cmd/*; do
     if [ -d "$dir" ]; then
         go build -ldflags="${LD_FLAGS}" -o "./bin/${dir##*/}" "${dir}" &
+        pids+=("$!")
     fi
 done
 
-wait
+for pid in ${pids[@]+"${pids[@]}"}; do
+    wait "${pid}"
+done

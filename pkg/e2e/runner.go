@@ -35,9 +35,27 @@ func (r *Runner) Start() error {
 				r.log.Error("serving profiler", zap.Error(err))
 			}
 		}()
+
+		go func() {
+			m := http.NewServeMux()
+			m.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+				_, err := w.Write([]byte("OK"))
+				if err != nil {
+					r.log.Error("writing health check response", zap.Error(err))
+				}
+			})
+			s := &http.Server{
+				Addr:    ":6062",
+				Handler: m,
+			}
+			err := s.ListenAndServe()
+			if err != nil {
+				r.log.Error("serving health", zap.Error(err))
+			}
+		}()
 	}
 
-	return r.withMetricsServer(func() error {
+	return r.withMetricsServer(r.config.MetricsPort, func() error {
 		for {
 			g, _ := errgroup.WithContext(r.ctx)
 			for _, test := range r.suite.Tests() {
@@ -47,7 +65,7 @@ func (r *Runner) Start() error {
 				})
 			}
 			err := g.Wait()
-			if err != nil && r.config.ContinuousExitOnError {
+			if err != nil && (!r.config.Continuous || r.config.ContinuousExitOnError) {
 				return err
 			}
 

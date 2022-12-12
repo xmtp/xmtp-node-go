@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-job
+  namespace: e2e
+spec:
+  template:
+    spec:
+      containers:
+      - name: runner
+        image: xmtp/xmtpd-e2e:dev
+        env:
+          - name: XMTP_API_URL
+            value: http://nodes.xmtp-nodes:5555
+      restartPolicy: Never
+  backoffLimit: 0

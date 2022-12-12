@@ -69,7 +69,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 		var waiting bool
 		for i := range clients {
-			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			env, err := streams[i].Next(ctx)
 			cancel()
 			if err != nil {
@@ -169,10 +169,6 @@ func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
 
 	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
 	defer cancel()
-	ctx, err := withAuth(ctx)
-	if err != nil {
-		return err
-	}
 
 	// Publish messages for all clients to all content topics.
 	envs := []*messagev1.Envelope{}
@@ -187,7 +183,7 @@ func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
 				}
 			}
 			envs = append(envs, clientEnvs...)
-			_, err = client.Publish(ctx, &messagev1.PublishRequest{
+			_, err := client.Publish(ctx, &messagev1.PublishRequest{
 				Envelopes: clientEnvs,
 			})
 			if err != nil {
@@ -325,12 +321,16 @@ func batchQuery(ctx context.Context, client messageclient.Client, contentTopics 
 		if err != nil {
 			return nil, err
 		}
-		var resp *messagev1.QueryResponse
-		for _, resp = range res.Responses {
+		var done int
+		for _, resp := range res.Responses {
 			envs = append(envs, resp.Envelopes...)
-			pagingInfo = resp.PagingInfo
+			if len(resp.Envelopes) == 0 || resp.PagingInfo == nil || resp.PagingInfo.Cursor == nil {
+				done += 1
+			} else {
+				pagingInfo = resp.PagingInfo
+			}
 		}
-		if len(resp.Envelopes) == 0 || resp.PagingInfo.Cursor == nil {
+		if done == len(res.Responses) {
 			break
 		}
 	}

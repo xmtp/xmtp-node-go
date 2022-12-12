@@ -44,8 +44,8 @@ var (
 	}
 )
 
-func (r *Runner) withMetricsServer(fn func() error) error {
-	metrics, err := metrics.NewMetricsServer(r.ctx, r.log, "0.0.0.0", 9009)
+func (r *Runner) withMetricsServer(port int, fn func() error) error {
+	metrics, err := metrics.NewMetricsServer(r.ctx, r.log, "0.0.0.0", port)
 	if err != nil {
 		return errors.Wrap(err, "initializing metrics server")
 	}
