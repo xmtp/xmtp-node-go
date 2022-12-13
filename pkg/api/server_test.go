@@ -385,7 +385,7 @@ func Test_QueryPaging(t *testing.T) {
 }
 
 func Test_Publish_DenyListed(t *testing.T) {
-	token, data, err := GenerateToken(time.Now())
+	token, data, err := GenerateToken(time.Now(), false)
 	require.NoError(t, err)
 	et, err := EncodeToken(token)
 	require.NoError(t, err)

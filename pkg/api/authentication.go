@@ -77,6 +77,9 @@ func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) 
 	if signature == nil {
 		return "", ErrUnsignedKey
 	}
+	// This signature on the identityKey always comes from a wallet.
+	// But for legacy reasons some clients will send it with type
+	// `.EcdsaCompact` instead of `.WalletEcdsaCompact` -- so we handle both.
 	switch sig := signature.Union.(type) {
 	case *envelope.Signature_EcdsaCompact:
 		cSig, err := crypto.SignatureFromBytes(sig.EcdsaCompact.Bytes)
@@ -84,6 +87,12 @@ func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) 
 			return wallet, err
 		}
 		return crypto.RecoverWalletAddress(isrBytes, cSig, uint8(sig.EcdsaCompact.Recovery))
+	case *envelope.Signature_WalletEcdsaCompact:
+		cSig, err := crypto.SignatureFromBytes(sig.WalletEcdsaCompact.Bytes)
+		if err != nil {
+			return wallet, err
+		}
+		return crypto.RecoverWalletAddress(isrBytes, cSig, uint8(sig.WalletEcdsaCompact.Recovery))
 	default:
 		return "", ErrUnknownSignatureType
 	}
