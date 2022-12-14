@@ -31,7 +31,7 @@ func EncodeToken(token *messagev1.Token) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+func GenerateToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.AuthData, error) {
 	wPri, wPub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, nil, err
@@ -48,15 +48,29 @@ func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, 
 			},
 		},
 	}
+	// The wallet signs the identity public key.
 	keySig, keyRec, err := crypto.SignDigest(wPri, crypto.EtherHash(createIdentitySignRequest(key)))
-	key.Signature = &envelope.Signature{
-		Union: &envelope.Signature_EcdsaCompact{
-			EcdsaCompact: &envelope.Signature_ECDSACompact{
-				Bytes:    keySig[:],
-				Recovery: uint32(keyRec),
+	if v1 {
+		// Legacy clients package the identity key signature as .EcdsaCompact.
+		key.Signature = &envelope.Signature{
+			Union: &envelope.Signature_EcdsaCompact{
+				EcdsaCompact: &envelope.Signature_ECDSACompact{
+					Bytes:    keySig[:],
+					Recovery: uint32(keyRec),
+				},
 			},
-		},
+		}
+	} else {
+		key.Signature = &envelope.Signature{
+			Union: &envelope.Signature_WalletEcdsaCompact{
+				WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{
+					Bytes:    keySig[:],
+					Recovery: uint32(keyRec),
+				},
+			},
+		}
 	}
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,6 +83,8 @@ func GenerateToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, 
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// The identity key signs the auth data.
 	sig, rec, err := crypto.Sign(iPri, dataBytes)
 	if err != nil {
 		return nil, nil, err

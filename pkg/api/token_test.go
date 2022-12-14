@@ -17,11 +17,22 @@ func randomBytes(n int) []byte {
 	return b
 }
 
-func Test_Nominal(t *testing.T) {
+func Test_NominalV1(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, data, err := GenerateToken(now.Add(-time.Minute))
+	token, data, err := GenerateToken(now.Add(-time.Minute), true)
+	require.NoError(t, err)
+	walletAddr, err := validateToken(ctx, logger, token, now)
+	require.NoError(t, err)
+	require.Equal(t, data.WalletAddr, string(walletAddr), "wallet address mismatch")
+}
+
+func Test_NominalV2(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := logging.With(context.Background(), logger)
+	now := time.Now()
+	token, data, err := GenerateToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
@@ -48,7 +59,7 @@ func Test_BadAuthSig(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, _, err := GenerateToken(now.Add(-time.Minute))
+	token, _, err := GenerateToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 	token.GetAuthDataSignature().GetEcdsaCompact().Bytes = randomBytes(64)
 	_, err = validateToken(ctx, logger, token, now)
@@ -60,9 +71,9 @@ func Test_SignatureMismatch(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token1, _, err := GenerateToken(now.Add(-time.Minute))
+	token1, _, err := GenerateToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
-	token2, _, err := GenerateToken(now.Add(-time.Minute))
+	token2, _, err := GenerateToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 
 	// Nominal Checks
