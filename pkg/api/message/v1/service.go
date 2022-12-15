@@ -9,7 +9,7 @@ import (
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
