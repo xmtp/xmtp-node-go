@@ -1,27 +1,47 @@
 package crdt
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strings"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/query"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
-	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1 "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/go/message_api/v1"
 )
 
 const (
 	envelopesKeyNamespace = "envelopes"
 )
 
+func buildMessageQuery(req *proto.QueryRequest) query.Query {
+	var topic string
+	if len(req.ContentTopics) > 0 {
+		topic = req.ContentTopics[0] // TODO
+	}
+	q := query.Query{Prefix: buildMessageQueryPrefix(topic)}
+	// TODO: sorting, start/end time filtering
+	if req.PagingInfo != nil {
+		if req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
+			q.Orders = []query.Order{query.OrderByKeyDescending{}}
+		}
+		if limit := req.PagingInfo.Limit; limit > 0 {
+			q.Limit = int(limit)
+		}
+	}
+	return q
+}
+
 func buildMessageQueryPrefix(topic string) string {
 	return strings.Join([]string{
 		envelopesKeyNamespace,
-		encodeTopicForStoreKey(topic),
-	}, "/") + "/"
+		topic,
+		"",
+	}, "/")
 }
 
 func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
@@ -32,15 +52,11 @@ func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
 
 	key := datastore.NewKey(strings.Join([]string{
 		envelopesKeyNamespace,
-		encodeTopicForStoreKey(env.ContentTopic),
+		env.ContentTopic,
 		fmt.Sprintf("%020d", env.TimestampNs),
 		cID.String(),
 	}, "/"))
 	return key, nil
-}
-
-func encodeTopicForStoreKey(topic string) string {
-	return base64.StdEncoding.EncodeToString([]byte(topic))
 }
 
 func newCID(val []byte) (cid.Cid, error) {

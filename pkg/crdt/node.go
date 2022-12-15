@@ -9,8 +9,7 @@ import (
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
-	badger "github.com/ipfs/go-ds-badger"
+	badger "github.com/ipfs/go-ds-badger3"
 	crdt "github.com/ipfs/go-ds-crdt"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
@@ -252,19 +251,7 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) error {
 }
 
 func (n *Node) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messagev1.Envelope, *messagev1.PagingInfo, error) {
-	var topic string
-	if len(req.ContentTopics) > 0 {
-		topic = req.ContentTopics[0] // TODO
-	}
-	// TODO: sorting, start/end time filtering
-	orders := []query.Order{}
-	if req.PagingInfo != nil && req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
-		orders = append(orders, query.OrderByKeyDescending{})
-	}
-	res, err := n.crdt.Query(ctx, query.Query{
-		Prefix: buildMessageQueryPrefix(topic),
-		Orders: orders,
-	})
+	res, err := n.crdt.Query(ctx, buildMessageQuery(req))
 	if err != nil {
 		return nil, nil, err
 	}
