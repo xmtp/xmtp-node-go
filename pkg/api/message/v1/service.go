@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -101,8 +102,8 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log.Info("started")
 	defer log.Info("stopped")
 
-	subC := s.dispatcher.Register(req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC, req.ContentTopics...)
+	subC := s.dispatcher.Register(nil, req.ContentTopics...)
+	defer s.dispatcher.Unregister(subC)
 
 	for {
 		select {
@@ -151,6 +152,9 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 				continue
 			}
 			env := buildEnvelope(wakuEnv.Message())
+			if env == nil || !isValidTopic(env.ContentTopic) {
+				continue
+			}
 			err := stream.Send(env)
 			if err != nil {
 				log.Error("sending envelope to subscriber", zap.Error(err))
@@ -252,6 +256,10 @@ func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
 		}
 	}
 	return pagingInfo
+}
+
+func isValidTopic(topic string) bool {
+	return strings.HasPrefix(topic, "/xmtp/0/")
 }
 
 func fromWakuTimestamp(ts int64) uint64 {

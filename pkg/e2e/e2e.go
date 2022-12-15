@@ -70,7 +70,7 @@ func (s *Suite) randomStringLower(n int) string {
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
 func withAuth(ctx context.Context) (context.Context, error) {
-	token, _, err := api.GenerateToken(time.Now())
+	token, _, err := api.GenerateToken(time.Now(), false)
 	if err != nil {
 		return ctx, err
 	}
