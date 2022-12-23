@@ -10,8 +10,7 @@ import (
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
-	messagev1 "github.com/xmtp/proto/go/message_api/v1"
-	proto "github.com/xmtp/proto/go/message_api/v1"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
 const (
@@ -23,25 +22,35 @@ func buildMessageQuery(req *proto.QueryRequest) query.Query {
 	if len(req.ContentTopics) > 0 {
 		topic = req.ContentTopics[0] // TODO
 	}
-	q := query.Query{Prefix: buildMessageQueryPrefix(topic)}
+	q := query.Query{Prefix: buildMessageQueryPrefix(topic, 0)}
 	// TODO: sorting, start/end time filtering
 	if req.PagingInfo != nil {
-		if req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
+		if req.PagingInfo.Direction == proto.SortDirection_SORT_DIRECTION_DESCENDING {
 			q.Orders = []query.Order{query.OrderByKeyDescending{}}
 		}
 		if limit := req.PagingInfo.Limit; limit > 0 {
 			q.Limit = int(limit)
 		}
 	}
+	if req.StartTimeNs > 0 {
+		q.Filters = append(q.Filters, query.FilterKeyCompare{
+			Op:  query.GreaterThanOrEqual,
+			Key: buildMessageQueryPrefix(topic, req.StartTimeNs),
+		})
+	}
 	return q
 }
 
-func buildMessageQueryPrefix(topic string) string {
-	return strings.Join([]string{
+func buildMessageQueryPrefix(topic string, timestampNs uint64) string {
+	segments := []string{
 		envelopesKeyNamespace,
 		topic,
-		"",
-	}, "/")
+	}
+	if timestampNs > 0 {
+		segments = append(segments, fmt.Sprintf("%020d", timestampNs))
+	}
+	segments = append(segments, "") // to get a slash at the end
+	return strings.Join(segments, "/")
 }
 
 func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
@@ -50,12 +59,8 @@ func buildMessageStoreKey(env *proto.Envelope) (datastore.Key, error) {
 		return datastore.Key{}, errors.Wrap(err, "creating cid")
 	}
 
-	key := datastore.NewKey(strings.Join([]string{
-		envelopesKeyNamespace,
-		env.ContentTopic,
-		fmt.Sprintf("%020d", env.TimestampNs),
-		cID.String(),
-	}, "/"))
+	key := datastore.NewKey(
+		buildMessageQueryPrefix(env.ContentTopic, env.TimestampNs) + cID.String())
 	return key, nil
 }
 

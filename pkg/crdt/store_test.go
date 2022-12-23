@@ -7,7 +7,7 @@ import (
 
 	badger "github.com/ipfs/go-ds-badger3"
 	"github.com/stretchr/testify/require"
-	v1 "github.com/xmtp/proto/go/message_api/v1"
+	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,6 +44,15 @@ func Test_Query(t *testing.T) {
 			data["m-0003"][:2],
 		)
 	})
+	t.Run("read from start time", func(t *testing.T) {
+		requireQueryResult(t, db,
+			&v1.QueryRequest{
+				StartTimeNs:   100,
+				ContentTopics: []string{"m-0003"},
+			},
+			data["m-0003"][1:],
+		)
+	})
 }
 
 func reversed(in []*v1.Envelope) []*v1.Envelope {
@@ -62,15 +71,16 @@ func requireQueryResult(t *testing.T, db *badger.Datastore, q *v1.QueryRequest, 
 	i := 0
 	for res := range qrs.Next() {
 		require.NoError(t, res.Error)
-		require.Less(t, i, len(envs))
+		require.Less(t, i, len(envs), "more results than expected")
 		var env v1.Envelope
 		require.NoError(t, proto.Unmarshal(res.Value, &env))
 		exp := envs[i]
-		require.Equal(t, exp.ContentTopic, env.ContentTopic)
-		require.Equal(t, exp.TimestampNs, env.TimestampNs)
-		require.Equal(t, exp.Message, env.Message)
+		require.Equal(t, exp.ContentTopic, env.ContentTopic, "topic mismatch")
+		require.Equal(t, exp.TimestampNs, env.TimestampNs, "timestamp mismatch %d ns != %d ns", env.TimestampNs, exp.TimestampNs)
+		require.Equal(t, exp.Message, env.Message, "message mismatch")
 		i++
 	}
+	require.Equal(t, len(envs), i, "less results than expected")
 }
 
 // sample db with topicsN topics and up to envelopesN messages in each
