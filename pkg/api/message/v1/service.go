@@ -18,6 +18,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	validXMTPTopicPrefix = "/xmtp/0/"
+	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
+)
+
 type Service struct {
 	proto.UnimplementedMessageApiServer
 
@@ -132,35 +137,9 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 	log.Info("started")
 	defer log.Info("stopped")
 
-	relaySub, err := s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return err
-	}
-
-	defer relaySub.Unsubscribe()
-
-	for {
-		select {
-		case <-stream.Context().Done():
-			log.Info("stream closed")
-			return nil
-		case <-s.ctx.Done():
-			log.Info("service closed")
-			return nil
-		case wakuEnv := <-relaySub.C:
-			if wakuEnv == nil {
-				continue
-			}
-			env := buildEnvelope(wakuEnv.Message())
-			if env == nil || !isValidTopic(env.ContentTopic) {
-				continue
-			}
-			err := stream.Send(env)
-			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
-			}
-		}
-	}
+	return s.Subscribe(&proto.SubscribeRequest{
+		ContentTopics: []string{contentTopicAllXMTP},
+	}, stream)
 }
 
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
@@ -259,7 +238,7 @@ func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
 }
 
 func isValidTopic(topic string) bool {
-	return strings.HasPrefix(topic, "/xmtp/0/")
+	return strings.HasPrefix(topic, validXMTPTopicPrefix)
 }
 
 func fromWakuTimestamp(ts int64) uint64 {

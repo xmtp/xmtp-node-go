@@ -121,7 +121,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 			for {
 				env, err := stream.Next(ctx)
 				if err != nil {
-					if isErrClosedConnection(err) {
+					if isErrClosedConnection(err) || err.Error() == "context canceled" {
 						break
 					}
 					s.log.Error("getting next", zap.Error(err))

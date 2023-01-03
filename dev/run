@@ -11,4 +11,5 @@ go run cmd/xmtpd/main.go \
     --nodekey "${NODE_KEY}" \
     --metrics \
     --metrics-period 5s \
+    --go-profiling \
     "$@"
