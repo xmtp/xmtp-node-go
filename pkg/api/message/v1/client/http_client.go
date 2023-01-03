@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/go-retryablehttp"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
@@ -18,7 +19,7 @@ import (
 type httpClient struct {
 	log        *zap.Logger
 	url        string
-	http       *http.Client
+	http       *retryablehttp.Client
 	version    string
 	appVersion string
 }
@@ -29,14 +30,15 @@ const (
 )
 
 func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string, appVersion string) *httpClient {
-	transport := &http.Transport{}
 	version := "xmtp-go/"
 	if len(gitCommit) > 0 {
 		version += gitCommit[:7]
 	}
+	http := retryablehttp.NewClient()
+	http.CheckRetry = retryPolicy
 	return &httpClient{
 		log:        log,
-		http:       &http.Client{Transport: transport},
+		http:       http,
 		url:        serverAddr,
 		version:    version,
 		appVersion: appVersion,
@@ -44,7 +46,7 @@ func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string, appVers
 }
 
 func (c *httpClient) Close() error {
-	c.http.CloseIdleConnections()
+	c.http.HTTPClient.CloseIdleConnections()
 	return nil
 }
 
@@ -145,10 +147,11 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 
 	url := c.url + path
 
-	post, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqJSON))
+	post, err := retryablehttp.NewRequest("POST", url, bytes.NewBuffer(reqJSON))
 	if err != nil {
 		return nil, err
 	}
+	post = post.WithContext(ctx)
 	post.Header.Set("Content-Type", "application/json")
 	md, _ := metadata.FromOutgoingContext(ctx)
 	for key, vals := range md {
@@ -170,4 +173,13 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 	}
 
 	return resp, err
+}
+
+func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	// Avoid conflicting with grpc-gateway max message size error.
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return false, err
+	}
+
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 }
