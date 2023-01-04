@@ -204,7 +204,7 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 			if err != nil {
 				return errors.Wrap(err, "expected query envelopes")
 			}
-			break
+//			break
 		}
 		if time.Since(started) > timeout {
 			err := envsDiff(envs, expectedEnvs)
@@ -260,6 +260,7 @@ func batchQuery(ctx context.Context, client messageclient.Client, contentTopics 
       envs = append(envs, resp.Envelopes...)
       pagingInfo = resp.PagingInfo
     }
+    fmt.Printf("got %d responses from batch", len(res.Responses))
     if len(resp.Envelopes) == 0 || resp.PagingInfo.Cursor == nil {
       break
     }
