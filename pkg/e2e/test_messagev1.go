@@ -185,6 +185,20 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 		if err != nil {
 			return errors.Wrap(err, "querying")
 		}
+    batchEnvs, err := batchQuery(ctx, client, contentTopics)
+		if err != nil {
+			return errors.Wrap(err, "batch querying")
+		}
+    if len(envs) != len(batchEnvs) {
+      return errors.Wrap(err, "got different number of batch envelopes")
+    } else {
+			err := envsDiff(batchEnvs, envs)
+			if err != nil {
+				return errors.Wrap(err, "expected query envelopes in batch")
+			}
+			break
+		}
+
 		if len(envs) == len(expectedEnvs) {
 			err := envsDiff(envs, expectedEnvs)
 			if err != nil {
@@ -220,6 +234,35 @@ func query(ctx context.Context, client messageclient.Client, contentTopics []str
 			break
 		}
 		pagingInfo = res.PagingInfo
+	}
+	return envs, nil
+}
+
+func batchQuery(ctx context.Context, client messageclient.Client, contentTopics []string) ([]*messagev1.Envelope, error) {
+	var envs []*messagev1.Envelope
+	var pagingInfo *messagev1.PagingInfo
+	for {
+    var queries = make([]*messagev1.QueryRequest, 0)
+    for i := 1; i <= 10; i++ {
+      queries = append(queries, &messagev1.QueryRequest{
+        ContentTopics: contentTopics,
+        PagingInfo:    pagingInfo,
+      })
+    }
+		res, err := client.BatchQuery(ctx, &messagev1.BatchQueryRequest{
+      Requests: queries,
+		})
+		if err != nil {
+			return nil, err
+		}
+    var resp *messagev1.QueryResponse
+    for _, resp = range res.Responses {
+      envs = append(envs, resp.Envelopes...)
+      pagingInfo = resp.PagingInfo
+    }
+    if len(resp.Envelopes) == 0 || resp.PagingInfo.Cursor == nil {
+      break
+    }
 	}
 	return envs, nil
 }
