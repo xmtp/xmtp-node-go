@@ -11,6 +11,7 @@ type Client interface {
 	Subscribe(context.Context, *messagev1.SubscribeRequest) (Stream, error)
 	SubscribeAll(context.Context) (Stream, error)
 	Query(context.Context, *messagev1.QueryRequest) (*messagev1.QueryResponse, error)
+  BatchQuery(ctx context.Context, req *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error)
 	Close() error
 }
 
