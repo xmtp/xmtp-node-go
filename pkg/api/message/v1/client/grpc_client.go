@@ -59,3 +59,7 @@ func (c *grpcClient) Publish(ctx context.Context, r *messagev1.PublishRequest) (
 func (c *grpcClient) Query(ctx context.Context, q *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	return c.grpc.Query(ctx, q)
 }
+
+func (c *grpcClient) BatchQuery(ctx context.Context, q *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+	return c.grpc.BatchQuery(ctx, q)
+}

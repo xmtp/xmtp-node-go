@@ -87,6 +87,14 @@ func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*m
 	return res, nil
 }
 
+func (c *httpClient) BatchQuery(ctx context.Context, req *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+	res, err := c.rawBatchQuery(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (c *httpClient) rawPublish(ctx context.Context, req *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
 	var res messagev1.PublishResponse
 	resp, err := c.post(ctx, "/message/v1/publish", req)
@@ -111,6 +119,27 @@ func (c *httpClient) rawPublish(ctx context.Context, req *messagev1.PublishReque
 func (c *httpClient) rawQuery(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	var res messagev1.QueryResponse
 	resp, err := c.post(ctx, "/message/v1/query", req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: %s", resp.Status, string(body))
+	}
+	err = protojson.Unmarshal(body, &res)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %s", err, string(body))
+	}
+	return &res, nil
+}
+
+func (c *httpClient) rawBatchQuery(ctx context.Context, req *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+	var res messagev1.BatchQueryResponse
+	resp, err := c.post(ctx, "/message/v1/batch-query", req)
 	if err != nil {
 		return nil, err
 	}
