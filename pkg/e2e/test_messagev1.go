@@ -150,6 +150,66 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	return nil
 }
 
+// Publish messages to multiple topics and batch query for those messages
+func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
+	clientCount := 5
+	msgsPerClientCount := 10
+	numTopics := 3
+	clients := make([]messageclient.Client, clientCount)
+	for i := 0; i < clientCount; i++ {
+		appVersion := "xmtp-e2e/"
+		if len(s.config.GitCommit) > 0 {
+			appVersion += s.config.GitCommit[:7]
+		}
+		clients[i] = messageclient.NewHTTPClient(s.log, s.config.APIURL, s.config.GitCommit, appVersion)
+		defer clients[i].Close()
+	}
+
+	contentTopics := make([]string, 0)
+	for i := 0; i < numTopics; i++ {
+		contentTopic := "testbatch-" + s.randomStringLower(12)
+		contentTopics = append(contentTopics, contentTopic)
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+	ctx, err := withAuth(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Publish messages for all clients to all content topics.
+	envs := []*messagev1.Envelope{}
+	for i, client := range clients {
+		for u, contentTopic := range contentTopics {
+			clientEnvs := make([]*messagev1.Envelope, msgsPerClientCount)
+			for j := 0; j < msgsPerClientCount; j++ {
+				clientEnvs[j] = &messagev1.Envelope{
+					ContentTopic: contentTopic,
+					TimestampNs:  uint64(j + 1),
+					Message:      []byte(fmt.Sprintf("msg-%d-%d-%d", i+1, u+1, j+1)),
+				}
+			}
+			envs = append(envs, clientEnvs...)
+			_, err = client.Publish(ctx, &messagev1.PublishRequest{
+				Envelopes: clientEnvs,
+			})
+			if err != nil {
+				return errors.Wrap(err, "publishing")
+			}
+		}
+	}
+
+	// Now batch query for all of the envelopes
+	for _, client := range clients {
+		err := expectBatchQueryMessagesEventually(ctx, client, contentTopics, envs)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) error {
 	receivedEnvs := []*messagev1.Envelope{}
 	waitC := time.After(5 * time.Second)
@@ -185,29 +245,45 @@ func expectQueryMessagesEventually(ctx context.Context, client messageclient.Cli
 		if err != nil {
 			return errors.Wrap(err, "querying")
 		}
-    batchEnvs, err := batchQuery(ctx, client, contentTopics)
-		if err != nil {
-			return errors.Wrap(err, "batch querying")
-		}
-    if len(envs) != len(batchEnvs) {
-      return errors.Wrap(err, "got different number of batch envelopes")
-    } else {
-			err := envsDiff(batchEnvs, envs)
-			if err != nil {
-				return errors.Wrap(err, "expected query envelopes in batch")
-			}
-			break
-		}
-
 		if len(envs) == len(expectedEnvs) {
 			err := envsDiff(envs, expectedEnvs)
 			if err != nil {
 				return errors.Wrap(err, "expected query envelopes")
 			}
-//			break
+			break
 		}
 		if time.Since(started) > timeout {
 			err := envsDiff(envs, expectedEnvs)
+			if err != nil {
+				return errors.Wrap(err, "expected query envelopes")
+			}
+			return fmt.Errorf("timeout waiting for query expectation with no diff")
+		}
+		time.Sleep(delay)
+	}
+	return nil
+}
+
+func expectBatchQueryMessagesEventually(ctx context.Context, client messageclient.Client, contentTopics []string, expectedEnvs []*messagev1.Envelope) error {
+	timeout := 10 * time.Second
+	delay := 500 * time.Millisecond
+	started := time.Now()
+	for {
+		batchEnvs, err := batchQuery(ctx, client, contentTopics)
+		if err != nil {
+			return errors.Wrap(err, "batch querying")
+		}
+		if len(batchEnvs) != len(expectedEnvs) {
+			return errors.Wrap(err, "got different number of batch envelopes")
+		} else {
+			err := envsDiff(batchEnvs, expectedEnvs)
+			if err != nil {
+				return errors.Wrap(err, "expected query envelopes in batch")
+			}
+			break
+		}
+		if time.Since(started) > timeout {
+			err := envsDiff(batchEnvs, expectedEnvs)
 			if err != nil {
 				return errors.Wrap(err, "expected query envelopes")
 			}
@@ -242,28 +318,28 @@ func batchQuery(ctx context.Context, client messageclient.Client, contentTopics 
 	var envs []*messagev1.Envelope
 	var pagingInfo *messagev1.PagingInfo
 	for {
-    var queries = make([]*messagev1.QueryRequest, 0)
-    for i := 1; i <= 10; i++ {
-      queries = append(queries, &messagev1.QueryRequest{
-        ContentTopics: contentTopics,
-        PagingInfo:    pagingInfo,
-      })
-    }
+		var queries = make([]*messagev1.QueryRequest, 0)
+		for _, contentTopic := range contentTopics {
+			queries = append(queries, &messagev1.QueryRequest{
+				ContentTopics: []string{contentTopic},
+				PagingInfo:    pagingInfo,
+			})
+		}
 		res, err := client.BatchQuery(ctx, &messagev1.BatchQueryRequest{
-      Requests: queries,
+			Requests: queries,
 		})
 		if err != nil {
 			return nil, err
 		}
-    var resp *messagev1.QueryResponse
-    for _, resp = range res.Responses {
-      envs = append(envs, resp.Envelopes...)
-      pagingInfo = resp.PagingInfo
-    }
-    fmt.Printf("got %d responses from batch", len(res.Responses))
-    if len(resp.Envelopes) == 0 || resp.PagingInfo.Cursor == nil {
-      break
-    }
+		var resp *messagev1.QueryResponse
+		for _, resp = range res.Responses {
+			envs = append(envs, resp.Envelopes...)
+			pagingInfo = resp.PagingInfo
+		}
+		fmt.Printf("got %d responses from batch", len(res.Responses))
+		if len(resp.Envelopes) == 0 || resp.PagingInfo.Cursor == nil {
+			break
+		}
 	}
 	return envs, nil
 }

@@ -169,19 +169,19 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
 	log := s.log.Named("batchQuery")
 	log.Info("received batch request")
-  // Naive implementation, perform all sub query requests sequentially
-  responses := make([]*proto.QueryResponse, 0)
-  for _, query := range req.Requests {
-    // Pass original context, or derive a new one?
-    resp, err := s.Query(ctx, query)
-    if err != nil {
-      return nil, status.Errorf(codes.Internal, err.Error())
-    }
-    responses = append(responses, resp)
-  }
+	// Naive implementation, perform all sub query requests sequentially
+	responses := make([]*proto.QueryResponse, 0)
+	for _, query := range req.Requests {
+		// Pass original context, or derive a new one?
+		resp, err := s.Query(ctx, query)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		responses = append(responses, resp)
+	}
 
 	return &proto.BatchQueryResponse{
-		Responses:  responses,
+		Responses: responses,
 	}, nil
 }
 
