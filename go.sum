@@ -1950,8 +1950,8 @@ github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3 h1:wzUffJGCTBGXIDy
 github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3/go.mod h1:bJREWk+NDnZYjgLQdAi8SUWuq/5pkMme4GqiffEhUF4=
 github.com/xmtp/go-waku v0.0.0-20220810150132-1237437a419a h1:hIC6tybvfLRH/kuM7mDez1oPxecQDEVE3JWMhNjc9kQ=
 github.com/xmtp/go-waku v0.0.0-20220810150132-1237437a419a/go.mod h1:z498Zyc/u6sNiFQFuRLtYVQMUQurezgH36xBpE8ei6Q=
-github.com/xmtp/proto/v3 v3.11.1-0.20230103181341-a184f7c09196 h1:TtksGMcc6/7hGdZXOeUiVx0WIH7Utb11I4TXG0epHaU=
-github.com/xmtp/proto/v3 v3.11.1-0.20230103181341-a184f7c09196/go.mod h1:D52iOVhHqCG6g/yd7kZ4A5f5cJ+8ifUam7KkuGx6IZs=
+github.com/xmtp/proto/v3 v3.12.0 h1:WfE4BLKWZlVAf8iFNrz6ZEGsYOZemDxwqMT2CeC30FQ=
+github.com/xmtp/proto/v3 v3.12.0/go.mod h1:D52iOVhHqCG6g/yd7kZ4A5f5cJ+8ifUam7KkuGx6IZs=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/yoheimuta/go-protoparser/v4 v4.6.0 h1:uvz1e9/5Ihsm4Ku8AJeDImTpirKmIxubZdSn0QJNdnw=
 github.com/yoheimuta/go-protoparser/v4 v4.6.0/go.mod h1:AHNNnSWnb0UoL4QgHPiOAg2BniQceFscPI5X/BZNHl8=
