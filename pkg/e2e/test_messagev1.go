@@ -273,21 +273,19 @@ func expectBatchQueryMessagesEventually(ctx context.Context, client messageclien
 		if err != nil {
 			return errors.Wrap(err, "batch querying")
 		}
-		if len(batchEnvs) != len(expectedEnvs) {
-			return errors.Wrap(err, "got different number of batch envelopes")
-		} else {
+		if len(batchEnvs) == len(expectedEnvs) {
 			err := envsDiff(batchEnvs, expectedEnvs)
 			if err != nil {
-				return errors.Wrap(err, "expected query envelopes in batch")
+				return errors.Wrap(err, "expected query envelopes from batchquery")
 			}
 			break
 		}
 		if time.Since(started) > timeout {
 			err := envsDiff(batchEnvs, expectedEnvs)
 			if err != nil {
-				return errors.Wrap(err, "expected query envelopes")
+				return errors.Wrap(err, "expected query envelopes from batchquery")
 			}
-			return fmt.Errorf("timeout waiting for query expectation with no diff")
+			return fmt.Errorf("timeout waiting for batchquery expectation with no diff")
 		}
 		time.Sleep(delay)
 	}
