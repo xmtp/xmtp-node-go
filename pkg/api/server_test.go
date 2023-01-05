@@ -399,10 +399,15 @@ func Test_BatchQuery(t *testing.T) {
 		// Spam a bunch of batch queries with the same topic
 		repeatedQueries := make([]*messageV1.QueryRequest, 0)
 		for i := 0; i < batchSize; i++ {
+			// Alternate sort directions to test that individual paging info is respected
+			direction := messageV1.SortDirection_SORT_DIRECTION_ASCENDING
+			if i%2 == 1 {
+				direction = messageV1.SortDirection_SORT_DIRECTION_DESCENDING
+			}
 			query := &messageV1.QueryRequest{
 				ContentTopics: []string{"topic"},
 				PagingInfo: &messageV1.PagingInfo{
-					Direction: messageV1.SortDirection_SORT_DIRECTION_ASCENDING,
+					Direction: direction,
 				},
 			}
 			repeatedQueries = append(repeatedQueries, query)
@@ -413,8 +418,19 @@ func Test_BatchQuery(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, batchQueryRes)
 
-		for _, response := range batchQueryRes.Responses {
-			requireEnvelopesEqual(t, envs, response.Envelopes)
+		// Descending envs
+		descendingEnvs := make([]*messageV1.Envelope, len(envs))
+		for i := 0; i < len(envs); i++ {
+			descendingEnvs[len(envs)-i-1] = envs[i]
+		}
+
+		for i, response := range batchQueryRes.Responses {
+			if i%2 == 1 {
+				// Reverse the response.Envelopes
+				requireEnvelopesEqual(t, descendingEnvs, response.Envelopes)
+			} else {
+				requireEnvelopesEqual(t, envs, response.Envelopes)
+			}
 		}
 	})
 }
