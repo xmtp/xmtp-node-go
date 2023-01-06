@@ -168,7 +168,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 
 func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
 	log := s.log.Named("batchQuery")
-	log.Info("received batch request")
+	log.Info("batch size", zap.Int("num_queries", len(req.Requests)))
 	// NOTE: in our implementation, we implicitly limit batch size to 50 requests
 	if len(req.Requests) > 50 {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed 50 requests in single batch")

@@ -392,7 +392,6 @@ func Test_BatchQuery(t *testing.T) {
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
-		time.Sleep(50 * time.Millisecond)
 		requireEventuallyStored(t, ctx, client, envs)
 
 		batchSize := 50
@@ -443,7 +442,6 @@ func Test_BatchQueryOverLimitError(t *testing.T) {
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
-		time.Sleep(50 * time.Millisecond)
 		requireEventuallyStored(t, ctx, client, envs)
 
 		// Limit is 50 queries implicitly so 100 should result in an error
