@@ -166,6 +166,29 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}, nil
 }
 
+func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
+	log := s.log.Named("batchQuery")
+	log.Info("batch size", zap.Int("num_queries", len(req.Requests)))
+	// NOTE: in our implementation, we implicitly limit batch size to 50 requests
+	if len(req.Requests) > 50 {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed 50 requests in single batch")
+	}
+	// Naive implementation, perform all sub query requests sequentially
+	responses := make([]*proto.QueryResponse, 0)
+	for _, query := range req.Requests {
+		// We execute the query using the existing Query API
+		resp, err := s.Query(ctx, query)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		responses = append(responses, resp)
+	}
+
+	return &proto.BatchQueryResponse{
+		Responses: responses,
+	}, nil
+}
+
 func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
 	return &proto.Envelope{
 		ContentTopic: msg.ContentTopic,
