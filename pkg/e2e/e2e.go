@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
@@ -11,9 +12,10 @@ import (
 )
 
 type Suite struct {
-	ctx  context.Context
-	log  *zap.Logger
-	rand *rand.Rand
+	ctx    context.Context
+	log    *zap.Logger
+	rand   *rand.Rand
+	randMu sync.Mutex
 
 	config *Config
 }
@@ -61,6 +63,8 @@ func (s *Suite) newTest(name string, runFn testRunFunc) *Test {
 }
 
 func (s *Suite) randomStringLower(n int) string {
+	s.randMu.Lock()
+	defer s.randMu.Unlock()
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[s.rand.Intn(len(letterRunes))]
