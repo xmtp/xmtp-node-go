@@ -167,7 +167,7 @@ func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
 
 	contentTopics := make([]string, 0)
 	for i := 0; i < numTopics; i++ {
-		contentTopic := "testbatch-" + s.randomStringLower(12)
+		contentTopic := "test-" + s.randomStringLower(12)
 		contentTopics = append(contentTopics, contentTopic)
 	}
 
