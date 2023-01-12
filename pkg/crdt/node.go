@@ -28,17 +28,17 @@ import (
 )
 
 const (
-	DefaultPubsubTopic = "/xmtp/1/default-xmtp/proto"
+	PubsubTopicPrefix = "/xmtp/2/"
 )
 
 type Node struct {
-	ctx         context.Context
-	log         *zap.Logger
-	store       *badger.Datastore
-	host        host.Host
-	dht         *dual.DHT
-	broadcaster *crdt.PubSubBroadcaster
-	ipfs        *ipfslite.Peer
+	ctx    context.Context
+	log    *zap.Logger
+	store  *badger.Datastore
+	host   host.Host
+	dht    *dual.DHT
+	pubsub *pubsub.PubSub
+	ipfs   *ipfslite.Peer
 
 	crdtByTopic   map[string]*crdt.Datastore
 	crdtByTopicMu sync.Mutex
@@ -204,10 +204,6 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing libp2p gossipsub")
 	}
-	pubsubBC, err := crdt.NewPubSubBroadcaster(ctx, psub, DefaultPubsubTopic)
-	if err != nil {
-		return nil, errors.Wrap(err, "initializing crdt pubsub broadcaster")
-	}
 
 	n := &Node{
 		ctx:         ctx,
@@ -215,7 +211,7 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 		store:       store,
 		host:        host,
 		dht:         dht,
-		broadcaster: pubsubBC,
+		pubsub:      psub,
 		ipfs:        ipfs,
 		crdtByTopic: map[string]*crdt.Datastore{},
 
@@ -369,7 +365,7 @@ func (n *Node) getOrCreate(topic string) (*crdt.Datastore, error) {
 		opts := crdt.DefaultOptions()
 		opts.Logger = &logger{n.log}
 		opts.RebroadcastInterval = 5 * time.Second
-		opts.MultiHeadProcessing = true
+		// opts.MultiHeadProcessing = true
 
 		opts.PutHook = func(key datastore.Key, value []byte) {
 			var env messagev1.Envelope
@@ -380,7 +376,11 @@ func (n *Node) getOrCreate(topic string) (*crdt.Datastore, error) {
 				n.EnvC <- &env
 			}
 		}
-		crdt, err := crdt.New(n.store, datastore.NewKey("topic/"+topic), n.ipfs, n.broadcaster, opts)
+		broadcaster, err := crdt.NewPubSubBroadcaster(n.ctx, n.pubsub, PubsubTopicPrefix+topic)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing crdt pubsub broadcaster")
+		}
+		crdt, err := crdt.New(n.store, datastore.NewKey("topic/"+topic), n.ipfs, broadcaster, opts)
 		if err != nil {
 			return nil, errors.Wrap(err, "initializing crdt")
 		}
