@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
@@ -31,12 +32,16 @@ const (
 )
 
 type Node struct {
-	ctx   context.Context
-	log   *zap.Logger
-	store *badger.Datastore
-	crdt  *crdt.Datastore
-	host  host.Host
-	dht   *dual.DHT
+	ctx         context.Context
+	log         *zap.Logger
+	store       *badger.Datastore
+	host        host.Host
+	dht         *dual.DHT
+	broadcaster *crdt.PubSubBroadcaster
+	ipfs        *ipfslite.Peer
+
+	crdtByTopic   map[string]*crdt.Datastore
+	crdtByTopicMu sync.Mutex
 
 	EnvC chan *messagev1.Envelope
 }
@@ -204,35 +209,17 @@ func NewNode(ctx context.Context, log *zap.Logger, options Options) (*Node, erro
 		return nil, errors.Wrap(err, "initializing crdt pubsub broadcaster")
 	}
 
-	// Initialize crdt/dag server.
-	opts := crdt.DefaultOptions()
-	opts.Logger = &logger{log}
-	opts.RebroadcastInterval = 5 * time.Second
-	opts.MultiHeadProcessing = true
-
-	envC := make(chan *messagev1.Envelope)
-	opts.PutHook = func(key datastore.Key, value []byte) {
-		var env messagev1.Envelope
-		err := proto.Unmarshal(value, &env)
-		if err != nil {
-			log.Info("parsing envelope", zap.Error(err))
-		} else {
-			envC <- &env
-		}
-	}
-	crdt, err := crdt.New(store, datastore.NewKey("crdt"), ipfs, pubsubBC, opts)
-	if err != nil {
-		return nil, errors.Wrap(err, "initializing crdt")
-	}
-
 	n := &Node{
-		ctx:   ctx,
-		log:   log,
-		store: store,
-		crdt:  crdt,
-		host:  host,
-		dht:   dht,
-		EnvC:  envC,
+		ctx:         ctx,
+		log:         log,
+		store:       store,
+		host:        host,
+		dht:         dht,
+		broadcaster: pubsubBC,
+		ipfs:        ipfs,
+		crdtByTopic: map[string]*crdt.Datastore{},
+
+		EnvC: make(chan *messagev1.Envelope),
 	}
 
 	return n, nil
@@ -281,6 +268,10 @@ func (n *Node) Close() error {
 }
 
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) error {
+	crdt, err := n.getOrCreate(env.ContentTopic)
+	if err != nil {
+		return err
+	}
 	envBytes, err := proto.Marshal(env)
 	if err != nil {
 		return err
@@ -289,7 +280,7 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) error {
 	if err != nil {
 		return errors.Wrap(err, "building message store key")
 	}
-	err = n.crdt.Put(ctx, storeKey, envBytes)
+	err = crdt.Put(ctx, storeKey, envBytes)
 	if err != nil {
 		return err
 	}
@@ -306,7 +297,11 @@ func (n *Node) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messa
 	if req.PagingInfo != nil && req.PagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_DESCENDING {
 		orders = append(orders, query.OrderByKeyDescending{})
 	}
-	res, err := n.crdt.Query(ctx, query.Query{
+	crdt, err := n.getOrCreate(topic)
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := crdt.Query(ctx, query.Query{
 		Prefix: buildMessageQueryPrefix(topic),
 		Orders: orders,
 	})
@@ -364,4 +359,33 @@ func listenAddresses(host host.Host) []string {
 		addrs = append(addrs, addr)
 	}
 	return addrs
+}
+
+func (n *Node) getOrCreate(topic string) (*crdt.Datastore, error) {
+	n.crdtByTopicMu.Lock()
+	defer n.crdtByTopicMu.Unlock()
+
+	if _, exists := n.crdtByTopic[topic]; !exists {
+		opts := crdt.DefaultOptions()
+		opts.Logger = &logger{n.log}
+		opts.RebroadcastInterval = 5 * time.Second
+		opts.MultiHeadProcessing = true
+
+		opts.PutHook = func(key datastore.Key, value []byte) {
+			var env messagev1.Envelope
+			err := proto.Unmarshal(value, &env)
+			if err != nil {
+				n.log.Info("parsing envelope", zap.Error(err))
+			} else {
+				n.EnvC <- &env
+			}
+		}
+		crdt, err := crdt.New(n.store, datastore.NewKey("topic/"+topic), n.ipfs, n.broadcaster, opts)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing crdt")
+		}
+		n.crdtByTopic[topic] = crdt
+	}
+
+	return n.crdtByTopic[topic], nil
 }
