@@ -8,15 +8,15 @@ import (
 
 type mapStore struct {
 	sync.Mutex
-	heads  *mh.Set
-	events map[string]*Event
+	heads  map[string]bool   // CIDs of current head events
+	events map[string]*Event // maps CIDs to all known Events
 }
 
 var _ TopicStore = (*mapStore)(nil)
 
 func NewMapStore() *mapStore {
 	return &mapStore{
-		heads:  mh.NewSet(),
+		heads:  make(map[string]bool),
 		events: make(map[string]*Event),
 	}
 }
@@ -29,29 +29,37 @@ func (s *mapStore) AddHead(ev *Event) (added bool, err error) {
 		return false, nil
 	}
 	s.events[key] = ev
-	s.heads.Add(ev.cid)
+	s.heads[key] = true
 	return true, nil
 }
 
 func (s *mapStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 	s.Lock()
 	defer s.Unlock()
-	if s.events[cid.String()] == nil {
+	key := cid.String()
+	if s.events[key] == nil {
 		return false, nil
 	}
-	s.heads.Remove(cid)
+	delete(s.heads, key)
 	return true, nil
 }
 
 func (s mapStore) NewEvent(payload []byte) (*Event, error) {
 	s.Lock()
 	defer s.Unlock()
-	ev, err := NewEvent(payload, s.heads.All())
+	ev, err := NewEvent(payload, s.allHeads())
 	if err != nil {
 		return nil, err
 	}
-	s.events[ev.cid.String()] = ev
-	s.heads = mh.NewSet()
-	s.heads.Add(ev.cid)
+	key := ev.cid.String()
+	s.events[key] = ev
+	s.heads = map[string]bool{key: true}
 	return ev, err
+}
+
+func (s mapStore) allHeads() (cids []mh.Multihash) {
+	for key := range s.heads {
+		cids = append(cids, s.events[key].cid)
+	}
+	return cids
 }
