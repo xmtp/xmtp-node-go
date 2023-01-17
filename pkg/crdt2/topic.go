@@ -8,27 +8,19 @@ import (
 )
 
 type Topic struct {
-	heads         *mh.Set
 	pendingEvents chan *Event
 	pendingCids   chan mh.Multihash
 
-	Store
-	Syncer
-	Broadcaster
+	TopicStore
+	TopicSyncer
+	TopicBroadcaster
 }
 
 func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) error {
-	ev, err := NewEvent(env.Message, t.heads.All())
+	ev, err := t.NewEvent(env.Message)
 	if err != nil {
 		return err
 	}
-	// TODO: this needs to be atomic
-	if err = t.Put(ev); err != nil {
-		return err
-	}
-	t.heads = mh.NewSet()
-	t.heads.Add(ev.cid)
-	// ... to here
 	t.Broadcast(ev)
 	return nil
 }
@@ -63,13 +55,13 @@ loop:
 		case ev := <-t.pendingEvents:
 			t.receiveEvent(ev)
 		case cid := <-t.pendingCids:
-			have, err := t.Has(cid)
+			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
+				// retry later
 				t.pendingCids <- cid
 				continue
 			}
-			if have {
-				t.heads.Remove(cid)
+			if haveAlready {
 				continue
 			}
 			evs, err := t.Fetch([]mh.Multihash{cid})
@@ -86,25 +78,15 @@ loop:
 }
 
 func (t *Topic) receiveEvent(ev *Event) {
-	have, err := t.Has(ev.cid)
+	added, err := t.AddHead(ev)
 	if err != nil {
-		// requeue the event for later
-		// this loop might be too tight if store is in trouble
-		t.pendingEvents <- ev
-	}
-	if have {
-		return
-	}
-
-	// TODO: this needs to happen atomically
-	if err := t.Put(ev); err != nil {
 		// requeue for later
 		t.pendingEvents <- ev
 	}
-	t.heads.Add(ev.cid)
-	// ... up to here
 
-	for _, link := range ev.links {
-		t.pendingCids <- link
+	if added {
+		for _, link := range ev.links {
+			t.pendingCids <- link
+		}
 	}
 }
