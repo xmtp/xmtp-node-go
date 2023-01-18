@@ -98,8 +98,9 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 		NodeKey: newNodeKey(t),
 		Address: "localhost",
 		Store: StoreOptions{
-			Enable:             true,
-			DbConnectionString: dbDSN,
+			Enable:                   true,
+			DbConnectionString:       dbDSN,
+			DbReaderConnectionString: dbDSN,
 		},
 		StaticNodes: staticNodes,
 		WSAddress:   "0.0.0.0",

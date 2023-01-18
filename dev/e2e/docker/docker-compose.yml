@@ -45,6 +45,7 @@ services:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 8a30dcb604b0b53627a5adc054dbf434b446628d4bd1eccc681d223f0550ce67
   node2:
@@ -76,6 +77,7 @@ services:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 5757057f3daac3fa80e43a06d24edf15fcaba11eb16ede5fd53b78ba68ef1436
   node3:
@@ -107,6 +109,7 @@ services:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: f643b771ad9e1bc9519d4dc754370c4ff32dd7a9f76f6026b5a6448289212fd7
   node4:
@@ -138,5 +141,6 @@ services:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
+      MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       GOWAKU-NODEKEY: 3ec2707fdd0584ad441fabcfbe928966378f797f929b3293ac8dc6a37206f3da

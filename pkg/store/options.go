@@ -29,6 +29,12 @@ func WithDB(db *sql.DB) Option {
 	}
 }
 
+func WithReaderDB(db *sql.DB) Option {
+	return func(s *XmtpStore) {
+		s.readerDB = db
+	}
+}
+
 func WithMessageProvider(p store.MessageProvider) Option {
 	return func(s *XmtpStore) {
 		s.msgProvider = p
@@ -44,5 +50,11 @@ func WithStatsPeriod(statsPeriod time.Duration) Option {
 func WithResumeStartTime(resumeStartTime int64) Option {
 	return func(s *XmtpStore) {
 		s.resumeStartTime = resumeStartTime
+	}
+}
+
+func WithCleaner() Option {
+	return func(s *XmtpStore) {
+		s.enableCleaner = true
 	}
 }

@@ -46,6 +46,7 @@ type XmtpStore struct {
 	MsgC        chan *protocol.Envelope
 	wg          sync.WaitGroup
 	db          *sql.DB
+	readerDB    *sql.DB
 	log         *zap.Logger
 	host        host.Host
 	msgProvider store.MessageProvider
@@ -54,6 +55,7 @@ type XmtpStore struct {
 	statsPeriod     time.Duration
 	resumePageSize  int
 	resumeStartTime int64
+	enableCleaner   bool
 }
 
 func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
@@ -79,12 +81,21 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingDBOption
 	}
 
+	// Required reader db option.
+	if s.readerDB == nil {
+		return nil, ErrMissingDBOption
+	}
+
 	// Required db option.
 	if s.msgProvider == nil {
 		return nil, ErrMissingMessageProviderOption
 	}
 
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
+
+	if s.enableCleaner {
+		go s.cleanerLoop()
+	}
 
 	return s, nil
 }

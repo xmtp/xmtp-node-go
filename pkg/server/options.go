@@ -33,13 +33,14 @@ type LightpushOptions struct {
 // retrieve message history from other nodes as well as acting as a store
 // node and provide message history to nodes that ask for it.
 type StoreOptions struct {
-	Enable               bool     `long:"store" description:"Enable store protocol"`
-	ShouldResume         bool     `long:"resume" description:"fix the gap in message history"`
-	ResumeStartTime      int64    `long:"resume-start-time" description:"resume from this start time" default:"-1"`
-	RetentionMaxDays     int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
-	RetentionMaxMessages int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
-	Nodes                []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
-	DbConnectionString   string   `long:"message-db-connection-string" description:"A Postgres database connection string"`
+	Enable                   bool     `long:"store" description:"Enable store protocol"`
+	ShouldResume             bool     `long:"resume" description:"fix the gap in message history"`
+	ResumeStartTime          int64    `long:"resume-start-time" description:"resume from this start time" default:"-1"`
+	RetentionMaxDays         int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
+	RetentionMaxMessages     int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
+	Nodes                    []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
+	DbConnectionString       string   `long:"message-db-connection-string" description:"A Postgres database connection string"`
+	DbReaderConnectionString string   `long:"message-db-reader-connection-string" description:"A Postgres database reader connection string"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
