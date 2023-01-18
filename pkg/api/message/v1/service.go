@@ -104,8 +104,8 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 
 func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
-	log.Info("started")
-	defer log.Info("stopped")
+	log.Debug("started")
+	defer log.Debug("stopped")
 
 	subC := s.dispatcher.Register(nil, req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC)
@@ -134,8 +134,8 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 
 func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
 	log := s.log.Named("subscribeAll")
-	log.Info("started")
-	defer log.Info("stopped")
+	log.Debug("started")
+	defer log.Debug("stopped")
 
 	return s.Subscribe(&proto.SubscribeRequest{
 		ContentTopics: []string{contentTopicAllXMTP},
