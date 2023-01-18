@@ -86,7 +86,7 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Info("received message")
+		log.Debug("received message")
 
 		wakuMsg := &wakupb.WakuMessage{
 			ContentTopic: env.ContentTopic,
@@ -144,7 +144,7 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
-	log.Info("received request")
+	log.Debug("received request")
 
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
