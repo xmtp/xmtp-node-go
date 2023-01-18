@@ -73,10 +73,10 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		fields = append(fields, zap.String("client_ip", strings.TrimSpace(ips[0])))
 	}
 
-	logFn := ti.log.Info
+	logFn := ti.log.Debug
 
 	if err != nil {
-		logFn = ti.log.Error
+		logFn = ti.log.Info
 		fields = append(fields, zap.Error(err))
 		grpcErr, _ := status.FromError(err)
 		if grpcErr != nil {

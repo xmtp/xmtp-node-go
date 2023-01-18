@@ -405,7 +405,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 			return err
 		}
 		stored = true
-		s.log.Info("message stored",
+		s.log.Debug("message stored",
 			zap.String("content_topic", env.Message().ContentTopic),
 			zap.Int("size", env.Size()),
 			logging.Time("sent", env.Index().SenderTime))
