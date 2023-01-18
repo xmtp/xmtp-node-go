@@ -113,7 +113,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	for {
 		select {
 		case <-stream.Context().Done():
-			log.Info("stream closed")
+			log.Debug("stream closed")
 			return nil
 		case <-s.ctx.Done():
 			log.Info("service closed")
