@@ -18,6 +18,7 @@ func (s *XmtpStore) cleanerLoop() {
 	for {
 		select {
 		case <-s.ctx.Done():
+			return
 		default:
 			err := s.deleteNonXMTPMessagesBatch(log)
 			if err != nil {
