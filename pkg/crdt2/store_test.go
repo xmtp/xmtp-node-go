@@ -52,7 +52,7 @@ func (s *mapTopicStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 	return true, nil
 }
 
-func (s mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
+func (s *mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 	s.Lock()
 	defer s.Unlock()
 	ev, err := NewEvent(env, s.allHeads())
@@ -65,11 +65,11 @@ func (s mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 	return ev, err
 }
 
-func (s mapTopicStore) Get(cid mh.Multihash) (*Event, error) {
+func (s *mapTopicStore) Get(cid mh.Multihash) (*Event, error) {
 	return s.events[cid.String()], nil
 }
 
-func (s mapTopicStore) allHeads() (cids []mh.Multihash) {
+func (s *mapTopicStore) allHeads() (cids []mh.Multihash) {
 	for key := range s.heads {
 		cids = append(cids, s.events[key].cid)
 	}

@@ -5,7 +5,7 @@ import mh "github.com/multiformats/go-multihash"
 type nilSyncer struct{}
 
 func (_ *nilSyncer) NewTopic(name string) TopicSyncer {
-	return nil
+	return &nilTopicSyncer{}
 }
 
 type nilTopicSyncer struct{}
