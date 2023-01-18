@@ -389,7 +389,7 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitStoredMessages(ctx, s.db, s.log)
+			metrics.EmitStoredMessages(ctx, s.readerDB, s.log)
 		}
 	}
 }
