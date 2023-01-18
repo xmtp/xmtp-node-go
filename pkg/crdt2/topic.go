@@ -8,21 +8,33 @@ import (
 )
 
 type Topic struct {
+	name          string
 	pendingEvents chan *Event
-	pendingCids   chan mh.Multihash
+	pendingLinks  chan mh.Multihash
 
 	TopicStore
 	TopicSyncer
 	TopicBroadcaster
 }
 
-func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) error {
+func NewTopic(name string, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
+	return &Topic{
+		name:             name,
+		pendingEvents:    make(chan *Event, 20),
+		pendingLinks:     make(chan mh.Multihash, 20),
+		TopicStore:       store,
+		TopicSyncer:      syncer,
+		TopicBroadcaster: bc,
+	}
+}
+
+func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
 	ev, err := t.NewEvent(env)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	t.Broadcast(ev)
-	return nil
+	return ev, nil
 }
 
 func (t *Topic) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messagev1.Envelope, *messagev1.PagingInfo, error) {
@@ -54,11 +66,11 @@ loop:
 			break loop
 		case ev := <-t.pendingEvents:
 			t.receiveEvent(ev)
-		case cid := <-t.pendingCids:
+		case cid := <-t.pendingLinks:
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
 				// retry later
-				t.pendingCids <- cid
+				t.pendingLinks <- cid
 				continue
 			}
 			if haveAlready {
@@ -68,7 +80,7 @@ loop:
 			if err != nil {
 				// requeue for later
 				// TODO: this will need refinement for invalid, missing cids etc.
-				t.pendingCids <- cid
+				t.pendingLinks <- cid
 			}
 			for _, ev := range evs {
 				t.receiveEvent(ev)
@@ -86,7 +98,7 @@ func (t *Topic) receiveEvent(ev *Event) {
 
 	if added {
 		for _, link := range ev.links {
-			t.pendingCids <- link
+			t.pendingLinks <- link
 		}
 	}
 }
