@@ -29,7 +29,8 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	return db, dsn, func() {
 		db.Close()
-		_, _ = ctlDB.Exec("DROP DATABASE " + dbName)
+		_, err = ctlDB.Exec("DROP DATABASE " + dbName)
+		require.NoError(t, err)
 		ctlDB.Close()
 	}
 }
