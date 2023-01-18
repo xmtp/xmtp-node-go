@@ -17,7 +17,7 @@ type Topic struct {
 }
 
 func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) error {
-	ev, err := t.NewEvent(env.Message)
+	ev, err := t.NewEvent(env)
 	if err != nil {
 		return err
 	}

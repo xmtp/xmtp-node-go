@@ -4,8 +4,10 @@ import (
 	"sync"
 
 	mh "github.com/multiformats/go-multihash"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
+// In-memory TopicStore for testing
 type mapStore struct {
 	sync.Mutex
 	heads  map[string]bool   // CIDs of current head events
@@ -44,10 +46,10 @@ func (s *mapStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 	return true, nil
 }
 
-func (s mapStore) NewEvent(payload []byte) (*Event, error) {
+func (s mapStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 	s.Lock()
 	defer s.Unlock()
-	ev, err := NewEvent(payload, s.allHeads())
+	ev, err := NewEvent(env, s.allHeads())
 	if err != nil {
 		return nil, err
 	}

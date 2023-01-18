@@ -1,11 +1,14 @@
 package crdt2
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"testing"
 
 	mh "github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/assert"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
 func Test_NilEvent(t *testing.T) {
@@ -16,41 +19,38 @@ func Test_NilEvent(t *testing.T) {
 	assert.Equal(t, ev.cid, emptyHash)
 }
 
-func Test_NoLinksEvent(t *testing.T) {
-	payload := make([]byte, 1000)
-	_, err := rand.Reader.Read(payload)
-	assert.NoError(t, err)
-	ev, err := NewEvent(payload, nil)
-	assert.NoError(t, err)
-	hash, err := mh.Sum(payload, mh.SHA2_256, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, ev.cid, hash)
-}
-
 func Test_Event(t *testing.T) {
 	payload := make([]byte, 1000)
 	_, err := rand.Reader.Read(payload)
 	assert.NoError(t, err)
+	env := &messagev1.Envelope{TimestampNs: 1, ContentTopic: "topic", Message: payload}
 	links := makeLinks(t, "one", "two", "three")
-	ev, err := NewEvent(payload, links)
+	ev, err := NewEvent(env, links)
 	assert.NoError(t, err)
-	hash, err := mh.Sum(join(links, payload), mh.SHA2_256, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, ev.cid, hash)
+	assert.Equal(t, computeCid(t, ev), ev.cid)
 }
 
 func makeLinks(t *testing.T, payloads ...string) (links []mh.Multihash) {
 	for _, p := range payloads {
-		ev, err := NewEvent([]byte(p), nil)
+		hash, err := mh.Sum([]byte(p), mh.SHA2_256, -1)
 		assert.NoError(t, err)
-		links = append(links, ev.cid)
+		links = append(links, hash)
 	}
 	return links
 }
 
-func join(hashes []mh.Multihash, payload []byte) (total []byte) {
-	for _, h := range hashes {
-		total = append(total, h...)
+func computeCid(t *testing.T, ev *Event) mh.Multihash {
+	timestampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestampBytes, ev.TimestampNs)
+	chunks := [][]byte{
+		timestampBytes,
+		[]byte(ev.ContentTopic),
+		ev.Message,
 	}
-	return append(total, payload...)
+	for _, l := range ev.links {
+		chunks = append(chunks, l)
+	}
+	sum, err := mh.Sum(bytes.Join(chunks, nil), mh.SHA2_256, -1)
+	assert.NoError(t, err)
+	return sum
 }
