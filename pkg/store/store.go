@@ -125,7 +125,7 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	// tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
+	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
