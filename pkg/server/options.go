@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/store"
 )
 
 type RelayOptions struct {
@@ -33,13 +34,14 @@ type LightpushOptions struct {
 // retrieve message history from other nodes as well as acting as a store
 // node and provide message history to nodes that ask for it.
 type StoreOptions struct {
-	Enable               bool     `long:"store" description:"Enable store protocol"`
-	ShouldResume         bool     `long:"resume" description:"fix the gap in message history"`
-	ResumeStartTime      int64    `long:"resume-start-time" description:"resume from this start time" default:"-1"`
-	RetentionMaxDays     int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
-	RetentionMaxMessages int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
-	Nodes                []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
-	DbConnectionString   string   `long:"message-db-connection-string" description:"A Postgres database connection string"`
+	Enable                   bool     `long:"store" description:"Enable store protocol"`
+	ShouldResume             bool     `long:"resume" description:"fix the gap in message history"`
+	ResumeStartTime          int64    `long:"resume-start-time" description:"resume from this start time" default:"-1"`
+	RetentionMaxDays         int      `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
+	RetentionMaxMessages     int      `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
+	Nodes                    []string `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
+	DbConnectionString       string   `long:"message-db-connection-string" description:"A Postgres database connection string"`
+	DbReaderConnectionString string   `long:"message-db-reader-connection-string" description:"A Postgres database reader connection string"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
@@ -68,6 +70,7 @@ type ProfilingOptions struct {
 	Mutex     bool `long:"mutex" description:"Enable mutex profiling"`
 	Goroutine bool `long:"goroutine" description:"Enable goroutine profiling"`
 }
+
 type AuthzOptions struct {
 	DbConnectionString string `long:"authz-db-connection-string" description:"Connection string for the authz DB"`
 }
@@ -96,13 +99,14 @@ type Options struct {
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 
-	API       api.Options      `group:"API Options" namespace:"api"`
-	Authz     AuthzOptions     `group:"Authz Options"`
-	Relay     RelayOptions     `group:"Relay Options"`
-	Store     StoreOptions     `group:"Store Options"`
-	Filter    FilterOptions    `group:"Filter Options"`
-	LightPush LightpushOptions `group:"LightPush Options"`
-	Metrics   MetricsOptions   `group:"Metrics Options"`
-	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
-	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
+	API       api.Options          `group:"API Options" namespace:"api"`
+	Authz     AuthzOptions         `group:"Authz Options"`
+	Relay     RelayOptions         `group:"Relay Options"`
+	Store     StoreOptions         `group:"Store Options"`
+	Filter    FilterOptions        `group:"Filter Options"`
+	LightPush LightpushOptions     `group:"LightPush Options"`
+	Metrics   MetricsOptions       `group:"Metrics Options"`
+	Tracing   TracingOptions       `group:"DD APM Tracing Options"`
+	Profiling ProfilingOptions     `group:"DD APM Profiling Options" namespace:"profiling"`
+	Cleaner   store.CleanerOptions `group:"DB Cleaner Options" namespace:"cleaner"`
 }

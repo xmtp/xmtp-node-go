@@ -136,9 +136,9 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 }
 
 const (
-	TopicCategoryPermissionUnknown        int = 0
-	TopicCategoryPermissionAuthRequired       = 1
-	TopicCategoryPermissionNoAuthRequired     = 2
+	TopicCategoryPermissionUnknown        = 0
+	TopicCategoryPermissionAuthRequired   = 1
+	TopicCategoryPermissionNoAuthRequired = 2
 )
 
 var TopicCategoryPermissions = map[string]int{

@@ -93,13 +93,14 @@ func TestServer_hexToECDSA(t *testing.T) {
 }
 
 func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
-	_, dbDSN, dbCleanup := test.NewDB(t)
+	_, dbDSN, _ := test.NewDB(t)
 	s, err := New(context.Background(), test.NewLog(t), Options{
 		NodeKey: newNodeKey(t),
 		Address: "localhost",
 		Store: StoreOptions{
-			Enable:             true,
-			DbConnectionString: dbDSN,
+			Enable:                   true,
+			DbConnectionString:       dbDSN,
+			DbReaderConnectionString: dbDSN,
 		},
 		StaticNodes: staticNodes,
 		WSAddress:   "0.0.0.0",
@@ -118,7 +119,6 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 	require.NotNil(t, s)
 	return s, func() {
 		s.Shutdown()
-		dbCleanup()
 	}
 }
 

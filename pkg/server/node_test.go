@@ -27,8 +27,8 @@ func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {
 	n2, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	// Connect to each other as store nodes.
 	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
@@ -68,8 +68,8 @@ func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	n2, cleanup := newTestNode(t, nil, false, db)
 	defer cleanup()
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	// Connect to each other as store nodes.
 	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
@@ -103,8 +103,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
 	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
 	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
@@ -124,8 +124,8 @@ func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
 	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
 	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
@@ -154,8 +154,8 @@ func TestNode_DataPartition_WithoutResume(t *testing.T) {
 	test.ExpectPeers(t, n1, n2.Host().ID())
 	test.ExpectPeers(t, n2, n1.Host().ID())
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	n1EnvC := test.Subscribe(t, n1)
 	n2EnvC := test.Subscribe(t, n2)
@@ -255,8 +255,8 @@ func TestNode_DataPartition_WithResume(t *testing.T) {
 	test.ExpectPeers(t, n1, n2.Host().ID())
 	test.ExpectPeers(t, n2, n1.Host().ID())
 
-	topic1 := test.NewTopic()
-	topic2 := test.NewTopic()
+	topic1 := newTopic()
+	topic2 := newTopic()
 
 	n1EnvC := test.Subscribe(t, n1)
 	n2EnvC := test.Subscribe(t, n2)
@@ -496,6 +496,7 @@ func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *
 		store.WithLog(utils.Logger()),
 		store.WithHost(host),
 		store.WithDB(db),
+		store.WithReaderDB(db),
 		store.WithMessageProvider(dbStore),
 	)
 	require.NoError(t, err)
@@ -548,4 +549,10 @@ func expectStoreMessagesEventually(t *testing.T, n *wakunode.WakuNode, contentTo
 		}
 	}
 	require.ElementsMatch(t, expectedMsgs, msgs)
+}
+
+func newTopic() string {
+	// A cleaner is enabled in the Store by default at this level, so we need
+	// to namespace the topic to avoid it being deleted and flaking tests.
+	return "/xmtp/test-" + test.RandomStringLower(5)
 }

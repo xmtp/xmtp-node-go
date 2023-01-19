@@ -47,6 +47,7 @@ type Server struct {
 	log           *zap.Logger
 	hostAddr      *net.TCPAddr
 	db            *sql.DB
+	readerDB      *sql.DB
 	metricsServer *metrics.Server
 	wakuNode      *node.WakuNode
 	ctx           context.Context
@@ -89,6 +90,11 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		return nil, errors.Wrap(err, "creating db")
 	}
 	s.log.Info("created db")
+
+	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating db")
+	}
 
 	if options.Metrics.Enable {
 		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
@@ -148,6 +154,8 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 				xmtpstore.WithLog(s.log),
 				xmtpstore.WithHost(w.Host()),
 				xmtpstore.WithDB(s.db),
+				xmtpstore.WithReaderDB(s.readerDB),
+				xmtpstore.WithCleaner(options.Cleaner),
 				xmtpstore.WithMessageProvider(dbStore),
 				xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
 				xmtpstore.WithResumeStartTime(options.Store.ResumeStartTime),

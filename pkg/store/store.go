@@ -34,6 +34,8 @@ var (
 	ErrMissingDBOption              = errors.New("missing db option")
 	ErrMissingMessageProviderOption = errors.New("missing message provider option")
 	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
+	ErrMissingCleanerPeriod         = errors.New("missing cleaner period option")
+	ErrMissingCleanerRetentionDays  = errors.New("missing cleaner retention days option")
 )
 
 const (
@@ -46,6 +48,7 @@ type XmtpStore struct {
 	MsgC        chan *protocol.Envelope
 	wg          sync.WaitGroup
 	db          *sql.DB
+	readerDB    *sql.DB
 	log         *zap.Logger
 	host        host.Host
 	msgProvider store.MessageProvider
@@ -54,6 +57,7 @@ type XmtpStore struct {
 	statsPeriod     time.Duration
 	resumePageSize  int
 	resumeStartTime int64
+	cleaner         CleanerOptions
 }
 
 func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
@@ -79,12 +83,31 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingDBOption
 	}
 
+	// Required reader db option.
+	if s.readerDB == nil {
+		return nil, ErrMissingDBOption
+	}
+
 	// Required db option.
 	if s.msgProvider == nil {
 		return nil, ErrMissingMessageProviderOption
 	}
 
+	// Required cleaner options.
+	if s.cleaner.Enable {
+		if s.cleaner.Period == 0 {
+			return nil, ErrMissingCleanerPeriod
+		}
+		if s.cleaner.RetentionDays == 0 {
+			return nil, ErrMissingCleanerRetentionDays
+		}
+	}
+
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
+
+	if s.cleaner.Enable {
+		go s.cleanerLoop()
+	}
 
 	return s, nil
 }
@@ -378,7 +401,7 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitStoredMessages(ctx, s.db, s.log)
+			metrics.EmitStoredMessages(ctx, s.readerDB, s.log)
 		}
 	}
 }

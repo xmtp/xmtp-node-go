@@ -34,6 +34,10 @@ func addEnvVars() {
 		options.Store.DbConnectionString = connStr
 	}
 
+	if connStr, hasConnstr := os.LookupEnv("MESSAGE_DB_READER_CONNECTION_STRING"); hasConnstr {
+		options.Store.DbReaderConnectionString = connStr
+	}
+
 	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
 		options.Authz.DbConnectionString = connStr
 	}

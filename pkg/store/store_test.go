@@ -7,6 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/status-im/go-waku/tests"
+	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
@@ -24,7 +25,7 @@ func TestStore_ExcludeRelayPings(t *testing.T) {
 	c := newTestClient(t, s.host.ID())
 	addStoreProtocol(t, c.host, s.host)
 
-	pubSubTopic := test.NewTopic()
+	pubSubTopic := newTopic()
 
 	storeMessage(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic)
 	storeMessage(t, s, test.NewMessage(relayPingContentTopic, 2, ""), pubSubTopic)
@@ -54,6 +55,7 @@ func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 				WithLog(log),
 				WithHost(host),
 				WithDB(db),
+				WithReaderDB(db),
 				WithMessageProvider(dbStore),
 			},
 			opts...,
@@ -88,4 +90,14 @@ func expectMessages(t *testing.T, s *XmtpStore, pubSubTopic string, msgs []*pb.W
 func storeMessage(t *testing.T, s *XmtpStore, msg *pb.WakuMessage, pubSubTopic string) {
 	_, err := s.storeMessage(test.NewEnvelope(t, msg, pubSubTopic))
 	require.NoError(t, err)
+}
+
+func storeMessageWithTime(t *testing.T, s *XmtpStore, msg *pb.WakuMessage, pubSubTopic string, receiverTime int64) {
+	env := protocol.NewEnvelope(msg, receiverTime, pubSubTopic)
+	_, err := s.storeMessage(env)
+	require.NoError(t, err)
+}
+
+func newTopic() string {
+	return "test-" + test.RandomStringLower(5)
 }

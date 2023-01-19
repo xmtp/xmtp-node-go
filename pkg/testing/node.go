@@ -64,10 +64,6 @@ func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
-func NewTopic() string {
-	return "test-" + RandomStringLower(5)
-}
-
 func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 
