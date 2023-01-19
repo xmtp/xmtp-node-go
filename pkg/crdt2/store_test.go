@@ -5,16 +5,20 @@ import (
 
 	mh "github.com/multiformats/go-multihash"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	"go.uber.org/zap"
 )
 
-type mapStore struct{}
+type mapStore struct {
+	log *zap.Logger
+}
 
-func NewMapStore() *mapStore {
-	return &mapStore{}
+func NewMapStore(log *zap.Logger) *mapStore {
+	return &mapStore{log}
 }
 
 func (s *mapStore) NewTopic(name string) TopicStore {
 	return &mapTopicStore{
+		log:    s.log.Named(name),
 		heads:  make(map[string]bool),
 		events: make(map[string]*Event),
 	}
@@ -25,6 +29,7 @@ type mapTopicStore struct {
 	sync.Mutex
 	heads  map[string]bool   // CIDs of current head events
 	events map[string]*Event // maps CIDs to all known Events
+	log    *zap.Logger
 }
 
 var _ TopicStore = (*mapTopicStore)(nil)
@@ -36,6 +41,7 @@ func (s *mapTopicStore) AddHead(ev *Event) (added bool, err error) {
 	if s.events[key] != nil {
 		return false, nil
 	}
+	s.log.Debug("adding head", zap.String("event", key))
 	s.events[key] = ev
 	s.heads[key] = true
 	return true, nil
@@ -48,6 +54,7 @@ func (s *mapTopicStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 	if s.events[key] == nil {
 		return false, nil
 	}
+	s.log.Debug("removing head", zap.String("event", key))
 	delete(s.heads, key)
 	return true, nil
 }
@@ -60,6 +67,7 @@ func (s *mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 		return nil, err
 	}
 	key := ev.cid.String()
+	s.log.Debug("creating event", zap.String("event", key), zap.Int("links", len(ev.links)))
 	s.events[key] = ev
 	s.heads = map[string]bool{key: true}
 	return ev, err

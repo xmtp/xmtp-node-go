@@ -1,6 +1,6 @@
 package crdt2
 
-type Broadcaster interface {
+type NodeBroadcaster interface {
 	NewTopic(name string) TopicBroadcaster
 }
 

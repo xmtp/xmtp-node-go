@@ -8,7 +8,11 @@ import (
 )
 
 func NewLog(t *testing.T) *zap.Logger {
-	log, err := zap.NewDevelopment()
+	cfg := zap.NewDevelopmentConfig()
+	if testing.Verbose() {
+		cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	}
+	log, err := cfg.Build()
 	require.NoError(t, err)
 	return log
 }

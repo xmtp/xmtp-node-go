@@ -8,15 +8,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/zap"
 )
 
 func Test_BasicPubSub(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ps := NewPubSub()
-	n1 := NewNode(ctx, NewMapStore(), (*nilSyncer)(nil), ps)
+	log := test.NewLog(t)
+	ps := NewPubSub(log)
+	n1 := NewNode(ctx, log.Named("n1"), NewMapStore(log.Named("n1")), (*nilSyncer)(nil), ps)
 	ps.AddNode(n1)
-	n2 := NewNode(ctx, NewMapStore(), (*nilSyncer)(nil), ps)
+	n2 := NewNode(ctx, log.Named("n2"), NewMapStore(log.Named("n2")), (*nilSyncer)(nil), ps)
 	ps.AddNode(n2)
 	n1.NewTopic("t1")
 	n2.NewTopic("t1")
@@ -33,20 +36,26 @@ func Test_BasicPubSub(t *testing.T) {
 
 // In-memory topic broadcaster
 type PubSub struct {
+	log         *zap.Logger
 	subscribers map[*Node]bool
 }
 
-func NewPubSub() *PubSub {
-	return &PubSub{subscribers: make(map[*Node]bool)}
+func NewPubSub(log *zap.Logger) *PubSub {
+	return &PubSub{
+		log:         log.Named("pubsub"),
+		subscribers: make(map[*Node]bool),
+	}
 }
 
 func (ps *PubSub) NewTopic(name string) TopicBroadcaster {
-	return NewTopicPubSub(ps)
+	return NewTopicPubSub(ps, name)
 }
 
 func (ps *PubSub) Broadcast(ev *Event) {
 	for sub := range ps.subscribers {
-		sub.Topics[ev.ContentTopic].Events() <- ev
+		if t := sub.Topics[ev.ContentTopic]; t != nil {
+			t.Events() <- ev
+		}
 	}
 }
 
@@ -56,17 +65,22 @@ func (ps *PubSub) AddNode(n *Node) {
 
 type TopicPubSub struct {
 	*PubSub
+	name   string
+	log    *zap.Logger
 	events chan *Event
 }
 
-func NewTopicPubSub(ps *PubSub) *TopicPubSub {
+func NewTopicPubSub(ps *PubSub, name string) *TopicPubSub {
 	return &TopicPubSub{
+		log:    ps.log.Named(name),
+		name:   name,
 		PubSub: ps,
 		events: make(chan *Event, 20),
 	}
 }
 
 func (tb *TopicPubSub) Broadcast(ev *Event) {
+	tb.log.Debug("broadcasting", zap.Stringer("event", ev.cid))
 	tb.PubSub.Broadcast(ev)
 }
 

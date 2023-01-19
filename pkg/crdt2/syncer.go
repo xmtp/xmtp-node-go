@@ -2,7 +2,7 @@ package crdt2
 
 import mh "github.com/multiformats/go-multihash"
 
-type Syncer interface {
+type NodeSyncer interface {
 	NewTopic(name string) TopicSyncer
 }
 
