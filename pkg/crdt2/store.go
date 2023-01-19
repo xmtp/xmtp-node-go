@@ -3,10 +3,11 @@ package crdt2
 import (
 	mh "github.com/multiformats/go-multihash"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	"go.uber.org/zap"
 )
 
 type NodeStore interface {
-	NewTopic(name string) TopicStore
+	NewTopic(name string, log *zap.Logger) TopicStore
 }
 
 type TopicStore interface {

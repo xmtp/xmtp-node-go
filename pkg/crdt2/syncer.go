@@ -1,9 +1,12 @@
 package crdt2
 
-import mh "github.com/multiformats/go-multihash"
+import (
+	mh "github.com/multiformats/go-multihash"
+	"go.uber.org/zap"
+)
 
 type NodeSyncer interface {
-	NewTopic(name string) TopicSyncer
+	NewTopic(name string, log *zap.Logger) TopicSyncer
 }
 
 type TopicSyncer interface {

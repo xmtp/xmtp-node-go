@@ -1,10 +1,13 @@
 package crdt2
 
-import mh "github.com/multiformats/go-multihash"
+import (
+	mh "github.com/multiformats/go-multihash"
+	"go.uber.org/zap"
+)
 
 type nilSyncer struct{}
 
-func (_ *nilSyncer) NewTopic(name string) TopicSyncer {
+func (_ *nilSyncer) NewTopic(name string, log *zap.Logger) TopicSyncer {
 	return &nilTopicSyncer{}
 }
 

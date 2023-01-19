@@ -8,17 +8,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type mapStore struct {
-	log *zap.Logger
+type mapStore struct{}
+
+func NewMapStore() *mapStore {
+	return &mapStore{}
 }
 
-func NewMapStore(log *zap.Logger) *mapStore {
-	return &mapStore{log}
-}
-
-func (s *mapStore) NewTopic(name string) TopicStore {
+func (s *mapStore) NewTopic(name string, log *zap.Logger) TopicStore {
 	return &mapTopicStore{
-		log:    s.log.Named(name),
+		log:    log.Named(name),
 		heads:  make(map[string]bool),
 		events: make(map[string]*Event),
 	}

@@ -35,9 +35,10 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 
 func (n *Node) NewTopic(name string) *Topic {
 	t := NewTopic(name,
-		n.NodeStore.NewTopic(name),
-		n.NodeSyncer.NewTopic(name),
-		n.NodeBroadcaster.NewTopic(name))
+		n.NodeStore.NewTopic(name, n.log),
+		n.NodeSyncer.NewTopic(name, n.log),
+		n.NodeBroadcaster.NewTopic(name, n.log),
+	)
 	n.Topics[name] = t
 	t.Start(n.ctx)
 	return t
