@@ -5,26 +5,31 @@ import (
 
 	mh "github.com/multiformats/go-multihash"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	"go.uber.org/zap"
 )
 
 type Topic struct {
-	name          string
-	pendingEvents chan *Event
-	pendingLinks  chan mh.Multihash
+	name              string
+	pendingEvents     chan *Event
+	pendingLinkEvents chan *Event
+	pendingLinks      chan mh.Multihash
+	log               *zap.Logger
 
 	TopicStore
 	TopicSyncer
 	TopicBroadcaster
 }
 
-func NewTopic(name string, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
+func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
 	return &Topic{
-		name:             name,
-		pendingEvents:    make(chan *Event, 20),
-		pendingLinks:     make(chan mh.Multihash, 20),
-		TopicStore:       store,
-		TopicSyncer:      syncer,
-		TopicBroadcaster: bc,
+		name:              name,
+		pendingEvents:     make(chan *Event, 20),
+		pendingLinkEvents: make(chan *Event, 20),
+		pendingLinks:      make(chan mh.Multihash, 20),
+		log:               log,
+		TopicStore:        store,
+		TopicSyncer:       syncer,
+		TopicBroadcaster:  bc,
 	}
 }
 
@@ -52,8 +57,10 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
+		case ev := <-t.pendingEvents:
+			t.AddHead(ev)
 		case ev := <-t.Events():
-			t.receiveEvent(ev)
+			t.AddHead(ev)
 		}
 	}
 }
@@ -64,9 +71,10 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
-		case ev := <-t.pendingEvents:
-			t.receiveEvent(ev)
+		case ev := <-t.pendingLinkEvents:
+			t.addEvent(ev)
 		case cid := <-t.pendingLinks:
+			t.log.Debug("checking link", zap.String("link", cid.String()))
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
 				// retry later
@@ -83,19 +91,33 @@ loop:
 				t.pendingLinks <- cid
 			}
 			for _, ev := range evs {
-				t.receiveEvent(ev)
+				t.addEvent(ev)
 			}
 		}
 	}
 }
 
-func (t *Topic) receiveEvent(ev *Event) {
+func (t *Topic) addHead(ev *Event) {
+	t.log.Debug("adding event", zap.String("event", ev.cid.String()))
 	added, err := t.AddHead(ev)
 	if err != nil {
 		// requeue for later
 		t.pendingEvents <- ev
 	}
+	if added {
+		for _, link := range ev.links {
+			t.pendingLinks <- link
+		}
+	}
+}
 
+func (t *Topic) addEvent(ev *Event) {
+	t.log.Debug("adding link event", zap.String("event", ev.cid.String()))
+	added, err := t.AddEvent(ev)
+	if err != nil {
+		// requeue for later
+		t.pendingLinkEvents <- ev
+	}
 	if added {
 		for _, link := range ev.links {
 			t.pendingLinks <- link

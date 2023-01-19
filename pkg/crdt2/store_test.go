@@ -32,6 +32,18 @@ type mapTopicStore struct {
 
 var _ TopicStore = (*mapTopicStore)(nil)
 
+func (s *mapTopicStore) AddEvent(ev *Event) (added bool, err error) {
+	s.Lock()
+	defer s.Unlock()
+	key := ev.cid.String()
+	if s.events[key] != nil {
+		return false, nil
+	}
+	s.log.Debug("adding event", zap.String("event", key))
+	s.events[key] = ev
+	return true, nil
+}
+
 func (s *mapTopicStore) AddHead(ev *Event) (added bool, err error) {
 	s.Lock()
 	defer s.Unlock()

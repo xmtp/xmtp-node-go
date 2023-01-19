@@ -10,6 +10,7 @@ import (
 )
 
 var TODO = errors.New("Not Yet Implemented")
+var UnknownTopic = errors.New("Unknown Topic")
 
 type Node struct {
 	ctx context.Context
@@ -35,6 +36,7 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 
 func (n *Node) NewTopic(name string) *Topic {
 	t := NewTopic(name,
+		n.log.Named(name),
 		n.NodeStore.NewTopic(name, n.log),
 		n.NodeSyncer.NewTopic(name, n.log),
 		n.NodeBroadcaster.NewTopic(name, n.log),
@@ -45,7 +47,11 @@ func (n *Node) NewTopic(name string) *Topic {
 }
 
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
-	return n.Topics[env.ContentTopic].Publish(ctx, env)
+	topic := n.Topics[env.ContentTopic]
+	if topic == nil {
+		return nil, UnknownTopic
+	}
+	return topic.Publish(ctx, env)
 }
 
 func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {

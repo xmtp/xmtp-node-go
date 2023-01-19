@@ -8,29 +8,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
-	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"go.uber.org/zap"
 )
 
 func Test_BasicBroadcast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	log := test.NewLog(t)
-	ps := NewChanBroadcaster(log)
-	n1 := NewNode(ctx, log.Named("n1"), NewMapStore(), (*nilSyncer)(nil), ps)
-	ps.AddNode(n1)
-	n2 := NewNode(ctx, log.Named("n2"), NewMapStore(), (*nilSyncer)(nil), ps)
-	ps.AddNode(n2)
-	n1.NewTopic("t1")
-	n2.NewTopic("t1")
-	ev, err := n1.Publish(ctx, &messagev1.Envelope{TimestampNs: 1, ContentTopic: "t1", Message: []byte("hi")})
+	nodes := NewNetwork(t, ctx, 5, 1)
+	ev, err := nodes[0].Publish(ctx, &messagev1.Envelope{TimestampNs: 1, ContentTopic: "t0", Message: []byte("hi")})
 	assert.NoError(t, err)
 	require.Eventually(t, func() bool {
-		ev, err := n2.Get("t1", ev.cid)
-		if err != nil {
-			return false
+		for i := 1; i < 3; i++ {
+			ev, err := nodes[i].Get("t0", ev.cid)
+			if err != nil || ev == nil {
+				return false
+			}
 		}
-		return ev != nil
+		return true
 	}, 100*time.Millisecond, 10*time.Millisecond)
 }
 
