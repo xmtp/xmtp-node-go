@@ -34,6 +34,8 @@ var (
 	ErrMissingDBOption              = errors.New("missing db option")
 	ErrMissingMessageProviderOption = errors.New("missing message provider option")
 	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
+	ErrMissingCleanerPeriod         = errors.New("missing cleaner period option")
+	ErrMissingCleanerRetentionDays  = errors.New("missing cleaner retention days option")
 )
 
 const (
@@ -55,7 +57,7 @@ type XmtpStore struct {
 	statsPeriod     time.Duration
 	resumePageSize  int
 	resumeStartTime int64
-	enableCleaner   bool
+	cleaner         CleanerOptions
 }
 
 func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
@@ -91,9 +93,19 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingMessageProviderOption
 	}
 
+	// Required cleaner options.
+	if s.cleaner.Enable {
+		if s.cleaner.Period == 0 {
+			return nil, ErrMissingCleanerPeriod
+		}
+		if s.cleaner.RetentionDays == 0 {
+			return nil, ErrMissingCleanerRetentionDays
+		}
+	}
+
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
 
-	if s.enableCleaner {
+	if s.cleaner.Enable {
 		go s.cleanerLoop()
 	}
 

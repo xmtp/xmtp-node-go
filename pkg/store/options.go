@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/status-im/go-waku/waku/v2/protocol/store"
+	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"go.uber.org/zap"
 )
 
@@ -35,7 +35,7 @@ func WithReaderDB(db *sql.DB) Option {
 	}
 }
 
-func WithMessageProvider(p store.MessageProvider) Option {
+func WithMessageProvider(p wakustore.MessageProvider) Option {
 	return func(s *XmtpStore) {
 		s.msgProvider = p
 	}
@@ -53,8 +53,8 @@ func WithResumeStartTime(resumeStartTime int64) Option {
 	}
 }
 
-func WithCleaner() Option {
+func WithCleaner(opts CleanerOptions) Option {
 	return func(s *XmtpStore) {
-		s.enableCleaner = true
+		s.cleaner = opts
 	}
 }

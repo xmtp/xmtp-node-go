@@ -8,9 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	nonXMTPMessageRetentionDays = 3
-)
+type CleanerOptions struct {
+	Enable        bool          `long:"enable" description:"Enable DB cleaner"`
+	Period        time.Duration `long:"period" description:"Time between successive runs of the cleaner" default:"5s"`
+	RetentionDays int           `long:"retention-days" description:"Number of days in the past that messages must be before being deleted" default:"3"`
+}
 
 func (s *XmtpStore) cleanerLoop() {
 	log := s.log.Named("cleaner")
@@ -24,7 +26,7 @@ func (s *XmtpStore) cleanerLoop() {
 			if err != nil {
 				log.Error("error deleting non-xmtp messages", zap.Error(err))
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(s.cleaner.Period)
 		}
 	}
 }
@@ -34,7 +36,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	timestampThreshold := time.Now().UTC().Add(time.Duration(nonXMTPMessageRetentionDays) * -1 * 24 * time.Hour).UnixNano()
+	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
 	rows, err := stmt.Query(timestampThreshold)
 	if err != nil {
 		return err

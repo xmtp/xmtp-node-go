@@ -11,7 +11,11 @@ import (
 func TestStore_Cleaner_DeletesNonXMTPMessages(t *testing.T) {
 	t.Parallel()
 
-	s, cleanup := newTestStore(t, WithCleaner())
+	s, cleanup := newTestStore(t, WithCleaner(CleanerOptions{
+		Enable:        true,
+		Period:        1 * time.Second,
+		RetentionDays: 3,
+	}))
 	defer cleanup()
 
 	c := newTestClient(t, s.host.ID())

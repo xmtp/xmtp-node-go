@@ -155,7 +155,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 				xmtpstore.WithHost(w.Host()),
 				xmtpstore.WithDB(s.db),
 				xmtpstore.WithReaderDB(s.readerDB),
-				xmtpstore.WithCleaner(),
+				xmtpstore.WithCleaner(options.Cleaner),
 				xmtpstore.WithMessageProvider(dbStore),
 				xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
 				xmtpstore.WithResumeStartTime(options.Store.ResumeStartTime),
