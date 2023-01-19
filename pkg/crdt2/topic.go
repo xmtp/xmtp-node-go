@@ -77,7 +77,8 @@ loop:
 			t.log.Debug("checking link", zap.String("link", cid.String()))
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
-				// retry later
+				// requeue for later
+				// TODO: may need a delay
 				t.pendingLinks <- cid
 				continue
 			}
@@ -102,6 +103,7 @@ func (t *Topic) addHead(ev *Event) {
 	added, err := t.AddHead(ev)
 	if err != nil {
 		// requeue for later
+		// TODO: may need a delay
 		t.pendingEvents <- ev
 	}
 	if added {
@@ -116,6 +118,7 @@ func (t *Topic) addEvent(ev *Event) {
 	added, err := t.AddEvent(ev)
 	if err != nil {
 		// requeue for later
+		// TODO: may need a delay
 		t.pendingLinkEvents <- ev
 	}
 	if added {
