@@ -32,7 +32,7 @@ func (s *XmtpStore) cleanerLoop() {
 }
 
 func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
-	stmt, err := s.readerDB.Prepare("SELECT ctid FROM message WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%' LIMIT 1000")
+	stmt, err := s.readerDB.Prepare("SELECT ctid FROM message WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%' LIMIT 10000")
 	if err != nil {
 		return err
 	}
