@@ -30,6 +30,10 @@ func (s *XmtpStore) cleanerLoop() {
 }
 
 func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
+	// We use a single atomic query here instead of breaking it up to hit the
+	// reader for the non-indexed NOT LIKE query first, because ctid can change
+	// during a full vacuum of the DB, so we want to avoid conflicting with
+	// that scenario and deleting the wrong data.
 	stmt, err := s.db.Prepare(`
 		WITH msg AS (
 			SELECT ctid
