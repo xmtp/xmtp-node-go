@@ -1,8 +1,6 @@
 package store
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -32,54 +30,36 @@ func (s *XmtpStore) cleanerLoop() {
 }
 
 func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
-	stmt, err := s.readerDB.Prepare("SELECT id FROM message WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%' LIMIT 1000")
+	// We use a single atomic query here instead of breaking it up to hit the
+	// reader for the non-indexed NOT LIKE query first, because ctid can change
+	// during a full vacuum of the DB, so we want to avoid conflicting with
+	// that scenario and deleting the wrong data.
+	started := time.Now().UTC()
+	stmt, err := s.db.Prepare(`
+		WITH msg AS (
+			SELECT ctid
+			FROM message
+			WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%'
+			LIMIT 1000
+			FOR UPDATE SKIP LOCKED
+		)
+		DELETE FROM message WHERE ctid IN (TABLE msg);
+	`)
 	if err != nil {
 		return err
 	}
 	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
-	rows, err := stmt.Query(timestampThreshold)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	ids := []any{}
-	for rows.Next() {
-		var id []byte
-		err = rows.Scan(&id)
-		if err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-
-	err = rows.Err()
+	res, err := stmt.Exec(timestampThreshold)
 	if err != nil {
 		return err
 	}
 
-	if len(ids) == 0 {
-		return nil
-	}
-
-	placeholders := make([]string, len(ids))
-	for i := 0; i < len(ids); i++ {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
-	stmt, err = s.db.Prepare("DELETE FROM message WHERE id IN (" + strings.Join(placeholders, ",") + ")")
-	if err != nil {
-		return err
-	}
-	res, err := stmt.Exec(ids...)
-	if err != nil {
-		return err
-	}
 	count, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
 
-	log.Info("deleted non-xmtp messages", zap.Int64("deleted", count), zap.Int("ids", len(ids)))
+	log.Info("deleted non-xmtp messages", zap.Int64("deleted", count), zap.Duration("duration", time.Since(started)))
 
 	return nil
 }
