@@ -58,9 +58,9 @@ loop:
 		case <-ctx.Done():
 			break loop
 		case ev := <-t.pendingEvents:
-			t.AddHead(ev)
+			t.addHead(ev)
 		case ev := <-t.Events():
-			t.AddHead(ev)
+			t.addHead(ev)
 		}
 	}
 }
@@ -74,7 +74,7 @@ loop:
 		case ev := <-t.pendingLinkEvents:
 			t.addEvent(ev)
 		case cid := <-t.pendingLinks:
-			t.log.Debug("checking link", zap.String("link", cid.String()))
+			// t.log.Debug("checking link", zap.String("link", cid.String()))
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
 				// requeue for later
@@ -86,14 +86,20 @@ loop:
 			if haveAlready {
 				continue
 			}
-			evs, err := t.Fetch([]mh.Multihash{cid})
+			t.log.Debug("fetching link", zap.String("link", cid.String()))
+			cids := []mh.Multihash{cid}
+			evs, err := t.Fetch(cids)
 			if err != nil {
 				// requeue for later
 				// TODO: this will need refinement for invalid, missing cids etc.
 				// TODO: if the channel is full, this will lock up the loop
 				t.pendingLinks <- cid
 			}
-			for _, ev := range evs {
+			for i, ev := range evs {
+				if ev == nil {
+					t.pendingLinks <- cids[i]
+					continue
+				}
 				t.addEvent(ev)
 			}
 		}
@@ -101,7 +107,7 @@ loop:
 }
 
 func (t *Topic) addHead(ev *Event) {
-	t.log.Debug("adding event", zap.String("event", ev.cid.String()))
+	// t.log.Debug("adding event", zap.String("event", ev.cid.String()))
 	added, err := t.AddHead(ev)
 	if err != nil {
 		// requeue for later
@@ -117,7 +123,7 @@ func (t *Topic) addHead(ev *Event) {
 }
 
 func (t *Topic) addEvent(ev *Event) {
-	t.log.Debug("adding link event", zap.String("event", ev.cid.String()))
+	// t.log.Debug("adding link event", zap.String("event", ev.cid.String()))
 	added, err := t.AddEvent(ev)
 	if err != nil {
 		// requeue for later

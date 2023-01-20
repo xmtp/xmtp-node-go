@@ -5,27 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"go.uber.org/zap"
 )
 
 func Test_BasicBroadcast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	nodes := NewNetwork(t, ctx, 5, 1)
-	ev, err := nodes[0].Publish(ctx, &messagev1.Envelope{TimestampNs: 1, ContentTopic: "t0", Message: []byte("hi")})
-	assert.NoError(t, err)
-	require.Eventually(t, func() bool {
-		for i := 1; i < 3; i++ {
-			ev, err := nodes[i].Get("t0", ev.cid)
-			if err != nil || ev == nil {
-				return false
-			}
-		}
-		return true
-	}, 100*time.Millisecond, 10*time.Millisecond)
+	net := NewNetwork(t, ctx, 5, 1)
+	net.PublishT0(0, "hi")
+	net.AssertEventuallyConsistent(time.Second)
 }
 
 // In-memory broadcaster
@@ -57,6 +45,10 @@ func (ps *ChanBroadcaster) AddNode(n *Node) {
 	ps.subscribers[n] = true
 }
 
+func (ps *ChanBroadcaster) RemoveNode(n *Node) {
+	delete(ps.subscribers, n)
+}
+
 type TopicChanBroadcaster struct {
 	*ChanBroadcaster
 	name   string
@@ -66,7 +58,7 @@ type TopicChanBroadcaster struct {
 
 func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, log *zap.Logger) *TopicChanBroadcaster {
 	return &TopicChanBroadcaster{
-		log:             log.Named(name),
+		log:             log,
 		name:            name,
 		ChanBroadcaster: ps,
 		events:          make(chan *Event, 20),

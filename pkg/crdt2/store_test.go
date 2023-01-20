@@ -16,7 +16,7 @@ func NewMapStore() *mapStore {
 
 func (s *mapStore) NewTopic(name string, log *zap.Logger) TopicStore {
 	return &mapTopicStore{
-		log:    log.Named(name),
+		log:    log,
 		heads:  make(map[string]bool),
 		events: make(map[string]*Event),
 	}
@@ -51,9 +51,9 @@ func (s *mapTopicStore) AddHead(ev *Event) (added bool, err error) {
 	if s.events[key] != nil {
 		return false, nil
 	}
-	s.log.Debug("adding head", zap.String("event", key))
 	s.events[key] = ev
 	s.heads[key] = true
+	s.log.Debug("adding head", zap.String("event", key), zap.Int("heads", len(s.heads)))
 	return true, nil
 }
 
@@ -64,7 +64,9 @@ func (s *mapTopicStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 	if s.events[key] == nil {
 		return false, nil
 	}
-	s.log.Debug("removing head", zap.String("event", key))
+	if s.heads[key] {
+		s.log.Debug("removing head", zap.String("event", key), zap.Int("heads", len(s.heads)-1))
+	}
 	delete(s.heads, key)
 	return true, nil
 }
