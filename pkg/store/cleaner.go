@@ -32,7 +32,7 @@ func (s *XmtpStore) cleanerLoop() {
 }
 
 func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
-	stmt, err := s.readerDB.Prepare("SELECT id FROM message WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%' LIMIT 1000")
+	stmt, err := s.readerDB.Prepare("SELECT ctid FROM message WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%' LIMIT 1000")
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
 
 	ids := []any{}
 	for rows.Next() {
-		var id []byte
+		var id string
 		err = rows.Scan(&id)
 		if err != nil {
 			return err
@@ -66,7 +66,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
 	for i := 0; i < len(ids); i++ {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 	}
-	stmt, err = s.db.Prepare("DELETE FROM message WHERE id IN (" + strings.Join(placeholders, ",") + ")")
+	stmt, err = s.db.Prepare("DELETE FROM message WHERE ctid IN (" + strings.Join(placeholders, ",") + ")")
 	if err != nil {
 		return err
 	}
