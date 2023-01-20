@@ -146,6 +146,10 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("received request")
 
+	if len(req.ContentTopics) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
+	}
+
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")

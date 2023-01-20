@@ -107,6 +107,23 @@ func Test_MaxMessageSize(t *testing.T) {
 	})
 }
 
+func Test_QueryNoTopics(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
+			ContentTopics: []string{},
+		})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.EqualError(t, err, `rpc error: code = InvalidArgument desc = content topics required`)
+		} else {
+			require.EqualError(t, err, "400 Bad Request: {\"code\":3, \"message\":\"content topics required\", \"details\":[]}")
+		}
+		require.Nil(t, queryRes)
+	})
+}
+
 func Test_QueryNonExistentTopic(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
