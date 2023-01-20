@@ -34,6 +34,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
 	// reader for the non-indexed NOT LIKE query first, because ctid can change
 	// during a full vacuum of the DB, so we want to avoid conflicting with
 	// that scenario and deleting the wrong data.
+	started := time.Now().UTC()
 	stmt, err := s.db.Prepare(`
 		WITH msg AS (
 			SELECT ctid
@@ -58,7 +59,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) error {
 		return err
 	}
 
-	log.Info("deleted non-xmtp messages", zap.Int64("deleted", count))
+	log.Info("deleted non-xmtp messages", zap.Int64("deleted", count), zap.Duration("duration", time.Since(started)))
 
 	return nil
 }
