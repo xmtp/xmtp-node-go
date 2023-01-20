@@ -34,7 +34,9 @@ var (
 	ErrMissingDBOption              = errors.New("missing db option")
 	ErrMissingMessageProviderOption = errors.New("missing message provider option")
 	ErrMissingStatsPeriodOption     = errors.New("missing stats period option")
-	ErrMissingCleanerPeriod         = errors.New("missing cleaner period option")
+	ErrMissingCleanerActivePeriod   = errors.New("missing cleaner active period option")
+	ErrMissingCleanerPassivePeriod  = errors.New("missing cleaner passive period option")
+	ErrMissingCleanerBatchSize      = errors.New("missing cleaner batch size option")
 	ErrMissingCleanerRetentionDays  = errors.New("missing cleaner retention days option")
 )
 
@@ -95,8 +97,14 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 
 	// Required cleaner options.
 	if s.cleaner.Enable {
-		if s.cleaner.Period == 0 {
-			return nil, ErrMissingCleanerPeriod
+		if s.cleaner.ActivePeriod == 0 {
+			return nil, ErrMissingCleanerActivePeriod
+		}
+		if s.cleaner.PassivePeriod == 0 {
+			return nil, ErrMissingCleanerPassivePeriod
+		}
+		if s.cleaner.BatchSize == 0 {
+			return nil, ErrMissingCleanerBatchSize
 		}
 		if s.cleaner.RetentionDays == 0 {
 			return nil, ErrMissingCleanerRetentionDays
