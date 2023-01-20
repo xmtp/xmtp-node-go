@@ -125,7 +125,6 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
-	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 }
 
@@ -385,23 +384,6 @@ func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
 				return
 			}
 			_, _ = s.storeMessage(envelope)
-		}
-	}
-}
-
-func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
-	if s.statsPeriod == 0 {
-		s.log.Info("statsPeriod is 0 indicating no metrics loop")
-		return
-	}
-	ticker := time.NewTicker(s.statsPeriod)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			metrics.EmitStoredMessages(ctx, s.readerDB, s.log)
 		}
 	}
 }
