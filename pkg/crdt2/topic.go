@@ -79,6 +79,7 @@ loop:
 			if err != nil {
 				// requeue for later
 				// TODO: may need a delay
+				// TODO: if the channel is full, this will lock up the loop
 				t.pendingLinks <- cid
 				continue
 			}
@@ -89,6 +90,7 @@ loop:
 			if err != nil {
 				// requeue for later
 				// TODO: this will need refinement for invalid, missing cids etc.
+				// TODO: if the channel is full, this will lock up the loop
 				t.pendingLinks <- cid
 			}
 			for _, ev := range evs {
@@ -104,6 +106,7 @@ func (t *Topic) addHead(ev *Event) {
 	if err != nil {
 		// requeue for later
 		// TODO: may need a delay
+		// TODO: if the channel is full, this will lock up the loop
 		t.pendingEvents <- ev
 	}
 	if added {
@@ -119,10 +122,12 @@ func (t *Topic) addEvent(ev *Event) {
 	if err != nil {
 		// requeue for later
 		// TODO: may need a delay
+		// TODO: if the channel is full, this will lock up the loop
 		t.pendingLinkEvents <- ev
 	}
 	if added {
 		for _, link := range ev.links {
+			// TODO: if the channel is full, this will lock up the loop
 			t.pendingLinks <- link
 		}
 	}
