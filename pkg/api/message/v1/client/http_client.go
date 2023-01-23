@@ -207,7 +207,7 @@ func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*h
 
 func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
 	// Avoid conflicting with grpc-gateway max message size error.
-	if resp.StatusCode == http.StatusTooManyRequests {
+	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return false, err
 	}
 
