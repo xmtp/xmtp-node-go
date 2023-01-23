@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
 )
 
@@ -103,7 +102,7 @@ func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool
 	entry := rl.fillAndReturnEntry(walletAddress, isAllowListed)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
-	log := rl.log.With(logging.WalletAddress(walletAddress))
+	log := rl.log.With(zap.String("wallet_address", walletAddress))
 	if entry.tokens == 0 {
 		log.Info("Rate limit exceeded")
 		return errors.New("rate_limit_exceeded")

@@ -7,29 +7,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 )
 
-type RelayOptions struct {
-	Disable                bool     `long:"no-relay" description:"Disable relay protocol"`
-	Topics                 []string `long:"topics" description:"List of topics to listen"`
-	MinRelayPeersToPublish int      `long:"min-relay-peers-to-publish" description:"Minimum number of peers to publish to Relay" default:"0"`
-}
-
-type FilterOptions struct {
-	Enable  bool     `long:"filter" description:"Enable filter protocol"`
-	Nodes   []string `long:"filter-node" description:"Multiaddr of a peer that supports filter protocol. Option may be repeated"`
-	Timeout int      `long:"filter-timeout" description:"Timeout for filter node in seconds" default:"14400"`
-}
-
-// LightpushOptions are settings used to enable the lightpush protocol. This is
-// a lightweight protocol used to avoid having to run the relay protocol which
-// is more resource intensive. With this protocol a message is pushed to a peer
-// that supports both the lightpush protocol and relay protocol. That peer will
-// broadcast the message and return a confirmation that the message was
-// broadcasted
-type LightpushOptions struct {
-	Enable bool     `long:"lightpush" description:"Enable lightpush protocol"`
-	Nodes  []string `long:"lightpush-node" description:"Multiaddr of a peer that supports lightpush protocol. Option may be repeated"`
-}
-
 // StoreOptions are settings used for enabling the store protocol, used to
 // retrieve message history from other nodes as well as acting as a store
 // node and provide message history to nodes that ask for it.
@@ -49,7 +26,7 @@ func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
 }
 
 // MetricsOptions are settings used to start a prometheus server for obtaining
-// useful node metrics to monitor the health of behavior of the go-waku node.
+// useful node metrics to monitor the health of behavior of the node.
 type MetricsOptions struct {
 	Enable       bool          `long:"metrics" description:"Enable the metrics server"`
 	Address      string        `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
@@ -76,8 +53,9 @@ type AuthzOptions struct {
 }
 
 // Options contains all the available features and settings that can be
-// configured via flags when executing go-waku as a service.
+// configured via flags when running the server.
 type Options struct {
+	NATSURL     string   `long:"nats-url" description:"NATS server URL" default:"nats://localhost:4222"`
 	Port        int      `short:"p" long:"port" description:"Libp2p TCP listening port (0 for random)" default:"60000"`
 	Address     string   `long:"address" description:"Listening address" default:"0.0.0.0"`
 	EnableWS    bool     `long:"ws" description:"Enable websockets support"`
@@ -101,10 +79,7 @@ type Options struct {
 
 	API       api.Options          `group:"API Options" namespace:"api"`
 	Authz     AuthzOptions         `group:"Authz Options"`
-	Relay     RelayOptions         `group:"Relay Options"`
 	Store     StoreOptions         `group:"Store Options"`
-	Filter    FilterOptions        `group:"Filter Options"`
-	LightPush LightpushOptions     `group:"LightPush Options"`
 	Metrics   MetricsOptions       `group:"Metrics Options"`
 	Tracing   TracingOptions       `group:"DD APM Tracing Options"`
 	Profiling ProfilingOptions     `group:"DD APM Profiling Options" namespace:"profiling"`

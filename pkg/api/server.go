@@ -11,6 +11,7 @@ import (
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
@@ -52,8 +53,15 @@ func New(config *Config) (*Server, error) {
 
 	s.ctx = context.Background()
 
+	// Initialize nats connection.
+	var err error
+	s.NATS, err = nats.Connect(nats.DefaultURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing nats")
+	}
+
 	// Start gRPC services.
-	err := s.startGRPC()
+	err = s.startGRPC()
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +112,7 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log)
+	s.messagev1, err = messagev1.NewService(s.NATS, s.Log)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}

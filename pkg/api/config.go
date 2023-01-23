@@ -4,8 +4,8 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"go.uber.org/zap"
@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrMissingLog  = errors.New("missing log config")
-	ErrMissingWaku = errors.New("missing waku config")
+	ErrMissingNATS = errors.New("missing nats config")
 )
 
 type Options struct {
@@ -28,7 +28,7 @@ type Options struct {
 type Config struct {
 	Options
 	AllowLister authz.WalletAllowLister
-	Waku        *wakunode.WakuNode
+	NATS        *nats.Conn
 	Log         *zap.Logger
 }
 
@@ -52,8 +52,8 @@ func (params *Config) check() error {
 	if params.Log == nil {
 		return ErrMissingLog
 	}
-	if params.Waku == nil {
-		return ErrMissingWaku
+	if params.NATS == nil {
+		return ErrMissingNATS
 	}
 	if err := validateAddr(params.HTTPAddress, params.HTTPPort); err != nil {
 		return errors.Wrap(err, "Invalid HTTP Address")

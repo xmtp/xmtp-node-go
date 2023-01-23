@@ -2,20 +2,10 @@ package authn
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
-	"math"
-	"net"
 	"testing"
-	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/status-im/go-waku/tests"
 	"github.com/stretchr/testify/require"
-	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
@@ -58,130 +48,8 @@ func LoadSerializedAuthReq(str string) (*V1ClientAuthRequest, error) {
 	return req, nil
 }
 
-func CreateHost(ctx context.Context, log *zap.Logger) (host.Host, error) {
-	maxAttempts := 5
-	hostStr := "localhost"
-	port := 0
-
-	for i := 0; i < maxAttempts; i++ {
-		addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(hostStr, "0"))
-		if err != nil {
-			log.Error("unable to resolve tcp addr: %v", zap.Error(err))
-			continue
-		}
-		l, err := net.ListenTCP("tcp", addr)
-		if err != nil {
-			log.Error("unable to listen on addr %q: %v", zap.String("ipaddr", addr.String()), zap.Error(err))
-			err := l.Close()
-			if err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		port = l.Addr().(*net.TCPAddr).Port
-		err = l.Close()
-		if err != nil {
-			return nil, err
-		}
-
-	}
-
-	libP2pHost, err := tests.MakeHost(ctx, port, rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-
-	return libP2pHost, nil
-}
-
 func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, error) {
-
-	libP2pHost, err := CreateHost(ctx, log)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewXmtpAuthentication(ctx, libP2pHost, log), nil
-}
-
-func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.PeerId, dest multiaddr.Multiaddr, protoId protocol.ID, serializedRequest string) (bool, error) {
-	h.Peerstore().AddAddr(peerId.Raw(), dest, peerstore.PermanentAddrTTL)
-
-	err := h.Connect(ctx, h.Peerstore().PeerInfo(peerId.Raw()))
-	if err != nil {
-		log.Error("host could not connect", zap.Error(err))
-		return false, err
-	}
-
-	stream, err := h.NewStream(ctx, peerId.Raw(), protoId)
-	if err != nil {
-		log.Info("", zap.Error(err))
-		return false, err
-	}
-
-	v1, _ := LoadSerializedAuthReq(serializedRequest)
-	authReqRPC := &ClientAuthRequest{
-		Version: &ClientAuthRequest_V1{
-			V1: v1,
-		},
-	}
-
-	log.Info("REQ", zap.Any("pack", authReqRPC))
-
-	writer := protoio.NewDelimitedWriter(stream)
-	reader := protoio.NewDelimitedReader(stream, math.MaxInt32)
-
-	err = writer.WriteMsg(authReqRPC)
-	if err != nil {
-		log.Error("could not write request", zap.Error(err))
-		return false, err
-	}
-
-	authResponseRPC := &ClientAuthResponse{}
-	err = reader.ReadMsg(authResponseRPC)
-	if err != nil {
-		log.Error("could not read response", zap.Error(err))
-		return false, err
-	}
-
-	return authResponseRPC.GetV1().AuthSuccessful, nil
-}
-
-// This integration test checks that data can flow between a mock client and Auth protocol. As the authn request was
-// generated from an oracle the peerIDs between the saved request and the connecting stream will not match, resulting in
-// a failed authentication.
-func TestRoundTrip(t *testing.T) {
-
-	log, _ := zap.NewDevelopment()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	node, err := CreateNode(ctx, log)
-	if err != nil {
-		log.Error("Test node could not be created", zap.Error(err))
-		cancel()
-		return
-	}
-	client, err := CreateHost(ctx, log)
-	if err != nil {
-		log.Error("Test client could not be created", zap.Error(err))
-		cancel()
-		return
-	}
-
-	go func() {
-		node.Start()
-		require.NoError(t, err)
-		dest := node.h.Addrs()[0]
-
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, types.PeerId(node.h.ID()), dest, ClientAuthnID_v1_0_0, sampleAuthReq002.reqBytes)
-		require.NoError(t, err)
-		require.False(t, didSucceed)
-
-		cancel()
-	}()
-	<-ctx.Done()
-
+	return NewXmtpAuthentication(ctx, log), nil
 }
 
 func TestV1_Nominal(t *testing.T) {
