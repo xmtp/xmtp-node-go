@@ -12,7 +12,7 @@ func Test_BasicBroadcast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	net := NewNetwork(t, ctx, 5, 1)
-	net.PublishT0(0, "hi")
+	net.Publish(0, t0, "hi")
 	net.AssertEventuallyConsistent(time.Second)
 }
 

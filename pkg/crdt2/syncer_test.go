@@ -15,20 +15,20 @@ func Test_BasicSyncing(t *testing.T) {
 	defer cancel()
 	// 3 nodes, one topic "t0"
 	net := NewNetwork(t, ctx, 3, 1)
-	net.PublishT0(0, "hi")
-	net.PublishT0(1, "hi back")
+	net.Publish(0, t0, "hi")
+	net.Publish(1, t0, "hi back")
 	// wait for things to settle
 	net.AssertEventuallyConsistent(time.Second)
 	// suspend broadcasts to n1/t0 and publish few things
-	net.WithSuspendedTopic(1, "t0", func(n *Node) {
-		net.PublishT0(2, "oh hello")
-		net.PublishT0(2, "how goes")
-		net.PublishT0(1, "how are you")
+	net.WithSuspendedTopic(1, t0, func(n *Node) {
+		net.Publish(2, t0, "oh hello")
+		net.Publish(2, t0, "how goes")
+		net.Publish(1, t0, "how are you")
 	})
 	// wait for things to settle but ignore n1
 	// because it needs a new broadcast to trigger syncing.
 	net.AssertEventuallyConsistent(time.Second, 1)
-	net.PublishT0(0, "not bad")
+	net.Publish(0, t0, "not bad")
 	net.AssertEventuallyConsistent(time.Second)
 }
 

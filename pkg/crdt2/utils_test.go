@@ -20,6 +20,11 @@ type network struct {
 	events []*Event // captures events published to the network
 }
 
+const t0 = "t0" // first topic
+const t1 = "t1" // second topic
+const t2 = "t2" // third topic
+// ...
+
 // Creates a network with given number of nodes and given number of topics on all nodes
 func NewNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 	log := test.NewLog(t)
@@ -49,11 +54,11 @@ func NewNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 	return &network{t: t, nodes: list}
 }
 
-// Publishes msg into topic "t0" from given node
-func (net *network) PublishT0(node int, msg string) {
+// Publishes msg into a topic from given node
+func (net *network) Publish(node int, topic, msg string) {
 	net.t.Helper()
 	n := net.nodes[node]
-	ev, err := n.Publish(n.ctx, &messagev1.Envelope{TimestampNs: uint64(len(net.events) + 1), ContentTopic: "t0", Message: []byte(msg)})
+	ev, err := n.Publish(n.ctx, &messagev1.Envelope{TimestampNs: uint64(len(net.events) + 1), ContentTopic: topic, Message: []byte(msg)})
 	assert.NoError(net.t, err)
 	net.events = append(net.events, ev)
 }
