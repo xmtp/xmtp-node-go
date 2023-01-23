@@ -21,8 +21,8 @@ type network struct {
 }
 
 const t0 = "t0" // first topic
-const t1 = "t1" // second topic
-const t2 = "t2" // third topic
+// const t1 = "t1" // second topic
+// const t2 = "t2" // third topic
 // ...
 
 // Creates a network with given number of nodes and given number of topics on all nodes
