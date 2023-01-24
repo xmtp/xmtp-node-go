@@ -10,23 +10,31 @@ import (
 	"time"
 )
 
-var visTopicF int
+var visTopicM int
+var visTopicN int
 
 func init() {
-	flag.IntVar(&visTopicF, "visTopic", 0, "run VisualiseTopic test with specified number of messages")
+	flag.IntVar(&visTopicM, "visTopic", 0, "run VisualiseTopic test with specified number of messages")
+	flag.IntVar(&visTopicN, "visTopicN", 3, "if running VisualiseTopic test, run with this many nodes")
+}
+
+type fixture struct {
+	nodes    int
+	topics   int
+	messages int
 }
 
 func Test_RandomMessages(t *testing.T) {
-	for i, fix := range []struct {
-		nodes    int
-		topics   int
-		messages int
-	}{
+	fixtures := []fixture{
 		{5, 1, 100},
 		{3, 3, 100},
 		{10, 10, 1000},
 		{10, 5, 10000},
-	} {
+	}
+	if !testing.Short() {
+		fixtures = append(fixtures, fixture{30, 1000, 50000})
+	}
+	for i, fix := range fixtures {
 		t.Run(fmt.Sprintf("%d/%dn/%dt/%dm", i, fix.nodes, fix.topics, fix.messages),
 			func(t *testing.T) { randomMsgTest(t, fix.nodes, fix.topics, fix.messages) },
 		)
@@ -34,10 +42,10 @@ func Test_RandomMessages(t *testing.T) {
 }
 
 func Test_VisualiseTopic(t *testing.T) {
-	if visTopicF == 0 {
+	if visTopicM == 0 {
 		return
 	}
-	net := randomMsgTest(t, 3, 1, visTopicF)
+	net := randomMsgTest(t, visTopicN, 1, visTopicM)
 	net.visualiseTopic(os.Stdout, t0)
 }
 
