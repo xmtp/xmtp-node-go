@@ -3,6 +3,7 @@ package crdt2
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"testing"
 	"time"
@@ -121,6 +122,22 @@ func (net *network) checkEvents(ignore []int) (missing map[int]string) {
 		}
 	}
 	return missing
+}
+
+func (net *network) visualiseTopic(w io.Writer, topic string) {
+	fmt.Fprintf(w, "strict digraph %s {\n", topic)
+	for i := len(net.events) - 1; i >= 0; i-- {
+		ev := net.events[i]
+		if ev.ContentTopic != topic {
+			continue
+		}
+		fmt.Fprintf(w, "\t\"%s\" -> { ", shortenedCid(ev.cid))
+		for _, l := range ev.links {
+			fmt.Fprintf(w, "\"%s\" ", shortenedCid(l))
+		}
+		fmt.Fprintf(w, "}\n")
+	}
+	fmt.Fprintf(w, "}\n")
 }
 
 func ignored(i int, ignore []int) bool {
