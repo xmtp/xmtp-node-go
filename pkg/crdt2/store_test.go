@@ -39,7 +39,7 @@ func (s *mapTopicStore) AddEvent(ev *Event) (added bool, err error) {
 	if s.events[key] != nil {
 		return false, nil
 	}
-	s.log.Debug("adding event", zap.String("event", key))
+	s.log.Debug("adding event", zapCid("event", ev.cid))
 	s.events[key] = ev
 	return true, nil
 }
@@ -53,7 +53,7 @@ func (s *mapTopicStore) AddHead(ev *Event) (added bool, err error) {
 	}
 	s.events[key] = ev
 	s.heads[key] = true
-	s.log.Debug("adding head", zap.String("event", key), zap.Int("heads", len(s.heads)))
+	s.log.Debug("adding head", zapCid("event", ev.cid), zap.Int("heads", len(s.heads)))
 	return true, nil
 }
 
@@ -65,7 +65,7 @@ func (s *mapTopicStore) RemoveHead(cid mh.Multihash) (have bool, err error) {
 		return false, nil
 	}
 	if s.heads[key] {
-		s.log.Debug("removing head", zap.String("event", key), zap.Int("heads", len(s.heads)-1))
+		s.log.Debug("removing head", zapCid("event", cid), zap.Int("heads", len(s.heads)-1))
 	}
 	delete(s.heads, key)
 	return true, nil
@@ -79,7 +79,7 @@ func (s *mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 		return nil, err
 	}
 	key := ev.cid.String()
-	s.log.Debug("creating event", zap.String("event", key), zap.Int("links", len(ev.links)))
+	s.log.Debug("creating event", zapCid("event", ev.cid), zap.Int("links", len(ev.links)))
 	s.events[key] = ev
 	s.heads = map[string]bool{key: true}
 	return ev, err

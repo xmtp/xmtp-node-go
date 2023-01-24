@@ -131,6 +131,7 @@ func (net *network) visualiseTopic(w io.Writer, topic string) {
 		if ev.ContentTopic != topic {
 			continue
 		}
+		fmt.Fprintf(w, "\t\"%s\" [label=\"%d: \\N\"]\n", shortenedCid(ev.cid), i)
 		fmt.Fprintf(w, "\t\"%s\" -> { ", shortenedCid(ev.cid))
 		for _, l := range ev.links {
 			fmt.Fprintf(w, "\"%s\" ", shortenedCid(l))

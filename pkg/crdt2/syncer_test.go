@@ -61,7 +61,7 @@ type randomTopicSyncer struct {
 
 func (s *randomTopicSyncer) Fetch(cids []mh.Multihash) (results []*Event, err error) {
 	node := s.nodes[rand.Intn(len(s.nodes))]
-	s.log.Debug("fetching", zapCids(cids...))
+	s.log.Debug("fetching", zapCids("cids", cids...))
 	for _, cid := range cids {
 		ev, err := node.Get(s.topic, cid)
 		if err != nil {

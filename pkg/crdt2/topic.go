@@ -74,7 +74,7 @@ loop:
 		case ev := <-t.pendingLinkEvents:
 			t.addEvent(ev)
 		case cid := <-t.pendingLinks:
-			// t.log.Debug("checking link", zap.String("link", cid.String()))
+			// t.log.Debug("checking link", zapCid("link", cid))
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
 				// requeue for later
@@ -86,7 +86,7 @@ loop:
 			if haveAlready {
 				continue
 			}
-			t.log.Debug("fetching link", zap.String("link", cid.String()))
+			t.log.Debug("fetching link", zapCid("link", cid))
 			cids := []mh.Multihash{cid}
 			evs, err := t.Fetch(cids)
 			if err != nil {
@@ -107,7 +107,7 @@ loop:
 }
 
 func (t *Topic) addHead(ev *Event) {
-	// t.log.Debug("adding event", zap.String("event", ev.cid.String()))
+	// t.log.Debug("adding event", zapCid("event", ev.cid))
 	added, err := t.AddHead(ev)
 	if err != nil {
 		// requeue for later
@@ -123,7 +123,7 @@ func (t *Topic) addHead(ev *Event) {
 }
 
 func (t *Topic) addEvent(ev *Event) {
-	// t.log.Debug("adding link event", zap.String("event", ev.cid.String()))
+	// t.log.Debug("adding link event", zapCid("event", ev.cid))
 	added, err := t.AddEvent(ev)
 	if err != nil {
 		// requeue for later

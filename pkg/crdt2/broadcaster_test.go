@@ -66,7 +66,7 @@ func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, log *zap.Logger) 
 }
 
 func (tb *TopicChanBroadcaster) Broadcast(ev *Event) {
-	tb.log.Debug("broadcasting", zap.Stringer("event", ev.cid))
+	tb.log.Debug("broadcasting", zapCid("event", ev.cid))
 	tb.ChanBroadcaster.Broadcast(ev)
 }
 
