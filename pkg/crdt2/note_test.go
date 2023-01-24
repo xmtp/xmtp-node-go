@@ -31,11 +31,9 @@ func Test_RandomMessages(t *testing.T) {
 		{10, 10, 1000},
 		{10, 5, 10000},
 	}
-	// CI is running the tests in Verbose mode, this kills the test run,
-	// although it runs in about 20s locally
-	// if !testing.Short() {
-	// 	fixtures = append(fixtures, fixture{30, 1000, 50000})
-	// }
+	if !testing.Short() {
+		fixtures = append(fixtures, fixture{30, 1000, 50000}) // should take about 20s locally
+	}
 	for i, fix := range fixtures {
 		t.Run(fmt.Sprintf("%d/%dn/%dt/%dm", i, fix.nodes, fix.topics, fix.messages),
 			func(t *testing.T) { randomMsgTest(t, fix.nodes, fix.topics, fix.messages) },
