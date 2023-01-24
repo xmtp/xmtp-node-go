@@ -9,9 +9,11 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 )
 
-/**
+/*
+*
 Executes the appropriate database queries to find messages and build a response based on a HistoryQuery
-**/
+*
+*/
 func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
 	var rows *sql.Rows
 	sql, args, err := buildSqlQuery(query)
@@ -40,7 +42,7 @@ func getContentTopics(filters []*pb.ContentFilter) []string {
 func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{}, err error) {
 	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
 
-	sb.Select("*").From("message")
+	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").From("message")
 
 	contentTopics := getContentTopics(query.ContentFilters)
 	if len(contentTopics) > 0 {

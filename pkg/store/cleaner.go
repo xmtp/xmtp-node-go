@@ -45,7 +45,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 		WITH msg AS (
 			SELECT ctid
 			FROM message
-			WHERE receivertimestamp < $1 AND contenttopic NOT LIKE '/xmtp/%'
+			WHERE receivertimestamp < $1 AND should_expire IS TRUE
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED
 		)

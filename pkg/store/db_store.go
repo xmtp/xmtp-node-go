@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/status-im/go-waku/waku/persistence"
 	"github.com/status-im/go-waku/waku/v2/protocol"
+	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/migrate"
@@ -83,15 +85,20 @@ func (d *DBStore) Put(env *protocol.Envelope) error {
 	cursor := env.Index()
 	pubsubTopic := env.PubsubTopic()
 	message := env.Message()
-	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+	shouldExpire := !isXMTP(message)
+	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version)
+	_, err = stmt.Exec(cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version, shouldExpire)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func isXMTP(msg *pb.WakuMessage) bool {
+	return strings.HasPrefix(msg.ContentTopic, "/xmtp/")
 }
