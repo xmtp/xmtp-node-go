@@ -143,6 +143,11 @@ func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
 }
 
+// Test possible malicious behavior of the client.
+func fromSerializedProtoMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer aGk=")
+}
+
 func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
 	token, data, err := GenerateToken(when, false)
 	require.NoError(t, err)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"errors"
 	"time"
 
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
@@ -19,6 +20,10 @@ func decodeToken(s string) (*messagev1.Token, error) {
 	err = proto.Unmarshal(b, &token)
 	if err != nil {
 		return nil, err
+	}
+	// Check that IdentityKey pointers are non-nil.
+	if token.IdentityKey == nil || token.IdentityKey.Signature == nil {
+		return nil, errors.New("missing identity key")
 	}
 	return &token, nil
 }
