@@ -26,9 +26,10 @@ type TopicStore interface {
 	// and add it to the heads
 	// Returns whether it was actually added.
 	AddHead(ev *Event) (added bool, err error)
-	// RemoveHead removes the CID from heads if it's there.
-	// Returns whether it was actually removed.
-	RemoveHead(cid mh.Multihash) (removed bool, err error)
+	// RemoveHead checks if we already have the event,
+	// and also removes it from heads if it's there.
+	// Returns whether we already have the event or not.
+	RemoveHead(cid mh.Multihash) (haveAlready bool, err error)
 	// Get returns the Event based on its CID, nil if absent.
 	// This is just for testing, not needed for the protocol implementation
 	Get(cid mh.Multihash) (*Event, error)

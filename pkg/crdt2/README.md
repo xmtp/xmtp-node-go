@@ -20,9 +20,11 @@ The implementation here follows this broad structure, you can find the `Event`, 
 
 ## TODO
 
-* simple timestamp ordering
+* simple timestamp event ordering
 * querying
 * adding/removing nodes to/from network
+* restarting a node correctly (from store)
+* investigate possible lockups
 * boltdb store
 * pubsub broadcaster
 * libp2p syncer
@@ -31,3 +33,5 @@ The implementation here follows this broad structure, you can find the `Event`, 
 * fetching multiple topics at a time
 * validation
 * consistent ordering respecting the DAG
+* deep linking improve DAG sync speed
+* rebroadcasting heads to catch up dormant topics

@@ -12,11 +12,11 @@ import (
 // It implements the topic API, as well as the
 // replication mechanism using the store, broadcaster and syncer.
 type Topic struct {
-	name              string            // the topic name
-	pendingEvents     chan *Event       // broadcasted events that were received from the network but not processed yet
-	pendingLinkEvents chan *Event       // missing events that were fetched from the network but not processed yet
-	pendingLinks      chan mh.Multihash // missing links that were discovered but not successfully fetched yet
-	log               *zap.Logger
+	name                 string            // the topic name
+	pendingReceiveEvents chan *Event       // broadcasted events that were received from the network but not processed yet
+	pendingSyncEvents    chan *Event       // missing events that were fetched from the network but not processed yet
+	pendingLinks         chan mh.Multihash // missing links that were discovered but not successfully fetched yet
+	log                  *zap.Logger
 
 	TopicStore
 	TopicSyncer
@@ -29,13 +29,13 @@ func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer
 		name: name,
 		// TODO: tuning the channel sizes will likely be important
 		// current implementation can lock up if the channels fill up.
-		pendingEvents:     make(chan *Event, 20),
-		pendingLinkEvents: make(chan *Event, 20),
-		pendingLinks:      make(chan mh.Multihash, 20),
-		log:               log,
-		TopicStore:        store,
-		TopicSyncer:       syncer,
-		TopicBroadcaster:  bc,
+		pendingReceiveEvents: make(chan *Event, 20),
+		pendingSyncEvents:    make(chan *Event, 20),
+		pendingLinks:         make(chan mh.Multihash, 20),
+		log:                  log,
+		TopicStore:           store,
+		TopicSyncer:          syncer,
+		TopicBroadcaster:     bc,
 	}
 }
 
@@ -66,10 +66,26 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
-		case ev := <-t.pendingEvents:
+		case ev := <-t.pendingReceiveEvents:
 			t.addHead(ev)
 		case ev := <-t.Events():
 			t.addHead(ev)
+		}
+	}
+}
+
+func (t *Topic) addHead(ev *Event) {
+	// t.log.Debug("adding event", zapCid("event", ev.cid))
+	added, err := t.AddHead(ev)
+	if err != nil {
+		// requeue for later
+		// TODO: may need a delay
+		// TODO: if the channel is full, this will lock up the loop
+		t.pendingReceiveEvents <- ev
+	}
+	if added {
+		for _, link := range ev.links {
+			t.pendingLinks <- link
 		}
 	}
 }
@@ -81,10 +97,13 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
-		case ev := <-t.pendingLinkEvents:
+		case ev := <-t.pendingSyncEvents:
 			t.addEvent(ev)
 		case cid := <-t.pendingLinks:
 			// t.log.Debug("checking link", zapCid("link", cid))
+			// If the CID is in heads, it should be removed because
+			// we have an event that points to it.
+			// We also don't need to fetch it since we already have it.
 			haveAlready, err := t.RemoveHead(cid)
 			if err != nil {
 				// requeue for later
@@ -107,27 +126,12 @@ loop:
 			}
 			for i, ev := range evs {
 				if ev == nil {
+					// requeue missing links
 					t.pendingLinks <- cids[i]
 					continue
 				}
 				t.addEvent(ev)
 			}
-		}
-	}
-}
-
-func (t *Topic) addHead(ev *Event) {
-	// t.log.Debug("adding event", zapCid("event", ev.cid))
-	added, err := t.AddHead(ev)
-	if err != nil {
-		// requeue for later
-		// TODO: may need a delay
-		// TODO: if the channel is full, this will lock up the loop
-		t.pendingEvents <- ev
-	}
-	if added {
-		for _, link := range ev.links {
-			t.pendingLinks <- link
 		}
 	}
 }
@@ -139,7 +143,7 @@ func (t *Topic) addEvent(ev *Event) {
 		// requeue for later
 		// TODO: may need a delay
 		// TODO: if the channel is full, this will lock up the loop
-		t.pendingLinkEvents <- ev
+		t.pendingSyncEvents <- ev
 	}
 	if added {
 		for _, link := range ev.links {
