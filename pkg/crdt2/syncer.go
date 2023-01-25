@@ -2,12 +2,11 @@ package crdt2
 
 import (
 	mh "github.com/multiformats/go-multihash"
-	"go.uber.org/zap"
 )
 
 // NodeSyncer manages the syncing capability for a Node
 type NodeSyncer interface {
-	NewTopic(name string, log *zap.Logger) TopicSyncer
+	NewTopic(name string, node *Node) TopicSyncer
 }
 
 // TopicSyncer provides syncing capability to a specific topic.

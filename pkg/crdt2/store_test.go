@@ -15,9 +15,10 @@ func NewMapStore() *mapStore {
 	return &mapStore{}
 }
 
-func (s *mapStore) NewTopic(name string, log *zap.Logger) TopicStore {
+func (s *mapStore) NewTopic(name string, n *Node) TopicStore {
 	return &mapTopicStore{
-		log:    log,
+		node:   n,
+		log:    n.log.Named(name),
 		heads:  make(map[string]bool),
 		events: make(map[string]*Event),
 	}
@@ -26,6 +27,7 @@ func (s *mapStore) NewTopic(name string, log *zap.Logger) TopicStore {
 // In-memory TopicStore
 type mapTopicStore struct {
 	sync.Mutex
+	node   *Node
 	heads  map[string]bool   // CIDs of current head events
 	events map[string]*Event // maps CIDs to all known Events
 	log    *zap.Logger

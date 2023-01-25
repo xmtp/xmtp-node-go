@@ -3,13 +3,12 @@ package crdt2
 import (
 	mh "github.com/multiformats/go-multihash"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
-	"go.uber.org/zap"
 )
 
 // NodeStore manages the storage capacity for a Node.
 type NodeStore interface {
 	// NewTopic creates a TopicStore for the specified topic.
-	NewTopic(name string, log *zap.Logger) TopicStore
+	NewTopic(name string, node *Node) TopicStore
 }
 
 // TopicStore represents the storage capacity for a specific topic.

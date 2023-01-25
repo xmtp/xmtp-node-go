@@ -29,12 +29,15 @@ func NewChanBroadcaster(log *zap.Logger) *ChanBroadcaster {
 	}
 }
 
-func (ps *ChanBroadcaster) NewTopic(name string, log *zap.Logger) TopicBroadcaster {
-	return NewTopicChanBroadcaster(ps, name, log)
+func (ps *ChanBroadcaster) NewTopic(name string, n *Node) TopicBroadcaster {
+	return NewTopicChanBroadcaster(ps, name, n)
 }
 
-func (ps *ChanBroadcaster) Broadcast(ev *Event) {
+func (ps *ChanBroadcaster) Broadcast(ev *Event, from *Node) {
 	for sub := range ps.subscribers {
+		if sub == from {
+			continue
+		}
 		if t := sub.Topics[ev.ContentTopic]; t != nil {
 			t.TopicBroadcaster.(*TopicChanBroadcaster).events <- ev
 		}
@@ -52,13 +55,15 @@ func (ps *ChanBroadcaster) RemoveNode(n *Node) {
 type TopicChanBroadcaster struct {
 	*ChanBroadcaster
 	name   string
+	node   *Node
 	log    *zap.Logger
 	events chan *Event
 }
 
-func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, log *zap.Logger) *TopicChanBroadcaster {
+func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, n *Node) *TopicChanBroadcaster {
 	return &TopicChanBroadcaster{
-		log:             log,
+		node:            n,
+		log:             n.log.Named(name),
 		name:            name,
 		ChanBroadcaster: ps,
 		events:          make(chan *Event, 20),
@@ -67,7 +72,7 @@ func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, log *zap.Logger) 
 
 func (tb *TopicChanBroadcaster) Broadcast(ev *Event) {
 	tb.log.Debug("broadcasting", zapCid("event", ev.cid))
-	tb.ChanBroadcaster.Broadcast(ev)
+	tb.ChanBroadcaster.Broadcast(ev, tb.node)
 }
 
 func (tb *TopicChanBroadcaster) Events() <-chan *Event {

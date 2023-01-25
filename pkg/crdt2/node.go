@@ -40,12 +40,11 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 
 // NewTopic adds a topic to the Node.
 func (n *Node) NewTopic(name string) *Topic {
-	log := n.log.Named(name)
 	t := NewTopic(name,
-		log,
-		n.NodeStore.NewTopic(name, log),
-		n.NodeSyncer.NewTopic(name, log),
-		n.NodeBroadcaster.NewTopic(name, log),
+		n.log.Named(name),
+		n.NodeStore.NewTopic(name, n),
+		n.NodeSyncer.NewTopic(name, n),
+		n.NodeBroadcaster.NewTopic(name, n),
 	)
 	n.Topics[name] = t
 	t.Start(n.ctx)

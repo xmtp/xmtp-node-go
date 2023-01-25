@@ -46,16 +46,18 @@ func (s *randomSyncer) AddNode(n *Node) {
 	s.nodes = append(s.nodes, n)
 }
 
-func (s *randomSyncer) NewTopic(name string, log *zap.Logger) TopicSyncer {
+func (s *randomSyncer) NewTopic(name string, n *Node) TopicSyncer {
 	return &randomTopicSyncer{
 		randomSyncer: s,
+		node:         n,
 		topic:        name,
-		log:          log,
+		log:          n.log.Named(name),
 	}
 }
 
 type randomTopicSyncer struct {
 	*randomSyncer
+	node  *Node
 	topic string
 	log   *zap.Logger
 }

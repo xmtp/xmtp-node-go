@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-var visTopicM int
-var visTopicN int
+var visTopicM int // number of messages for VisualiseTopic test
+var visTopicN int // number of nodes for VisualiseTopic test
 
 func init() {
 	flag.IntVar(&visTopicM, "visTopic", 0, "run VisualiseTopic test with specified number of messages")
@@ -75,6 +75,6 @@ func randomMsgTest(t *testing.T, nodes, topics, messages int) *network {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
 		}
 	}
-	net.AssertEventuallyConsistent(time.Duration(messages*nodes*10) * time.Millisecond)
+	net.AssertEventuallyConsistent(time.Duration(messages*nodes) * time.Millisecond)
 	return net
 }

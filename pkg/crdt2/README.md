@@ -35,3 +35,4 @@ The implementation here follows this broad structure, you can find the `Event`, 
 * consistent ordering respecting the DAG
 * deep linking improve DAG sync speed
 * rebroadcasting heads to catch up dormant topics
+* what if anything should we do about inactive/dormant topics
