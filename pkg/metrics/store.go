@@ -19,15 +19,15 @@ var StoredMessageView = &view.View{
 }
 
 func EmitStoredMessages(ctx context.Context, db *sql.DB, logger *zap.Logger) {
-	count, err := messageCount(db)
+	count, err := messageCountEstimate(db)
 	if err != nil {
 		logger.Error("counting messages", zap.Error(err))
 	}
 	stats.Record(ctx, StoredMessages.M(count))
 }
 
-func messageCount(db *sql.DB) (count int64, err error) {
-	rows, err := db.Query("SELECT count(*) FROM message")
+func messageCountEstimate(db *sql.DB) (count int64, err error) {
+	rows, err := db.Query("SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = 'public.message'::regclass")
 	if err != nil {
 		return 0, err
 	}
