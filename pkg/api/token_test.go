@@ -101,10 +101,12 @@ func Test_DecodeInvalidToken(t *testing.T) {
 	token, err := decodeToken("aGk=")
 	require.Error(t, err)
 	require.Nil(t, token)
+	require.Contains(t, err.Error(), "missing identity key")
 }
 
 func Test_DecodeEmptyToken(t *testing.T) {
 	token, err := decodeToken("")
 	require.Error(t, err)
 	require.Nil(t, token)
+	require.Contains(t, err.Error(), "missing identity key")
 }

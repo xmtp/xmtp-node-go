@@ -31,7 +31,7 @@ func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 }
 
 func Test_AuthnTokenMissingIdentityKey(t *testing.T) {
-	ctx := fromSerializedProtoMissingIdentityKey(t, context.Background())
+	ctx := withMissingIdentityKey(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
 		require.Error(t, err)
