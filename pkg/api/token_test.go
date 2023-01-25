@@ -97,8 +97,14 @@ func Test_DecodeXmtpjsToken(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_DecodeInvalidTokenSafely(t *testing.T) {
+func Test_DecodeInvalidToken(t *testing.T) {
 	token, err := decodeToken("aGk=")
+	require.Error(t, err)
+	require.Nil(t, token)
+}
+
+func Test_DecodeEmptyToken(t *testing.T) {
+	token, err := decodeToken("")
 	require.Error(t, err)
 	require.Nil(t, token)
 }
