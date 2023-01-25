@@ -85,13 +85,13 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	s.ctx, s.cancel = context.WithCancel(logging.With(ctx, s.log))
 
-	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB)
+	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating db")
 	}
 	s.log.Info("created db")
 
-	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB)
+	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating db")
 	}
@@ -103,7 +103,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB)
+		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating authz db")
 		}
@@ -467,8 +467,8 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
-	db, err := createBunDB(dbConnectionString, waitForDb)
+func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration) error {
+	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout)
 	if err != nil {
 		return err
 	}
@@ -481,8 +481,8 @@ func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb 
 	return err
 }
 
-func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb time.Duration) error {
-	db, err := createBunDB(dbConnectionString, waitForDb)
+func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration) error {
+	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout)
 	if err != nil {
 		return err
 	}
@@ -495,15 +495,15 @@ func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb ti
 	return err
 }
 
-func createBunDB(dsn string, waitForDB time.Duration) (*bun.DB, error) {
-	db, err := createDB(dsn, waitForDB)
+func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*bun.DB, error) {
+	db, err := createDB(dsn, waitForDB, readTimeout, writeTimeout)
 	if err != nil {
 		return nil, err
 	}
 	return bun.NewDB(db, pgdialect.New()), nil
 }
 
-func createDB(dsn string, waitForDB time.Duration) (*sql.DB, error) {
+func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*sql.DB, error) {
 	db := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithDSN(dsn),
 		pgdriver.WithReadTimeout(30*time.Second),
