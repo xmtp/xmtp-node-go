@@ -54,6 +54,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer stmt.Close()
 	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
 	res, err := stmt.Exec(timestampThreshold, s.cleaner.BatchSize)
 	if err != nil {
