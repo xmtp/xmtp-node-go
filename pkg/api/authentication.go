@@ -76,7 +76,7 @@ func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 
 func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) (wallet types.WalletAddr, err error) {
 	if identityKey == nil {
-		return wallet, ErrMissingAuthData
+		return wallet, ErrMissingIdentityKey
 	}
 	isrBytes := createIdentitySignRequest(identityKey)
 	signature := identityKey.Signature
