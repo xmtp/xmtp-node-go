@@ -29,7 +29,12 @@ type TopicStore interface {
 	// and also removes it from heads if it's there.
 	// Returns whether we already have the event or not.
 	RemoveHead(cid mh.Multihash) (haveAlready bool, err error)
+
+	// Following methods are just for testing,
+	// not needed for the protocol implementation
+
 	// Get returns the Event based on its CID, nil if absent.
-	// This is just for testing, not needed for the protocol implementation
 	Get(cid mh.Multihash) (*Event, error)
+	// Count returns count of all stored events
+	Count() (int, error)
 }

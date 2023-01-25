@@ -92,6 +92,10 @@ func (s *mapTopicStore) Get(cid mh.Multihash) (*Event, error) {
 	return s.events[cid.String()], nil
 }
 
+func (s *mapTopicStore) Count() (int, error) {
+	return len(s.events), nil
+}
+
 func (s *mapTopicStore) allHeads() (cids []mh.Multihash) {
 	for key := range s.heads {
 		cids = append(cids, s.events[key].cid)

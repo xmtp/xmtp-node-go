@@ -109,6 +109,11 @@ func (net *network) checkEvents(ignore []int) (missing map[int]string) {
 		if ignored(j, ignore) {
 			continue
 		}
+		count, err := n.Count()
+		assert.NoError(net.t, err)
+		if count == len(net.events) {
+			continue // shortcut
+		}
 		result := ""
 		pass := true
 		for i, ev := range net.events {

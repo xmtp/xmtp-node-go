@@ -68,3 +68,15 @@ func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
 	}
 	return t.Get(cid)
 }
+
+// Count returns count of all events on the Node.
+func (n *Node) Count() (count int, err error) {
+	for _, t := range n.Topics {
+		tc, err := t.Count()
+		if err != nil {
+			return 0, err
+		}
+		count += tc
+	}
+	return count, nil
+}
