@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
-	github.com/boltdb/bolt v1.3.1
 	github.com/dustin/go-broadcast v0.0.0-20211018055107-71439988bd91
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.8
