@@ -5,6 +5,7 @@ on:
       - main
 jobs:
   deploy:
+    concurrency: main
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
