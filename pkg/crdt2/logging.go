@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// cid provides uniform logging for individual CIDs
 type cid mh.Multihash
 
 func zapCid(key string, c mh.Multihash) zapcore.Field {
@@ -18,6 +19,7 @@ func (c cid) String() string {
 	return shortenedCid(mh.Multihash(c))
 }
 
+// cidSlice provides uniform logging for lists of CIDs
 type cidSlice []mh.Multihash
 
 func (cids cidSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {

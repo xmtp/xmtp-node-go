@@ -32,7 +32,8 @@ func Test_BasicSyncing(t *testing.T) {
 	net.AssertEventuallyConsistent(time.Second)
 }
 
-// In-memory syncer
+// In-memory syncer that implements fetching by
+// reaching directly into a random Node's store.
 type randomSyncer struct {
 	nodes []*Node
 }

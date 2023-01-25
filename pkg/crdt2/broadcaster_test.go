@@ -16,7 +16,7 @@ func Test_BasicBroadcast(t *testing.T) {
 	net.AssertEventuallyConsistent(time.Second)
 }
 
-// In-memory broadcaster
+// In-memory broadcaster that uses channels to broadcast Events between Nodes.
 type ChanBroadcaster struct {
 	log         *zap.Logger
 	subscribers map[*Node]bool

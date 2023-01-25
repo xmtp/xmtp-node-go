@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// In-memory store using maps to store Events
 type mapStore struct{}
 
 func NewMapStore() *mapStore {
@@ -22,7 +23,7 @@ func (s *mapStore) NewTopic(name string, log *zap.Logger) TopicStore {
 	}
 }
 
-// In-memory TopicStore for testing
+// In-memory TopicStore
 type mapTopicStore struct {
 	sync.Mutex
 	heads  map[string]bool   // CIDs of current head events

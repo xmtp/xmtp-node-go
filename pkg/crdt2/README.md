@@ -9,7 +9,7 @@ Each oval captures a single message, it is an `Event` of the clock. The arrows p
 What makes this clock a Merkle-Clock are the long (shortened in the picture) hex sequences associated with each Event. These are content identifiers, `CIDs`, which
 
 1. uniquely identify each Event
-2. capture the message payload (the payload is hashed into the CID)
+2. capture the Event payload (the message is hashed into the CID)
 3. capture the Event links (the CIDs of the linked events are also hashed into the CID)
 
 The goal of the topic as Merkle-Clock is to support eventually consistent replication of topic contents among the nodes. Messages can be received, i.e. new Events to be created, by any node at any time. We want to make sure that all nodes participating in the topic eventually have all the events that happened across the network. Moreover we also want to make sure that all the nodes agree on the ordering of the events, i.e. given enough time they will all end up with the same DAG. The CIDs make it easy for nodes to see whether they already have given Event and whether they are missing any of its links. The CIDs also make things immutable, which allows the nodes to determine where they can stop following the missing link chain.
@@ -17,3 +17,17 @@ The goal of the topic as Merkle-Clock is to support eventually consistent replic
 What makes the replication happen are three basic components: the store, the broadcaster and the syncer. The `store` simply persists Events on a node. It allows the node to serve the Events it has to its clients and to other nodes. The `broadcaster` is used by the nodes to announce new Events they create to the rest of the network. However the broadcasts are not reliable, they may not reach some nodes due to transient network issues or due to nodes being turned off temporarily. This creates the situation where a node may receive a new event in a broadcast and realize that some of the links of the Event are unknown to it. This is where the `syncer` comes in, the nodes can use it to request missing events from the rest of the network. This allows the nodes to backfill their DAGs and catch up with the others.
 
 The implementation here follows this broad structure, you can find the `Event`, `Topic`, `Node` as well as the `Store`, `Broadcaster` and `Syncer`.
+
+## TODO
+
+* simple timestamp ordering
+* querying
+* adding/removing nodes to/from network
+* boltdb store
+* pubsub broadcaster
+* libp2p syncer
+* metrics
+* fetching multiple cids at a time
+* fetching multiple topics at a time
+* validation
+* consistent ordering respecting the DAG

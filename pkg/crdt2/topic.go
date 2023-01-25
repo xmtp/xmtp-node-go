@@ -8,11 +8,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// Topic manages the DAG of a topic replica.
+// It implements the topic API, as well as the
+// replication mechanism using the store, broadcaster and syncer.
 type Topic struct {
-	name              string
-	pendingEvents     chan *Event
-	pendingLinkEvents chan *Event
-	pendingLinks      chan mh.Multihash
+	name              string            // the topic name
+	pendingEvents     chan *Event       // broadcasted events that were received from the network but not processed yet
+	pendingLinkEvents chan *Event       // missing events that were fetched from the network but not processed yet
+	pendingLinks      chan mh.Multihash // missing links that were discovered but not successfully fetched yet
 	log               *zap.Logger
 
 	TopicStore
@@ -20,9 +23,12 @@ type Topic struct {
 	TopicBroadcaster
 }
 
+// Creates a new topic replica
 func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
 	return &Topic{
-		name:              name,
+		name: name,
+		// TODO: tuning the channel sizes will likely be important
+		// current implementation can lock up if the channels fill up.
 		pendingEvents:     make(chan *Event, 20),
 		pendingLinkEvents: make(chan *Event, 20),
 		pendingLinks:      make(chan mh.Multihash, 20),
@@ -33,6 +39,7 @@ func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer
 	}
 }
 
+// Publish adopts a new message into a topic and broadcasts it to the network.
 func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
 	ev, err := t.NewEvent(env)
 	if err != nil {
@@ -46,11 +53,13 @@ func (t *Topic) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*mess
 	return nil, nil, TODO
 }
 
+// Start the replication mechanisms of the topic.
 func (t *Topic) Start(ctx context.Context) {
 	go t.receiveLoop(ctx)
 	go t.syncLoop(ctx)
 }
 
+// receiveLoop processes incoming Event broadcasts.
 func (t *Topic) receiveLoop(ctx context.Context) {
 loop:
 	for {
@@ -65,6 +74,7 @@ loop:
 	}
 }
 
+// syncLoop implements topic syncing
 func (t *Topic) syncLoop(ctx context.Context) {
 loop:
 	for {

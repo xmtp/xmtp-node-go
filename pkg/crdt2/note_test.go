@@ -41,6 +41,12 @@ func Test_RandomMessages(t *testing.T) {
 	}
 }
 
+// Run a single topic test with given number of nodes and messages and visualise the resulting topic DAG after.
+// Usage:
+//
+//		go test -visTopic=<messageCount> [visTopicN=<nodeCount>] >t0.dot
+//	 	dot -Tjpg t0.dot >t0.jpg
+//	 	open t0.jpg
 func Test_VisualiseTopic(t *testing.T) {
 	if visTopicM == 0 {
 		return

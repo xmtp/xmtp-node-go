@@ -12,6 +12,9 @@ import (
 var TODO = errors.New("Not Yet Implemented")
 var UnknownTopic = errors.New("Unknown Topic")
 
+// Node represents a node in the XMTP network.
+// Node hosts a set of Topics and provides the required
+// supporting facilities (store, syncer, broadcaster).
 type Node struct {
 	ctx context.Context
 	log *zap.Logger
@@ -23,6 +26,7 @@ type Node struct {
 	NodeBroadcaster
 }
 
+// NewNode creates a new network node.
 func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeSyncer, bc NodeBroadcaster) *Node {
 	return &Node{
 		ctx:             ctx,
@@ -34,6 +38,7 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	}
 }
 
+// NewTopic adds a topic to the Node.
 func (n *Node) NewTopic(name string) *Topic {
 	log := n.log.Named(name)
 	t := NewTopic(name,
@@ -47,6 +52,7 @@ func (n *Node) NewTopic(name string) *Topic {
 	return t
 }
 
+// Publish sends a new message out to the network.
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
 	topic := n.Topics[env.ContentTopic]
 	if topic == nil {
@@ -55,6 +61,11 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, er
 	return topic.Publish(ctx, env)
 }
 
+// Get retrieves an Event for given Topic.
 func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
-	return n.Topics[topic].Get(cid)
+	t := n.Topics[topic]
+	if t == nil {
+		return nil, UnknownTopic
+	}
+	return t.Get(cid)
 }

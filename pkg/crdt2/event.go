@@ -9,14 +9,16 @@ import (
 )
 
 // Event represents a node in the Merkle-Clock
+// It captures a message and links to its preceding Events
 type Event struct {
 	*messagev1.Envelope
 	links []mh.Multihash // cid's of direct ancestors
-	cid   mh.Multihash   // cid is computed by hashing the links and payload together
+	cid   mh.Multihash   // cid is computed by hashing the links and message together
 }
 
-func NewEvent(env *messagev1.Envelope, links []mh.Multihash) (*Event, error) {
-	ev := &Event{Envelope: env, links: links}
+// NewEvent creates an event from a message and a set of links to preceding events (heads)
+func NewEvent(env *messagev1.Envelope, heads []mh.Multihash) (*Event, error) {
+	ev := &Event{Envelope: env, links: heads}
 	var err error
 	ev.cid, err = mh.SumStream(ev.Reader(), mh.SHA2_256, -1)
 	if err != nil {
@@ -34,6 +36,7 @@ type chunkReader struct {
 	pos          int      // current position from the start of the next chunk
 }
 
+// Reader creates a chunk reader for given Event.
 func (ev *Event) Reader() *chunkReader {
 	// compose the chunks of the Event data
 	var chunks [][]byte

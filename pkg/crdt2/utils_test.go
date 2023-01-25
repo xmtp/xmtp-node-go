@@ -15,6 +15,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// network is an in-memory simulation of a network of a given number of Nodes.
+// All nodes host all of the given number of topics named t0, t1, etc.
+// network also captures events that were published to it for final analysis of the test results.
 type network struct {
 	t      *testing.T
 	nodes  []*Node  // all the nodes in the network
@@ -124,6 +127,8 @@ func (net *network) checkEvents(ignore []int) (missing map[int]string) {
 	return missing
 }
 
+// emit a graphvis depiction of the topic contents
+// showing the individual events and their links
 func (net *network) visualiseTopic(w io.Writer, topic string) {
 	fmt.Fprintf(w, "strict digraph %s {\n", topic)
 	for i := len(net.events) - 1; i >= 0; i-- {

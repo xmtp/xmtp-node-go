@@ -11,7 +11,7 @@ import (
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
-func Test_NilEvent(t *testing.T) {
+func Test_NilEventCID(t *testing.T) {
 	ev, err := NewEvent(nil, nil)
 	assert.NoError(t, err)
 	emptyHash, err := mh.Sum(nil, mh.SHA2_256, -1)
@@ -19,7 +19,7 @@ func Test_NilEvent(t *testing.T) {
 	assert.Equal(t, ev.cid, emptyHash)
 }
 
-func Test_Event(t *testing.T) {
+func Test_EventCID(t *testing.T) {
 	payload := make([]byte, 1000)
 	_, err := rand.Reader.Read(payload)
 	assert.NoError(t, err)
