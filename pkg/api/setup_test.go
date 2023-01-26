@@ -87,6 +87,7 @@ func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStor
 		store.WithHost(host),
 		store.WithDB(db),
 		store.WithReaderDB(db),
+		store.WithCleanerDB(db),
 		store.WithMessageProvider(dbStore))
 	require.NoError(t, err)
 
