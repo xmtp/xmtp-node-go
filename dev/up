@@ -9,5 +9,5 @@ if ! which protoc &>/dev/null; then brew install protobuf; fi
 if ! which protoc-gen-go &>/dev/null; then go install google.golang.org/protobuf/cmd/protoc-gen-go@latest; fi
 if ! which mockgen &>/dev/null; then go install github.com/golang/mock/mockgen@latest; fi
 if ! which protolint &>/dev/null; then go install github.com/yoheimuta/protolint/cmd/protolint@latest; fi
-
+if ! which terraform &>/dev/null; then brew install terraform; fi
 dev/generate
