@@ -96,3 +96,17 @@ func Test_DecodeXmtpjsToken(t *testing.T) {
 	_, err := decodeToken("CpIBCOqy8+iqMBJECkIKQGsPVyMg1ZjfJXCu7+IxuRJ9/JrWvPIPsZ+GjRM+eQ8kLCfuOequP3GscERICC3qRk/l4eCW/kqM5fbd5/TcQHEaQwpBBAzYR20tIAxsD3cXSnrDBoZ8xr2FPgA9d4u1QzaNt/t0tpQ9G6i9ju35nCDTr35iMbZvbYfZJKYbed2ABOZ2xdMSNgoqMHg1NDY3ZUU5ZGU5MmE3ZDgzMGE3MTMxNTZkZjg4ZGQ2Qjg3MDQwZUY2EMCs9dTXv42GFxpGCkQKQBoIQ77Vi0SU3M5s1WsthNiJgI8Vx89cSzZvJiaIVNJYCJO2x55eEex5R4o55XFvoNrgGcRyDOGg3WMsTWlWOx8QAQ==")
 	require.NoError(t, err)
 }
+
+func Test_DecodeInvalidToken(t *testing.T) {
+	token, err := decodeToken("aGk=")
+	require.Error(t, err)
+	require.Nil(t, token)
+	require.Contains(t, err.Error(), "missing identity key")
+}
+
+func Test_DecodeEmptyToken(t *testing.T) {
+	token, err := decodeToken("")
+	require.Error(t, err)
+	require.Nil(t, token)
+	require.Contains(t, err.Error(), "missing identity key")
+}

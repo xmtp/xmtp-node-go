@@ -20,6 +20,10 @@ func decodeToken(s string) (*messagev1.Token, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Check that IdentityKey pointers are non-nil.
+	if token.IdentityKey == nil || token.IdentityKey.Signature == nil {
+		return nil, ErrMissingIdentityKey
+	}
 	return &token, nil
 }
 

@@ -30,6 +30,15 @@ func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 	})
 }
 
+func Test_AuthnTokenMissingIdentityKey(t *testing.T) {
+	ctx := withMissingIdentityKey(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "missing identity key")
+	})
+}
+
 func Test_AuthnTokenMissingAuthData(t *testing.T) {
 	ctx := withMissingAuthData(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {

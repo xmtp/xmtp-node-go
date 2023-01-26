@@ -26,6 +26,7 @@ var (
 	ErrUnsignedKey              = errors.New("identity key is not signed")
 	ErrUnknownSignatureType     = errors.New("unknown signature type")
 	ErrUnknownKeyType           = errors.New("unknown public key type")
+	ErrMissingIdentityKey       = errors.New("missing identity key")
 )
 
 func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
@@ -57,8 +58,10 @@ func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token,
 	return recoveredWalletAddress, nil
 }
 
-//
 func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
+	if identityKey == nil {
+		return nil
+	}
 	// We need a bare key to generate the key bytes to sign.
 	unsignedKey := &envelope.PublicKey{
 		Timestamp: identityKey.Timestamp,
@@ -72,6 +75,9 @@ func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 }
 
 func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) (wallet types.WalletAddr, err error) {
+	if identityKey == nil {
+		return wallet, ErrMissingIdentityKey
+	}
 	isrBytes := createIdentitySignRequest(identityKey)
 	signature := identityKey.Signature
 	if signature == nil {
