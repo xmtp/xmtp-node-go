@@ -11,7 +11,7 @@ import (
 func Test_BasicBroadcast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	net := NewNetwork(t, ctx, 5, 1)
+	net := newNetwork(t, ctx, 5, 1)
 	net.Publish(0, t0, "hi")
 	net.AssertEventuallyConsistent(time.Second)
 }
@@ -29,27 +29,27 @@ func NewChanBroadcaster(log *zap.Logger) *ChanBroadcaster {
 	}
 }
 
-func (ps *ChanBroadcaster) NewTopic(name string, n *Node) TopicBroadcaster {
-	return NewTopicChanBroadcaster(ps, name, n)
+func (b *ChanBroadcaster) NewTopic(name string, n *Node) TopicBroadcaster {
+	return NewTopicChanBroadcaster(b, name, n)
 }
 
-func (ps *ChanBroadcaster) Broadcast(ev *Event, from *Node) {
-	for sub := range ps.subscribers {
+func (b *ChanBroadcaster) Broadcast(ev *Event, from *Node) {
+	for sub := range b.subscribers {
 		if sub == from {
 			continue
 		}
-		if t := sub.Topics[ev.ContentTopic]; t != nil {
+		if t := sub.topics[ev.ContentTopic]; t != nil {
 			t.TopicBroadcaster.(*TopicChanBroadcaster).events <- ev
 		}
 	}
 }
 
-func (ps *ChanBroadcaster) AddNode(n *Node) {
-	ps.subscribers[n] = true
+func (b *ChanBroadcaster) AddNode(n *Node) {
+	b.subscribers[n] = true
 }
 
-func (ps *ChanBroadcaster) RemoveNode(n *Node) {
-	delete(ps.subscribers, n)
+func (b *ChanBroadcaster) RemoveNode(n *Node) {
+	delete(b.subscribers, n)
 }
 
 type TopicChanBroadcaster struct {
@@ -60,12 +60,12 @@ type TopicChanBroadcaster struct {
 	events chan *Event
 }
 
-func NewTopicChanBroadcaster(ps *ChanBroadcaster, name string, n *Node) *TopicChanBroadcaster {
+func NewTopicChanBroadcaster(b *ChanBroadcaster, name string, n *Node) *TopicChanBroadcaster {
 	return &TopicChanBroadcaster{
 		node:            n,
 		log:             n.log.Named(name),
 		name:            name,
-		ChanBroadcaster: ps,
+		ChanBroadcaster: b,
 		events:          make(chan *Event, 20),
 	}
 }

@@ -24,8 +24,8 @@ type Topic struct {
 }
 
 // Creates a new topic replica
-func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
-	return &Topic{
+func NewTopic(ctx context.Context, name string, log *zap.Logger, store TopicStore, syncer TopicSyncer, bc TopicBroadcaster) *Topic {
+	t := &Topic{
 		name: name,
 		// TODO: tuning the channel sizes will likely be important
 		// current implementation can lock up if the channels fill up.
@@ -37,6 +37,9 @@ func NewTopic(name string, log *zap.Logger, store TopicStore, syncer TopicSyncer
 		TopicSyncer:          syncer,
 		TopicBroadcaster:     bc,
 	}
+	go t.receiveLoop(ctx)
+	go t.syncLoop(ctx)
+	return t
 }
 
 // Publish adopts a new message into a topic and broadcasts it to the network.
@@ -51,12 +54,6 @@ func (t *Topic) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, e
 
 func (t *Topic) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*messagev1.Envelope, *messagev1.PagingInfo, error) {
 	return nil, nil, TODO
-}
-
-// Start the replication mechanisms of the topic.
-func (t *Topic) Start(ctx context.Context) {
-	go t.receiveLoop(ctx)
-	go t.syncLoop(ctx)
 }
 
 // receiveLoop processes incoming Event broadcasts.

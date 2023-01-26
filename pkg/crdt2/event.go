@@ -27,15 +27,6 @@ func NewEvent(env *messagev1.Envelope, heads []mh.Multihash) (*Event, error) {
 	return ev, nil
 }
 
-// chunkReader helps computing an Event CID efficiently by
-// yielding the bytes composed of the various bits of the Event
-// without having to concatenate them all.
-// This allows passing the reader to mh.SumStream()
-type chunkReader struct {
-	unreadChunks [][]byte // chunks of the Event data to be hashed
-	pos          int      // current position from the start of the next chunk
-}
-
 // Reader creates a chunk reader for given Event.
 func (ev *Event) Reader() *chunkReader {
 	// compose the chunks of the Event data
@@ -50,6 +41,15 @@ func (ev *Event) Reader() *chunkReader {
 		chunks = append(chunks, link)
 	}
 	return &chunkReader{chunks, 0}
+}
+
+// chunkReader helps computing an Event CID efficiently by
+// yielding the bytes composed of the various bits of the Event
+// without having to concatenate them all.
+// This allows passing the reader to mh.SumStream()
+type chunkReader struct {
+	unreadChunks [][]byte // chunks of the Event data to be hashed
+	pos          int      // current position from the start of the next chunk
 }
 
 func (r *chunkReader) Read(b []byte) (n int, err error) {

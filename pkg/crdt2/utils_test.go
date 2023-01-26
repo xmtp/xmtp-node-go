@@ -30,7 +30,7 @@ const t0 = "t0" // first topic
 // ...
 
 // Creates a network with given number of nodes and given number of topics on all nodes
-func NewNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
+func newNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 	log := test.NewLog(t)
 	bc := NewChanBroadcaster(log)
 	sync := NewRandomSyncer()
@@ -49,7 +49,7 @@ func NewNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 			n.NewTopic(topic)
 			log.Debug("creating", zap.String("node", name), zap.String("topic", topic))
 		}
-		require.Len(t, n.Topics, topics)
+		require.Len(t, n.topics, topics)
 		list = append(list, n)
 	}
 	require.Len(t, list, nodes)
@@ -125,9 +125,8 @@ func (net *network) checkEvents(ignore []int) (missing map[int]string) {
 				result = result + strconv.FormatInt(int64(i), 36)
 			}
 		}
-		if !pass {
-			missing[j] = result
-		}
+		assert.False(net.t, pass)
+		missing[j] = result
 	}
 	return missing
 }

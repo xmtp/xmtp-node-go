@@ -66,7 +66,7 @@ func randomMsgTest(t *testing.T, nodes, topics, messages int) *network {
 	// to inject an event to most topics, and then the random length of the delay
 	// should allow some amount of propagation to happen before the next burst.
 	delayEvery := nodes * topics
-	net := NewNetwork(t, ctx, nodes, topics)
+	net := newNetwork(t, ctx, nodes, topics)
 	for i := 0; i < messages; i++ {
 		topic := fmt.Sprintf("t%d", rand.Intn(topics))
 		msg := fmt.Sprintf("gm %d", i)

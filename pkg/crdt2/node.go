@@ -12,14 +12,14 @@ import (
 var TODO = errors.New("Not Yet Implemented")
 var UnknownTopic = errors.New("Unknown Topic")
 
-// Node represents a node in the XMTP network.
+// Node represents a peer in the XMTP network.
 // Node hosts a set of Topics and provides the required
 // supporting facilities (store, syncer, broadcaster).
 type Node struct {
 	ctx context.Context
 	log *zap.Logger
 
-	Topics map[string]*Topic
+	topics map[string]*Topic
 
 	NodeStore
 	NodeSyncer
@@ -31,7 +31,7 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	return &Node{
 		ctx:             ctx,
 		log:             log,
-		Topics:          make(map[string]*Topic),
+		topics:          make(map[string]*Topic),
 		NodeStore:       store,
 		NodeSyncer:      syncer,
 		NodeBroadcaster: bc,
@@ -40,20 +40,21 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 
 // NewTopic adds a topic to the Node.
 func (n *Node) NewTopic(name string) *Topic {
-	t := NewTopic(name,
+	t := NewTopic(
+		n.ctx,
+		name,
 		n.log.Named(name),
 		n.NodeStore.NewTopic(name, n),
 		n.NodeSyncer.NewTopic(name, n),
 		n.NodeBroadcaster.NewTopic(name, n),
 	)
-	n.Topics[name] = t
-	t.Start(n.ctx)
+	n.topics[name] = t
 	return t
 }
 
 // Publish sends a new message out to the network.
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
-	topic := n.Topics[env.ContentTopic]
+	topic := n.topics[env.ContentTopic]
 	if topic == nil {
 		return nil, UnknownTopic
 	}
@@ -62,7 +63,7 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, er
 
 // Get retrieves an Event for given Topic.
 func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
-	t := n.Topics[topic]
+	t := n.topics[topic]
 	if t == nil {
 		return nil, UnknownTopic
 	}
@@ -71,7 +72,7 @@ func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
 
 // Count returns count of all events on the Node.
 func (n *Node) Count() (count int, err error) {
-	for _, t := range n.Topics {
+	for _, t := range n.topics {
 		tc, err := t.Count()
 		if err != nil {
 			return 0, err
