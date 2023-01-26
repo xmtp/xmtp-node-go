@@ -56,6 +56,7 @@ func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 				WithHost(host),
 				WithDB(db),
 				WithReaderDB(db),
+				WithCleanerDB(db),
 				WithMessageProvider(dbStore),
 			},
 			opts...,

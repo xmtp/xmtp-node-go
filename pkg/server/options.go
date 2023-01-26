@@ -42,8 +42,8 @@ type StoreOptions struct {
 	Nodes                    []string      `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
 	DbConnectionString       string        `long:"message-db-connection-string" description:"A Postgres database connection string"`
 	DbReaderConnectionString string        `long:"message-db-reader-connection-string" description:"A Postgres database reader connection string"`
-	ReadTimeout              time.Duration `long:"message-db-read-timeout" description:"Timeout for reading from the database" default:"30s"`
-	WriteTimeout             time.Duration `long:"message-db-write-timeout" description:"Timeout for writing to the database" default:"30s"`
+	ReadTimeout              time.Duration `long:"message-db-read-timeout" description:"Timeout for reading from the database" default:"10s"`
+	WriteTimeout             time.Duration `long:"message-db-write-timeout" description:"Timeout for writing to the database" default:"10s"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {

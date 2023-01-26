@@ -497,6 +497,7 @@ func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *
 		store.WithHost(host),
 		store.WithDB(db),
 		store.WithReaderDB(db),
+		store.WithCleanerDB(db),
 		store.WithMessageProvider(dbStore),
 	)
 	require.NoError(t, err)

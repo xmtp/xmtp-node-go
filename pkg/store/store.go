@@ -38,6 +38,7 @@ var (
 	ErrMissingCleanerPassivePeriod  = errors.New("missing cleaner passive period option")
 	ErrMissingCleanerBatchSize      = errors.New("missing cleaner batch size option")
 	ErrMissingCleanerRetentionDays  = errors.New("missing cleaner retention days option")
+	ErrMissingCleanerDBOption       = errors.New("missing cleaner db option")
 )
 
 const (
@@ -51,6 +52,7 @@ type XmtpStore struct {
 	wg          sync.WaitGroup
 	db          *sql.DB
 	readerDB    *sql.DB
+	cleanerDB   *sql.DB
 	log         *zap.Logger
 	host        host.Host
 	msgProvider store.MessageProvider
@@ -108,6 +110,9 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		}
 		if s.cleaner.RetentionDays == 0 {
 			return nil, ErrMissingCleanerRetentionDays
+		}
+		if s.cleanerDB == nil {
+			return nil, ErrMissingCleanerDBOption
 		}
 	}
 

@@ -35,6 +35,12 @@ func WithReaderDB(db *sql.DB) Option {
 	}
 }
 
+func WithCleanerDB(db *sql.DB) Option {
+	return func(s *XmtpStore) {
+		s.cleanerDB = db
+	}
+}
+
 func WithMessageProvider(p wakustore.MessageProvider) Option {
 	return func(s *XmtpStore) {
 		s.msgProvider = p
