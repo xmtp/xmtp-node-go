@@ -10,7 +10,7 @@ type CleanerOptions struct {
 	Enable        bool          `long:"enable" description:"Enable DB cleaner"`
 	ActivePeriod  time.Duration `long:"active-period" description:"Time between successive runs of the cleaner when the last run was a full batch" default:"2s"`
 	PassivePeriod time.Duration `long:"passive-period" description:"Time between successive runs of the cleaner when the last run was not a full batch" default:"5m"`
-	RetentionDays int           `long:"retention-days" description:"Number of days in the past that messages must be before being deleted" default:"3"`
+	RetentionDays int           `long:"retention-days" description:"Number of days in the past that messages must be before being deleted" default:"1"`
 	BatchSize     int           `long:"batch-size" description:"Batch size of messages to be deleted in one iteration" default:"1000"`
 	ReadTimeout   time.Duration `long:"read-timeout" description:"Timeout for reading from the database" default:"30s"`
 	WriteTimeout  time.Duration `long:"write-timeout" description:"Timeout for writing to the database" default:"30s"`
