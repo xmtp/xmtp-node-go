@@ -38,7 +38,8 @@ func NewTopic(ctx context.Context, name string, log *zap.Logger, store TopicStor
 		TopicBroadcaster:     bc,
 	}
 	go t.receiveLoop(ctx)
-	go t.syncLoop(ctx)
+	go t.syncEventLoop(ctx)
+	go t.syncLinkLoop(ctx)
 	return t
 }
 
@@ -64,36 +65,56 @@ loop:
 		case <-ctx.Done():
 			break loop
 		case ev := <-t.pendingReceiveEvents:
-			t.addHead(ev)
-		}
-	}
-}
-
-func (t *Topic) addHead(ev *Event) {
-	// t.log.Debug("adding event", zapCid("event", ev.cid))
-	added, err := t.AddHead(ev)
-	if err != nil {
-		// requeue for later
-		// TODO: may need a delay
-		// TODO: if the channel is full, this will lock up the loop
-		t.pendingReceiveEvents <- ev
-	}
-	if added {
-		for _, link := range ev.links {
-			t.pendingLinks <- link
+			// t.log.Debug("adding event", zapCid("event", ev.cid))
+			added, err := t.AddHead(ev)
+			if err != nil {
+				// requeue for later
+				// TODO: may need a delay
+				// TODO: if the channel is full, this will lock up the loop
+				t.pendingReceiveEvents <- ev
+			}
+			if added {
+				for _, link := range ev.links {
+					t.pendingLinks <- link
+				}
+			}
 		}
 	}
 }
 
 // syncLoop implements topic syncing
-func (t *Topic) syncLoop(ctx context.Context) {
+func (t *Topic) syncEventLoop(ctx context.Context) {
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break loop
 		case ev := <-t.pendingSyncEvents:
-			t.addEvent(ev)
+			// t.log.Debug("adding link event", zapCid("event", ev.cid))
+			added, err := t.AddEvent(ev)
+			if err != nil {
+				// requeue for later
+				// TODO: may need a delay
+				// TODO: if the channel is full, this will lock up the loop
+				t.pendingSyncEvents <- ev
+			}
+			if added {
+				for _, link := range ev.links {
+					// TODO: if the channel is full, this will lock up the loop
+					t.pendingLinks <- link
+				}
+			}
+		}
+	}
+}
+
+// syncLoop implements topic syncing
+func (t *Topic) syncLinkLoop(ctx context.Context) {
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
 		case cid := <-t.pendingLinks:
 			// t.log.Debug("checking link", zapCid("link", cid))
 			// If the CID is in heads, it should be removed because
@@ -125,25 +146,8 @@ loop:
 					t.pendingLinks <- cids[i]
 					continue
 				}
-				t.addEvent(ev)
+				t.pendingSyncEvents <- ev
 			}
-		}
-	}
-}
-
-func (t *Topic) addEvent(ev *Event) {
-	// t.log.Debug("adding link event", zapCid("event", ev.cid))
-	added, err := t.AddEvent(ev)
-	if err != nil {
-		// requeue for later
-		// TODO: may need a delay
-		// TODO: if the channel is full, this will lock up the loop
-		t.pendingSyncEvents <- ev
-	}
-	if added {
-		for _, link := range ev.links {
-			// TODO: if the channel is full, this will lock up the loop
-			t.pendingLinks <- link
 		}
 	}
 }
