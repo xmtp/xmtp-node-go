@@ -37,7 +37,7 @@ func NewTopic(ctx context.Context, name string, log *zap.Logger, store TopicStor
 		TopicSyncer:          syncer,
 		TopicBroadcaster:     bc,
 	}
-	go t.receiveLoop(ctx)
+	go t.receiveEventLoop(ctx)
 	go t.syncEventLoop(ctx)
 	go t.syncLinkLoop(ctx)
 	return t
@@ -57,8 +57,9 @@ func (t *Topic) Query(ctx context.Context, req *messagev1.QueryRequest) ([]*mess
 	return nil, nil, TODO
 }
 
-// receiveLoop processes incoming Event broadcasts.
-func (t *Topic) receiveLoop(ctx context.Context) {
+// receiveEventLoop processes incoming Events from broadcasts.
+// It consumes pendingReceiveEvents and writes into pendingLinks.
+func (t *Topic) receiveEventLoop(ctx context.Context) {
 loop:
 	for {
 		select {
@@ -82,33 +83,8 @@ loop:
 	}
 }
 
-// syncLoop implements topic syncing
-func (t *Topic) syncEventLoop(ctx context.Context) {
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			break loop
-		case ev := <-t.pendingSyncEvents:
-			// t.log.Debug("adding link event", zapCid("event", ev.cid))
-			added, err := t.AddEvent(ev)
-			if err != nil {
-				// requeue for later
-				// TODO: may need a delay
-				// TODO: if the channel is full, this will lock up the loop
-				t.pendingSyncEvents <- ev
-			}
-			if added {
-				for _, link := range ev.links {
-					// TODO: if the channel is full, this will lock up the loop
-					t.pendingLinks <- link
-				}
-			}
-		}
-	}
-}
-
-// syncLoop implements topic syncing
+// syncLoop fetches missing events from links.
+// It consumes pendingLinks and writes into pendingSyncEvents
 func (t *Topic) syncLinkLoop(ctx context.Context) {
 loop:
 	for {
@@ -147,6 +123,35 @@ loop:
 					continue
 				}
 				t.pendingSyncEvents <- ev
+			}
+		}
+	}
+}
+
+// syncEventLoop processes missing events that were fetched from links.
+// It consumes pendingSyncEvents and writes into pendingLinks.
+// TODO: There is channel read/write cycle between the two sync loops,
+// i.e. they could potentially lock up if both channels fill up.
+func (t *Topic) syncEventLoop(ctx context.Context) {
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case ev := <-t.pendingSyncEvents:
+			// t.log.Debug("adding link event", zapCid("event", ev.cid))
+			added, err := t.AddEvent(ev)
+			if err != nil {
+				// requeue for later
+				// TODO: may need a delay
+				// TODO: if the channel is full, this will lock up the loop
+				t.pendingSyncEvents <- ev
+			}
+			if added {
+				for _, link := range ev.links {
+					// TODO: if the channel is full, this will lock up the loop
+					t.pendingLinks <- link
+				}
 			}
 		}
 	}
