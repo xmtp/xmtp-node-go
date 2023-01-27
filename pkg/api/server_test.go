@@ -118,7 +118,7 @@ func Test_QueryNoTopics(t *testing.T) {
 			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
 			require.EqualError(t, err, `rpc error: code = InvalidArgument desc = content topics required`)
 		} else {
-			require.EqualError(t, err, "400 Bad Request: {\"code\":3, \"message\":\"content topics required\", \"details\":[]}")
+			require.Regexp(t, `400 Bad Request: {"code\":3,\s?"message":"content topics required",\s?"details":\[\]}`, err.Error())
 		}
 		require.Nil(t, queryRes)
 	})
