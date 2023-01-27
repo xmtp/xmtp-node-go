@@ -147,9 +147,11 @@ func (s *Server) startHTTP() error {
 		return errors.Wrap(err, "creating grpc-gateway listener")
 	}
 
+	// Add two handler wrappers to mux: gzipWrapper and allowCORS
 	server := http.Server{
 		Addr:    addr,
-		Handler: allowCORS(mux),
+		Handler: allowCORS(gzipWrapper(mux)),
+		//		Handler: gzipWrapper(allowCORS(mux)),
 	}
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "http", func(ctx context.Context) {
