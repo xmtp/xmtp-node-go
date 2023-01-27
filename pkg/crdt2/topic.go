@@ -65,8 +65,6 @@ loop:
 			break loop
 		case ev := <-t.pendingReceiveEvents:
 			t.addHead(ev)
-		case ev := <-t.Events():
-			t.addHead(ev)
 		}
 	}
 }

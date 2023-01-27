@@ -38,8 +38,8 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	}
 }
 
-// NewTopic adds a topic to the Node.
-func (n *Node) NewTopic(name string) *Topic {
+// newTopic adds a topic to the Node.
+func (n *Node) newTopic(name string) *Topic {
 	t := NewTopic(
 		n.ctx,
 		name,
@@ -56,7 +56,7 @@ func (n *Node) NewTopic(name string) *Topic {
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
 	topic := n.topics[env.ContentTopic]
 	if topic == nil {
-		return nil, UnknownTopic
+		topic = n.newTopic(env.ContentTopic)
 	}
 	return topic.Publish(ctx, env)
 }
