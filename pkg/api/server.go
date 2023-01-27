@@ -151,7 +151,6 @@ func (s *Server) startHTTP() error {
 	server := http.Server{
 		Addr:    addr,
 		Handler: allowCORS(gzipWrapper(mux)),
-		//		Handler: gzipWrapper(allowCORS(mux)),
 	}
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "http", func(ctx context.Context) {
