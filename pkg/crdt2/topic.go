@@ -156,3 +156,20 @@ loop:
 		}
 	}
 }
+
+// Bootstrap the topic from the contents of the topic store.
+// This is called from a goroutine group during node creation.
+func (t *Topic) bootstrap(ctx context.Context) error {
+	links, err := t.FindMissingLinks()
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case t.pendingLinks <- link:
+		}
+	}
+	return nil
+}

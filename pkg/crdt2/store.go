@@ -9,6 +9,12 @@ import (
 type NodeStore interface {
 	// NewTopic creates a TopicStore for the specified topic.
 	NewTopic(name string, node *Node) TopicStore
+
+	// Following methods are needed for bootstrapping topics
+	// from a pre-existing store.
+
+	// Topics returns the list of all the stored topic names
+	Topics() (topics []string, err error)
 }
 
 // TopicStore represents the storage capacity for a specific topic.
@@ -29,6 +35,14 @@ type TopicStore interface {
 	// and also removes it from heads if it's there.
 	// Returns whether we already have the event or not.
 	RemoveHead(cid mh.Multihash) (haveAlready bool, err error)
+
+	// Following methods are needed for bootstrapping a topic
+	// from a pre-existing store.
+
+	// GetPendingLinks scans the whole topic for links that
+	// are not present in the topic.
+	// Returns the list of all missing links.
+	FindMissingLinks() (links []mh.Multihash, err error)
 
 	// Following methods are just for testing,
 	// not needed for the protocol implementation

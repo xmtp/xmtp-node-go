@@ -9,24 +9,43 @@ import (
 )
 
 // In-memory store using maps to store Events
-type mapStore struct{}
+type mapStore struct {
+	sync.Mutex
+	topics map[string]*mapTopicStore
+}
 
-func NewMapStore() *mapStore {
-	return &mapStore{}
+func newMapStore() *mapStore {
+	return &mapStore{
+		topics: make(map[string]*mapTopicStore),
+	}
 }
 
 func (s *mapStore) NewTopic(name string, n *Node) TopicStore {
-	return &mapTopicStore{
-		node:   n,
-		log:    n.log.Named(name),
-		heads:  make(map[string]bool),
-		events: make(map[string]*Event),
+	s.Lock()
+	defer s.Unlock()
+	ts := s.topics[name]
+	if ts == nil {
+		ts = &mapTopicStore{
+			node:   n,
+			log:    n.log.Named(name),
+			heads:  make(map[string]bool),
+			events: make(map[string]*Event),
+		}
+		s.topics[name] = ts
 	}
+	return ts
+}
+
+func (s *mapStore) Topics() (topics []string, err error) {
+	for k := range s.topics {
+		topics = append(topics, k)
+	}
+	return topics, nil
 }
 
 // In-memory TopicStore
 type mapTopicStore struct {
-	sync.Mutex
+	sync.RWMutex
 	node   *Node
 	heads  map[string]bool   // CIDs of current head events
 	events map[string]*Event // maps CIDs to all known Events
@@ -86,6 +105,19 @@ func (s *mapTopicStore) NewEvent(env *messagev1.Envelope) (*Event, error) {
 	s.events[key] = ev
 	s.heads = map[string]bool{key: true}
 	return ev, err
+}
+
+func (s *mapTopicStore) FindMissingLinks() (links []mh.Multihash, err error) {
+	s.RLock()
+	defer s.RUnlock()
+	for _, ev := range s.events {
+		for _, cid := range ev.links {
+			if s.events[cid.String()] == nil {
+				links = append(links, cid)
+			}
+		}
+	}
+	return links, nil
 }
 
 func (s *mapTopicStore) Get(cid mh.Multihash) (*Event, error) {
