@@ -20,13 +20,14 @@ func (s *XmtpStore) cleanerLoop() {
 	log := s.log.Named("cleaner")
 
 	for {
+		started := time.Now().UTC()
 		select {
 		case <-s.ctx.Done():
 			return
 		default:
 			count, err := s.deleteNonXMTPMessagesBatch(log)
 			if err != nil {
-				log.Error("error deleting non-xmtp messages", zap.Error(err))
+				log.Error("error deleting non-xmtp messages", zap.Error(err), zap.Duration("duration", time.Since(started)))
 			}
 			if count >= int64(s.cleaner.BatchSize-10) {
 				time.Sleep(s.cleaner.ActivePeriod)
