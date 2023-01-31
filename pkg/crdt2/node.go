@@ -42,24 +42,27 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 		NodeSyncer:      syncer,
 		NodeBroadcaster: bc,
 	}
+	// Find pre-existing topics
 	topics, err := store.Topics()
 	if err != nil {
 		return nil, err
 	}
+	// Bootstrap all the topics with some parallelization.
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.SetLimit(1000) // up to 1000 topic bootstraps in parallel
 	for _, n := range topics {
 		topic := n
 		grp.Go(func() (err error) {
-			var t *Topic
-			{
+			t := func() *Topic {
 				node.Lock()
 				defer node.Unlock()
-				t = node.newTopic(topic)
-			}
+				return node.newTopic(topic)
+			}()
 			return t.bootstrap(ctx)
 		})
 	}
+	// Do not return until all topics are bootstrapped successfully.
+	// If any bootstrap fails, bail out.
 	if err := grp.Wait(); err != nil {
 		cancel()
 		return nil, err
@@ -75,14 +78,13 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, er
 
 // Get retrieves an Event for given Topic.
 func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
-	var t *Topic
-	{
+	t := func() *Topic {
 		n.RLock()
 		defer n.RUnlock()
-		t = n.topics[topic]
-		if t == nil {
-			return nil, UnknownTopic
-		}
+		return n.topics[topic]
+	}()
+	if t == nil {
+		return nil, UnknownTopic
 	}
 	return t.Get(cid)
 }
