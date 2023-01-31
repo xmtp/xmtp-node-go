@@ -43,12 +43,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
 	whereClause := "receivertimestamp < $1 AND should_expire IS TRUE"
 
-	stmt, err := s.cleanerDB.Prepare("SELECT COUNT(1) FROM message WHERE " + whereClause + ";")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(timestampThreshold)
+	rows, err := s.cleanerDB.Query("SELECT COUNT(1) FROM message WHERE "+whereClause, timestampThreshold)
 	if err != nil {
 		return 0, err
 	}
@@ -69,21 +64,16 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	// reader for the non-indexed NOT LIKE query first, because ctid can change
 	// during a full vacuum of the DB, so we want to avoid conflicting with
 	// that scenario and deleting the wrong data.
-	stmt, err = s.cleanerDB.Prepare(`
+	res, err := s.cleanerDB.Exec(`
 		WITH msg AS (
 			SELECT ctid
 			FROM message
-			WHERE ` + whereClause + `
+			WHERE `+whereClause+`
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED
 		)
 		DELETE FROM message WHERE ctid IN (TABLE msg);
-	`)
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-	res, err := stmt.Exec(timestampThreshold, s.cleaner.BatchSize)
+	`, timestampThreshold, s.cleaner.BatchSize)
 	if err != nil {
 		return 0, err
 	}
