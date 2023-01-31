@@ -10,6 +10,4 @@ type NodeBroadcaster interface {
 type TopicBroadcaster interface {
 	// Broadcast sends an Event out to the network
 	Broadcast(*Event)
-	// Events channel is used to receive Events broadcasted by other nodes
-	Events() <-chan *Event
 }

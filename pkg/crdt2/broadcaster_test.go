@@ -38,9 +38,11 @@ func (b *ChanBroadcaster) Broadcast(ev *Event, from *Node) {
 		if sub == from {
 			continue
 		}
-		if t := sub.topics[ev.ContentTopic]; t != nil {
-			t.TopicBroadcaster.(*TopicChanBroadcaster).events <- ev
+		t := sub.topics[ev.ContentTopic]
+		if t == nil {
+			t = sub.newTopic(ev.ContentTopic)
 		}
+		t.pendingReceiveEvents <- ev
 	}
 }
 
@@ -54,27 +56,19 @@ func (b *ChanBroadcaster) RemoveNode(n *Node) {
 
 type TopicChanBroadcaster struct {
 	*ChanBroadcaster
-	name   string
-	node   *Node
-	log    *zap.Logger
-	events chan *Event
+	node *Node
+	log  *zap.Logger
 }
 
 func NewTopicChanBroadcaster(b *ChanBroadcaster, name string, n *Node) *TopicChanBroadcaster {
 	return &TopicChanBroadcaster{
 		node:            n,
 		log:             n.log.Named(name),
-		name:            name,
 		ChanBroadcaster: b,
-		events:          make(chan *Event, 20),
 	}
 }
 
 func (tb *TopicChanBroadcaster) Broadcast(ev *Event) {
 	tb.log.Debug("broadcasting", zapCid("event", ev.cid))
 	tb.ChanBroadcaster.Broadcast(ev, tb.node)
-}
-
-func (tb *TopicChanBroadcaster) Events() <-chan *Event {
-	return tb.events
 }

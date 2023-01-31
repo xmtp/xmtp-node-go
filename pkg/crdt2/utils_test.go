@@ -12,11 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
-	"go.uber.org/zap"
 )
 
 // network is an in-memory simulation of a network of a given number of Nodes.
-// All nodes host all of the given number of topics named t0, t1, etc.
 // network also captures events that were published to it for final analysis of the test results.
 type network struct {
 	t      *testing.T
@@ -29,7 +27,7 @@ const t0 = "t0" // first topic
 // const t2 = "t2" // third topic
 // ...
 
-// Creates a network with given number of nodes and given number of topics on all nodes
+// Creates a network with given number of nodes
 func newNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 	log := test.NewLog(t)
 	bc := NewChanBroadcaster(log)
@@ -44,12 +42,6 @@ func newNetwork(t *testing.T, ctx context.Context, nodes, topics int) *network {
 			bc)
 		bc.AddNode(n)
 		sync.AddNode(n)
-		for j := 0; j < topics; j++ {
-			topic := fmt.Sprintf("t%d", j)
-			n.NewTopic(topic)
-			log.Debug("creating", zap.String("node", name), zap.String("topic", topic))
-		}
-		require.Len(t, n.topics, topics)
 		list = append(list, n)
 	}
 	require.Len(t, list, nodes)
