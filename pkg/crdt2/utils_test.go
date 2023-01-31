@@ -20,7 +20,7 @@ import (
 type network struct {
 	t      *testing.T
 	ctx    context.Context
-	Cancel context.CancelFunc
+	cancel context.CancelFunc
 	log    *zap.Logger
 	bc     *chanBroadcaster
 	sync   *randomSyncer
@@ -41,7 +41,7 @@ func newNetwork(t *testing.T, nodes, topics int) *network {
 	net := &network{
 		t:      t,
 		ctx:    ctx,
-		Cancel: cancel,
+		cancel: cancel,
 		log:    log,
 		bc:     newChanBroadcaster(log),
 		sync:   newRandomSyncer(),
@@ -54,6 +54,10 @@ func newNetwork(t *testing.T, nodes, topics int) *network {
 	require.Len(t, net.bc.subscribers, nodes)
 	require.Len(t, net.sync.nodes, nodes)
 	return net
+}
+
+func (net *network) Close() {
+	net.cancel()
 }
 
 func (net *network) AddNode(store NodeStore) *Node {
@@ -77,7 +81,7 @@ func (net *network) RemoveNode(n int) *Node {
 		return nil
 	}
 	delete(net.nodes, n)
-	node.Cancel()
+	node.Close()
 	return node
 }
 

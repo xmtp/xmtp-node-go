@@ -35,7 +35,7 @@ func Test_RandomMessages(t *testing.T) {
 	}
 	for i, fix := range fixtures {
 		t.Run(fmt.Sprintf("%d/%dn/%dt/%dm", i, fix.nodes, fix.topics, fix.messages),
-			func(t *testing.T) { randomMsgTest(t, fix.nodes, fix.topics, fix.messages).Cancel() },
+			func(t *testing.T) { randomMsgTest(t, fix.nodes, fix.topics, fix.messages).Close() },
 		)
 	}
 }
@@ -43,7 +43,7 @@ func Test_RandomMessages(t *testing.T) {
 func Test_NewNodeJoin(t *testing.T) {
 	// create a network with some pre-existing traffic
 	net := randomMsgTest(t, 3, 1, 10)
-	defer net.Cancel()
+	defer net.Close()
 	// add a new node and observe that it catches up
 	net.AddNode(newMapStore())
 	// need to trigger a sync for the node to catch up
@@ -54,7 +54,7 @@ func Test_NewNodeJoin(t *testing.T) {
 func Test_NodeRestart(t *testing.T) {
 	// create a network with some pre-existing traffic
 	net := randomMsgTest(t, 3, 1, 10)
-	defer net.Cancel()
+	defer net.Close()
 	// replace node 2 reusing its store
 	n := net.RemoveNode(2)
 	store := n.NodeStore.(*mapStore)
@@ -78,7 +78,7 @@ func Test_VisualiseTopic(t *testing.T) {
 		return
 	}
 	net := randomMsgTest(t, visTopicN, 1, visTopicM)
-	defer net.Cancel()
+	defer net.Close()
 	net.visualiseTopic(os.Stdout, t0)
 }
 

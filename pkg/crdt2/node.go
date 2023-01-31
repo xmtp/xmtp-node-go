@@ -19,11 +19,11 @@ var UnknownTopic = errors.New("Unknown Topic")
 // supporting facilities (store, syncer, broadcaster).
 type Node struct {
 	ctx    context.Context
-	Cancel context.CancelFunc
+	cancel context.CancelFunc
 	log    *zap.Logger
 
-	sync.RWMutex // to protect the topics map
-	topics       map[string]*Topic
+	topicsLock sync.RWMutex
+	topics     map[string]*Topic
 
 	NodeStore
 	NodeSyncer
@@ -35,7 +35,7 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	ctx, cancel := context.WithCancel(ctx)
 	node := &Node{
 		ctx:             ctx,
-		Cancel:          cancel,
+		cancel:          cancel,
 		log:             log,
 		topics:          make(map[string]*Topic),
 		NodeStore:       store,
@@ -50,14 +50,10 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	// Bootstrap all the topics with some parallelization.
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.SetLimit(1000) // up to 1000 topic bootstraps in parallel
-	for _, n := range topics {
-		topic := n
+	for _, name := range topics {
+		topic := name
 		grp.Go(func() (err error) {
-			t := func() *Topic {
-				node.Lock()
-				defer node.Unlock()
-				return node.newTopic(topic)
-			}()
+			t := node.createTopic(topic)
 			return t.bootstrap(ctx)
 		})
 	}
@@ -70,6 +66,10 @@ func NewNode(ctx context.Context, log *zap.Logger, store NodeStore, syncer NodeS
 	return node, nil
 }
 
+func (n *Node) Close() {
+	n.cancel()
+}
+
 // Publish sends a new message out to the network.
 func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, error) {
 	topic := n.getOrCreateTopic(env.ContentTopic)
@@ -78,11 +78,7 @@ func (n *Node) Publish(ctx context.Context, env *messagev1.Envelope) (*Event, er
 
 // Get retrieves an Event for given Topic.
 func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
-	t := func() *Topic {
-		n.RLock()
-		defer n.RUnlock()
-		return n.topics[topic]
-	}()
+	t := n.getTopic(topic)
 	if t == nil {
 		return nil, UnknownTopic
 	}
@@ -91,8 +87,8 @@ func (n *Node) Get(topic string, cid mh.Multihash) (*Event, error) {
 
 // Count returns count of all events on the Node.
 func (n *Node) Count() (count int, err error) {
-	n.RLock()
-	defer n.RUnlock()
+	n.topicsLock.RLock()
+	defer n.topicsLock.RUnlock()
 	for _, t := range n.topics {
 		tc, err := t.Count()
 		if err != nil {
@@ -103,11 +99,23 @@ func (n *Node) Count() (count int, err error) {
 	return count, nil
 }
 
+func (n *Node) getTopic(topic string) *Topic {
+	n.topicsLock.RLock()
+	defer n.topicsLock.RUnlock()
+	return n.topics[topic]
+}
+
+func (n *Node) createTopic(topic string) *Topic {
+	n.topicsLock.Lock()
+	defer n.topicsLock.Unlock()
+	return n.newTopic(topic)
+}
+
 // getOrCreateTopic MUST NOT be called before topic bootstrap is complete
 // to avoid creating empty topics that weren't bootstrapped.
 func (n *Node) getOrCreateTopic(topic string) *Topic {
-	n.Lock()
-	defer n.Unlock()
+	n.topicsLock.Lock()
+	defer n.topicsLock.Unlock()
 	t := n.topics[topic]
 	if t == nil {
 		t = n.newTopic(topic)

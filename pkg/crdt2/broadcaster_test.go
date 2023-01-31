@@ -9,7 +9,7 @@ import (
 
 func Test_BasicBroadcast(t *testing.T) {
 	net := newNetwork(t, 5, 1)
-	defer net.Cancel()
+	defer net.Close()
 	net.Publish(0, t0, "hi")
 	net.AssertEventuallyConsistent(time.Second)
 }
