@@ -86,17 +86,9 @@ func (d *DBStore) Put(env *protocol.Envelope) error {
 	pubsubTopic := env.PubsubTopic()
 	message := env.Message()
 	shouldExpire := !isXMTP(message)
-	stmt, err := d.db.Prepare("INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version, shouldExpire)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	sql := "INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+	_, err := d.db.Exec(sql, cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version, shouldExpire)
+	return err
 }
 
 func isXMTP(msg *pb.WakuMessage) bool {
