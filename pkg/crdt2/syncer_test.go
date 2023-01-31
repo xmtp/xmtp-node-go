@@ -1,7 +1,6 @@
 package crdt2
 
 import (
-	"context"
 	"math/rand"
 	"testing"
 	"time"
@@ -11,10 +10,9 @@ import (
 )
 
 func Test_BasicSyncing(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	// 3 nodes, one topic "t0"
-	net := newNetwork(t, ctx, 3, 1)
+	net := newNetwork(t, 3, 1)
+	defer net.Close()
 	net.Publish(0, t0, "hi")
 	net.Publish(1, t0, "hi back")
 	// wait for things to settle
@@ -38,7 +36,7 @@ type randomSyncer struct {
 	nodes []*Node
 }
 
-func NewRandomSyncer() *randomSyncer {
+func newRandomSyncer() *randomSyncer {
 	return &randomSyncer{}
 }
 
