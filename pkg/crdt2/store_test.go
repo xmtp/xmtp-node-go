@@ -10,7 +10,7 @@ import (
 
 // In-memory store using maps to store Events
 type mapStore struct {
-	sync.Mutex
+	sync.RWMutex
 	topics map[string]*mapTopicStore
 }
 
@@ -20,6 +20,7 @@ func newMapStore() *mapStore {
 	}
 }
 
+// NewTopic returns a store for a pre-existing topic or creates a new one.
 func (s *mapStore) NewTopic(name string, n *Node) TopicStore {
 	s.Lock()
 	defer s.Unlock()
@@ -36,7 +37,10 @@ func (s *mapStore) NewTopic(name string, n *Node) TopicStore {
 	return ts
 }
 
+// Topics lists all topics in the store.
 func (s *mapStore) Topics() (topics []string, err error) {
+	s.RLock()
+	defer s.RUnlock()
 	for k := range s.topics {
 		topics = append(topics, k)
 	}
@@ -121,6 +125,8 @@ func (s *mapTopicStore) FindMissingLinks() (links []mh.Multihash, err error) {
 }
 
 func (s *mapTopicStore) Get(cid mh.Multihash) (*Event, error) {
+	s.RLock()
+	defer s.RUnlock()
 	return s.events[cid.String()], nil
 }
 

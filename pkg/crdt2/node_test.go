@@ -31,7 +31,7 @@ func Test_RandomMessages(t *testing.T) {
 		{10, 5, 10000},
 	}
 	if !testing.Short() {
-		fixtures = append(fixtures, fixture{30, 1000, 50000}) // should take about 20s locally
+		fixtures = append(fixtures, fixture{50, 1000, 100000}) // should take about 6s locally
 	}
 	for i, fix := range fixtures {
 		t.Run(fmt.Sprintf("%d/%dn/%dt/%dm", i, fix.nodes, fix.topics, fix.messages),
@@ -41,8 +41,10 @@ func Test_RandomMessages(t *testing.T) {
 }
 
 func Test_NewNodeJoin(t *testing.T) {
+	// create a network with some pre-existing traffic
 	net := randomMsgTest(t, 3, 1, 10)
 	defer net.Cancel()
+	// add a new node and observe that it catches up
 	net.AddNode(newMapStore())
 	// need to trigger a sync for the node to catch up
 	net.Publish(0, t0, "ahoy new node")
@@ -50,6 +52,7 @@ func Test_NewNodeJoin(t *testing.T) {
 }
 
 func Test_NodeRestart(t *testing.T) {
+	// create a network with some pre-existing traffic
 	net := randomMsgTest(t, 3, 1, 10)
 	defer net.Cancel()
 	// replace node 2 reusing its store
