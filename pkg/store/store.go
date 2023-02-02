@@ -119,10 +119,6 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 
 	s.MsgC = make(chan *protocol.Envelope, bufferSize)
 
-	if s.cleaner.Enable {
-		go s.cleanerLoop()
-	}
-
 	return s, nil
 }
 
@@ -141,6 +137,11 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
+
+	// Start cleaner
+	if s.cleaner.Enable {
+		go s.cleanerLoop()
+	}
 }
 
 func (s *XmtpStore) Stop() {
