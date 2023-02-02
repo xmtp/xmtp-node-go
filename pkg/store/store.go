@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -253,9 +254,13 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 					msgFnErr = err
 					return false
 				}
-				latestStoredTimestamp = timestamp
+				atomic.StoreInt64(&latestStoredTimestamp, timestamp)
 				return stored
 			})
+			// Reuse the msgCountLock to protect the asyncErr and success boolean
+			msgCountLock.Lock()
+			defer msgCountLock.Unlock()
+
 			if err != nil {
 				log.Error("querying peer", zap.Error(err))
 				asyncErr = err
@@ -268,14 +273,11 @@ func (s *XmtpStore) Resume(ctx context.Context, pubsubTopic string, peers []peer
 			}
 
 			success = true
-
-			msgCountLock.Lock()
-			defer msgCountLock.Unlock()
 			msgCount += count
 		}(p)
 	}
 	wg.Wait()
-	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)), zap.Int64("latest_stored_timestamp", latestStoredTimestamp))
+	log = log.With(zap.Int("count", msgCount), zap.Duration("duration", time.Now().UTC().Sub(started)), zap.Int64("latest_stored_timestamp", atomic.LoadInt64(&latestStoredTimestamp)))
 	if !success && asyncErr != nil {
 		log.Error("resuming", zap.Error(asyncErr))
 		return msgCount, asyncErr
