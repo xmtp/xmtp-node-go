@@ -78,10 +78,11 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 		return currentVal
 	}
 
+	currentVal.mutex.Lock()
+	defer currentVal.mutex.Unlock()
 	now := time.Now()
 	minutesSinceLastSeen := now.Sub(currentVal.lastSeen).Minutes()
 	if minutesSinceLastSeen > 0 {
-		currentVal.mutex.Lock()
 		// Only update the lastSeen if it has been >= 1 minute
 		// This allows for continuously sending nodes to still get credits
 		currentVal.lastSeen = now
@@ -92,7 +93,6 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAll
 			additionalTokens = MAX_UINT_16 - int(currentVal.tokens)
 		}
 		currentVal.tokens = minUint16(currentVal.tokens+uint16(additionalTokens), maxTokens)
-		currentVal.mutex.Unlock()
 	}
 
 	return currentVal
