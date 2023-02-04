@@ -56,7 +56,7 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode
 	n, nodeCleanup := test.NewNode(t, storeNodes,
 		append(
 			opts,
-			wakunode.WithWakuStore(true, false),
+			wakunode.WithWakuStore(false, false),
 			wakunode.WithWakuStoreFactory(func(w *wakunode.WakuNode) wakustore.Store {
 				// Note that the node calls store.Stop() during it's cleanup,
 				// but it that doesn't clean up the given DB, so we make sure

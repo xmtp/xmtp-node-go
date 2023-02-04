@@ -18,44 +18,6 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
-func TestNode_PublishSubscribeQuery_DifferentDBs(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	n2, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	topic1 := newTopic()
-	topic2 := newTopic()
-
-	// Connect to each other as store nodes.
-	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
-	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	// Subscribe via each node.
-	n1EnvC := test.Subscribe(t, n1)
-	n2EnvC := test.Subscribe(t, n2)
-
-	// Publish to each node.
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
-
-	// Expect subscribed messages.
-	expectedMsgs := []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	}
-	test.SubscribeExpect(t, n1EnvC, expectedMsgs)
-	test.SubscribeExpect(t, n2EnvC, expectedMsgs)
-
-	// Expect query messages.
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, expectedMsgs)
-}
-
 func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	t.Parallel()
 
@@ -81,271 +43,30 @@ func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	n1EnvC := test.Subscribe(t, n1)
 	n2EnvC := test.Subscribe(t, n2)
 
-	// Publish to each node.
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
+	// Store message to DB.
+	msg1 := test.NewMessage(topic1, 1, "msg1")
+	s1, ok := n1.Store().(*store.XmtpStore)
+	require.True(t, ok, "waku store not xmtp store")
+	_, err := s1.InsertMessage(msg1)
+	require.NoError(t, err)
+
+	msg2 := test.NewMessage(topic2, 2, "msg2")
+	s2, ok := n2.Store().(*store.XmtpStore)
+	require.True(t, ok, "waku store not xmtp store")
+	_, err = s2.InsertMessage(msg2)
+	require.NoError(t, err)
+
+	// Publish to each node via relay.
+	test.Publish(t, n1, msg1)
+	test.Publish(t, n2, msg2)
 
 	// Expect subscribed messages.
-	expectedMsgs := []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	}
+	expectedMsgs := []*pb.WakuMessage{msg1, msg2}
 	test.SubscribeExpect(t, n1EnvC, expectedMsgs)
 	test.SubscribeExpect(t, n2EnvC, expectedMsgs)
 
 	// Expect query messages.
 	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, expectedMsgs)
-}
-
-func TestNode_Resume_OnStart_StoreNodesConnectedBefore(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	topic1 := newTopic()
-	topic2 := newTopic()
-
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
-
-	n2, cleanup := newTestNode(t, []*wakunode.WakuNode{n1}, true, nil)
-	defer cleanup()
-
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-}
-
-func TestNode_Resume_OnStart_StoreNodesConnectedAfter(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	topic1 := newTopic()
-	topic2 := newTopic()
-
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n1, test.NewMessage(topic2, 2, "msg2"))
-
-	n2, cleanup := newTestNode(t, nil, true, nil)
-	defer cleanup()
-	test.Connect(t, n2, n1)
-
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-}
-func TestNode_DataPartition_WithoutResume(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	n2, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	// Connect and send a message to each node, expecting that the messages
-	// are relayed to the other nodes.
-	test.Connect(t, n1, n2)
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	topic1 := newTopic()
-	topic2 := newTopic()
-
-	n1EnvC := test.Subscribe(t, n1)
-	n2EnvC := test.Subscribe(t, n2)
-
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
-
-	test.SubscribeExpect(t, n1EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	test.SubscribeExpect(t, n2EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-
-	// Disconnect and send a message to each node, expecting that the messages
-	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2)
-	test.ExpectNoPeers(t, n1)
-	test.ExpectNoPeers(t, n2)
-
-	test.Publish(t, n1, test.NewMessage(topic1, 4, "msg4"))
-	test.Publish(t, n2, test.NewMessage(topic2, 5, "msg5"))
-	test.Publish(t, n1, test.NewMessage(topic1, 6, "msg6"))
-	test.Publish(t, n2, test.NewMessage(topic2, 7, "msg7"))
-
-	test.SubscribeExpect(t, n1EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic1, 6, "msg6"),
-	})
-	test.SubscribeExpect(t, n2EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic1, 6, "msg6"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-
-	// Reconnect and expect that no new messages are relayed.
-	test.Connect(t, n1, n2)
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic1, 6, "msg6"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-}
-
-func TestNode_DataPartition_WithResume(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, true, nil)
-	defer cleanup()
-
-	n2, cleanup := newTestNode(t, nil, true, nil)
-	defer cleanup()
-
-	// Connect and send a message to each node, expecting that the messages
-	// are relayed to the other nodes.
-	test.Connect(t, n1, n2)
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	topic1 := newTopic()
-	topic2 := newTopic()
-
-	n1EnvC := test.Subscribe(t, n1)
-	n2EnvC := test.Subscribe(t, n2)
-
-	test.Publish(t, n1, test.NewMessage(topic1, 1, "msg1"))
-	test.Publish(t, n2, test.NewMessage(topic2, 2, "msg2"))
-
-	test.SubscribeExpect(t, n1EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	test.SubscribeExpect(t, n2EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-	})
-
-	// Disconnect and send a message to each node, expecting that the messages
-	// are not relayed to the other node.
-	test.Disconnect(t, n1, n2)
-	test.ExpectNoPeers(t, n1)
-	test.ExpectNoPeers(t, n2)
-
-	test.Publish(t, n1, test.NewMessage(topic1, 4, "msg4"))
-	test.Publish(t, n2, test.NewMessage(topic2, 5, "msg5"))
-	test.Publish(t, n1, test.NewMessage(topic1, 6, "msg6"))
-	test.Publish(t, n2, test.NewMessage(topic2, 7, "msg7"))
-
-	test.SubscribeExpect(t, n1EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic1, 6, "msg6"),
-	})
-	test.SubscribeExpect(t, n2EnvC, []*pb.WakuMessage{
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic1, 6, "msg6"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-
-	// Reconnect and resume on each node, and expect new stored messages.
-	test.Connect(t, n1, n2)
-	test.Connect(t, n2, n1)
-	storeResume(t, n1)
-	storeResume(t, n2)
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	test.SubscribeExpectNone(t, n1EnvC)
-	test.SubscribeExpectNone(t, n2EnvC)
-
-	expectStoreMessagesEventually(t, n1, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic1, 6, "msg6"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
-	expectStoreMessagesEventually(t, n2, []string{topic1, topic2}, []*pb.WakuMessage{
-		test.NewMessage(topic1, 1, "msg1"),
-		test.NewMessage(topic2, 2, "msg2"),
-		test.NewMessage(topic1, 4, "msg4"),
-		test.NewMessage(topic2, 5, "msg5"),
-		test.NewMessage(topic1, 6, "msg6"),
-		test.NewMessage(topic2, 7, "msg7"),
-	})
 }
 
 func TestNodes_Deployment(t *testing.T) {
@@ -461,7 +182,7 @@ func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, withResume bool,
 	n, nodeCleanup := test.NewNode(t, storeNodes,
 		append(
 			opts,
-			wakunode.WithWakuStore(true, withResume),
+			wakunode.WithWakuStore(false, withResume),
 			wakunode.WithWakuStoreFactory(func(w *wakunode.WakuNode) wakustore.Store {
 				// Note that the node calls store.Stop() during it's cleanup,
 				// but it that doesn't clean up the given DB, so we make sure
@@ -505,11 +226,6 @@ func newTestStore(t *testing.T, host host.Host, db *sql.DB) (*store.XmtpStore, *
 	store.Start(context.Background())
 
 	return store, dbStore, store.Stop, dbCleanup
-}
-
-func storeResume(t *testing.T, n *wakunode.WakuNode) {
-	_, err := n.Store().Resume(context.Background(), relay.DefaultWakuTopic, nil)
-	require.NoError(t, err)
 }
 
 func listMessages(t *testing.T, n *wakunode.WakuNode, contentTopics []string) []*pb.WakuMessage {

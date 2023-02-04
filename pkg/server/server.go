@@ -147,7 +147,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Store.Enable {
-		nodeOpts = append(nodeOpts, node.WithWakuStoreAndRetentionPolicy(options.Store.ShouldResume, options.Store.RetentionMaxDaysDuration(), options.Store.RetentionMaxMessages))
+		nodeOpts = append(nodeOpts, node.WithWakuStore(false, options.Store.ShouldResume))
 		dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
 		if err != nil {
 			return nil, errors.Wrap(err, "creating db store")
