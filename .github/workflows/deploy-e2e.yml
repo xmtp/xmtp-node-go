@@ -27,28 +27,30 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Docker Publish
-        id: docker-publish
+      - name: Push
+        id: push
         run: |
           export DOCKER_IMAGE_TAG=latest
           IMAGE_TO_DEPLOY="$(dev/e2e/build)"
-          echo "IMAGE_TO_DEPLOY=${IMAGE_TO_DEPLOY}" >> ${GITHUB_ENV}
           echo Successfully pushed $IMAGE_TO_DEPLOY
+          echo "docker_image=${IMAGE_TO_DEPLOY}" >> ${GITHUB_OUTPUT}
 
       - name: Deploy (dev)
-        run: |
-          go run ./scripts/deploy/e2e \
-            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
-            --workspace=dev \
-            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
-            --git-commit="$(git rev-parse HEAD)"
-          echo Successfully deployed
+        uses: xmtp-labs/terraform-deployer@v1
+        with:
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: dev
+          variable-name: xmtpd_e2e_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/xmtpd-e2e@sha256:"
 
       - name: Deploy (production)
-        run: |
-          go run ./scripts/deploy/e2e \
-            --tf-token=${{ secrets.TERRAFORM_TOKEN }} \
-            --workspace=production \
-            --container-image=${{ env.IMAGE_TO_DEPLOY }} \
-            --git-commit="$(git rev-parse HEAD)"
-          echo Successfully deployed
+        uses: xmtp-labs/terraform-deployer@v1
+        with:
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: production
+          variable-name: xmtpd_e2e_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/xmtpd-e2e@sha256:"

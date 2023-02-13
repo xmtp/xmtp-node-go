@@ -25,24 +25,30 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Deploy (dev)
-        if: ${{ github.ref_name == 'main' }}
-        env:
-          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
+      - name: Push
+        id: push
         run: |
           export DOCKER_IMAGE_TAG=latest
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --workspace=dev --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
-          echo Successfully deployed
+          echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
+
+      - name: Deploy (dev)
+        uses: xmtp-labs/terraform-deployer@v1
+        with:
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: dev
+          variable-name: xmtp_node_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/node-go@sha256:"
 
       - name: Deploy (production)
-        if: ${{ github.ref_name == 'main' }}
-        env:
-          TERRAFORM_TOKEN: ${{ secrets.TERRAFORM_TOKEN }}
-        run: |
-          export DOCKER_IMAGE_TAG=production
-          IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
-          echo Successfully pushed $IMAGE_TO_DEPLOY
-          go run ./scripts/deploy/nodes --tf-token=$TERRAFORM_TOKEN --workspace=production --container-image=$IMAGE_TO_DEPLOY --git-commit=$(git rev-parse HEAD)
-          echo Successfully deployed
+        uses: xmtp-labs/terraform-deployer@v1
+        with:
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: production
+          variable-name: xmtp_node_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/node-go@sha256:"
