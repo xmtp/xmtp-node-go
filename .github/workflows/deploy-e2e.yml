@@ -27,8 +27,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Docker Publish
-        id: docker-publish
+      - name: Push
+        id: push
         run: |
           export DOCKER_IMAGE_TAG=latest
           IMAGE_TO_DEPLOY="$(dev/e2e/build)"
