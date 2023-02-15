@@ -70,7 +70,7 @@ func Test_MaxContentTopicLength(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		envs := []*messageV1.Envelope{
 			{
-				ContentTopic: test.RandomStringLower(messagev1api.MaxContentTopicSize + 1),
+				ContentTopic: test.RandomStringLower(messagev1api.MaxContentTopicNameSize + 1),
 				Message:      []byte("msg"),
 				TimestampNs:  1,
 			},

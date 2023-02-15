@@ -23,10 +23,10 @@ const (
 	validXMTPTopicPrefix = "/xmtp/0/"
 	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
 
-	MaxContentTopicSize = 300
+	MaxContentTopicNameSize = 300
 
 	// 1048576 - 300 - 62 = 1048214
-	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicSize - 62
+	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
 )
 
 type Service struct {
@@ -94,7 +94,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
 		log.Info("received message")
 
-		if len(env.ContentTopic) > MaxContentTopicSize {
+		if len(env.ContentTopic) > MaxContentTopicNameSize {
 			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
 		}
 
