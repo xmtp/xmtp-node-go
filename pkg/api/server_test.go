@@ -79,7 +79,7 @@ func Test_Libp2pMaxMessageSize(t *testing.T) {
 		envs := []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")-1),
+				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")),
 				TimestampNs:  1,
 			},
 		}
@@ -123,8 +123,18 @@ func Test_GRPCMaxMessageSize(t *testing.T) {
 		envs := []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, testMaxMsgSize-100), // subtract some bytes for the rest of the envelope
+				Message:      make([]byte, testMaxMsgSize/3),
 				TimestampNs:  1,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  2,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3-100), // subtract some bytes for the rest of the envelope
+				TimestampNs:  3,
 			},
 		}
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
@@ -137,8 +147,18 @@ func Test_GRPCMaxMessageSize(t *testing.T) {
 		envs = []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, testMaxMsgSize+100),
-				TimestampNs:  1,
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  4,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  5,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3+100),
+				TimestampNs:  6,
 			},
 		}
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})

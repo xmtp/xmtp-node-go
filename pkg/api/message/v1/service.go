@@ -89,7 +89,7 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Debug("received message")
+		log.Info("received message")
 
 		wakuMsg := &wakupb.WakuMessage{
 			ContentTopic: env.ContentTopic,
