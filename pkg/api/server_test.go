@@ -13,6 +13,7 @@ import (
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messagev1api "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -64,6 +65,27 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	})
 }
 
+func Test_MaxContentTopicLength(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		envs := []*messageV1.Envelope{
+			{
+				ContentTopic: test.RandomStringLower(messagev1api.MaxContentTopicSize + 1),
+				Message:      []byte("msg"),
+				TimestampNs:  1,
+			},
+		}
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.Regexp(t, "topic length too big", grpcErr.Message())
+		} else {
+			require.Regexp(t, `400 Bad Request: {"code"\s?:3,\s?"message":\s?"topic length too big",\s?"details":\s?\[\]}`, err.Error())
+		}
+	})
+}
+
 func Test_Libp2pMaxMessageSize(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
@@ -79,7 +101,7 @@ func Test_Libp2pMaxMessageSize(t *testing.T) {
 		envs := []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")),
+				Message:      make([]byte, messagev1api.MaxMessageSize),
 				TimestampNs:  1,
 			},
 		}
@@ -93,7 +115,7 @@ func Test_Libp2pMaxMessageSize(t *testing.T) {
 		envs = []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")+1),
+				Message:      make([]byte, messagev1api.MaxMessageSize+1),
 				TimestampNs:  1,
 			},
 		}
