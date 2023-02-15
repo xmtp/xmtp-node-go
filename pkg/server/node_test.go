@@ -21,8 +21,6 @@ import (
 func Test_Libp2pMaxMessageSize(t *testing.T) {
 	t.Parallel()
 
-	utils.SetLogLevel("DEBUG")
-
 	n1, cleanup := newTestNode(t, nil, false, nil)
 	defer cleanup()
 
