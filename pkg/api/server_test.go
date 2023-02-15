@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1api "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -63,7 +64,51 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	})
 }
 
-func Test_MaxMessageSize(t *testing.T) {
+func Test_Libp2pMaxMessageSize(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish valid message
+		envs := []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")-1),
+				TimestampNs:  1,
+			},
+		}
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		subscribeExpect(t, stream, envs)
+		requireEventuallyStored(t, ctx, client, envs)
+
+		// publish invalid message
+		envs = []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, messagev1api.DefaultMaxMessageSize-len("topic")+1),
+				TimestampNs:  1,
+			},
+		}
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.Regexp(t, "message too big", grpcErr.Message())
+		} else {
+			require.Regexp(t, `400 Bad Request: {"code"\s?:3,\s?"message":\s?"message too big",\s?"details":\s?\[\]}`, err.Error())
+		}
+	})
+}
+
+func Test_GRPCMaxMessageSize(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
