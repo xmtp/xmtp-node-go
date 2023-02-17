@@ -20,11 +20,16 @@ var openFilesView = &view.View{
 }
 
 func EmitOpenFiles(ctx context.Context) error {
-	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -nblL -p %v", os.Getpid())).Output()
+	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -nblL -p %v -Ff", os.Getpid())).Output()
 	if err != nil {
 		return err
 	}
-	lines := strings.Split(string(out), "\n")
-	count := int64(len(lines) - 1)
+	var count int64
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, "f") {
+			continue
+		}
+		count++
+	}
 	return recordWithTags(ctx, nil, openFiles.M(count))
 }
