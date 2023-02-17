@@ -156,9 +156,19 @@ syncLoop:
 		}
 	}
 
+	envs = append(syncEnvs, envs...)
+
 	// Expect that they're stored.
 	for _, client := range clients {
-		err := expectQueryMessagesEventually(ctx, client, []string{contentTopic}, append(syncEnvs, envs...))
+		err := expectQueryMessagesEventually(ctx, client, []string{contentTopic}, envs)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Expect that they're also available via batch query.
+	for _, client := range clients {
+		err := expectBatchQueryMessagesEventually(ctx, client, []string{contentTopic}, envs)
 		if err != nil {
 			return err
 		}
