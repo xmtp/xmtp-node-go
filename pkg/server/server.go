@@ -187,6 +187,8 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
 	}
 
+	tracing.GoPanicWrap(s.ctx, &s.wg, "open files metrics", func(_ context.Context) { s.openFilesMetricsLoop() })
+
 	err = addPeers(s.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
 	if err != nil {
 		return nil, errors.Wrap(err, "adding peer")
@@ -326,6 +328,24 @@ func (s *Server) staticNodesConnectLoop(staticNodes []string) {
 					continue
 				}
 				dialPeer(peerAddr)
+			}
+		}
+	}
+}
+
+func (s *Server) openFilesMetricsLoop() {
+	period := 5 * time.Second
+	s.log.Info("starting open files metrics loop", zap.Duration("period", period))
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			err := metrics.EmitOpenFiles(s.ctx)
+			if err != nil {
+				s.log.Info("error emitting number of open files metric", zap.Error(err))
 			}
 		}
 	}
