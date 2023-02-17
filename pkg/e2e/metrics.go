@@ -62,18 +62,10 @@ func (r *Runner) withMetricsServer(fn func() error) error {
 }
 
 func recordSuccessfulRun(ctx context.Context, tags ...tag) error {
-	err := recordWithTags(ctx, tags, failedRuns.M(0))
-	if err != nil {
-		return err
-	}
 	return recordWithTags(ctx, tags, successfulRuns.M(1))
 }
 
 func recordFailedRun(ctx context.Context, tags ...tag) error {
-	err := recordWithTags(ctx, tags, successfulRuns.M(0))
-	if err != nil {
-		return err
-	}
 	return recordWithTags(ctx, tags, failedRuns.M(1))
 }
 
