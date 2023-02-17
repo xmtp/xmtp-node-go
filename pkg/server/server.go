@@ -334,7 +334,7 @@ func (s *Server) staticNodesConnectLoop(staticNodes []string) {
 }
 
 func (s *Server) openFilesMetricsLoop() {
-	period := 5 * time.Second
+	period := 1 * time.Minute
 	s.log.Info("starting open files metrics loop", zap.Duration("period", period))
 	ticker := time.NewTicker(period)
 	defer ticker.Stop()
