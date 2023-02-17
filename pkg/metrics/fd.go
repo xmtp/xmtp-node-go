@@ -20,7 +20,7 @@ var openFilesView = &view.View{
 }
 
 func EmitOpenFiles(ctx context.Context) error {
-	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -p %v", os.Getpid())).Output()
+	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -nblL -p %v", os.Getpid())).Output()
 	if err != nil {
 		return err
 	}
