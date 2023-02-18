@@ -79,13 +79,6 @@ func main() {
 		return
 	}
 
-	if options.GenerateKey {
-		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatal("writing private key file", zap.Error(err))
-		}
-		return
-	}
-
 	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
 		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout); err != nil {
 			log.Fatal("creating message db migration", zap.Error(err))
@@ -171,6 +164,7 @@ func fatal(msg string, args ...any) {
 	log.Fatalf(msg, args...)
 }
 
+// TODO: remove waku from this
 func initWakuLogging(options server.Options) (func(), error) {
 	err := utils.SetLogLevel(options.LogLevel)
 	if err != nil {

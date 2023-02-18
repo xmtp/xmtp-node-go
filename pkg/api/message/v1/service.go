@@ -6,14 +6,9 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
-	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
-	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
-	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
-	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,58 +30,28 @@ type Service struct {
 
 	// Configured as constructor options.
 	log   *zap.Logger
-	waku  *wakunode.WakuNode
 	nats  *nats.Conn
 	store *store.XmtpStore
 
 	// Configured internally.
-	ctx        context.Context
-	ctxCancel  func()
-	wg         sync.WaitGroup
-	dispatcher *dispatcher
-	relaySub   *wakurelay.Subscription
+	ctx       context.Context
+	ctxCancel func()
+	wg        sync.WaitGroup
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, nats *nats.Conn, store *store.XmtpStore) (s *Service, err error) {
+func NewService(logger *zap.Logger, nats *nats.Conn, store *store.XmtpStore) (s *Service, err error) {
 	s = &Service{
-		waku:  node,
 		log:   logger.Named("message/v1"),
 		nats:  nats,
 		store: store,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-	s.dispatcher = newDispatcher()
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "subscribing to relay")
-	}
-	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case wakuEnv := <-s.relaySub.C:
-				if wakuEnv == nil {
-					continue
-				}
-				env := buildEnvelope(wakuEnv.Message())
-				s.dispatcher.Submit(env.ContentTopic, env)
-			}
-		}
-	})
 
 	return s, nil
 }
 
 func (s *Service) Close() {
 	s.log.Info("closing")
-	if s.relaySub != nil {
-		s.relaySub.Unsubscribe()
-	}
-	if s.dispatcher != nil {
-		s.dispatcher.Close()
-	}
-
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
@@ -118,21 +83,19 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 
-		if s.nats != nil {
-			envB, err := pb.Marshal(env)
-			if err != nil {
-				return nil, err
-			}
-			err = s.nats.Publish(env.ContentTopic, envB)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			_, err = s.waku.Relay().Publish(ctx, wakuMsg)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
-			}
-			metrics.EmitPublishedEnvelope(ctx, env)
+		envB, err := pb.Marshal(env)
+		if err != nil {
+			return nil, err
+		}
+		err = s.nats.Publish(env.ContentTopic, envB)
+		if err != nil {
+			return nil, err
+		}
+
+		// Publish to the "all" topic too.
+		err = s.nats.Publish(contentTopicAllXMTP, envB)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return &proto.PublishResponse{}, nil
@@ -143,58 +106,32 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log.Debug("started")
 	defer log.Debug("stopped")
 
-	if s.nats != nil {
-		for _, topic := range req.ContentTopics {
-			sub, err := s.nats.Subscribe(topic, func(msg *nats.Msg) {
-				var env proto.Envelope
-				err := pb.Unmarshal(msg.Data, &env)
-				if err != nil {
-					log.Info("error unmarshaling envelope", zap.Error(err))
-					return
-				}
-				err = stream.Send(&env)
-				if err != nil {
-					log.Error("error sending envelope to subscriber", zap.Error(err))
-				}
-			})
+	for _, topic := range req.ContentTopics {
+		sub, err := s.nats.Subscribe(topic, func(msg *nats.Msg) {
+			var env proto.Envelope
+			err := pb.Unmarshal(msg.Data, &env)
 			if err != nil {
-				return err
+				log.Info("error unmarshaling envelope", zap.Error(err))
+				return
 			}
-			defer sub.Unsubscribe()
-		}
-
-		select {
-		case <-stream.Context().Done():
-			log.Debug("stream closed")
-			return nil
-		case <-s.ctx.Done():
-			log.Info("service closed")
-			return nil
-		}
-	} else {
-		subC := s.dispatcher.Register(nil, req.ContentTopics...)
-		defer s.dispatcher.Unregister(subC)
-
-		for {
-			select {
-			case <-stream.Context().Done():
-				log.Debug("stream closed")
-				return nil
-			case <-s.ctx.Done():
-				log.Info("service closed")
-				return nil
-			case obj := <-subC:
-				env, ok := obj.(*proto.Envelope)
-				if !ok {
-					log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-					continue
-				}
-				err := stream.Send(env)
-				if err != nil {
-					log.Error("sending envelope to subscriber", zap.Error(err))
-				}
+			err = stream.Send(&env)
+			if err != nil {
+				log.Error("error sending envelope to subscriber", zap.Error(err))
 			}
+		})
+		if err != nil {
+			return err
 		}
+		defer sub.Unsubscribe()
+	}
+
+	select {
+	case <-stream.Context().Done():
+		log.Debug("stream closed")
+		return nil
+	case <-s.ctx.Done():
+		log.Info("service closed")
+		return nil
 	}
 }
 

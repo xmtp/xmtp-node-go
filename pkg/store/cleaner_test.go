@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/stretchr/testify/require"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -110,15 +111,28 @@ func TestStore_Cleaner(t *testing.T) {
 			}))
 			defer cleanup()
 
-			c := newTestClient(t, s.host.ID())
-			addStoreProtocol(t, c.host, s.host)
-
 			tc.setup(t, s)
 
 			query := &pb.HistoryQuery{
 				PubsubTopic: pubSubTopic,
 			}
-			expectQueryMessagesEventually(t, c, query, tc.expected)
+			expectQueryMessagesEventually(t, s, query, tc.expected)
 		})
 	}
+}
+
+func expectQueryMessagesEventually(t *testing.T, s *XmtpStore, query *pb.HistoryQuery, expectedMsgs []*pb.WakuMessage) []*pb.WakuMessage {
+	var msgs []*pb.WakuMessage
+	require.Eventually(t, func() bool {
+		msgs = queryMessages(t, s, query)
+		return len(msgs) == len(expectedMsgs)
+	}, 3*time.Second, 500*time.Millisecond, "expected %d == %d", len(msgs), len(expectedMsgs))
+	require.ElementsMatch(t, expectedMsgs, msgs)
+	return msgs
+}
+
+func queryMessages(t *testing.T, s *XmtpStore, query *pb.HistoryQuery) []*pb.WakuMessage {
+	res, err := s.FindMessages(query)
+	require.NoError(t, err)
+	return res.Messages
 }

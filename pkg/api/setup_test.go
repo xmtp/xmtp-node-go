@@ -5,16 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
-	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -24,7 +23,16 @@ const (
 
 func newTestServer(t *testing.T) (*Server, func()) {
 	log := test.NewLog(t)
-	waku, wakuCleanup := newTestNode(t, nil)
+	ns, err := server.NewServer(&server.Options{
+		Port:       server.RANDOM_PORT,
+		MaxPayload: testMaxMsgSize,
+	})
+	require.NoError(t, err)
+	go ns.Start()
+	require.True(t, ns.ReadyForConnections(4*time.Second), "nats server not ready")
+	nats, err := nats.Connect(ns.ClientURL())
+	require.NoError(t, err)
+	store, _, _, dbCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
 	s, err := New(&Config{
@@ -39,53 +47,27 @@ func newTestServer(t *testing.T) (*Server, func()) {
 			},
 			MaxMsgSize: testMaxMsgSize,
 		},
-		Waku:        waku,
-		Store:       waku.Store().(*store.XmtpStore),
+		NATS:        nats,
+		Store:       store,
 		Log:         test.NewLog(t),
 		AllowLister: allowLister,
 	})
 	require.NoError(t, err)
 	return s, func() {
 		s.Close()
-		wakuCleanup()
-		authzDBCleanup()
-	}
-}
-
-func newTestNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
-	var dbCleanup func()
-	n, nodeCleanup := test.NewNode(t, storeNodes,
-		append(
-			opts,
-			wakunode.WithWakuStore(false, false),
-			wakunode.WithWakuStoreFactory(func(w *wakunode.WakuNode) wakustore.Store {
-				// Note that the node calls store.Stop() during it's cleanup,
-				// but it that doesn't clean up the given DB, so we make sure
-				// to return that in the node cleanup returned here.
-				// Note that the same host needs to be used here.
-				var store *store.XmtpStore
-				store, _, _, dbCleanup = newTestStore(t, w.Host())
-				return store
-			}),
-		)...,
-	)
-	return n, func() {
-		nodeCleanup()
 		dbCleanup()
+		authzDBCleanup()
+		ns.Shutdown()
 	}
 }
 
-func newTestStore(t *testing.T, host host.Host) (*store.XmtpStore, *store.DBStore, func(), func()) {
+func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, *store.DBStore, func(), func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	dbStore, err := store.NewDBStore(utils.Logger(), store.WithDBStoreDB(db))
+	dbStore, err := store.NewDBStore(log, store.WithDBStoreDB(db))
 	require.NoError(t, err)
 
-	if host == nil {
-		host = test.NewPeer(t)
-	}
 	store, err := store.NewXmtpStore(
-		store.WithLog(utils.Logger()),
-		store.WithHost(host),
+		store.WithLog(log),
 		store.WithDB(db),
 		store.WithReaderDB(db),
 		store.WithCleanerDB(db),

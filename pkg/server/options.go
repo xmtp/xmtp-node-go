@@ -80,8 +80,7 @@ type AuthzOptions struct {
 }
 
 type NATSOptions struct {
-	Enable bool   `long:"enable" description:"Enable NATS"`
-	URL    string `long:"url" description:"URL of NATS server" default:""`
+	URL string `long:"url" description:"URL of NATS server" default:""`
 }
 
 // Options contains all the available features and settings that can be

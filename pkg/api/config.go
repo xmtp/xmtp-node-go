@@ -6,7 +6,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
@@ -16,7 +15,6 @@ import (
 var (
 	ErrMissingLog   = errors.New("missing log config")
 	ErrMissingNATS  = errors.New("missing nats config")
-	ErrMissingWaku  = errors.New("missing waku config")
 	ErrMissingStore = errors.New("missing store config")
 )
 
@@ -33,7 +31,6 @@ type Config struct {
 	Options
 	AllowLister authz.WalletAllowLister
 	NATS        *nats.Conn
-	Waku        *wakunode.WakuNode
 	Log         *zap.Logger
 	Store       *store.XmtpStore
 }
@@ -58,11 +55,8 @@ func (params *Config) check() error {
 	if params.Log == nil {
 		return ErrMissingLog
 	}
-	// if params.NATS == nil {
-	// 	return ErrMissingNATS
-	// }
-	if params.Waku == nil {
-		return ErrMissingWaku
+	if params.NATS == nil {
+		return ErrMissingNATS
 	}
 	if params.Store == nil {
 		return ErrMissingStore
