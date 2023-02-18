@@ -9,13 +9,15 @@ import (
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
+	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
 )
 
 var (
-	ErrMissingLog  = errors.New("missing log config")
-	ErrMissingNATS = errors.New("missing nats config")
-	ErrMissingWaku = errors.New("missing waku config")
+	ErrMissingLog   = errors.New("missing log config")
+	ErrMissingNATS  = errors.New("missing nats config")
+	ErrMissingWaku  = errors.New("missing waku config")
+	ErrMissingStore = errors.New("missing store config")
 )
 
 type Options struct {
@@ -33,6 +35,7 @@ type Config struct {
 	NATS        *nats.Conn
 	Waku        *wakunode.WakuNode
 	Log         *zap.Logger
+	Store       *store.XmtpStore
 }
 
 // Options bundle command line options associated with the authn package.
@@ -60,6 +63,9 @@ func (params *Config) check() error {
 	// }
 	if params.Waku == nil {
 		return ErrMissingWaku
+	}
+	if params.Store == nil {
+		return ErrMissingStore
 	}
 	if err := validateAddr(params.HTTPAddress, params.HTTPPort); err != nil {
 		return errors.Wrap(err, "Invalid HTTP Address")

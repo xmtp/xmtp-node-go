@@ -40,6 +40,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 			MaxMsgSize: testMaxMsgSize,
 		},
 		Waku:        waku,
+		Store:       waku.Store().(*store.XmtpStore),
 		Log:         test.NewLog(t),
 		AllowLister: allowLister,
 	})

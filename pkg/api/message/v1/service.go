@@ -34,9 +34,10 @@ type Service struct {
 	proto.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log  *zap.Logger
-	waku *wakunode.WakuNode
-	nats *nats.Conn
+	log   *zap.Logger
+	waku  *wakunode.WakuNode
+	nats  *nats.Conn
+	store *store.XmtpStore
 
 	// Configured internally.
 	ctx        context.Context
@@ -46,11 +47,12 @@ type Service struct {
 	relaySub   *wakurelay.Subscription
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, nats *nats.Conn) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, nats *nats.Conn, store *store.XmtpStore) (s *Service, err error) {
 	s = &Service{
-		waku: node,
-		log:  logger.Named("message/v1"),
-		nats: nats,
+		waku:  node,
+		log:   logger.Named("message/v1"),
+		nats:  nats,
+		store: store,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
@@ -111,11 +113,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.InvalidArgument, "message too big")
 		}
 
-		store, ok := s.waku.Store().(*store.XmtpStore)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-		}
-		_, err := store.InsertMessage(wakuMsg)
+		_, err := s.store.InsertMessage(wakuMsg)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
@@ -218,11 +216,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
 	}
 
-	store, ok := s.waku.Store().(*store.XmtpStore)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-	}
-	res, err := store.FindMessages(buildWakuQuery(req))
+	res, err := s.store.FindMessages(buildWakuQuery(req))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}

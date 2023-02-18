@@ -79,10 +79,12 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 	s.log = s.log.Named("store")
 
 	// Required host option.
-	if s.host == nil {
-		return nil, ErrMissingHostOption
+	// if s.host == nil {
+	// 	return nil, ErrMissingHostOption
+	// }
+	if s.host != nil {
+		s.log = s.log.With(zap.String("host", s.host.ID().Pretty()))
 	}
-	s.log = s.log.With(zap.String("host", s.host.ID().Pretty()))
 
 	// Required db option.
 	if s.db == nil {
@@ -133,7 +135,9 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	}
 	s.started = true
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
+	if s.host != nil {
+		s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
+	}
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")

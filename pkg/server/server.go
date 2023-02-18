@@ -47,6 +47,7 @@ import (
 type Server struct {
 	log           *zap.Logger
 	nats          *nats.Conn
+	store         *xmtpstore.XmtpStore
 	hostAddr      *net.TCPAddr
 	db            *sql.DB
 	readerDB      *sql.DB
@@ -159,12 +160,27 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		nodeOpts = append(nodeOpts, node.WithWakuFilter(true, filter.WithTimeout(time.Duration(options.Filter.Timeout)*time.Second)))
 	}
 
+	dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
+	if err != nil {
+		return nil, errors.Wrap(err, "creating db store")
+	}
+	s.store, err = xmtpstore.NewXmtpStore(
+		xmtpstore.WithLog(s.log),
+		xmtpstore.WithDB(s.db),
+		xmtpstore.WithReaderDB(s.readerDB),
+		xmtpstore.WithCleanerDB(s.cleanerDB),
+		xmtpstore.WithCleaner(options.Cleaner),
+		xmtpstore.WithMessageProvider(dbStore),
+		xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
+	)
+	if err != nil {
+		s.log.Fatal("initializing store", zap.Error(err))
+	}
+	// TODO: move this into store.New and rename Stop to Close
+	s.store.Start(ctx)
+
 	if options.Store.Enable {
 		nodeOpts = append(nodeOpts, node.WithWakuStore(false, options.Store.ShouldResume))
-		dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
-		if err != nil {
-			return nil, errors.Wrap(err, "creating db store")
-		}
 		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
 		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
 
@@ -250,6 +266,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Options:     options.API,
 			Log:         s.log.Named("api"),
 			NATS:        s.nats,
+			Store:       s.store,
 			Waku:        s.wakuNode,
 			AllowLister: s.allowLister,
 		},
@@ -271,7 +288,12 @@ func (s *Server) WaitForShutdown() {
 func (s *Server) Shutdown() {
 	s.log.Info("shutting down...")
 
-	s.nats.Close()
+	if s.nats != nil {
+		s.nats.Close()
+	}
+	if s.store != nil {
+		s.store.Stop()
+	}
 
 	// shut the node down
 	s.wakuNode.Stop()
