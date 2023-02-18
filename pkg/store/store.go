@@ -108,6 +108,7 @@ func (s *Store) start() error {
 	}
 	s.started = true
 	s.ctx, s.cancel = context.WithCancel(s.ctx)
+	s.ctx = logging.With(s.ctx, s.log)
 
 	err := s.migrate()
 	if err != nil {

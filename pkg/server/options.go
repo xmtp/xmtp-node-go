@@ -42,7 +42,7 @@ type StoreOptions struct {
 }
 
 // MetricsOptions are settings used to start a prometheus server for obtaining
-// useful node metrics to monitor the health of behavior of the go-waku node.
+// useful node metrics to monitor the health of behavior of the node.
 type MetricsOptions struct {
 	Enable       bool          `long:"metrics" description:"Enable the metrics server"`
 	Address      string        `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
@@ -75,7 +75,7 @@ type NATSOptions struct {
 }
 
 // Options contains all the available features and settings that can be
-// configured via flags when executing go-waku as a service.
+// configured.
 type Options struct {
 	LogLevel string `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
 	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
