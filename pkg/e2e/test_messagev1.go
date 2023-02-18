@@ -177,66 +177,6 @@ syncLoop:
 	return nil
 }
 
-// Publish messages to multiple topics and batch query for those messages
-func (s *Suite) testMessageV1PublishBatchQuery(log *zap.Logger) error {
-	clientCount := 5
-	msgsPerClientCount := 10
-	numTopics := 3
-	clients := make([]messageclient.Client, clientCount)
-	for i := 0; i < clientCount; i++ {
-		appVersion := "xmtp-e2e/"
-		if len(s.config.GitCommit) > 0 {
-			appVersion += s.config.GitCommit[:7]
-		}
-		clients[i] = messageclient.NewHTTPClient(s.log, s.config.APIURL, s.config.GitCommit, appVersion)
-		defer clients[i].Close()
-	}
-
-	contentTopics := make([]string, 0)
-	for i := 0; i < numTopics; i++ {
-		contentTopic := "test-" + s.randomStringLower(12)
-		contentTopics = append(contentTopics, contentTopic)
-	}
-
-	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
-	defer cancel()
-	ctx, err := withAuth(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Publish messages for all clients to all content topics.
-	envs := []*messagev1.Envelope{}
-	for i, client := range clients {
-		for u, contentTopic := range contentTopics {
-			clientEnvs := make([]*messagev1.Envelope, msgsPerClientCount)
-			for j := 0; j < msgsPerClientCount; j++ {
-				clientEnvs[j] = &messagev1.Envelope{
-					ContentTopic: contentTopic,
-					TimestampNs:  uint64(j + 1),
-					Message:      []byte(fmt.Sprintf("msg-%d-%d-%d", i+1, u+1, j+1)),
-				}
-			}
-			envs = append(envs, clientEnvs...)
-			_, err = client.Publish(ctx, &messagev1.PublishRequest{
-				Envelopes: clientEnvs,
-			})
-			if err != nil {
-				return errors.Wrap(err, "publishing")
-			}
-		}
-	}
-
-	// Now batch query for all of the envelopes
-	for _, client := range clients {
-		err := expectBatchQueryMessagesEventually(ctx, client, contentTopics, envs)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func subscribeExpect(envC chan *messagev1.Envelope, envs []*messagev1.Envelope) error {
 	receivedEnvs := []*messagev1.Envelope{}
 	waitC := time.After(5 * time.Second)

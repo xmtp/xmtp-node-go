@@ -114,7 +114,9 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 		if err != nil {
 			return err
 		}
-		defer sub.Unsubscribe()
+		defer func() {
+			_ = sub.Unsubscribe()
+		}()
 	}
 
 	select {
