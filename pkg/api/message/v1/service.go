@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -35,6 +36,7 @@ type Service struct {
 	// Configured as constructor options.
 	log  *zap.Logger
 	waku *wakunode.WakuNode
+	nats *nats.Conn
 
 	// Configured internally.
 	ctx        context.Context
@@ -44,10 +46,11 @@ type Service struct {
 	relaySub   *wakurelay.Subscription
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, nats *nats.Conn) (s *Service, err error) {
 	s = &Service{
 		waku: node,
 		log:  logger.Named("message/v1"),
+		nats: nats,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
@@ -117,11 +120,22 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 
-		_, err = s.waku.Relay().Publish(ctx, wakuMsg)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+		if s.nats != nil {
+			envB, err := pb.Marshal(env)
+			if err != nil {
+				return nil, err
+			}
+			err = s.nats.Publish(env.ContentTopic, envB)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			_, err = s.waku.Relay().Publish(ctx, wakuMsg)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
+			metrics.EmitPublishedEnvelope(ctx, env)
 		}
-		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
 }
@@ -131,10 +145,26 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log.Debug("started")
 	defer log.Debug("stopped")
 
-	subC := s.dispatcher.Register(nil, req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC)
+	if s.nats != nil {
+		for _, topic := range req.ContentTopics {
+			sub, err := s.nats.Subscribe(topic, func(msg *nats.Msg) {
+				var env proto.Envelope
+				err := pb.Unmarshal(msg.Data, &env)
+				if err != nil {
+					log.Info("error unmarshaling envelope", zap.Error(err))
+					return
+				}
+				err = stream.Send(&env)
+				if err != nil {
+					log.Error("error sending envelope to subscriber", zap.Error(err))
+				}
+			})
+			if err != nil {
+				return err
+			}
+			defer sub.Unsubscribe()
+		}
 
-	for {
 		select {
 		case <-stream.Context().Done():
 			log.Debug("stream closed")
@@ -142,15 +172,29 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 		case <-s.ctx.Done():
 			log.Info("service closed")
 			return nil
-		case obj := <-subC:
-			env, ok := obj.(*proto.Envelope)
-			if !ok {
-				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-				continue
-			}
-			err := stream.Send(env)
-			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
+		}
+	} else {
+		subC := s.dispatcher.Register(nil, req.ContentTopics...)
+		defer s.dispatcher.Unregister(subC)
+
+		for {
+			select {
+			case <-stream.Context().Done():
+				log.Debug("stream closed")
+				return nil
+			case <-s.ctx.Done():
+				log.Info("service closed")
+				return nil
+			case obj := <-subC:
+				env, ok := obj.(*proto.Envelope)
+				if !ok {
+					log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
+					continue
+				}
+				err := stream.Send(env)
+				if err != nil {
+					log.Error("sending envelope to subscriber", zap.Error(err))
+				}
 			}
 		}
 	}

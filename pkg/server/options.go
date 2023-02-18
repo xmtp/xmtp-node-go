@@ -79,6 +79,11 @@ type AuthzOptions struct {
 	WriteTimeout       time.Duration `long:"authz-write-timeout" description:"Timeout for writing to the database" default:"10s"`
 }
 
+type NATSOptions struct {
+	Enable bool   `long:"enable" description:"Enable NATS"`
+	URL    string `long:"url" description:"URL of NATS server" default:""`
+}
+
 // Options contains all the available features and settings that can be
 // configured via flags when executing go-waku as a service.
 type Options struct {
@@ -104,6 +109,7 @@ type Options struct {
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 
 	API       api.Options          `group:"API Options" namespace:"api"`
+	NATS      NATSOptions          `group:"NATS Options" namespace:"nats"`
 	Authz     AuthzOptions         `group:"Authz Options"`
 	Relay     RelayOptions         `group:"Relay Options"`
 	Store     StoreOptions         `group:"Store Options"`

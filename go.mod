@@ -23,6 +23,7 @@ require (
 	github.com/libp2p/go-msgio v0.2.0
 	github.com/mattn/go-sqlite3 v1.14.13
 	github.com/multiformats/go-multiaddr v0.5.0
+	github.com/nats-io/nats.go v1.9.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/status-im/go-waku v0.0.0-20220310221450-e7098efcff73
@@ -142,6 +143,9 @@ require (
 	github.com/multiformats/go-multihash v0.1.0 // indirect
 	github.com/multiformats/go-multistream v0.3.3 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
+	github.com/nats-io/jwt v0.3.2 // indirect
+	github.com/nats-io/nkeys v0.1.3 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect

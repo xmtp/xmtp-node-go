@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
@@ -45,6 +46,7 @@ import (
 
 type Server struct {
 	log           *zap.Logger
+	nats          *nats.Conn
 	hostAddr      *net.TCPAddr
 	db            *sql.DB
 	readerDB      *sql.DB
@@ -64,8 +66,19 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	s := &Server{
 		log: log,
 	}
-
 	var err error
+
+	if options.NATS.Enable {
+		natsURL := options.NATS.URL
+		if natsURL == "" {
+			natsURL = nats.DefaultURL
+		}
+		s.nats, err = nats.Connect(natsURL)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing nats")
+		}
+	}
+
 	s.hostAddr, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", options.Address, options.Port))
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving host address")
@@ -236,6 +249,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		&api.Config{
 			Options:     options.API,
 			Log:         s.log.Named("api"),
+			NATS:        s.nats,
 			Waku:        s.wakuNode,
 			AllowLister: s.allowLister,
 		},
@@ -256,6 +270,8 @@ func (s *Server) WaitForShutdown() {
 
 func (s *Server) Shutdown() {
 	s.log.Info("shutting down...")
+
+	s.nats.Close()
 
 	// shut the node down
 	s.wakuNode.Stop()
