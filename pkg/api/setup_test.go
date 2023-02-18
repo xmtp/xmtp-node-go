@@ -66,7 +66,7 @@ func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, *store.DBSto
 	dbStore, err := store.NewDBStore(log, store.WithDBStoreDB(db))
 	require.NoError(t, err)
 
-	store, err := store.NewXmtpStore(
+	store, err := store.New(
 		store.WithLog(log),
 		store.WithDB(db),
 		store.WithReaderDB(db),
@@ -74,9 +74,7 @@ func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, *store.DBSto
 		store.WithMessageProvider(dbStore))
 	require.NoError(t, err)
 
-	store.Start(context.Background())
-
-	return store, dbStore, store.Stop, dbCleanup
+	return store, dbStore, store.Close, dbCleanup
 }
 
 func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {

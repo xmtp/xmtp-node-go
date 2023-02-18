@@ -99,7 +99,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating db store")
 	}
-	s.store, err = xmtpstore.NewXmtpStore(
+	s.store, err = xmtpstore.New(
 		xmtpstore.WithLog(s.log),
 		xmtpstore.WithDB(s.db),
 		xmtpstore.WithReaderDB(s.readerDB),
@@ -111,8 +111,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	if err != nil {
 		s.log.Fatal("initializing store", zap.Error(err))
 	}
-	// TODO: move this into store.New and rename Stop to Close
-	s.store.Start(ctx)
 
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
@@ -145,7 +143,7 @@ func (s *Server) Shutdown() {
 		s.nats.Close()
 	}
 	if s.store != nil {
-		s.store.Stop()
+		s.store.Close()
 	}
 
 	if s.allowLister != nil {

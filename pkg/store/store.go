@@ -52,10 +52,14 @@ type XmtpStore struct {
 	cleaner     CleanerOptions
 }
 
-func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
+func New(opts ...Option) (*XmtpStore, error) {
 	s := new(XmtpStore)
 	for _, opt := range opts {
 		opt(s)
+	}
+
+	if s.ctx == nil {
+		s.ctx, s.cancel = context.WithCancel(context.Background())
 	}
 
 	// Required logger option.
@@ -98,21 +102,17 @@ func NewXmtpStore(opts ...Option) (*XmtpStore, error) {
 		}
 	}
 
-	s.MsgC = make(chan *protocol.Envelope, bufferSize)
+	s.start()
 
 	return s, nil
 }
 
-func (s *XmtpStore) MessageChannel() chan *protocol.Envelope {
-	return s.MsgC
-}
-
-func (s *XmtpStore) Start(ctx context.Context) {
+func (s *XmtpStore) start() {
 	if s.started {
 		return
 	}
 	s.started = true
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.ctx, s.cancel = context.WithCancel(s.ctx)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
@@ -123,7 +123,7 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	}
 }
 
-func (s *XmtpStore) Stop() {
+func (s *XmtpStore) Close() {
 	s.started = false
 
 	if s.MsgC != nil {
@@ -137,20 +137,6 @@ func (s *XmtpStore) Stop() {
 
 func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
 	return FindMessages(s.db, query)
-}
-
-func (s *XmtpStore) findLastSeen() (int64, error) {
-	res, err := FindMessages(s.db, &pb.HistoryQuery{
-		PagingInfo: &pb.PagingInfo{
-			Direction: pb.PagingInfo_BACKWARD,
-			PageSize:  1,
-		},
-	})
-	if err != nil || len(res.Messages) == 0 {
-		return 0, err
-	}
-
-	return res.Messages[0].Timestamp, nil
 }
 
 func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
@@ -218,11 +204,4 @@ func computeIndex(env *protocol.Envelope) (*pb.Index, error) {
 		SenderTime:   env.Message().Timestamp,
 		PubsubTopic:  env.PubsubTopic(),
 	}, nil
-}
-
-func max(x, y int64) int64 {
-	if x > y {
-		return x
-	}
-	return y
 }
