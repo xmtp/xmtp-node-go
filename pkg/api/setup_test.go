@@ -32,7 +32,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	require.True(t, ns.ReadyForConnections(4*time.Second), "nats server not ready")
 	nats, err := nats.Connect(ns.ClientURL())
 	require.NoError(t, err)
-	store, _, _, dbCleanup := newTestStore(t, log)
+	store, _, dbCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
 	s, err := New(&Config{
@@ -61,20 +61,17 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	}
 }
 
-func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, *store.DBStore, func(), func()) {
+func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, func(), func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	dbStore, err := store.NewDBStore(log, store.WithDBStoreDB(db))
-	require.NoError(t, err)
-
 	store, err := store.New(
 		store.WithLog(log),
 		store.WithDB(db),
 		store.WithReaderDB(db),
 		store.WithCleanerDB(db),
-		store.WithMessageProvider(dbStore))
+	)
 	require.NoError(t, err)
 
-	return store, dbStore, store.Close, dbCleanup
+	return store, store.Close, dbCleanup
 }
 
 func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {

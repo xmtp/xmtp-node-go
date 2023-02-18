@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,11 +12,14 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
-	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 )
@@ -37,15 +41,14 @@ var (
 )
 
 type XmtpStore struct {
-	ctx         context.Context
-	cancel      func()
-	MsgC        chan *protocol.Envelope
-	wg          sync.WaitGroup
-	db          *sql.DB
-	readerDB    *sql.DB
-	cleanerDB   *sql.DB
-	log         *zap.Logger
-	msgProvider store.MessageProvider
+	ctx       context.Context
+	cancel    func()
+	MsgC      chan *protocol.Envelope
+	wg        sync.WaitGroup
+	db        *sql.DB
+	readerDB  *sql.DB
+	cleanerDB *sql.DB
+	log       *zap.Logger
 
 	started     bool
 	statsPeriod time.Duration
@@ -78,11 +81,6 @@ func New(opts ...Option) (*XmtpStore, error) {
 		return nil, ErrMissingDBOption
 	}
 
-	// Required db option.
-	if s.msgProvider == nil {
-		return nil, ErrMissingMessageProviderOption
-	}
-
 	// Required cleaner options.
 	if s.cleaner.Enable {
 		if s.cleaner.ActivePeriod == 0 {
@@ -102,17 +100,25 @@ func New(opts ...Option) (*XmtpStore, error) {
 		}
 	}
 
-	s.start()
+	err := s.start()
+	if err != nil {
+		return nil, err
+	}
 
 	return s, nil
 }
 
-func (s *XmtpStore) start() {
+func (s *XmtpStore) start() error {
 	if s.started {
-		return
+		return nil
 	}
 	s.started = true
 	s.ctx, s.cancel = context.WithCancel(s.ctx)
+
+	err := s.migrate()
+	if err != nil {
+		return err
+	}
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
@@ -121,6 +127,8 @@ func (s *XmtpStore) start() {
 	if s.cleaner.Enable {
 		go s.cleanerLoop()
 	}
+
+	return nil
 }
 
 func (s *XmtpStore) Close() {
@@ -165,7 +173,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
 		tracing.SpanResource(span, "store")
 		tracing.SpanType(span, "db")
-		err = s.msgProvider.Put(env) // Should the index be stored?
+		err = s.insertMessage(env) // Should the index be stored?
 		if err != nil {
 			tracing.SpanTag(span, "stored", false)
 			if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
@@ -194,6 +202,40 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 		return nil
 	})
 	return stored, err
+}
+
+func (s *XmtpStore) insertMessage(env *protocol.Envelope) error {
+	cursor := env.Index()
+	pubsubTopic := env.PubsubTopic()
+	message := env.Message()
+	shouldExpire := !isXMTP(message)
+	sql := "INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+	_, err := s.db.Exec(sql, cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version, shouldExpire)
+	return err
+}
+
+func (s *XmtpStore) migrate() error {
+	ctx := context.Background()
+	db := bun.NewDB(s.db, pgdialect.New())
+	migrator := migrate.NewMigrator(db, messages.Migrations)
+	err := migrator.Init(ctx)
+	if err != nil {
+		return err
+	}
+
+	group, err := migrator.Migrate(ctx)
+	if err != nil {
+		return err
+	}
+	if group.IsZero() {
+		s.log.Info("No new migrations to run")
+	}
+
+	return nil
+}
+
+func isXMTP(msg *pb.WakuMessage) bool {
+	return strings.HasPrefix(msg.ContentTopic, "/xmtp/")
 }
 
 func computeIndex(env *protocol.Envelope) (*pb.Index, error) {

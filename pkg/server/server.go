@@ -95,17 +95,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
-	if err != nil {
-		return nil, errors.Wrap(err, "creating db store")
-	}
 	s.store, err = xmtpstore.New(
 		xmtpstore.WithLog(s.log),
 		xmtpstore.WithDB(s.db),
 		xmtpstore.WithReaderDB(s.readerDB),
 		xmtpstore.WithCleanerDB(s.cleanerDB),
 		xmtpstore.WithCleaner(options.Cleaner),
-		xmtpstore.WithMessageProvider(dbStore),
 		xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
 	)
 	if err != nil {

@@ -13,8 +13,6 @@ import (
 func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 	db, _, dbCleanup := test.NewDB(t)
 	log := utils.Logger()
-	dbStore, err := NewDBStore(log, WithDBStoreDB(db))
-	require.NoError(t, err)
 
 	store, err := New(
 		append(
@@ -23,7 +21,6 @@ func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
 				WithDB(db),
 				WithReaderDB(db),
 				WithCleanerDB(db),
-				WithMessageProvider(dbStore),
 			},
 			opts...,
 		)...,

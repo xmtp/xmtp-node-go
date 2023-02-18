@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"time"
 
-	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"go.uber.org/zap"
 )
 
@@ -31,13 +30,6 @@ func WithReaderDB(db *sql.DB) Option {
 func WithCleanerDB(db *sql.DB) Option {
 	return func(s *XmtpStore) {
 		s.cleanerDB = db
-	}
-}
-
-// TODO: replace MessageProvider with a local type and remove waku reference
-func WithMessageProvider(p wakustore.MessageProvider) Option {
-	return func(s *XmtpStore) {
-		s.msgProvider = p
 	}
 }
 

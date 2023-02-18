@@ -31,16 +31,9 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 	return idx
 }
 
-func createStore(t *testing.T, db *sql.DB) *DBStore {
-	option := WithDBStoreDB(db)
-	store, err := NewDBStore(utils.Logger(), option)
-	require.NoError(t, err)
-	return store
-}
-
-func createAndFillDb(t *testing.T) (*sql.DB, []*pb.WakuMessage) {
+func createAndFillDb(t *testing.T) (*XmtpStore, func(), []*pb.WakuMessage) {
 	db := NewMock()
-	store := createStore(t, db)
+	store, cleanup := newTestStore(t)
 	_, err := db.Exec("TRUNCATE TABLE message;")
 	require.NoError(t, err)
 
@@ -48,22 +41,26 @@ func createAndFillDb(t *testing.T) (*sql.DB, []*pb.WakuMessage) {
 	msg2 := tests.CreateWakuMessage("test2", 2)
 	msg3 := tests.CreateWakuMessage("test3", 3)
 
-	err = store.Put(protocol.NewEnvelope(msg1, utils.GetUnixEpoch(), TOPIC))
+	err = store.insertMessage(protocol.NewEnvelope(msg1, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(protocol.NewEnvelope(msg2, utils.GetUnixEpoch(), TOPIC))
+	err = store.insertMessage(protocol.NewEnvelope(msg2, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
-	err = store.Put(protocol.NewEnvelope(msg3, utils.GetUnixEpoch(), TOPIC))
+	err = store.insertMessage(protocol.NewEnvelope(msg3, utils.GetUnixEpoch(), TOPIC))
 	require.NoError(t, err)
 
-	return db, []*pb.WakuMessage{msg1, msg2, msg3}
+	return store, func() {
+		cleanup()
+		db.Close()
+	}, []*pb.WakuMessage{msg1, msg2, msg3}
 }
 
 func TestQuerySimple(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		ContentFilters: []*pb.ContentFilter{
 			{
 				ContentTopic: "test2",
@@ -78,9 +75,10 @@ func TestQuerySimple(t *testing.T) {
 }
 
 func TestQueryMultipleTopics(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		ContentFilters: []*pb.ContentFilter{
 			{
 				ContentTopic: "test2",
@@ -96,18 +94,20 @@ func TestQueryMultipleTopics(t *testing.T) {
 }
 
 func TestQueryNoTopics(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{})
+	result, err := store.FindMessages(&pb.HistoryQuery{})
 
 	require.NoError(t, err)
 	require.Len(t, result.Messages, 3)
 }
 
 func TestQueryStartTime(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		StartTime: 2,
 	})
 
@@ -116,9 +116,10 @@ func TestQueryStartTime(t *testing.T) {
 }
 
 func TestQueryTimeWindow(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		StartTime: 2,
 		EndTime:   3,
 	})
@@ -129,9 +130,10 @@ func TestQueryTimeWindow(t *testing.T) {
 }
 
 func TestQueryTimeAndTopic(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	resultNoHits, err := FindMessages(db, &pb.HistoryQuery{
+	resultNoHits, err := store.FindMessages(&pb.HistoryQuery{
 		ContentFilters: []*pb.ContentFilter{
 			{
 				// Wrong content topic. Should exclude messages
@@ -145,7 +147,7 @@ func TestQueryTimeAndTopic(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resultNoHits.Messages, 0)
 
-	resultWithHits, err := FindMessages(db, &pb.HistoryQuery{
+	resultWithHits, err := store.FindMessages(&pb.HistoryQuery{
 		ContentFilters: []*pb.ContentFilter{
 			{
 				ContentTopic: "test3",
@@ -159,16 +161,17 @@ func TestQueryTimeAndTopic(t *testing.T) {
 }
 
 func TestQueryPubsubTopic(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		PubsubTopic: "test",
 	})
 
 	require.NoError(t, err)
 	require.Len(t, result.Messages, 3)
 
-	result, err = FindMessages(db, &pb.HistoryQuery{
+	result, err = store.FindMessages(&pb.HistoryQuery{
 		PubsubTopic: "foo",
 	})
 	require.NoError(t, err)
@@ -176,9 +179,10 @@ func TestQueryPubsubTopic(t *testing.T) {
 }
 
 func TestDirectionSingleField(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Direction: pb.PagingInfo_FORWARD,
 		},
@@ -187,7 +191,7 @@ func TestDirectionSingleField(t *testing.T) {
 	require.Len(t, result.Messages, 3)
 	require.Equal(t, result.Messages[0].Timestamp, int64(1))
 
-	result, err = FindMessages(db, &pb.HistoryQuery{
+	result, err = store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Direction: pb.PagingInfo_BACKWARD,
 		},
@@ -198,9 +202,10 @@ func TestDirectionSingleField(t *testing.T) {
 }
 
 func TestCursorTimestamp(t *testing.T) {
-	db, msgs := createAndFillDb(t)
+	store, cleanup, msgs := createAndFillDb(t)
+	defer cleanup()
 	idx := buildIndex(msgs[1], TOPIC)
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Cursor: &pb.Index{
 				SenderTime:  int64(2),
@@ -216,12 +221,13 @@ func TestCursorTimestamp(t *testing.T) {
 }
 
 func TestCursorTimestampBackwards(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 	// Create a copy of the second message to use as the index
 	msg2 := tests.CreateWakuMessage("test2", 2)
 	idx := buildIndex(msg2, "test")
 
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Cursor:    idx,
 			Direction: pb.PagingInfo_BACKWARD,
@@ -233,9 +239,10 @@ func TestCursorTimestampBackwards(t *testing.T) {
 }
 
 func TestCursorTimestampTie(t *testing.T) {
-	db, msgs := createAndFillDb(t)
+	store, cleanup, msgs := createAndFillDb(t)
+	defer cleanup()
 	idx := buildIndex(msgs[0], TOPIC)
-	result, err := FindMessages(db, &pb.HistoryQuery{
+	result, err := store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			Cursor: &pb.Index{
 				SenderTime:  int64(1),
@@ -251,12 +258,13 @@ func TestCursorTimestampTie(t *testing.T) {
 }
 
 func TestPagingInfoGeneration(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 
 	results := []*pb.WakuMessage{}
 	var cursor *pb.Index
 	for {
-		response, err := FindMessages(db, &pb.HistoryQuery{
+		response, err := store.FindMessages(&pb.HistoryQuery{
 			PagingInfo: &pb.PagingInfo{
 				PageSize:  1,
 				Cursor:    cursor,
@@ -278,16 +286,16 @@ func TestPagingInfoGeneration(t *testing.T) {
 }
 
 func TestPagingInfoWithFilter(t *testing.T) {
-	db, _ := createAndFillDb(t)
-	store := createStore(t, db)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 	additionalMessage := tests.CreateWakuMessage("test1", 2)
-	err := store.Put(protocol.NewEnvelope(additionalMessage, utils.GetUnixEpoch(), "test"))
+	err := store.insertMessage(protocol.NewEnvelope(additionalMessage, utils.GetUnixEpoch(), "test"))
 	require.NoError(t, err)
 
 	results := []*pb.WakuMessage{}
 	var cursor *pb.Index
 	for {
-		response, err := FindMessages(db, &pb.HistoryQuery{
+		response, err := store.FindMessages(&pb.HistoryQuery{
 			ContentFilters: []*pb.ContentFilter{{
 				ContentTopic: "test1",
 			}},
@@ -313,11 +321,12 @@ func TestPagingInfoWithFilter(t *testing.T) {
 }
 
 func TestLastPage(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 	msg2 := tests.CreateWakuMessage("test2", 2)
 	idx := buildIndex(msg2, "test")
 
-	response, err := FindMessages(db, &pb.HistoryQuery{
+	response, err := store.FindMessages(&pb.HistoryQuery{
 		PagingInfo: &pb.PagingInfo{
 			PageSize:  10,
 			Cursor:    idx,
@@ -331,11 +340,12 @@ func TestLastPage(t *testing.T) {
 }
 
 func TestPageSizeOne(t *testing.T) {
-	db, _ := createAndFillDb(t)
+	store, cleanup, _ := createAndFillDb(t)
+	defer cleanup()
 	var cursor *pb.Index
 	loops := 0
 	for {
-		response, err := FindMessages(db, &pb.HistoryQuery{
+		response, err := store.FindMessages(&pb.HistoryQuery{
 			ContentFilters: []*pb.ContentFilter{
 				{
 					ContentTopic: "test1",
