@@ -74,16 +74,11 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 	go ns.Start()
 	require.True(t, ns.ReadyForConnections(4*time.Second), "nats server not ready")
 	s, err := New(context.Background(), test.NewLog(t), Options{
-		Address: "localhost",
 		Store: StoreOptions{
 			Enable:                   true,
 			DbConnectionString:       dbDSN,
 			DbReaderConnectionString: dbDSN,
 		},
-		StaticNodes: staticNodes,
-		WSAddress:   "0.0.0.0",
-		WSPort:      0,
-		EnableWS:    true,
 		API: api.Options{
 			HTTPPort: 0,
 			GRPCPort: 0,
