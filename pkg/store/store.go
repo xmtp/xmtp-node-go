@@ -9,14 +9,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
-	"github.com/status-im/go-waku/waku/v2/protocol/relay"
-	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
@@ -41,7 +38,6 @@ var (
 type Store struct {
 	ctx       context.Context
 	cancel    func()
-	MsgC      chan *protocol.Envelope
 	wg        sync.WaitGroup
 	db        *sql.DB
 	readerDB  *sql.DB
@@ -131,17 +127,12 @@ func (s *Store) start() error {
 
 func (s *Store) Close() {
 	s.started = false
-
-	if s.MsgC != nil {
-		close(s.MsgC)
-	}
-
 	s.cancel()
 	s.wg.Wait()
 	s.log.Info("stopped")
 }
 
-func (s *Store) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
+func (s *Store) FindMessages(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error) {
 	return FindMessages(s.db, query)
 }
 
@@ -162,16 +153,15 @@ func (s *Store) statusMetricsLoop(ctx context.Context) {
 	}
 }
 
-func (s *Store) InsertMessage(msg *pb.WakuMessage) (bool, error) {
-	env := protocol.NewEnvelope(msg, time.Now().UTC().UnixNano(), relay.DefaultWakuTopic)
-	return s.storeMessage(env)
+func (s *Store) InsertMessage(env *messagev1.Envelope) (bool, error) {
+	return s.storeMessage(env, time.Now().UTC().UnixNano())
 }
 
-func (s *Store) storeMessage(env *protocol.Envelope) (stored bool, err error) {
+func (s *Store) storeMessage(env *messagev1.Envelope, ts int64) (stored bool, err error) {
 	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
 		tracing.SpanResource(span, "store")
 		tracing.SpanType(span, "db")
-		err = s.insertMessage(env) // Should the index be stored?
+		err = s.insertMessage(env, ts) // Should the index be stored?
 		if err != nil {
 			tracing.SpanTag(span, "stored", false)
 			if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
@@ -187,28 +177,22 @@ func (s *Store) storeMessage(env *protocol.Envelope) (stored bool, err error) {
 			return err
 		}
 		stored = true
-		s.log.Debug("message stored",
-			zap.String("content_topic", env.Message().ContentTopic),
-			zap.Int("size", env.Size()),
-			logging.Time("sent", env.Index().SenderTime))
+		s.log.Debug("message stored", zap.String("content_topic", env.ContentTopic), logging.Time("sent", int64(env.TimestampNs)))
 		// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
 		// TODO: re-add this without the waku reference
 		// metrics.RecordMessage(s.ctx, "stored", 1)
 		tracing.SpanTag(span, "stored", true)
-		tracing.SpanTag(span, "content_topic", env.Message().ContentTopic)
-		tracing.SpanTag(span, "size", env.Size())
+		tracing.SpanTag(span, "content_topic", env.ContentTopic)
 		return nil
 	})
 	return stored, err
 }
 
-func (s *Store) insertMessage(env *protocol.Envelope) error {
-	cursor := env.Index()
-	pubsubTopic := env.PubsubTopic()
-	message := env.Message()
-	shouldExpire := !isXMTP(message)
+func (s *Store) insertMessage(env *messagev1.Envelope, ts int64) error {
+	digest := computeDigest(env)
+	shouldExpire := !isXMTP(env.ContentTopic)
 	sql := "INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
-	_, err := s.db.Exec(sql, cursor.Digest, cursor.ReceiverTime, message.Timestamp, message.ContentTopic, pubsubTopic, message.Payload, message.Version, shouldExpire)
+	_, err := s.db.Exec(sql, digest, ts, env.TimestampNs, env.ContentTopic, "", env.Message, 0, shouldExpire)
 	return err
 }
 
@@ -232,16 +216,11 @@ func (s *Store) migrate() error {
 	return nil
 }
 
-func isXMTP(msg *pb.WakuMessage) bool {
-	return strings.HasPrefix(msg.ContentTopic, "/xmtp/")
+func isXMTP(topic string) bool {
+	return strings.HasPrefix(topic, "/xmtp/")
 }
 
-func computeIndex(env *protocol.Envelope) (*pb.Index, error) {
-	hash := sha256.Sum256(append([]byte(env.Message().ContentTopic), env.Message().Payload...))
-	return &pb.Index{
-		Digest:       hash[:],
-		ReceiverTime: utils.GetUnixEpoch(),
-		SenderTime:   env.Message().Timestamp,
-		PubsubTopic:  env.PubsubTopic(),
-	}, nil
+func computeDigest(env *messagev1.Envelope) []byte {
+	digest := sha256.Sum256(append([]byte(env.ContentTopic), env.Message...))
+	return digest[:]
 }

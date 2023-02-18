@@ -2,17 +2,16 @@ package store
 
 import (
 	"testing"
+	"time"
 
-	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
-	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func newTestStore(t *testing.T, opts ...Option) (*Store, func()) {
 	db, _, dbCleanup := test.NewDB(t)
-	log := utils.Logger()
+	log := test.NewLog(t)
 
 	store, err := New(
 		append(
@@ -33,13 +32,12 @@ func newTestStore(t *testing.T, opts ...Option) (*Store, func()) {
 	}
 }
 
-func storeMessage(t *testing.T, s *Store, msg *pb.WakuMessage, pubSubTopic string) {
-	_, err := s.storeMessage(test.NewEnvelope(t, msg, pubSubTopic))
+func storeMessage(t *testing.T, s *Store, env *messagev1.Envelope) {
+	_, err := s.storeMessage(env, time.Now().UTC().UnixNano())
 	require.NoError(t, err)
 }
 
-func storeMessageWithTime(t *testing.T, s *Store, msg *pb.WakuMessage, pubSubTopic string, receiverTime int64) {
-	env := protocol.NewEnvelope(msg, receiverTime, pubSubTopic)
-	_, err := s.storeMessage(env)
+func storeMessageWithTime(t *testing.T, s *Store, env *messagev1.Envelope, receiverTime int64) {
+	_, err := s.storeMessage(env, receiverTime)
 	require.NoError(t, err)
 }
