@@ -5,9 +5,5 @@ PORT="${PORT:-9002}"
 
 dev/run \
     --store \
-    --filter \
-    --lightpush \
-    --ws \
-    --ws-port="${PORT}" \
     --api.authn.allowlists \
     "$@"

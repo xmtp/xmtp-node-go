@@ -167,21 +167,15 @@ func (s *Store) storeMessage(env *messagev1.Envelope, ts int64) (stored bool, er
 			tracing.SpanTag(span, "stored", false)
 			if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
 				s.log.Debug("storing message", zap.Error(err))
-				// TODO: re-add this without the waku reference
-				// metrics.RecordStoreError(s.ctx, "store_duplicate_key")
 				return nil
 			}
 			s.log.Error("storing message", zap.Error(err))
-			// TODO: re-add this without the waku reference
-			// metrics.RecordStoreError(s.ctx, "store_failure")
 			span.Finish(tracing.WithError(err))
 			return err
 		}
 		stored = true
 		s.log.Debug("message stored", zap.String("content_topic", env.ContentTopic), logging.Time("sent", int64(env.TimestampNs)))
 		// This expects me to know the length of the message queue, which I don't now that the store lives in the DB. Setting to 1 for now
-		// TODO: re-add this without the waku reference
-		// metrics.RecordMessage(s.ctx, "stored", 1)
 		tracing.SpanTag(span, "stored", true)
 		tracing.SpanTag(span, "content_topic", env.ContentTopic)
 		return nil
