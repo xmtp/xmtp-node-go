@@ -31,7 +31,7 @@ func buildIndex(msg *pb.WakuMessage, topic string) *pb.Index {
 	return idx
 }
 
-func createAndFillDb(t *testing.T) (*XmtpStore, func(), []*pb.WakuMessage) {
+func createAndFillDb(t *testing.T) (*Store, func(), []*pb.WakuMessage) {
 	db := NewMock()
 	store, cleanup := newTestStore(t)
 	_, err := db.Exec("TRUNCATE TABLE message;")

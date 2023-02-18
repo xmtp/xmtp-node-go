@@ -24,9 +24,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const bufferSize = 1024
 const maxPageSize = 100
-const maxPeersToResume = 5
 
 var (
 	ErrMissingLogOption             = errors.New("missing log option")
@@ -40,7 +38,7 @@ var (
 	ErrMissingCleanerDBOption       = errors.New("missing cleaner db option")
 )
 
-type XmtpStore struct {
+type Store struct {
 	ctx       context.Context
 	cancel    func()
 	MsgC      chan *protocol.Envelope
@@ -55,8 +53,8 @@ type XmtpStore struct {
 	cleaner     CleanerOptions
 }
 
-func New(opts ...Option) (*XmtpStore, error) {
-	s := new(XmtpStore)
+func New(opts ...Option) (*Store, error) {
+	s := new(Store)
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -108,7 +106,7 @@ func New(opts ...Option) (*XmtpStore, error) {
 	return s, nil
 }
 
-func (s *XmtpStore) start() error {
+func (s *Store) start() error {
 	if s.started {
 		return nil
 	}
@@ -131,7 +129,7 @@ func (s *XmtpStore) start() error {
 	return nil
 }
 
-func (s *XmtpStore) Close() {
+func (s *Store) Close() {
 	s.started = false
 
 	if s.MsgC != nil {
@@ -143,11 +141,11 @@ func (s *XmtpStore) Close() {
 	s.log.Info("stopped")
 }
 
-func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
+func (s *Store) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
 	return FindMessages(s.db, query)
 }
 
-func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
+func (s *Store) statusMetricsLoop(ctx context.Context) {
 	if s.statsPeriod == 0 {
 		s.log.Info("statsPeriod is 0 indicating no metrics loop")
 		return
@@ -164,12 +162,12 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 	}
 }
 
-func (s *XmtpStore) InsertMessage(msg *pb.WakuMessage) (bool, error) {
+func (s *Store) InsertMessage(msg *pb.WakuMessage) (bool, error) {
 	env := protocol.NewEnvelope(msg, time.Now().UTC().UnixNano(), relay.DefaultWakuTopic)
 	return s.storeMessage(env)
 }
 
-func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error) {
+func (s *Store) storeMessage(env *protocol.Envelope) (stored bool, err error) {
 	err = tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
 		tracing.SpanResource(span, "store")
 		tracing.SpanType(span, "db")
@@ -204,7 +202,7 @@ func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error
 	return stored, err
 }
 
-func (s *XmtpStore) insertMessage(env *protocol.Envelope) error {
+func (s *Store) insertMessage(env *protocol.Envelope) error {
 	cursor := env.Index()
 	pubsubTopic := env.PubsubTopic()
 	message := env.Message()
@@ -214,7 +212,7 @@ func (s *XmtpStore) insertMessage(env *protocol.Envelope) error {
 	return err
 }
 
-func (s *XmtpStore) migrate() error {
+func (s *Store) migrate() error {
 	ctx := context.Background()
 	db := bun.NewDB(s.db, pgdialect.New())
 	migrator := migrate.NewMigrator(db, messages.Migrations)

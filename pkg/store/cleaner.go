@@ -16,7 +16,7 @@ type CleanerOptions struct {
 	WriteTimeout  time.Duration `long:"write-timeout" description:"Timeout for writing to the database" default:"60s"`
 }
 
-func (s *XmtpStore) cleanerLoop() {
+func (s *Store) cleanerLoop() {
 	log := s.log.Named("cleaner")
 
 	for {
@@ -38,7 +38,7 @@ func (s *XmtpStore) cleanerLoop() {
 	}
 }
 
-func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
+func (s *Store) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	started := time.Now().UTC()
 	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
 	whereClause := "receivertimestamp < $1 AND should_expire IS TRUE"

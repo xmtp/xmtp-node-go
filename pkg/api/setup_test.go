@@ -61,7 +61,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	}
 }
 
-func newTestStore(t *testing.T, log *zap.Logger) (*store.XmtpStore, func(), func()) {
+func newTestStore(t *testing.T, log *zap.Logger) (*store.Store, func(), func()) {
 	db, _, dbCleanup := test.NewDB(t)
 	store, err := store.New(
 		store.WithLog(log),

@@ -31,7 +31,7 @@ type Service struct {
 	// Configured as constructor options.
 	log   *zap.Logger
 	nats  *nats.Conn
-	store *store.XmtpStore
+	store *store.Store
 
 	// Configured internally.
 	ctx       context.Context
@@ -39,7 +39,7 @@ type Service struct {
 	wg        sync.WaitGroup
 }
 
-func NewService(logger *zap.Logger, nats *nats.Conn, store *store.XmtpStore) (s *Service, err error) {
+func NewService(logger *zap.Logger, nats *nats.Conn, store *store.Store) (s *Service, err error) {
 	s = &Service{
 		log:   logger.Named("message/v1"),
 		nats:  nats,

@@ -31,7 +31,7 @@ import (
 type Server struct {
 	log           *zap.Logger
 	nats          *nats.Conn
-	store         *xmtpstore.XmtpStore
+	store         *xmtpstore.Store
 	db            *sql.DB
 	readerDB      *sql.DB
 	cleanerDB     *sql.DB

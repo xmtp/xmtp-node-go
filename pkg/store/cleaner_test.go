@@ -14,19 +14,19 @@ func TestStore_Cleaner(t *testing.T) {
 	tcs := []struct {
 		name      string
 		batchSize int
-		setup     func(t *testing.T, s *XmtpStore)
+		setup     func(t *testing.T, s *Store)
 		expected  []*pb.WakuMessage
 	}{
 		{
 			name:      "no messages",
 			batchSize: 5,
-			setup:     func(t *testing.T, s *XmtpStore) {},
+			setup:     func(t *testing.T, s *Store) {},
 			expected:  []*pb.WakuMessage{},
 		},
 		{
 			name:      "less than batch size",
 			batchSize: 5,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
 				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
 				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
@@ -52,7 +52,7 @@ func TestStore_Cleaner(t *testing.T) {
 		{
 			name:      "equal to batch size",
 			batchSize: 3,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
 				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
 				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
@@ -75,7 +75,7 @@ func TestStore_Cleaner(t *testing.T) {
 		{
 			name:      "greater than batch size",
 			batchSize: 2,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
 				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
 				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
@@ -121,7 +121,7 @@ func TestStore_Cleaner(t *testing.T) {
 	}
 }
 
-func expectQueryMessagesEventually(t *testing.T, s *XmtpStore, query *pb.HistoryQuery, expectedMsgs []*pb.WakuMessage) []*pb.WakuMessage {
+func expectQueryMessagesEventually(t *testing.T, s *Store, query *pb.HistoryQuery, expectedMsgs []*pb.WakuMessage) []*pb.WakuMessage {
 	var msgs []*pb.WakuMessage
 	require.Eventually(t, func() bool {
 		msgs = queryMessages(t, s, query)
@@ -131,7 +131,7 @@ func expectQueryMessagesEventually(t *testing.T, s *XmtpStore, query *pb.History
 	return msgs
 }
 
-func queryMessages(t *testing.T, s *XmtpStore, query *pb.HistoryQuery) []*pb.WakuMessage {
+func queryMessages(t *testing.T, s *Store, query *pb.HistoryQuery) []*pb.WakuMessage {
 	res, err := s.FindMessages(query)
 	require.NoError(t, err)
 	return res.Messages

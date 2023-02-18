@@ -32,7 +32,7 @@ type Config struct {
 	AllowLister authz.WalletAllowLister
 	NATS        *nats.Conn
 	Log         *zap.Logger
-	Store       *store.XmtpStore
+	Store       *store.Store
 }
 
 // Options bundle command line options associated with the authn package.
