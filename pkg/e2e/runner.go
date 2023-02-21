@@ -70,17 +70,18 @@ func (r *Runner) runTest(test *Test) error {
 	duration := ended.Sub(started)
 	log = log.With(zap.Duration("duration", duration))
 	if err != nil {
-		err := recordFailedRun(r.ctx, nameTag)
-		if err != nil {
-			log.Error("recording failed run metric", zap.Error(err))
-		}
-
-		statusTag := newTag(testStatusTagKey, "failed")
-		err = recordRun(r.ctx, nameTag, statusTag)
-		if err != nil {
-			log.Error("recording failed run metric", zap.Error(err))
+		recordErr := recordFailedRun(r.ctx, nameTag)
+		if recordErr != nil {
+			log.Error("recording failed run metric", zap.Error(recordErr))
 		}
 		log.Error("test failed", zap.Error(err))
+
+		statusTag := newTag(testStatusTagKey, "failed")
+		err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
+		if err != nil {
+			log.Error("recording run duration", zap.Error(err))
+			return err
+		}
 
 		return err
 	}
@@ -93,13 +94,7 @@ func (r *Runner) runTest(test *Test) error {
 	}
 
 	statusTag := newTag(testStatusTagKey, "success")
-	err = recordRun(r.ctx, nameTag, statusTag)
-	if err != nil {
-		log.Error("recording successful run metric", zap.Error(err))
-		return err
-	}
-
-	err = recordRunDuration(r.ctx, duration, nameTag)
+	err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
 	if err != nil {
 		log.Error("recording run duration", zap.Error(err))
 		return err

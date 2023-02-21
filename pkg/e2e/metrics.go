@@ -14,7 +14,6 @@ import (
 var (
 	successfulRuns     = stats.Int64("successful_runs", "Number of successful runs", stats.UnitDimensionless)
 	failedRuns         = stats.Int64("failed_runs", "Number of failed runs", stats.UnitDimensionless)
-	runsMeasure        = stats.Int64("runs", "Number of runs", stats.UnitDimensionless)
 	runDurationSeconds = stats.Float64("run_duration_seconds", "Duration of the run in seconds", stats.UnitSeconds)
 
 	testNameTagKey   = metricstag.MustNewKey("test")
@@ -36,18 +35,11 @@ var (
 			TagKeys:     []metricstag.Key{testNameTagKey},
 		},
 		{
-			Name:        "xmtpd_e2e_runs",
-			Measure:     runsMeasure,
-			Description: "Number of e2e runs",
-			Aggregation: view.Count(),
-			TagKeys:     []metricstag.Key{testNameTagKey, testStatusTagKey},
-		},
-		{
 			Name:        "xmtpd_e2e_run_duration_seconds",
 			Measure:     runDurationSeconds,
 			Description: "Duration of the run in seconds",
 			Aggregation: view.Distribution(append(floatRange(30), 40, 50, 60, 90, 120, 300)...),
-			TagKeys:     []metricstag.Key{testNameTagKey},
+			TagKeys:     []metricstag.Key{testNameTagKey, testStatusTagKey},
 		},
 	}
 )
@@ -76,10 +68,6 @@ func recordSuccessfulRun(ctx context.Context, tags ...tag) error {
 
 func recordFailedRun(ctx context.Context, tags ...tag) error {
 	return recordWithTags(ctx, tags, failedRuns.M(1))
-}
-
-func recordRun(ctx context.Context, tags ...tag) error {
-	return recordWithTags(ctx, tags, runsMeasure.M(1))
 }
 
 func recordRunDuration(ctx context.Context, duration time.Duration, tags ...tag) error {
