@@ -12,13 +12,29 @@ import (
 )
 
 var (
-	runsMeasure               = stats.Int64("runs", "Number of runs", stats.UnitDimensionless)
-	runDurationSecondsMeasure = stats.Float64("run_duration_seconds", "Duration of the run in seconds", stats.UnitSeconds)
+	successfulRuns     = stats.Int64("successful_runs", "Number of successful runs", stats.UnitDimensionless)
+	failedRuns         = stats.Int64("failed_runs", "Number of failed runs", stats.UnitDimensionless)
+	runsMeasure        = stats.Int64("runs", "Number of runs", stats.UnitDimensionless)
+	runDurationSeconds = stats.Float64("run_duration_seconds", "Duration of the run in seconds", stats.UnitSeconds)
 
 	testNameTagKey   = metricstag.MustNewKey("test")
 	testStatusTagKey = metricstag.MustNewKey("status")
 
 	views = []*view.View{
+		{
+			Name:        "xmtpd_e2e_successful_runs",
+			Measure:     successfulRuns,
+			Description: "Number of successful runs",
+			Aggregation: view.Count(),
+			TagKeys:     []metricstag.Key{testNameTagKey},
+		},
+		{
+			Name:        "xmtpd_e2e_failed_runs",
+			Measure:     failedRuns,
+			Description: "Number of failed runs",
+			Aggregation: view.Count(),
+			TagKeys:     []metricstag.Key{testNameTagKey},
+		},
 		{
 			Name:        "xmtpd_e2e_runs",
 			Measure:     runsMeasure,
@@ -28,7 +44,7 @@ var (
 		},
 		{
 			Name:        "xmtpd_e2e_run_duration_seconds",
-			Measure:     runDurationSecondsMeasure,
+			Measure:     runDurationSeconds,
 			Description: "Duration of the run in seconds",
 			Aggregation: view.Distribution(append(floatRange(30), 40, 50, 60, 90, 120, 300)...),
 			TagKeys:     []metricstag.Key{testNameTagKey},
@@ -54,12 +70,20 @@ func (r *Runner) withMetricsServer(fn func() error) error {
 	return fn()
 }
 
+func recordSuccessfulRun(ctx context.Context, tags ...tag) error {
+	return recordWithTags(ctx, tags, successfulRuns.M(1))
+}
+
+func recordFailedRun(ctx context.Context, tags ...tag) error {
+	return recordWithTags(ctx, tags, failedRuns.M(1))
+}
+
 func recordRun(ctx context.Context, tags ...tag) error {
 	return recordWithTags(ctx, tags, runsMeasure.M(1))
 }
 
 func recordRunDuration(ctx context.Context, duration time.Duration, tags ...tag) error {
-	return recordWithTags(ctx, tags, runDurationSecondsMeasure.M(duration.Seconds()))
+	return recordWithTags(ctx, tags, runDurationSeconds.M(duration.Seconds()))
 }
 
 type tag struct {
