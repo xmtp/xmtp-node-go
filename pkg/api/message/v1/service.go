@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -21,6 +22,11 @@ import (
 const (
 	validXMTPTopicPrefix = "/xmtp/0/"
 	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
+
+	MaxContentTopicNameSize = 300
+
+	// 1048576 - 300 - 62 = 1048214
+	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
 )
 
 type Service struct {
@@ -86,12 +92,20 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Debug("received message")
+		log.Info("received message")
+
+		if len(env.ContentTopic) > MaxContentTopicNameSize {
+			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
+		}
 
 		wakuMsg := &wakupb.WakuMessage{
 			ContentTopic: env.ContentTopic,
 			Timestamp:    toWakuTimestamp(env.TimestampNs),
 			Payload:      env.Message,
+		}
+
+		if len(env.Message) > MaxMessageSize {
+			return nil, status.Errorf(codes.InvalidArgument, "message too big")
 		}
 
 		store, ok := s.waku.Store().(*store.XmtpStore)

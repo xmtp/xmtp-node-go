@@ -11,7 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1api "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -63,7 +65,28 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	})
 }
 
-func Test_MaxMessageSize(t *testing.T) {
+func Test_MaxContentTopicLength(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		envs := []*messageV1.Envelope{
+			{
+				ContentTopic: test.RandomStringLower(messagev1api.MaxContentTopicNameSize + 1),
+				Message:      []byte("msg"),
+				TimestampNs:  1,
+			},
+		}
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.Regexp(t, "topic length too big", grpcErr.Message())
+		} else {
+			require.Regexp(t, `400 Bad Request: {"code"\s?:3,\s?"message":\s?"topic length too big",\s?"details":\s?\[\]}`, err.Error())
+		}
+	})
+}
+
+func Test_Libp2pMaxMessageSize(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
@@ -78,7 +101,7 @@ func Test_MaxMessageSize(t *testing.T) {
 		envs := []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, testMaxMsgSize-100), // subtract some bytes for the rest of the envelope
+				Message:      make([]byte, messagev1api.MaxMessageSize),
 				TimestampNs:  1,
 			},
 		}
@@ -92,8 +115,72 @@ func Test_MaxMessageSize(t *testing.T) {
 		envs = []*messageV1.Envelope{
 			{
 				ContentTopic: "topic",
-				Message:      make([]byte, testMaxMsgSize+100),
+				Message:      make([]byte, messagev1api.MaxMessageSize+1),
 				TimestampNs:  1,
+			},
+		}
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.Regexp(t, "message too big", grpcErr.Message())
+		} else {
+			require.Regexp(t, `400 Bad Request: {"code"\s?:3,\s?"message":\s?"message too big",\s?"details":\s?\[\]}`, err.Error())
+		}
+	})
+}
+
+func Test_GRPCMaxMessageSize(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish valid message
+		envs := []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  1,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  2,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3-100), // subtract some bytes for the rest of the envelope
+				TimestampNs:  3,
+			},
+		}
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		subscribeExpect(t, stream, envs)
+		requireEventuallyStored(t, ctx, client, envs)
+
+		// publish invalid message
+		envs = []*messageV1.Envelope{
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  4,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3),
+				TimestampNs:  5,
+			},
+			{
+				ContentTopic: "topic",
+				Message:      make([]byte, testMaxMsgSize/3+100),
+				TimestampNs:  6,
 			},
 		}
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
