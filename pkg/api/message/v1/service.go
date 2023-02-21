@@ -93,7 +93,17 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			Timestamp:    toWakuTimestamp(env.TimestampNs),
 			Payload:      env.Message,
 		}
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+
+		store, ok := s.waku.Store().(*store.XmtpStore)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
+		}
+		_, err := store.InsertMessage(wakuMsg)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+
+		_, err = s.waku.Relay().Publish(ctx, wakuMsg)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}

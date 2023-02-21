@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/protocol"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -134,7 +135,6 @@ func (s *XmtpStore) Start(ctx context.Context) {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.host.SetStreamHandler(store.StoreID_v20beta4, s.onRequest)
 
-	tracing.GoPanicWrap(s.ctx, &s.wg, "store-incoming-messages", func(ctx context.Context) { s.storeIncomingMessages(ctx) })
 	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.statusMetricsLoop(ctx) })
 	s.log.Info("Store protocol started")
 
@@ -391,20 +391,6 @@ func (s *XmtpStore) onRequest(stream network.Stream) {
 	})
 }
 
-func (s *XmtpStore) storeIncomingMessages(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case envelope := <-s.MsgC:
-			if envelope == nil {
-				return
-			}
-			_, _ = s.storeMessage(envelope)
-		}
-	}
-}
-
 func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 	if s.statsPeriod == 0 {
 		s.log.Info("statsPeriod is 0 indicating no metrics loop")
@@ -420,6 +406,11 @@ func (s *XmtpStore) statusMetricsLoop(ctx context.Context) {
 			metrics.EmitStoredMessages(ctx, s.readerDB, s.log)
 		}
 	}
+}
+
+func (s *XmtpStore) InsertMessage(msg *pb.WakuMessage) (bool, error) {
+	env := protocol.NewEnvelope(msg, time.Now().UTC().UnixNano(), relay.DefaultWakuTopic)
+	return s.storeMessage(env)
 }
 
 func (s *XmtpStore) storeMessage(env *protocol.Envelope) (stored bool, err error) {
