@@ -16,7 +16,8 @@ var (
 	failedRuns         = stats.Int64("failed_runs", "Number of failed runs", stats.UnitDimensionless)
 	runDurationSeconds = stats.Float64("run_duration_seconds", "Duration of the run in seconds", stats.UnitSeconds)
 
-	testNameTagKey = metricstag.MustNewKey("test")
+	testNameTagKey   = metricstag.MustNewKey("test")
+	testStatusTagKey = metricstag.MustNewKey("status")
 
 	views = []*view.View{
 		{
@@ -38,7 +39,7 @@ var (
 			Measure:     runDurationSeconds,
 			Description: "Duration of the run in seconds",
 			Aggregation: view.Distribution(append(floatRange(30), 40, 50, 60, 90, 120, 300)...),
-			TagKeys:     []metricstag.Key{testNameTagKey},
+			TagKeys:     []metricstag.Key{testNameTagKey, testStatusTagKey},
 		},
 	}
 )

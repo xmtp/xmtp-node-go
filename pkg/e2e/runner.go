@@ -72,9 +72,17 @@ func (r *Runner) runTest(test *Test) error {
 	if err != nil {
 		recordErr := recordFailedRun(r.ctx, nameTag)
 		if recordErr != nil {
-			log.Error("recording failed run metric", zap.Error(err))
+			log.Error("recording failed run metric", zap.Error(recordErr))
 		}
 		log.Error("test failed", zap.Error(err))
+
+		statusTag := newTag(testStatusTagKey, "failed")
+		err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
+		if err != nil {
+			log.Error("recording run duration", zap.Error(err))
+			return err
+		}
+
 		return err
 	}
 	log.Info("test passed")
@@ -85,7 +93,8 @@ func (r *Runner) runTest(test *Test) error {
 		return err
 	}
 
-	err = recordRunDuration(r.ctx, duration, nameTag)
+	statusTag := newTag(testStatusTagKey, "success")
+	err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
 	if err != nil {
 		log.Error("recording run duration", zap.Error(err))
 		return err
