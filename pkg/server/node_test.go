@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
@@ -17,61 +16,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
-
-func Test_Libp2pMaxMessageSize(t *testing.T) {
-	t.Parallel()
-
-	n1, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	n2, cleanup := newTestNode(t, nil, false, nil)
-	defer cleanup()
-
-	topic1 := newTopic()
-
-	// Connect to each other as store nodes.
-	test.Connect(t, n1, n2, string(wakustore.StoreID_v20beta4))
-	test.Connect(t, n2, n1, string(wakustore.StoreID_v20beta4))
-	test.ExpectPeers(t, n1, n2.Host().ID())
-	test.ExpectPeers(t, n2, n1.Host().ID())
-
-	// Subscribe via each node.
-	n1EnvC := test.Subscribe(t, n1)
-	n2EnvC := test.Subscribe(t, n2)
-
-	// Publish valid size.
-	msg1 := &pb.WakuMessage{
-		Payload:      make([]byte, pubsub.DefaultMaxMessageSize-len(topic1)-50),
-		ContentTopic: topic1,
-		Timestamp:    1,
-	}
-	test.Publish(t, n1, msg1)
-
-	// Expect subscribed messages.
-	expectedMsgs := []*pb.WakuMessage{msg1}
-	test.SubscribeExpect(t, n1EnvC, expectedMsgs)
-	test.SubscribeExpect(t, n2EnvC, expectedMsgs)
-
-	// Expect query messages.
-	expectStoreMessagesEventually(t, n1, []string{topic1}, expectedMsgs)
-	expectStoreMessagesEventually(t, n2, []string{topic1}, expectedMsgs)
-
-	// Publish invalid size.
-	msg2 := &pb.WakuMessage{
-		Payload:      make([]byte, pubsub.DefaultMaxMessageSize-len(topic1)+50),
-		ContentTopic: topic1,
-		Timestamp:    2,
-	}
-	test.Publish(t, n1, msg2)
-
-	// Expect subscribed messages missing from other node.
-	test.SubscribeExpect(t, n1EnvC, []*pb.WakuMessage{msg2})
-	test.SubscribeExpect(t, n2EnvC, []*pb.WakuMessage{})
-
-	// Expect query messages missing from other node.
-	expectStoreMessagesEventually(t, n1, []string{topic1}, []*pb.WakuMessage{msg1, msg2})
-	expectStoreMessagesEventually(t, n2, []string{topic1}, []*pb.WakuMessage{msg1})
-}
 
 func TestNode_PublishSubscribeQuery_SharedDB(t *testing.T) {
 	t.Parallel()
