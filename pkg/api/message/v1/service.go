@@ -20,7 +20,7 @@ const (
 	MaxContentTopicNameSize = 300
 
 	// 1048576 - 300 - 62 = 1048214
-	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
+	MaxMessageSize = 1024*1024 - MaxContentTopicNameSize - 62
 )
 
 type Service struct {
