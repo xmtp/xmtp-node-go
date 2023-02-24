@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	validXMTPTopicPrefix = "/xmtp/0/"
-	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
-
 	MaxContentTopicNameSize = 300
 
 	// 1048576 - 300 - 62 = 1048214
@@ -83,12 +80,6 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		if err != nil {
 			return nil, err
 		}
-
-		// Publish to the "all" topic too.
-		err = s.nats.Publish(contentTopicAllXMTP, envB)
-		if err != nil {
-			return nil, err
-		}
 	}
 	return &proto.PublishResponse{}, nil
 }
@@ -134,8 +125,10 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 	log.Debug("started")
 	defer log.Debug("stopped")
 
+	// Subscribe to all nats subjects via wildcard
+	// https://docs.nats.io/nats-concepts/subjects#wildcards
 	return s.Subscribe(&proto.SubscribeRequest{
-		ContentTopics: []string{contentTopicAllXMTP},
+		ContentTopics: []string{"*"},
 	}, stream)
 }
 
