@@ -174,6 +174,10 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
 	}
 
+	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
+		log.Info("query with time filters", zap.Strings("topics", req.ContentTopics), zap.Uint64("start_time", req.StartTimeNs), zap.Uint64("end_time", req.EndTimeNs))
+	}
+
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
