@@ -150,6 +150,9 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			}
 			err := stream.Send(env)
 			if err != nil {
+				if err == context.Canceled {
+					return nil
+				}
 				log.Error("sending envelope to subscriber", zap.Error(err))
 			}
 		}
