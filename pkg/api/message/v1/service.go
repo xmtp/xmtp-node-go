@@ -175,11 +175,17 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}
 
 	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
-		log.Info("query with time filters", zap.Uint64("start_time", req.StartTimeNs), zap.Uint64("end_time", req.EndTimeNs))
+		ri := NewRequesterInfo(ctx)
+		log.Info("query with time filters", append(
+			ri.ZapFields(),
+			zap.Uint64("start_time", req.StartTimeNs),
+			zap.Uint64("end_time", req.EndTimeNs),
+		)...)
 	}
 
 	if len(req.ContentTopics) > 1 {
-		log.Info("query with multiple topics")
+		ri := NewRequesterInfo(ctx)
+		log.Info("query with multiple topics", ri.ZapFields()...)
 	}
 
 	store, ok := s.waku.Store().(*store.XmtpStore)

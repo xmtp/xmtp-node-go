@@ -244,9 +244,9 @@ func allowCORS(h http.Handler) http.Handler {
 
 func incomingHeaderMatcher(key string) (string, bool) {
 	switch strings.ToLower(key) {
-	case clientVersionMetadataKey:
+	case messagev1.ClientVersionMetadataKey:
 		return key, true
-	case appVersionMetadataKey:
+	case messagev1.AppVersionMetadataKey:
 		return key, true
 	default:
 		return key, false

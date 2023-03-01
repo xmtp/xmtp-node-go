@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAPI_Telemetry_parseVersionHeaderValue(t *testing.T) {
+func TestAPI_Context_parseVersionHeaderValue(t *testing.T) {
 	tcs := []struct {
 		name            string
 		value           []string
