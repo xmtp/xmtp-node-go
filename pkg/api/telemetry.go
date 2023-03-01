@@ -4,17 +4,13 @@ import (
 	"context"
 	"strings"
 
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	clientVersionMetadataKey = "x-client-version"
-	appVersionMetadataKey    = "x-app-version"
 )
 
 type TelemetryInterceptor struct {
@@ -55,18 +51,16 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, err error) {
 	serviceName, methodName := splitMethodName(fullMethod)
-	md, _ := metadata.FromIncomingContext(ctx)
-	clientName, _, clientVersion := parseVersionHeaderValue(md.Get(clientVersionMetadataKey))
-	appName, _, appVersion := parseVersionHeaderValue(md.Get(appVersionMetadataKey))
-	fields := []zapcore.Field{
-		zap.String("service", serviceName),
-		zap.String("method", methodName),
-		zap.String("client", clientName),
-		zap.String("client_version", clientVersion),
-		zap.String("app", appName),
-		zap.String("app_version", appVersion),
-	}
+	ri := messagev1.NewRequesterInfo(ctx)
+	fields := append(
+		[]zapcore.Field{
+			zap.String("service", serviceName),
+			zap.String("method", methodName),
+		},
+		ri.ZapFields()...,
+	)
 
+	md, _ := metadata.FromIncomingContext(ctx)
 	if ips := md.Get("x-forwarded-for"); len(ips) > 0 {
 		// There are potentially multiple comma separated IPs bundled in that first value
 		ips := strings.Split(ips[0], ",")
@@ -98,19 +92,4 @@ func splitMethodName(fullMethodName string) (serviceName string, methodName stri
 		return fullMethodName[:i], fullMethodName[i+1:]
 	}
 	return "unknown", "unknown"
-}
-
-func parseVersionHeaderValue(vals []string) (name string, version string, full string) {
-	if len(vals) == 0 {
-		return
-	}
-	full = vals[0]
-	parts := strings.Split(full, "/")
-	if len(parts) > 0 {
-		name = parts[0]
-		if len(parts) > 1 {
-			version = parts[1]
-		}
-	}
-	return
 }
