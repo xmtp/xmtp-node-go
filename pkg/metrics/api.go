@@ -65,6 +65,15 @@ var publishedEnvelopeView = &view.View{
 	TagKeys:     append([]tag.Key{topicCategoryTag}, appClientVersionTagKeys...),
 }
 
+var publishedEnvelopeCounterMeasure = stats.Int64("published_envelopes", "published envelopes", stats.UnitDimensionless)
+var publishedEnvelopeCounterView = &view.View{
+	Name:        "xmtp_published_envelopes",
+	Measure:     publishedEnvelopeCounterMeasure,
+	Description: "Count of published envelopes",
+	Aggregation: view.Count(),
+	TagKeys:     append([]tag.Key{topicCategoryTag}, appClientVersionTagKeys...),
+}
+
 func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 	ri := apicontext.NewRequesterInfo(ctx)
 	fields := ri.ZapFields()
@@ -85,6 +94,15 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 		logging.From(ctx).Error("recording metric",
 			zap.Error(err),
 			zap.String("metric", publishedEnvelopeView.Name),
+			zap.Int64("size", size),
+			zap.String("topic_category", topicCategory),
+		)
+	}
+	err = recordWithTags(ctx, mutators, publishedEnvelopeCounterMeasure.M(1))
+	if err != nil {
+		logging.From(ctx).Error("recording metric",
+			zap.Error(err),
+			zap.String("metric", publishedEnvelopeCounterView.Name),
 			zap.Int64("size", size),
 			zap.String("topic_category", topicCategory),
 		)
