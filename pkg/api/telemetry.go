@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
+	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -51,7 +51,7 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, err error) {
 	serviceName, methodName := splitMethodName(fullMethod)
-	ri := messagev1.NewRequesterInfo(ctx)
+	ri := apicontext.NewRequesterInfo(ctx)
 	fields := append(
 		[]zapcore.Field{
 			zap.String("service", serviceName),

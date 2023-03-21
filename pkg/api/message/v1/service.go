@@ -11,6 +11,7 @@ import (
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -175,7 +176,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}
 
 	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
-		ri := NewRequesterInfo(ctx)
+		ri := apicontext.NewRequesterInfo(ctx)
 		log.Info("query with time filters", append(
 			ri.ZapFields(),
 			zap.Uint64("start_time", req.StartTimeNs),
@@ -184,7 +185,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}
 
 	if len(req.ContentTopics) > 1 {
-		ri := NewRequesterInfo(ctx)
+		ri := apicontext.NewRequesterInfo(ctx)
 		log.Info("query with multiple topics", ri.ZapFields()...)
 	}
 
