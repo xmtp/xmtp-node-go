@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
-
+	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -15,15 +15,17 @@ import (
 )
 
 var (
-	apiRequestTagKeys = []tag.Key{
-		newTagKey("service"),
-		newTagKey("method"),
+	appClientVersionTagKeys = []tag.Key{
 		newTagKey("client"),
 		newTagKey("client_version"),
 		newTagKey("app"),
 		newTagKey("app_version"),
-		newTagKey("error_code"),
 	}
+	apiRequestTagKeys = append([]tag.Key{
+		newTagKey("service"),
+		newTagKey("method"),
+		newTagKey("error_code"),
+	}, appClientVersionTagKeys...)
 
 	apiRequestTagKeysByName = buildTagKeysByName(apiRequestTagKeys)
 )
@@ -60,13 +62,24 @@ var publishedEnvelopeView = &view.View{
 	Measure:     publishedEnvelopeMeasure,
 	Description: "Size of a published envelope",
 	Aggregation: view.Distribution(100, 1000, 10000, 100000),
-	TagKeys:     []tag.Key{topicCategoryTag},
+	TagKeys:     append([]tag.Key{topicCategoryTag}, appClientVersionTagKeys...),
 }
 
 func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
+	ri := apicontext.NewRequesterInfo(ctx)
+	fields := ri.ZapFields()
+	mutators := make([]tag.Mutator, 0, len(fields)+1)
+	for _, field := range fields {
+		key, ok := apiRequestTagKeysByName[field.Key]
+		if !ok {
+			continue
+		}
+		mutators = append(mutators, tag.Insert(key, field.String))
+	}
+
 	topicCategory := categoryFromTopic(env.ContentTopic)
+	mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
 	size := int64(len(env.Message))
-	mutators := []tag.Mutator{tag.Insert(topicCategoryTag, topicCategory)}
 	err := recordWithTags(ctx, mutators, publishedEnvelopeMeasure.M(size))
 	if err != nil {
 		logging.From(ctx).Error("recording metric",

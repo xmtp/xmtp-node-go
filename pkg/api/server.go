@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
+	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 )
 
 const (
@@ -244,9 +245,9 @@ func allowCORS(h http.Handler) http.Handler {
 
 func incomingHeaderMatcher(key string) (string, bool) {
 	switch strings.ToLower(key) {
-	case messagev1.ClientVersionMetadataKey:
+	case apicontext.ClientVersionMetadataKey:
 		return key, true
-	case messagev1.AppVersionMetadataKey:
+	case apicontext.AppVersionMetadataKey:
 		return key, true
 	default:
 		return key, false
