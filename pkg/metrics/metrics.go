@@ -56,6 +56,7 @@ func RegisterViews(logger *zap.Logger) {
 		StoredMessageView,
 		apiRequestsView,
 		publishedEnvelopeView,
+		publishedEnvelopeCounterView,
 	); err != nil {
 		logger.Fatal("registering metrics views", zap.Error(err))
 	}
