@@ -65,24 +65,21 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	})
 }
 
-func Test_SubscribePublishEphemeralEnvelope(t *testing.T) {
+func Test_SubscribePublishToEphemeralTopic(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
-			ContentTopics: []string{"topic"},
+			ContentTopics: []string{"/xmtp/0/mE-123/proto"},
 		})
 		require.NoError(t, err)
 		defer stream.Close()
 		time.Sleep(50 * time.Millisecond)
 
-		ephemeral := true
-
 		env := &messageV1.Envelope{
-			ContentTopic: "topic",
+			ContentTopic: "/xmtp/0/mE-123/proto",
 			Message:      []byte("hi"),
 			TimestampNs:  uint64(time.Now().UnixNano()),
-			Ephemeral:    &ephemeral,
 		}
 		envs := []*messageV1.Envelope{env}
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
@@ -94,7 +91,7 @@ func Test_SubscribePublishEphemeralEnvelope(t *testing.T) {
 
 		// ...but it should not be persisted
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
-			ContentTopics: []string{"topic"},
+			ContentTopics: []string{"/xmtp/0/mE-123/proto"},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, queryRes)

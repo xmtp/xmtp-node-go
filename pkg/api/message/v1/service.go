@@ -14,6 +14,7 @@ import (
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -114,7 +115,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
 		}
 
-		if !env.GetEphemeral() {
+		if !topic.IsEphemeral(env.ContentTopic) {
 			_, err := store.InsertMessage(wakuMsg)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, err.Error())

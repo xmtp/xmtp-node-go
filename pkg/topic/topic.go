@@ -1,0 +1,35 @@
+package topic
+
+import "strings"
+
+var topicCategoryByPrefix = map[string]string{
+	"test":         "test",
+	"contact":      "contact",
+	"intro":        "v1-intro",
+	"dm":           "v1-conversation",
+	"invite":       "v2-invite",
+	"m":            "v2-conversation",
+	"mE":           "v2-conversation-ephemeral",
+	"privatestore": "private",
+}
+
+func IsEphemeral(contentTopic string) bool {
+	return Category(contentTopic) == "v2-conversation-ephemeral"
+}
+
+func Category(contentTopic string) string {
+	if strings.HasPrefix(contentTopic, "test-") {
+		return "test"
+	}
+	topic := strings.TrimPrefix(contentTopic, "/xmtp/0/")
+	if len(topic) == len(contentTopic) {
+		return "invalid"
+	}
+	prefix, _, hasPrefix := strings.Cut(topic, "-")
+	if hasPrefix {
+		if category, found := topicCategoryByPrefix[prefix]; found {
+			return category
+		}
+	}
+	return "invalid"
+}
