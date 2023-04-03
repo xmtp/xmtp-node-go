@@ -145,6 +145,7 @@ var TopicCategoryPermissions = map[string]int{
 	"privatestore": TopicCategoryPermissionAuthRequired,
 	"contact":      TopicCategoryPermissionAuthRequired,
 	"m":            TopicCategoryPermissionNoAuthRequired,
+	"mE":           TopicCategoryPermissionNoAuthRequired,
 	"dm":           TopicCategoryPermissionNoAuthRequired,
 	"intro":        TopicCategoryPermissionNoAuthRequired,
 	"invite":       TopicCategoryPermissionNoAuthRequired,

@@ -2,11 +2,11 @@ package metrics
 
 import (
 	"context"
-	"strings"
 
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -86,7 +86,7 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 		mutators = append(mutators, tag.Insert(key, field.String))
 	}
 
-	topicCategory := categoryFromTopic(env.ContentTopic)
+	topicCategory := topic.Category(env.ContentTopic)
 	mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
 	size := int64(len(env.Message))
 	err := recordWithTags(ctx, mutators, publishedEnvelopeMeasure.M(size))
@@ -107,33 +107,6 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 			zap.String("topic_category", topicCategory),
 		)
 	}
-}
-
-var topicCategoryByPrefix = map[string]string{
-	"test":         "test",
-	"contact":      "contact",
-	"intro":        "v1-intro",
-	"dm":           "v1-conversation",
-	"invite":       "v2-invite",
-	"m":            "v2-conversation",
-	"privatestore": "private",
-}
-
-func categoryFromTopic(contentTopic string) string {
-	if strings.HasPrefix(contentTopic, "test-") {
-		return "test"
-	}
-	topic := strings.TrimPrefix(contentTopic, "/xmtp/0/")
-	if len(topic) == len(contentTopic) {
-		return "invalid"
-	}
-	prefix, _, hasPrefix := strings.Cut(topic, "-")
-	if hasPrefix {
-		if category, found := topicCategoryByPrefix[prefix]; found {
-			return category
-		}
-	}
-	return "invalid"
 }
 
 func buildTagKeysByName(keys []tag.Key) map[string]tag.Key {
