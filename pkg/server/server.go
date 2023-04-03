@@ -511,7 +511,6 @@ func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration)
 }
 
 func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*sql.DB, error) {
-	fmt.Println("dsn is", dsn)
 	db := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithDSN(dsn),
 		pgdriver.WithReadTimeout(readTimeout),
