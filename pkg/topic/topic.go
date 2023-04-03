@@ -7,6 +7,7 @@ var topicCategoryByPrefix = map[string]string{
 	"contact":      "contact",
 	"intro":        "v1-intro",
 	"dm":           "v1-conversation",
+	"dmE":          "v1-conversation-ephemeral",
 	"invite":       "v2-invite",
 	"m":            "v2-conversation",
 	"mE":           "v2-conversation-ephemeral",
@@ -14,7 +15,7 @@ var topicCategoryByPrefix = map[string]string{
 }
 
 func IsEphemeral(contentTopic string) bool {
-	return Category(contentTopic) == "v2-conversation-ephemeral"
+	return Category(contentTopic) == "v2-conversation-ephemeral" || Category(contentTopic) == "v1-conversation-ephemeral"
 }
 
 func Category(contentTopic string) string {

@@ -147,6 +147,7 @@ var TopicCategoryPermissions = map[string]int{
 	"m":            TopicCategoryPermissionNoAuthRequired,
 	"mE":           TopicCategoryPermissionNoAuthRequired,
 	"dm":           TopicCategoryPermissionNoAuthRequired,
+	"dmE":          TopicCategoryPermissionNoAuthRequired,
 	"intro":        TopicCategoryPermissionNoAuthRequired,
 	"invite":       TopicCategoryPermissionNoAuthRequired,
 }
