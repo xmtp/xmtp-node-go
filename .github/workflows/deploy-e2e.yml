@@ -43,7 +43,7 @@ jobs:
           terraform-workspace: dev
           variable-name: xmtpd_e2e_image
           variable-value: ${{ steps.push.outputs.docker_image }}
-          variable-value-required-prefix: "xmtp/xmtpd-e2e@sha256:"
+          variable-value-required-prefix: "xmtp/node-go-e2e@sha256:"
 
       - name: Deploy (production)
         uses: xmtp-labs/terraform-deployer@v1
@@ -53,4 +53,4 @@ jobs:
           terraform-workspace: production
           variable-name: xmtpd_e2e_image
           variable-value: ${{ steps.push.outputs.docker_image }}
-          variable-value-required-prefix: "xmtp/xmtpd-e2e@sha256:"
+          variable-value-required-prefix: "xmtp/node-go-e2e@sha256:"
