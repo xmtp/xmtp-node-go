@@ -136,7 +136,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("started")
 	defer log.Debug("stopped")
-	stream.SendHeader(metadata.Pairs("subscribed", "true"))
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 	subC := s.dispatcher.Register(nil, req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC)
 
