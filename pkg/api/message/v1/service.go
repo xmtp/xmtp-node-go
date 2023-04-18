@@ -18,6 +18,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -135,7 +136,9 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("started")
 	defer log.Debug("stopped")
-
+	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
+	// See: https://github.com/xmtp/libxmtp/pull/58
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 	subC := s.dispatcher.Register(nil, req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC)
 
@@ -153,6 +156,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
 				continue
 			}
+
 			err := stream.Send(env)
 			if err != nil {
 				log.Error("sending envelope to subscriber", zap.Error(err))
