@@ -139,7 +139,10 @@ func (s *Server) startHTTP() error {
 		case r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/swagger-ui"):
 			swaggerUI.ServeHTTP(w, r)
 		case r.URL.Path == "/swagger.json":
-			w.Write(messagev1openapi.JSON)
+			_, err := w.Write(messagev1openapi.JSON)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 		default:
 			gwmux.ServeHTTP(w, r)
 		}

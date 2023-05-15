@@ -28,7 +28,6 @@ type Signature struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Union:
-	//
 	//	*Signature_EcdsaCompact
 	Union isSignature_Union `protobuf_oneof:"union"`
 }
@@ -147,7 +146,6 @@ type PublicKey struct {
 	Timestamp uint64     `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Signature *Signature `protobuf:"bytes,2,opt,name=signature,proto3,oneof" json:"signature,omitempty"`
 	// Types that are assignable to Union:
-	//
 	//	*PublicKey_Secp256K1Uncompressed
 	Union isPublicKey_Union `protobuf_oneof:"union"`
 }
@@ -299,7 +297,6 @@ type ClientAuthRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Version:
-	//
 	//	*ClientAuthRequest_V1
 	Version isClientAuthRequest_Version `protobuf_oneof:"version"`
 }
@@ -421,7 +418,6 @@ type ClientAuthResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Version:
-	//
 	//	*ClientAuthResponse_V1
 	Version isClientAuthResponse_Version `protobuf_oneof:"version"`
 }

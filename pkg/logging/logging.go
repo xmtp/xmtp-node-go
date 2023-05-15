@@ -4,7 +4,6 @@
 // implementation purposely does as little as possible at field creation time,
 // and postpones any transformation to output time by relying on the generic
 // zap types like zap.Stringer, zap.Array, zap.Object
-//
 package logging
 
 import (
