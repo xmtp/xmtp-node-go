@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func Test_HTTPRootPath(t *testing.T) {
+func Test_HTTPNotFound(t *testing.T) {
 	t.Parallel()
 
 	server, cleanup := newTestServer(t)
@@ -27,7 +27,7 @@ func Test_HTTPRootPath(t *testing.T) {
 
 	// Root path responds with 404.
 	var rootRes map[string]interface{}
-	resp, err := http.Post(server.httpListenAddr(), "application/json", nil)
+	resp, err := http.Post(server.httpListenAddr()+"/not-found", "application/json", nil)
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -38,6 +38,20 @@ func Test_HTTPRootPath(t *testing.T) {
 		"message": "Not Found",
 		"details": []interface{}{},
 	}, rootRes)
+}
+
+func Test_HTTPRootPath(t *testing.T) {
+	t.Parallel()
+
+	server, cleanup := newTestServer(t)
+	defer cleanup()
+
+	// Root path responds with 404.
+	resp, err := http.Post(server.httpListenAddr(), "", nil)
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NotEmpty(t, body)
 }
 
 func Test_SubscribePublishQuery(t *testing.T) {
