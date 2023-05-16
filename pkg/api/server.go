@@ -12,7 +12,9 @@ import (
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
+	swgui "github.com/swaggest/swgui/v3"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1openapi "github.com/xmtp/proto/v3/openapi/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"google.golang.org/grpc/health"
@@ -130,7 +132,21 @@ func (s *Server) startHTTP() error {
 		runtime.WithStreamErrorHandler(runtime.DefaultStreamErrorHandler),
 		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
 	)
-	mux.Handle("/", gwmux)
+
+	swaggerUI := swgui.NewHandler("API", "/swagger.json", "/")
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/swagger-ui"):
+			swaggerUI.ServeHTTP(w, r)
+		case r.URL.Path == "/swagger.json":
+			_, err := w.Write(messagev1openapi.JSON)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		default:
+			gwmux.ServeHTTP(w, r)
+		}
+	})
 
 	conn, err := s.dialGRPC(s.ctx)
 	if err != nil {

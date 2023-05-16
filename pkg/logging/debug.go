@@ -14,8 +14,10 @@ func IsDebugLevel() bool {
 // IfDebug aides conditional addition of logging fields.
 //
 // log.Info("query",
+//
 //	zap.String("from", peer.ID),
-// 	logging.IfDebug(zap.Object("query", query)),
+//	logging.IfDebug(zap.Object("query", query)),
+//
 // )
 func IfDebug(field zap.Field) zap.Field {
 	if IsDebugLevel() {

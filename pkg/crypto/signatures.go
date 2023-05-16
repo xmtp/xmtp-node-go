@@ -35,7 +35,7 @@ func GenerateKeyPair() (pri PrivateKey, pub PublicKey, err error) {
 
 // Verify evaluates a Secp256k1 signature to determine if the message provided was signed by the given publics
 // corresponding private key. It returns true if the message was signed by the corresponding keypair, as
-//well as any errors generated in the process
+// well as any errors generated in the process
 func Verify(pub PublicKey, msg Message, sig Signature) bool {
 	digest := ethcrypto.Keccak256(msg)
 	return secp256k1.VerifySignature((*pub)[:], digest, (*sig)[:])
