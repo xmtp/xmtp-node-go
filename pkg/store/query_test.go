@@ -2,9 +2,7 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Blank import to register the sqlite3 driver
@@ -357,58 +355,5 @@ func TestPageSizeOne(t *testing.T) {
 			break
 		}
 		loops++
-	}
-}
-
-func TestMarginalia(t *testing.T) {
-	type tc struct {
-		query      *pb.HistoryQuery
-		marginalia string
-	}
-	for i, c := range []tc{
-		{
-			marginalia: "/* ",
-			query: &pb.HistoryQuery{
-				ContentFilters: []*pb.ContentFilter{
-					{
-						ContentTopic: "topic",
-					},
-				},
-			},
-		},
-		{
-			marginalia: "/* START END",
-			query: &pb.HistoryQuery{
-				ContentFilters: []*pb.ContentFilter{
-					{
-						ContentTopic: "topic",
-					},
-				},
-				StartTime: int64(1),
-				EndTime:   int64(2),
-			},
-		},
-		{
-			marginalia: "/* ASC LIMIT CURSOR SENDER_TIME DIGEST",
-			query: &pb.HistoryQuery{
-				ContentFilters: []*pb.ContentFilter{
-					{
-						ContentTopic: "topic",
-					},
-				},
-				PagingInfo: &pb.PagingInfo{
-					PageSize: 1,
-					Cursor: &pb.Index{
-						SenderTime: int64(2),
-						Digest:     []byte("digest"),
-					},
-					Direction: pb.PagingInfo_FORWARD,
-				},
-			},
-		},
-	} {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			require.Equal(t, c.marginalia, strings.Split(marginalia(c.query), "\n")[0])
-		})
 	}
 }

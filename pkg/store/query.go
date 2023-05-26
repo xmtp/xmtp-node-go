@@ -2,9 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
-	"strings"
-	"time"
 
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
 	"github.com/status-im/go-waku/waku/persistence"
@@ -71,7 +68,6 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	addSort(sb, direction)
 
 	querySql, args = sb.Build()
-	querySql = marginalia(query) + querySql
 
 	return querySql, args, err
 }
@@ -288,51 +284,4 @@ func minOf(vars ...int) int {
 	}
 
 	return min
-}
-
-func marginalia(query *pb.HistoryQuery) string {
-	var shape []string
-	var params strings.Builder
-	params.WriteString(fmt.Sprintf("TOPICS: %s\n", getContentTopics(query.ContentFilters)))
-	if query.StartTime != 0 {
-		shape = append(shape, "START")
-		params.WriteString(fmt.Sprintf("START: %v\n", toTime(query.StartTime)))
-	}
-	if query.EndTime != 0 {
-		shape = append(shape, "END")
-		params.WriteString(fmt.Sprintf("END: %v\n", toTime(query.EndTime)))
-	}
-	if query.PubsubTopic != "" {
-		shape = append(shape, "PUBSUB")
-		params.WriteString(fmt.Sprintf("PUBSUB: %s\n", query.PubsubTopic))
-	}
-	if pagingInfo := query.PagingInfo; pagingInfo != nil {
-		if pagingInfo.Direction == pb.PagingInfo_BACKWARD {
-			shape = append(shape, "DESC")
-			params.WriteString("DIRECTION: DESC\n")
-		} else {
-			shape = append(shape, "ASC")
-			params.WriteString("DIRECTION: ASC\n")
-		}
-		if pagingInfo.PageSize != 0 {
-			shape = append(shape, "LIMIT")
-			params.WriteString(fmt.Sprintf("LIMIT: %d\n", pagingInfo.PageSize))
-		}
-		if cursor := pagingInfo.Cursor; cursor != nil {
-			shape = append(shape, "CURSOR")
-			if cursor.SenderTime != 0 {
-				shape = append(shape, "SENDER_TIME")
-				params.WriteString(fmt.Sprintf("SENDER TIME: %v\n", toTime(cursor.SenderTime)))
-			}
-			if cursor.Digest != nil {
-				shape = append(shape, "DIGEST")
-				params.WriteString(fmt.Sprintf("DIGEST: %X\n", cursor.Digest))
-			}
-		}
-	}
-	return fmt.Sprintf("/* %s\n%s*/\n", strings.Join(shape, " "), params.String())
-}
-
-func toTime(nanos int64) time.Time {
-	return time.Unix(0, nanos).UTC()
 }
