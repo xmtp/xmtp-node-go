@@ -150,6 +150,7 @@ var TopicCategoryPermissions = map[string]int{
 	"dmE":          TopicCategoryPermissionNoAuthRequired,
 	"intro":        TopicCategoryPermissionNoAuthRequired,
 	"invite":       TopicCategoryPermissionNoAuthRequired,
+	"group-invite": TopicCategoryPermissionNoAuthRequired,
 }
 
 func allowedToPublish(topic string, wallet types.WalletAddr) bool {
