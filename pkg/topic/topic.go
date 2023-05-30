@@ -9,6 +9,7 @@ var topicCategoryByPrefix = map[string]string{
 	"dm":           "v1-conversation",
 	"dmE":          "v1-conversation-ephemeral",
 	"invite":       "v2-invite",
+	"groupInvite":  "v2-group-invite",
 	"m":            "v2-conversation",
 	"mE":           "v2-conversation-ephemeral",
 	"privatestore": "private",
