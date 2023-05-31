@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
@@ -201,10 +202,13 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
 	}
+	start := time.Now()
 	res, err := store.FindMessages(buildWakuQuery(req))
 	if err != nil {
+		metrics.EmitQuery(ctx, req, 0, err, time.Since(start))
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
+	metrics.EmitQuery(ctx, req, len(res.Messages), nil, time.Since(start))
 
 	envs := make([]*proto.Envelope, 0, len(res.Messages))
 	for _, msg := range res.Messages {

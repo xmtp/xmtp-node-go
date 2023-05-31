@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"time"
 
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
@@ -75,17 +76,7 @@ var publishedEnvelopeCounterView = &view.View{
 }
 
 func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
-	ri := apicontext.NewRequesterInfo(ctx)
-	fields := ri.ZapFields()
-	mutators := make([]tag.Mutator, 0, len(fields)+1)
-	for _, field := range fields {
-		key, ok := apiRequestTagKeysByName[field.Key]
-		if !ok {
-			continue
-		}
-		mutators = append(mutators, tag.Insert(key, field.String))
-	}
-
+	mutators := contextMutators(ctx)
 	topicCategory := topic.Category(env.ContentTopic)
 	mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
 	size := int64(len(env.Message))
@@ -109,6 +100,20 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 	}
 }
 
+func contextMutators(ctx context.Context) []tag.Mutator {
+	ri := apicontext.NewRequesterInfo(ctx)
+	fields := ri.ZapFields()
+	mutators := make([]tag.Mutator, 0, len(fields)+1)
+	for _, field := range fields {
+		key, ok := apiRequestTagKeysByName[field.Key]
+		if !ok {
+			continue
+		}
+		mutators = append(mutators, tag.Insert(key, field.String))
+	}
+	return mutators
+}
+
 func buildTagKeysByName(keys []tag.Key) map[string]tag.Key {
 	m := map[string]tag.Key{}
 	for _, key := range keys {
@@ -120,4 +125,85 @@ func buildTagKeysByName(keys []tag.Key) map[string]tag.Key {
 func newTagKey(str string) tag.Key {
 	key, _ := tag.NewKey(str)
 	return key
+}
+
+var queryParametersTag, _ = tag.NewKey("parameters")
+var queryErrorTag, _ = tag.NewKey("error")
+var queryDurationMeasure = stats.Int64("api_query_duration", "duration of API query", stats.UnitMilliseconds)
+var queryDurationView = &view.View{
+	Name:        "xmtp_api_query_duration",
+	Measure:     queryDurationMeasure,
+	Description: "duration of API query (ms)",
+	Aggregation: view.Distribution(1, 10, 100, 1000, 10000, 100000),
+	TagKeys:     append([]tag.Key{topicCategoryTag, queryErrorTag, queryParametersTag}, appClientVersionTagKeys...),
+}
+
+var queryResultMeasure = stats.Int64("api_query_result", "number of events returned by an API query", stats.UnitNone)
+var queryResultView = &view.View{
+	Name:        "xmtp_api_query_result",
+	Measure:     queryResultMeasure,
+	Description: "number of events returned by an API query",
+	Aggregation: view.Distribution(1, 10, 100, 1000, 10000, 100000),
+	TagKeys:     append([]tag.Key{topicCategoryTag, queryErrorTag, queryParametersTag}, appClientVersionTagKeys...),
+}
+
+func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err error, duration time.Duration) {
+	mutators := contextMutators(ctx)
+	if len(req.ContentTopics) > 0 {
+		topicCategory := topic.Category(req.ContentTopics[0])
+		mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
+	}
+	if err != nil {
+		mutators = append(mutators, tag.Insert(queryErrorTag, "internal"))
+	}
+	parameters := parametersTag(req)
+	mutators = append(mutators, tag.Insert(queryParametersTag, parameters))
+	err = recordWithTags(ctx, mutators, queryDurationMeasure.M(duration.Milliseconds()))
+	if err != nil {
+		logging.From(ctx).Error("recording metric",
+			zap.Error(err),
+			zap.Duration("duration", duration),
+			zap.String("parameters", parameters),
+			zap.String("metric", queryDurationView.Name),
+		)
+	}
+	err = recordWithTags(ctx, mutators, queryResultMeasure.M(int64(results)))
+	if err != nil {
+		logging.From(ctx).Error("recording metric",
+			zap.Error(err),
+			zap.Int("results", results),
+			zap.String("parameters", parameters),
+			zap.String("metric", queryResultView.Name),
+		)
+	}
+}
+
+func parametersTag(req *proto.QueryRequest) string {
+	params := []byte("-------")
+	if req.StartTimeNs > 0 {
+		params[0] = 'S'
+	}
+	if req.EndTimeNs > 0 {
+		params[1] = 'E'
+	}
+	if pi := req.PagingInfo; pi != nil {
+		if pi.Direction == proto.SortDirection_SORT_DIRECTION_ASCENDING {
+			params[2] = 'A'
+		} else {
+			params[2] = 'D'
+		}
+		if pi.Limit > 0 {
+			params[3] = 'L'
+		}
+		if ci := pi.Cursor.GetIndex(); ci != nil {
+			params[4] = 'C'
+			if ci.Digest != nil {
+				params[5] = 'D'
+			}
+			if ci.SenderTimeNs > 0 {
+				params[6] = 'T'
+			}
+		}
+	}
+	return string(params)
 }
