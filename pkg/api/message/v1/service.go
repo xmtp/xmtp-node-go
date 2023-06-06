@@ -13,6 +13,7 @@ import (
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
@@ -184,6 +185,13 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
 	}
 
+	if len(req.ContentTopics) > 1 {
+		ri := apicontext.NewRequesterInfo(ctx)
+		log.Info("query with multiple topics", ri.ZapFields()...)
+	} else {
+		log = log.With(zap.String("topic_type", topic.Category(req.ContentTopics[0])))
+	}
+	log = log.With(logging.QueryParameters(req))
 	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
 		ri := apicontext.NewRequesterInfo(ctx)
 		log.Info("query with time filters", append(
@@ -193,22 +201,21 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		)...)
 	}
 
-	if len(req.ContentTopics) > 1 {
-		ri := apicontext.NewRequesterInfo(ctx)
-		log.Info("query with multiple topics", ri.ZapFields()...)
-	}
-
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
 	}
 	start := time.Now()
 	res, err := store.FindMessages(buildWakuQuery(req))
+	duration := time.Since(start)
 	if err != nil {
-		metrics.EmitQuery(ctx, req, 0, err, time.Since(start))
+		metrics.EmitQuery(ctx, req, 0, err, duration)
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-	metrics.EmitQuery(ctx, req, len(res.Messages), nil, time.Since(start))
+	metrics.EmitQuery(ctx, req, len(res.Messages), nil, duration)
+	if duration > 10*time.Millisecond {
+		log.With(zap.Duration("duration", duration), zap.Int("results", len(res.Messages))).Info("slow query")
+	}
 
 	envs := make([]*proto.Envelope, 0, len(res.Messages))
 	for _, msg := range res.Messages {

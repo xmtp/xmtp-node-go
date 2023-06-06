@@ -156,7 +156,7 @@ func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err er
 	if err != nil {
 		mutators = append(mutators, tag.Insert(queryErrorTag, "internal"))
 	}
-	parameters := parametersTag(req)
+	parameters := logging.QueryShape(req)
 	mutators = append(mutators, tag.Insert(queryParametersTag, parameters))
 	err = recordWithTags(ctx, mutators, queryDurationMeasure.M(duration.Milliseconds()))
 	if err != nil {
@@ -176,34 +176,4 @@ func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err er
 			zap.String("metric", queryResultView.Name),
 		)
 	}
-}
-
-func parametersTag(req *proto.QueryRequest) string {
-	params := []byte("-------")
-	if req.StartTimeNs > 0 {
-		params[0] = 'S'
-	}
-	if req.EndTimeNs > 0 {
-		params[1] = 'E'
-	}
-	if pi := req.PagingInfo; pi != nil {
-		if pi.Direction == proto.SortDirection_SORT_DIRECTION_ASCENDING {
-			params[2] = 'A'
-		} else {
-			params[2] = 'D'
-		}
-		if pi.Limit > 0 {
-			params[3] = 'L'
-		}
-		if ci := pi.Cursor.GetIndex(); ci != nil {
-			params[4] = 'C'
-			if ci.Digest != nil {
-				params[5] = 'D'
-			}
-			if ci.SenderTimeNs > 0 {
-				params[6] = 'T'
-			}
-		}
-	}
-	return string(params)
 }

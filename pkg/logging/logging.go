@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/status-im/go-waku/logging"
+	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -45,4 +46,44 @@ func ValueType(key string, val interface{}) zap.Field {
 
 func (vt valueType) String() string {
 	return fmt.Sprintf("%T", vt.val)
+}
+
+type queryParameters struct{ *proto.QueryRequest }
+
+func (qp queryParameters) String() string {
+	return QueryShape(qp.QueryRequest)
+}
+
+func QueryParameters(req *proto.QueryRequest) zap.Field {
+	return zap.Stringer("parameters", queryParameters{req})
+}
+
+func QueryShape(req *proto.QueryRequest) string {
+	params := []byte("-------")
+	if req.StartTimeNs > 0 {
+		params[0] = 'S'
+	}
+	if req.EndTimeNs > 0 {
+		params[1] = 'E'
+	}
+	if pi := req.PagingInfo; pi != nil {
+		if pi.Direction == proto.SortDirection_SORT_DIRECTION_ASCENDING {
+			params[2] = 'A'
+		} else {
+			params[2] = 'D'
+		}
+		if pi.Limit > 0 {
+			params[3] = 'L'
+		}
+		if ci := pi.Cursor.GetIndex(); ci != nil {
+			params[4] = 'C'
+			if ci.Digest != nil {
+				params[5] = 'D'
+			}
+			if ci.SenderTimeNs > 0 {
+				params[6] = 'T'
+			}
+		}
+	}
+	return string(params)
 }
