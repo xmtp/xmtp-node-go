@@ -25,6 +25,7 @@ func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, 
 	if err != nil {
 		return
 	}
+	defer rows.Close()
 
 	res, err = buildResponse(rows, query)
 
