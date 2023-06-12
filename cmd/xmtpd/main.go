@@ -87,14 +87,14 @@ func main() {
 	}
 
 	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
-		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout); err != nil {
+		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns); err != nil {
 			log.Fatal("creating message db migration", zap.Error(err))
 		}
 		return
 	}
 
 	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
-		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout); err != nil {
+		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns); err != nil {
 			log.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return

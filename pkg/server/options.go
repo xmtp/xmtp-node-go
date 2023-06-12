@@ -44,6 +44,7 @@ type StoreOptions struct {
 	DbReaderConnectionString string        `long:"message-db-reader-connection-string" description:"A Postgres database reader connection string"`
 	ReadTimeout              time.Duration `long:"message-db-read-timeout" description:"Timeout for reading from the database" default:"10s"`
 	WriteTimeout             time.Duration `long:"message-db-write-timeout" description:"Timeout for writing to the database" default:"10s"`
+	MaxOpenConns             int           `long:"max-open-conns" description:"Maximum number of open connections" default:"80"`
 }
 
 func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
