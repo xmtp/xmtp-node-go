@@ -516,6 +516,10 @@ func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*
 		pgdriver.WithReadTimeout(readTimeout),
 		pgdriver.WithWriteTimeout(writeTimeout),
 	))
+
+	// Default in postgres is typically configured to be 100.
+	db.SetMaxOpenConns(80)
+
 	waitUntil := time.Now().Add(waitForDB)
 	err := db.Ping()
 	for err != nil && time.Now().Before(waitUntil) {
