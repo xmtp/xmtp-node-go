@@ -86,18 +86,18 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	s.ctx, s.cancel = context.WithCancel(logging.With(ctx, s.log))
 
-	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout)
+	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating db")
 	}
 	s.log.Info("created db")
 
-	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout)
+	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating reader db")
 	}
 
-	s.cleanerDB, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Cleaner.ReadTimeout, options.Cleaner.WriteTimeout)
+	s.cleanerDB, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Cleaner.ReadTimeout, options.Cleaner.WriteTimeout, options.Store.MaxOpenConns)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating cleaner db")
 	}
@@ -109,7 +109,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout)
+		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating authz db")
 		}
@@ -474,8 +474,8 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration) error {
-	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout)
+func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return err
 	}
@@ -488,8 +488,8 @@ func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb,
 	return err
 }
 
-func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration) error {
-	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout)
+func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return err
 	}
@@ -502,23 +502,22 @@ func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, r
 	return err
 }
 
-func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*bun.DB, error) {
-	db, err := createDB(dsn, waitForDB, readTimeout, writeTimeout)
+func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, maxOpenConns int) (*bun.DB, error) {
+	db, err := createDB(dsn, waitForDB, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return nil, err
 	}
 	return bun.NewDB(db, pgdialect.New()), nil
 }
 
-func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration) (*sql.DB, error) {
+func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, maxOpenConns int) (*sql.DB, error) {
 	db := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithDSN(dsn),
 		pgdriver.WithReadTimeout(readTimeout),
 		pgdriver.WithWriteTimeout(writeTimeout),
 	))
 
-	// Default in postgres is typically configured to be 100.
-	db.SetMaxOpenConns(80)
+	db.SetMaxOpenConns(maxOpenConns)
 
 	waitUntil := time.Now().Add(waitForDB)
 	err := db.Ping()
