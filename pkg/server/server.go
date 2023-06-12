@@ -517,7 +517,9 @@ func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, ma
 		pgdriver.WithWriteTimeout(writeTimeout),
 	))
 
-	db.SetMaxOpenConns(maxOpenConns)
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(maxOpenConns)
+	}
 
 	waitUntil := time.Now().Add(waitForDB)
 	err := db.Ping()
