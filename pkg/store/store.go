@@ -161,7 +161,7 @@ func (s *XmtpStore) Stop() {
 }
 
 func (s *XmtpStore) FindMessages(query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
-	return FindMessages(s.db, query)
+	return FindMessages(s.readerDB, query)
 }
 
 func (s *XmtpStore) Query(ctx context.Context, query store.Query, opts ...store.HistoryRequestOption) (*store.Result, error) {
