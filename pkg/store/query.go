@@ -108,11 +108,10 @@ func addLimit(sb *sqlBuilder.SelectBuilder, pageSize uint64) {
 func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
 	switch direction {
 	case pb.PagingInfo_BACKWARD:
-		sb.OrderBy("senderTimestamp desc", "id desc", "pubsubTopic desc", "receiverTimestamp desc")
+		sb.OrderBy("senderTimestamp desc", "id desc")
 	case pb.PagingInfo_FORWARD:
-		sb.OrderBy("senderTimestamp asc", "id asc", "pubsubTopic asc", "receiverTimestamp asc")
+		sb.OrderBy("senderTimestamp asc", "id asc")
 	}
-
 }
 
 func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.PagingInfo_Direction) {
