@@ -14,22 +14,16 @@ import (
 Executes the appropriate database queries to find messages and build a response based on a HistoryQuery
 *
 */
-func FindMessages(db *sql.DB, query *pb.HistoryQuery) (res *pb.HistoryResponse, err error) {
-	var rows *sql.Rows
-	sql, args, err := buildSqlQuery(query)
-	if err != nil {
-		return
-	}
+func FindMessages(db *sql.DB, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
+	sql, args := buildSqlQuery(query)
 
-	rows, err = db.Query(sql, args...)
+	rows, err := db.Query(sql, args...)
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
-	res, err = buildResponse(rows, query)
-
-	return
+	return buildResponse(rows, query)
 }
 
 func getContentTopics(filters []*pb.ContentFilter) []string {
@@ -40,7 +34,70 @@ func getContentTopics(filters []*pb.ContentFilter) []string {
 	return out
 }
 
-func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{}, err error) {
+func buildSqlQuery(query *pb.HistoryQuery) (string, []interface{}) {
+	pagingInfo := query.PagingInfo
+	if pagingInfo == nil {
+		pagingInfo = new(pb.PagingInfo)
+	}
+	cursor := pagingInfo.Cursor
+	direction := getDirection(pagingInfo)
+
+	if cursor == nil {
+		sb := buildSqlQueryWithoutCursor(query)
+		return sb.Build()
+	}
+
+	ub := sqlBuilder.PostgreSQL.NewUnionBuilder()
+
+	sb1 := buildSqlQueryWithoutCursor(query)
+	switch direction {
+	case pb.PagingInfo_FORWARD:
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
+			sb1.Where(sb1.GreaterThan("senderTimestamp", cursor.SenderTime))
+		} else if cursor.Digest != nil {
+			sb1.Where(sb1.GreaterThan("id", cursor.Digest))
+		}
+	case pb.PagingInfo_BACKWARD:
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
+			sb1.Where(sb1.LessThan("senderTimestamp", cursor.SenderTime))
+		} else if cursor.Digest != nil {
+			sb1.Where(sb1.LessThan("id", cursor.Digest))
+		}
+	}
+
+	sb2 := buildSqlQueryWithoutCursor(query)
+	switch direction {
+	case pb.PagingInfo_FORWARD:
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
+			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", cursor.SenderTime), sb2.GreaterThan("id", cursor.Digest)))
+		} else if cursor.Digest != nil {
+			sb2.Where(sb2.GreaterThan("id", cursor.Digest))
+		}
+	case pb.PagingInfo_BACKWARD:
+		if cursor.SenderTime != 0 && cursor.Digest != nil {
+			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", cursor.SenderTime), sb2.LessThan("id", cursor.Digest)))
+		} else if cursor.Digest != nil {
+			sb2.Where(sb2.LessThan("id", cursor.Digest))
+		}
+	}
+
+	ub.Union(sb1, sb2)
+
+	// Add limit.
+	ub.Limit(getPageSize(pagingInfo))
+
+	// Add sorting.
+	switch direction {
+	case pb.PagingInfo_BACKWARD:
+		ub.OrderBy("senderTimestamp desc", "id desc")
+	case pb.PagingInfo_FORWARD:
+		ub.OrderBy("senderTimestamp asc", "id asc")
+	}
+
+	return ub.Build()
+}
+
+func buildSqlQueryWithoutCursor(query *pb.HistoryQuery) *sqlBuilder.SelectBuilder {
 	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
 
 	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").From("message")
@@ -63,30 +120,17 @@ func buildSqlQuery(query *pb.HistoryQuery) (querySql string, args []interface{},
 	}
 
 	pagingInfo := query.PagingInfo
-	addPagination(sb, pagingInfo)
+	if pagingInfo == nil {
+		pagingInfo = new(pb.PagingInfo)
+	}
+
+	pageSize := pagingInfo.PageSize
+	addLimit(sb, pageSize)
 
 	direction := getDirection(pagingInfo)
 	addSort(sb, direction)
 
-	querySql, args = sb.Build()
-
-	return querySql, args, err
-}
-
-func addPagination(sb *sqlBuilder.SelectBuilder, pagination *pb.PagingInfo) {
-	if pagination == nil {
-		pagination = new(pb.PagingInfo)
-	}
-
-	// Set page size
-	pageSize := pagination.PageSize
-	addLimit(sb, pageSize)
-
-	cursor := pagination.Cursor
-	direction := pagination.Direction
-	if cursor != nil {
-		addCursor(sb, cursor, direction)
-	}
+	return sb
 }
 
 func getDirection(pagingInfo *pb.PagingInfo) (direction pb.PagingInfo_Direction) {
@@ -111,50 +155,6 @@ func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
 		sb.OrderBy("senderTimestamp desc", "id desc")
 	case pb.PagingInfo_FORWARD:
 		sb.OrderBy("senderTimestamp asc", "id asc")
-	}
-}
-
-func addCursor(sb *sqlBuilder.SelectBuilder, cursor *pb.Index, direction pb.PagingInfo_Direction) {
-	switch direction {
-	case pb.PagingInfo_FORWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			// This is tricky. The current implementation does a complex sort by senderTimestamp, digest (id), pubsub topic, and receiverTimestamp
-			// This is also used for cursor based pagination
-			// I am going for 1:1 parity right now, and not worried about performance.
-			// But this, and the sort, is going to be a real performance issue without indexing.
-			// Alternatively, I could use a derived table/CTE to accomplish this
-			sb.Where(
-				sb.Or(
-					sb.GreaterThan("senderTimestamp", cursor.SenderTime),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.GreaterThan("id", cursor.Digest)),
-					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
-				),
-			)
-		} else if cursor.Digest != nil {
-			sb.Where(
-				sb.Or(
-					sb.GreaterThan("id", cursor.Digest),
-					// sb.And(sb.Equal("id", cursor.Digest), sb.GreaterThan("pubsubTopic", cursor.PubsubTopic)),
-				),
-			)
-		}
-	case pb.PagingInfo_BACKWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			sb.Where(
-				sb.Or(
-					sb.LessThan("senderTimestamp", cursor.SenderTime),
-					sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.LessThan("id", cursor.Digest)),
-					// sb.And(sb.Equal("senderTimestamp", cursor.SenderTime), sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
-				),
-			)
-		} else if cursor.Digest != nil {
-			sb.Where(
-				sb.Or(
-					sb.LessThan("id", cursor.Digest),
-					// sb.And(sb.Equal("id", cursor.Digest), sb.LessThan("pubsubTopic", cursor.PubsubTopic)),
-				),
-			)
-		}
 	}
 }
 
@@ -200,13 +200,6 @@ func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.Paging
 		Direction: direction,
 	}, nil
 }
-
-// func getCursor(pagingInfo *pb.PagingInfo) *pb.Index {
-// 	if pagingInfo == nil {
-// 		return nil
-// 	}
-// 	return pagingInfo.Cursor
-// }
 
 func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
 	if len(messages) == 0 {
