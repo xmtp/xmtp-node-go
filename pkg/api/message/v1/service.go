@@ -201,6 +201,13 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		)...)
 	}
 
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != nil {
+		cursor := req.PagingInfo.Cursor.GetIndex()
+		if cursor != nil && cursor.SenderTimeNs == 0 && cursor.Digest == nil {
+			log.Info("query with partial cursor", zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)), zap.Any("cursor_digest", cursor.Digest))
+		}
+	}
+
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
@@ -209,10 +216,8 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	res, err := store.FindMessages(buildWakuQuery(req))
 	duration := time.Since(start)
 	if err != nil {
-		metrics.EmitQuery(ctx, req, 0, err, duration)
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-	metrics.EmitQuery(ctx, req, len(res.Messages), nil, duration)
 	if duration > 10*time.Millisecond {
 		log.With(zap.Duration("duration", duration), zap.Int("results", len(res.Messages))).Info("slow query")
 	}
