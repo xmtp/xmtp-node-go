@@ -216,8 +216,10 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	res, err := store.FindMessages(buildWakuQuery(req))
 	duration := time.Since(start)
 	if err != nil {
+		metrics.EmitQuery(ctx, req, 0, err, duration)
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
+	metrics.EmitQuery(ctx, req, len(res.Messages), nil, duration)
 	if duration > 10*time.Millisecond {
 		log.With(zap.Duration("duration", duration), zap.Int("results", len(res.Messages))).Info("slow query")
 	}
