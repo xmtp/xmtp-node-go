@@ -148,7 +148,7 @@ var queryResultView = &view.View{
 }
 
 func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err error, duration time.Duration) {
-	mutators := contextMutators(ctx)
+	mutators := []tag.Mutator{}
 	if len(req.ContentTopics) > 0 {
 		topicCategory := topic.Category(req.ContentTopics[0])
 		mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
