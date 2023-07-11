@@ -1,6 +1,10 @@
 # xmtp-node-go
 
-XMTP node software
+This repo provides the node software that currently forms the XMTP network.
+
+This repo is private because this node software is not meant for public use. All nodes that currently form the XMTP network are run by XMTP Labs.
+
+If you're interested in an **experimental** version of XMTP node software that might be used to form the XMTP network in the future, see [xmtpd](https://github.com/xmtp/xmtpd).
 
 ## Instructions
 
