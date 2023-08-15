@@ -67,9 +67,23 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 	}
 }
 
+func (wa *WalletAuthorizer) isApiVersion1(request *messagev1.PublishRequest) bool {
+	envelopes := request.Envelopes
+	if envelopes == nil || len(envelopes) == 0 {
+		return false
+	}
+	// If any of the envelopes are not for a v1 topic, then we treat the request as non-v1
+	for _, envelope := range envelopes {
+		if !strings.HasPrefix(envelope.ContentTopic, "xmtp/1/") && !strings.HasPrefix(envelope.ContentTopic, "/xmtp/1") {
+			return false
+		}
+	}
+	return true
+}
+
 func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
 	_, isPublish := req.(*messagev1.PublishRequest)
-	return isPublish
+	return isPublish && !wa.isApiVersion1(req.(*messagev1.PublishRequest))
 }
 
 func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) error {
