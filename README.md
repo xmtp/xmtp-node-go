@@ -1,12 +1,19 @@
 # xmtp-node-go
 
-This repo provides the node software that currently forms the XMTP network.
+This repo provides software for the nodes that currently form the XMTP network. **No new development is planned for this node software.**
 
-This repo is private because this node software is not meant for public use. All nodes that currently form the XMTP network are run by XMTP Labs.
+At this time, all nodes in the XMTP network are run by XMTP Labs, whose mission is to promote and support the development and global adoption of XMTP.
 
-If you're interested in an **experimental** version of XMTP node software that might be used to form the XMTP network in the future, see [xmtpd](https://github.com/xmtp/xmtpd).
+All new development is focused on [xmtpd](https://github.com/xmtp/xmtpd), an **experimental** version of XMTP node software. 
+
+After `xmtpd` meets specific functional requirements, the plan is for it to become the node software that powers the XMTP network. In the future, anyone will be able to run an `xmtpd` node that participates in the XMTP network.
 
 ## Instructions
+
+### Install prerequisites
+
+- [Go](https://go.dev/doc/install)
+- [Docker](https://www.docker.com/get-started/)
 
 ### Install dependencies and start the DB
 
@@ -35,7 +42,7 @@ If you're interested in an **experimental** version of XMTP node software that m
 
 ## Deployments
 
-Merging a PR to the `main` branch will trigger a new deployment via Github Actions and Terraform.
+Merging a PR to the `main` branch will trigger a new deployment via GitHub Actions and Terraform.
 
 The default behavior is to deploy `main` to both the `dev` and `production` environments. If you'd like to deploy a different branch to `dev`, open a PR with an update to [.github/workflows/deploy.yml](https://github.com/xmtp/xmtp-node-go/blob/main/.github/workflows/deploy.yml#L29) switching from `main` to your branch. Remember to PR it back to `main` when you're done.
 
