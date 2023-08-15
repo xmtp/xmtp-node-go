@@ -83,7 +83,7 @@ func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest
 
 func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
 	publishRequest, isPublish := req.(*messagev1.PublishRequest)
-	return isPublish && !wa.isProtocolVersion3(publishRequest)
+	return isPublish && (!wa.isProtocolVersion3(publishRequest) || wa.AuthnConfig.EnableV3)
 }
 
 func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) error {
