@@ -72,9 +72,9 @@ func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest
 	if envelopes == nil || len(envelopes) == 0 {
 		return false
 	}
-	// If any of the envelopes are not for a v1 topic, then we treat the request as non-v1
+	// If any of the envelopes are not for a v3 topic, then we treat the request as non-v3
 	for _, envelope := range envelopes {
-		if !strings.HasPrefix(envelope.ContentTopic, "/xmtp/3/") && !strings.HasPrefix(envelope.ContentTopic, "xmtp/3/") {
+		if !strings.HasPrefix(envelope.ContentTopic, "/xmtp/3/") {
 			return false
 		}
 	}
@@ -82,8 +82,8 @@ func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest
 }
 
 func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
-	_, isPublish := req.(*messagev1.PublishRequest)
-	return isPublish && !wa.isProtocolVersion3(req.(*messagev1.PublishRequest))
+	publishRequest, isPublish := req.(*messagev1.PublishRequest)
+	return isPublish && !wa.isProtocolVersion3(publishRequest)
 }
 
 func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) error {
