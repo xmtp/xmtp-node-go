@@ -84,30 +84,38 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 	if ch == nil {
 		return
 	}
-	// Should be safe to read without a lock since we are not modifying the map here
-	topicsBySub, hasTopicsBySub := d.topicsBySub[ch]
-	// If the user is not subscribed to anything, just register everything in the list
-	if !hasTopicsBySub {
-		d.Register(ch, topics...)
-		return
-	}
+
 	newTopicMap := make(map[string]bool)
 	for _, topic := range topics {
 		newTopicMap[topic] = true
 	}
+
+	// Copy the existing map
+	d.l.RLock()
+	topicsBySub, hasTopicsBySub := d.topicsBySub[ch]
 	toUnregister := make([]string, 0)
+	existingTopicMap := make(map[string]bool, len(topicsBySub))
 	for topic := range topicsBySub {
+		existingTopicMap[topic] = true
 		if !newTopicMap[topic] {
 			toUnregister = append(toUnregister, topic)
 		}
 	}
+	d.l.RUnlock()
+
+	// If the user is not subscribed to anything, just register everything in the list
+	if !hasTopicsBySub {
+		defer d.Register(ch, topics...)
+		return
+	}
+
 	if len(toUnregister) > 0 {
 		d.Unregister(ch, toUnregister...)
 	}
 
 	toRegister := make([]string, 0)
 	for _, topic := range topics {
-		_, exists := topicsBySub[topic]
+		_, exists := existingTopicMap[topic]
 		if !exists {
 			toRegister = append(toRegister, topic)
 		}
