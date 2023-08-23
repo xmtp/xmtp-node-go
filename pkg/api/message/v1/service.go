@@ -167,6 +167,63 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	}
 }
 
+func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
+	log := s.log.Named("subscribe")
+	log.Debug("started")
+	defer log.Debug("stopped")
+	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
+	// See: https://github.com/xmtp/libxmtp/pull/58
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
+
+	// Block on the first request to get the initial subscription topics
+	req, err := stream.Recv()
+	if err != nil {
+		log.Error("receiving subscription request", zap.Error(err))
+		return err
+	}
+	log = log.With(zap.Int("num_content_topics", len(req.ContentTopics)))
+	subC := s.dispatcher.Register(nil, req.ContentTopics...)
+	defer s.dispatcher.Unregister(subC)
+	requestChannel := make(chan *proto.SubscribeRequest)
+	go func() {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				log.Error("reading subscription", zap.Error(err))
+				close(requestChannel)
+				return
+			}
+			requestChannel <- req
+		}
+	}()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			log.Debug("stream closed")
+			return nil
+		case <-s.ctx.Done():
+			log.Info("service closed")
+			return nil
+		case req := <-requestChannel:
+			log.Info("updating subscription")
+			log = log.With(zap.Int("num_content_topics", len(req.ContentTopics)))
+			s.dispatcher.Update(subC, req.ContentTopics...)
+		case obj := <-subC:
+			env, ok := obj.(*proto.Envelope)
+			if !ok {
+				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
+				continue
+			}
+
+			err := stream.Send(env)
+			if err != nil {
+				log.Error("sending envelope to subscriber", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
 	log := s.log.Named("subscribeAll")
 	log.Debug("started")

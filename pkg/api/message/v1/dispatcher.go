@@ -79,6 +79,43 @@ func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
 	d.unregister(ch, topics...)
 }
 
+// Update takes in an array of topics and unregisters any topics that are not in the array and registers any topics that are not already registered.
+func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
+	if ch == nil {
+		return
+	}
+	// Should be safe to read without a lock since we are not modifying the map here
+	topicsBySub, hasTopicsBySub := d.topicsBySub[ch]
+	// If the user is not subscribed to anything, just register everything in the list
+	if !hasTopicsBySub {
+		d.Register(ch, topics...)
+		return
+	}
+	newTopicMap := make(map[string]bool)
+	for _, topic := range topics {
+		newTopicMap[topic] = true
+	}
+	toUnregister := make([]string, 0)
+	for topic := range topicsBySub {
+		if !newTopicMap[topic] {
+			toUnregister = append(toUnregister, topic)
+		}
+	}
+	if len(toUnregister) > 0 {
+		d.Unregister(ch, toUnregister...)
+	}
+
+	toRegister := make([]string, 0)
+	for _, topic := range topics {
+		_, exists := topicsBySub[topic]
+		if !exists {
+			toRegister = append(toRegister, topic)
+		}
+	}
+	d.Register(ch, toRegister...)
+
+}
+
 func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 	subTopics := d.topicsBySub[ch]
 	if len(subTopics) == 0 {

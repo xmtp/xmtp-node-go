@@ -56,3 +56,54 @@ func (s *grpcStream) Close() error {
 	s.cancel()
 	return nil
 }
+
+type grpcBidiStream struct {
+	cancel context.CancelFunc
+	stream messagev1.MessageApi_Subscribe2Client
+}
+
+func (s *grpcBidiStream) Next(ctx context.Context) (*messagev1.Envelope, error) {
+	envC := make(chan *messagev1.Envelope)
+	errC := make(chan error)
+	go func() {
+		env, err := s.stream.Recv()
+		if ctx.Err() != nil {
+			// If the context has already closed, then just return out of this.
+			return
+		}
+		if err != nil {
+			grpcErr, ok := status.FromError(err)
+			if ok {
+				if status.Code(err) == codes.Canceled {
+					err = io.EOF
+				} else {
+					err = errors.New(grpcErr.Message())
+				}
+			}
+			errC <- err
+			return
+		}
+		envC <- env
+	}()
+
+	var env *messagev1.Envelope
+	select {
+	case v := <-envC:
+		env = v
+	case err := <-errC:
+		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return env, nil
+}
+
+func (s *grpcBidiStream) Close() error {
+	s.cancel()
+	return nil
+}
+
+func (s *grpcBidiStream) Send(req *messagev1.SubscribeRequest) error {
+	return s.stream.Send(req)
+}

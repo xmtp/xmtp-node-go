@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,6 +68,10 @@ func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequ
 		return nil, err
 	}
 	return stream, nil
+}
+
+func (c *httpClient) Subscribe2(ctx context.Context, req *messagev1.SubscribeRequest) (Subscribe2Stream, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (c *httpClient) SubscribeAll(ctx context.Context) (Stream, error) {
