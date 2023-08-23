@@ -169,7 +169,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 }
 
 func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
-	log := s.log.Named("subscribe")
+	log := s.log.Named("subscribe2")
 	log.Debug("started")
 	defer log.Debug("stopped")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
@@ -184,7 +184,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF {
+				if err != io.EOF && err != context.Canceled {
 					log.Error("reading subscription", zap.Error(err))
 				}
 				close(requestChannel)
