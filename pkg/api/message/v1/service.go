@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -183,7 +184,9 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
-				log.Error("reading subscription", zap.Error(err))
+				if err != io.EOF {
+					log.Error("reading subscription", zap.Error(err))
+				}
 				close(requestChannel)
 				return
 			}
