@@ -45,9 +45,22 @@ func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		if !wa.Ratelimits && !wa.requiresAuthorization(req) {
+			return handler(ctx, req)
+		}
+		wallet, authErr := wa.getWallet(ctx)
+
+		if wa.Ratelimits {
+			if err := wa.applyLimits(ctx, req, wallet); err != nil {
+				return nil, err
+			}
+		}
 
 		if wa.requiresAuthorization(req) {
-			if err := wa.authorize(ctx, req); err != nil {
+			if authErr != nil {
+				return nil, authErr
+			}
+			if err := wa.authorize(ctx, req, wallet); err != nil {
 				return nil, err
 			}
 		}
@@ -62,7 +75,13 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		// TODO(mk): Add metrics
+		if wa.Ratelimits {
+			ctx := stream.Context()
+			wallet, _ := wa.getWallet(ctx)
+			if err := wa.applyLimits(ctx, nil, wallet); err != nil {
+				return err
+			}
+		}
 		return handler(srv, stream)
 	}
 }
@@ -86,34 +105,37 @@ func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
 	return isPublish && (!wa.isProtocolVersion3(publishRequest) || wa.AuthnConfig.EnableV3)
 }
 
-func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) error {
+func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return status.Errorf(codes.Unauthenticated, "metadata is not provided")
+		return "", status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
 
 	values := md.Get(authorizationMetadataKey)
 	if len(values) == 0 {
-		return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
+		return "", status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}
 
 	words := strings.SplitN(values[0], " ", 2)
 	if len(words) != 2 {
-		return status.Errorf(codes.Unauthenticated, "invalid authorization header")
+		return "", status.Errorf(codes.Unauthenticated, "invalid authorization header")
 	}
 	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
-		return status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
+		return "", status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
 	}
 	token, err := decodeToken(strings.TrimSpace(words[1]))
 	if err != nil {
-		return status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
+		return "", status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
 	}
 
 	wallet, err := validateToken(ctx, wa.Log, token, time.Now())
 	if err != nil {
-		return status.Errorf(codes.Unauthenticated, "validating token: %s", err)
+		return "", status.Errorf(codes.Unauthenticated, "validating token: %s", err)
 	}
+	return wallet, nil
+}
 
+func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wallet types.WalletAddr) error {
 	if pub, isPublish := req.(*messagev1.PublishRequest); isPublish {
 		for _, env := range pub.Envelopes {
 			if !wa.privilegedAddresses[wallet] && !allowedToPublish(env.ContentTopic, wallet) {
@@ -121,16 +143,20 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) erro
 			}
 		}
 	}
-
-	return wa.authorizeWallet(ctx, wallet)
+	return nil
 }
 
-func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.WalletAddr) error {
+func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wallet types.WalletAddr) error {
 	// * for limit exhaustion return status.Errorf(codes.ResourceExhausted, ...)
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
 
+	ip := clientIPFromContext(ctx)
+	if len(ip) == 0 {
+		ip = "ip_unknown"
+	}
+
 	var allowListed bool
-	if wa.AllowLists {
+	if len(wallet) > 0 && wa.AllowLists {
 		if wa.AllowLister.IsDenyListed(wallet.String()) {
 			wa.Log.Debug("wallet deny listed", logging.WalletAddress(wallet.String()))
 			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
@@ -138,10 +164,14 @@ func (wa *WalletAuthorizer) authorizeWallet(ctx context.Context, wallet types.Wa
 		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
 	}
 
-	if !wa.Ratelimits {
-		return nil
+	cost := 1
+	switch req := req.(type) {
+	case *messagev1.PublishRequest:
+		cost = len(req.Envelopes)
+	case *messagev1.BatchQueryRequest:
+		cost = len(req.Requests)
 	}
-	err := wa.Limiter.Spend(wallet.String(), allowListed)
+	err := wa.Limiter.Spend(wallet.String(), uint16(cost), allowListed)
 	if err == nil {
 		return nil
 	}
@@ -195,4 +225,15 @@ func allowedToPublish(topic string, wallet types.WalletAddr) bool {
 	}
 
 	return true
+}
+
+func clientIPFromContext(ctx context.Context) string {
+	md, _ := metadata.FromIncomingContext(ctx)
+	vals := md.Get("x-forwarded-for")
+	if len(vals) == 0 {
+		return ""
+	}
+	// There are potentially multiple comma separated IPs bundled in that first value
+	ips := strings.Split(vals[0], ",")
+	return strings.TrimSpace(ips[0])
 }

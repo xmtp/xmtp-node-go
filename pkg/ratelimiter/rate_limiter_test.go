@@ -20,9 +20,9 @@ func TestSpend(t *testing.T) {
 		mutex:    sync.Mutex{},
 	}
 
-	err1 := rl.Spend(walletAddress, false)
+	err1 := rl.Spend(walletAddress, 1, false)
 	require.NoError(t, err1)
-	err2 := rl.Spend(walletAddress, false)
+	err2 := rl.Spend(walletAddress, 1, false)
 	require.Error(t, err2)
 	if err2.Error() != "rate_limit_exceeded" {
 		t.Error("Incorrect error")
@@ -47,9 +47,9 @@ func TestSpendWithTime(t *testing.T) {
 		tokens:   uint16(0),
 		mutex:    sync.Mutex{},
 	}
-	err1 := rl.Spend(walletAddress, false)
+	err1 := rl.Spend(walletAddress, 1, false)
 	require.NoError(t, err1)
-	err2 := rl.Spend(walletAddress, false)
+	err2 := rl.Spend(walletAddress, 1, false)
 	require.Error(t, err2)
 }
 
@@ -78,7 +78,7 @@ func TestSpendAllowListed(t *testing.T) {
 		mutex:    sync.Mutex{},
 	}
 	entry := rl.fillAndReturnEntry(walletAddress, true)
-	require.Equal(t, entry.tokens, uint16(500*ALLOW_LISTED_RATE_PER_MINUTE))
+	require.Equal(t, entry.tokens, uint16(500*PRIORITY_RATE_PER_MINUTE))
 }
 
 func TestMaxUint16(t *testing.T) {
@@ -92,7 +92,7 @@ func TestMaxUint16(t *testing.T) {
 	}
 
 	entry := rl.fillAndReturnEntry(walletAddress, true)
-	require.Equal(t, entry.tokens, uint16(ALLOW_LISTED_MAX_TOKENS))
+	require.Equal(t, entry.tokens, uint16(PRIORITY_MAX_TOKENS))
 }
 
 // Ensures that the map can be accessed concurrently
@@ -104,7 +104,7 @@ func TestSpendConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = rl.Spend(walletAddress, false)
+			_ = rl.Spend(walletAddress, 1, false)
 		}()
 	}
 
