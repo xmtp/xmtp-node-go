@@ -14,6 +14,7 @@ import (
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messagev1api "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -755,27 +756,70 @@ func Test_Publish_DenyListed(t *testing.T) {
 		require.NoError(t, err)
 
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{})
-		expectWalletDenied(t, err)
+		requireErrorEqual(t, err, codes.PermissionDenied, "wallet is deny listed")
 		require.Nil(t, publishRes)
 	})
 }
 
-func expectWalletDenied(t *testing.T, err error) {
-	grpcErr, ok := status.FromError(err)
-	if ok {
-		require.Equal(t, codes.PermissionDenied, grpcErr.Code())
-		require.Equal(t, "wallet is deny listed", grpcErr.Message())
-	} else {
-		parts := strings.SplitN(err.Error(), ": ", 2)
-		reason, msgJSON := parts[0], parts[1]
-		require.Equal(t, "403 Forbidden", reason)
-		var msg map[string]interface{}
-		err := json.Unmarshal([]byte(msgJSON), &msg)
+func Test_Ratelimits_Regular(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		server.authorizer.Ratelimits = true
+		limiter, ok := server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter)
+		require.True(t, ok)
+		limiter.Limits[ratelimiter.PUBLISH] = &ratelimiter.Limit{MaxTokens: 1, RatePerMinute: 0}
+		envs := makeEnvelopes(2)
+		_, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:1]})
 		require.NoError(t, err)
-		require.Equal(t, map[string]interface{}{
-			"code":    float64(codes.PermissionDenied),
-			"message": "wallet is deny listed",
-			"details": []interface{}{},
-		}, msg)
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
+		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
+		// check that Query is not affected by publish quota
+		_, err = client.Query(ctx, &messageV1.QueryRequest{ContentTopics: []string{"topic"}})
+		require.NoError(t, err)
+	})
+}
+
+func Test_Ratelimits_Priority(t *testing.T) {
+	token, data, err := GenerateToken(time.Now(), false)
+	require.NoError(t, err)
+	et, err := EncodeToken(token)
+	require.NoError(t, err)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), authorizationMetadataKey, "Bearer "+et)
+
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		err := server.AllowLister.Allow(ctx, data.WalletAddr)
+		require.NoError(t, err)
+		server.authorizer.Ratelimits = true
+		limiter, ok := server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter)
+		require.True(t, ok)
+		limiter.Limits[ratelimiter.PUBLISH] = &ratelimiter.Limit{MaxTokens: 1, RatePerMinute: 0}
+		limiter.PriorityMultiplier = 2
+		envs := makeEnvelopes(3)
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:2]})
+		require.NoError(t, err)
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[2:3]})
+		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
+		// check that query is not affected by publish quota
+		_, err = client.Query(ctx, &messageV1.QueryRequest{ContentTopics: []string{"topic"}})
+		require.NoError(t, err)
+	})
+}
+
+func requireErrorEqual(t *testing.T, err error, code codes.Code, msg string, details ...interface{}) {
+	require.Error(t, err)
+	grpcErr, ok := status.FromError(err)
+	if ok { // GRPC
+		require.Equal(t, code, grpcErr.Code())
+		require.Equal(t, msg, grpcErr.Message())
+		require.ElementsMatch(t, details, grpcErr.Details())
+	} else { // HTTP
+		parts := strings.SplitN(err.Error(), ": ", 2)
+		_, errJSON := parts[0], parts[1]
+		var httpErr map[string]interface{}
+		err := json.Unmarshal([]byte(errJSON), &httpErr)
+		require.NoError(t, err)
+		require.Equal(t, float64(code), httpErr["code"])
+		require.Equal(t, msg, httpErr["message"])
+		require.ElementsMatch(t, details, httpErr["details"])
 	}
 }

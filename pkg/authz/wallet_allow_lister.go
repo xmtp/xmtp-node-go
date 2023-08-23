@@ -43,6 +43,7 @@ type WalletAllowLister interface {
 	IsDenyListed(walletAddress string) bool
 	GetPermissions(walletAddress string) Permission
 	Deny(ctx context.Context, WalletAddress string) error
+	Allow(ctx context.Context, WalletAddress string) error
 }
 
 // DatabaseWalletAllowLister implements database backed allow list.
@@ -87,9 +88,18 @@ func (d *DatabaseWalletAllowLister) IsDenyListed(walletAddress string) bool {
 
 // Add an address to the deny list.
 func (d *DatabaseWalletAllowLister) Deny(ctx context.Context, walletAddress string) error {
+	return d.Apply(ctx, walletAddress, Denied)
+}
+
+// Add an address to the allow list.
+func (d *DatabaseWalletAllowLister) Allow(ctx context.Context, walletAddress string) error {
+	return d.Apply(ctx, walletAddress, Allowed)
+}
+
+func (d *DatabaseWalletAllowLister) Apply(ctx context.Context, walletAddress string, permission Permission) error {
 	wallet := WalletAddress{
 		WalletAddress: walletAddress,
-		Permission:    "deny",
+		Permission:    unmapPermission(permission),
 	}
 	_, err := d.db.NewInsert().Model(&wallet).Exec(ctx)
 	if err != nil {
@@ -164,6 +174,17 @@ func mapPermission(permission string) Permission {
 		return Denied
 	default:
 		return Unspecified
+	}
+}
+
+func unmapPermission(permission Permission) string {
+	switch permission {
+	case Allowed:
+		return "allow"
+	case Denied:
+		return "deny"
+	default:
+		return "unspecified"
 	}
 }
 

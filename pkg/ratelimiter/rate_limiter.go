@@ -1,24 +1,32 @@
 package ratelimiter
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"go.uber.org/zap"
 )
 
+type LimitType string
+
 const (
-	ALLOW_LISTED_RATE_PER_MINUTE = uint16(10)
-	ALLOW_LISTED_MAX_TOKENS      = uint16(10000)
-	REGULAR_RATE_PER_MINUTE      = uint16(1)
-	REGULAR_MAX_TOKENS           = uint16(100)
-	MAX_UINT_16                  = 65535
+	PRIORITY_MULTIPLIER     = uint16(5)
+	DEFAULT_RATE_PER_MINUTE = uint16(2000)
+	DEFAULT_MAX_TOKENS      = uint16(10000)
+	PUBLISH_RATE_PER_MINUTE = uint16(200)
+	PUBLISH_MAX_TOKENS      = uint16(1000)
+	MAX_UINT_16             = 65535
+
+	DEFAULT LimitType = "DEF"
+	PUBLISH LimitType = "PUB"
 )
 
 type RateLimiter interface {
-	Spend(walletAddress string, isAllowListed bool) error
+	Spend(limitType LimitType, bucket string, cost uint16, isPriority bool) error
 }
 
 // Entry represents a single wallet entry in the rate limiter
@@ -31,89 +39,124 @@ type Entry struct {
 	mutex sync.Mutex
 }
 
-// TokenBucketRateLimiter implements the RateLimiter interface
-type TokenBucketRateLimiter struct {
-	log     *zap.Logger
-	wallets map[string]*Entry
-	mutex   sync.RWMutex
+// Limit controls token refilling for bucket entries
+type Limit struct {
+	// Maximum number of tokens that can be accumulated
+	MaxTokens uint16
+	// Number of tokens to refill per minute
+	RatePerMinute uint16
 }
 
-func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
-	tb := new(TokenBucketRateLimiter)
-	tb.log = log.Named("ratelimiter")
-	tb.wallets = make(map[string]*Entry)
-	tb.mutex = sync.RWMutex{}
-
-	return tb
-}
-
-func getRates(isAllowListed bool) (ratePerMinute uint16, maxTokens uint16) {
-	if isAllowListed {
-		ratePerMinute = ALLOW_LISTED_RATE_PER_MINUTE
-		maxTokens = ALLOW_LISTED_MAX_TOKENS
-	} else {
-		ratePerMinute = REGULAR_RATE_PER_MINUTE
-		maxTokens = REGULAR_MAX_TOKENS
-	}
-	return
-}
-
-// Will return the entry, with items filled based on the time since last access
-func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isAllowListed bool) *Entry {
-	ratePerMinute, maxTokens := getRates(isAllowListed)
-	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
-	rl.mutex.RLock()
-	currentVal, exists := rl.wallets[walletAddress]
-	rl.mutex.RUnlock()
-	if !exists {
-		rl.mutex.Lock()
-		currentVal = &Entry{
-			tokens:   uint16(maxTokens),
-			lastSeen: time.Now(),
-			mutex:    sync.Mutex{},
-		}
-		rl.wallets[walletAddress] = currentVal
-		rl.mutex.Unlock()
-
-		return currentVal
-	}
-
-	currentVal.mutex.Lock()
-	defer currentVal.mutex.Unlock()
+func (l Limit) Refill(entry *Entry, multiplier uint16) {
 	now := time.Now()
-	minutesSinceLastSeen := now.Sub(currentVal.lastSeen).Minutes()
+	ratePerMinute := l.RatePerMinute * multiplier
+	maxTokens := l.MaxTokens * multiplier
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+	minutesSinceLastSeen := now.Sub(entry.lastSeen).Minutes()
 	if minutesSinceLastSeen > 0 {
 		// Only update the lastSeen if it has been >= 1 minute
 		// This allows for continuously sending nodes to still get credits
-		currentVal.lastSeen = now
+		entry.lastSeen = now
 		// Convert to ints so that we can check if above MAX_UINT_16
 		additionalTokens := int(ratePerMinute) * int(minutesSinceLastSeen)
 		// Avoid overflows of UINT16 when new balance is above limit
-		if additionalTokens+int(currentVal.tokens) > MAX_UINT_16 {
-			additionalTokens = MAX_UINT_16 - int(currentVal.tokens)
+		if additionalTokens+int(entry.tokens) > MAX_UINT_16 {
+			additionalTokens = MAX_UINT_16 - int(entry.tokens)
 		}
-		currentVal.tokens = minUint16(currentVal.tokens+uint16(additionalTokens), maxTokens)
+		entry.tokens = minUint16(entry.tokens+uint16(additionalTokens), maxTokens)
 	}
-
-	return currentVal
 }
 
-// The Spend function takes a WalletAddress and a boolean asserting whether to apply the AllowListed rate limits or the regular rate limits
-func (rl *TokenBucketRateLimiter) Spend(walletAddress string, isAllowListed bool) error {
-	entry := rl.fillAndReturnEntry(walletAddress, isAllowListed)
+// TokenBucketRateLimiter implements the RateLimiter interface
+type TokenBucketRateLimiter struct {
+	log                *zap.Logger
+	ctx                context.Context
+	mutex              sync.RWMutex
+	newBuckets         *Buckets // buckets that can be added to
+	oldBuckets         *Buckets // buckets to be swept for expired entries
+	PriorityMultiplier uint16
+	Limits             map[LimitType]*Limit
+}
+
+func NewTokenBucketRateLimiter(ctx context.Context, log *zap.Logger) *TokenBucketRateLimiter {
+	tb := new(TokenBucketRateLimiter)
+	tb.log = log.Named("ratelimiter")
+	tb.ctx = ctx
+	// TODO: need to periodically clear out expired items to avoid unlimited growth of the map.
+	tb.newBuckets = NewBuckets(log, "buckets1")
+	tb.oldBuckets = NewBuckets(log, "buckets2")
+	tb.PriorityMultiplier = PRIORITY_MULTIPLIER
+	tb.Limits = map[LimitType]*Limit{
+		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
+		PUBLISH: {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
+	}
+	return tb
+}
+
+func (rl *TokenBucketRateLimiter) getLimit(limitType LimitType) *Limit {
+	if l := rl.Limits[limitType]; l != nil {
+		return l
+	}
+	return rl.Limits["default"]
+}
+
+// Will return the entry, with items filled based on the time since last access
+func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket string, isPriority bool) *Entry {
+	limit := rl.getLimit(limitType)
+	multiplier := uint16(1)
+	if isPriority {
+		multiplier = rl.PriorityMultiplier
+	}
+	rl.mutex.RLock()
+	if entry := rl.oldBuckets.getAndRefill(bucket, limit, multiplier, false); entry != nil {
+		rl.mutex.RUnlock()
+		return entry
+	}
+	entry := rl.newBuckets.getAndRefill(bucket, limit, multiplier, true)
+	rl.mutex.RUnlock()
+	return entry
+}
+
+// The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
+func (rl *TokenBucketRateLimiter) Spend(limitType LimitType, bucket string, cost uint16, isPriority bool) error {
+	entry := rl.fillAndReturnEntry(limitType, bucket, isPriority)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
-	log := rl.log.With(logging.WalletAddress(walletAddress))
-	if entry.tokens == 0 {
-		log.Info("Rate limit exceeded")
-		return errors.New("rate_limit_exceeded")
+	log := rl.log.With(logging.String("bucket", bucket))
+	if entry.tokens < cost {
+		return errors.New("rate limit exceeded")
 	}
 
-	log.Debug("Spend allowed. Wallet is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
-
-	entry.tokens = entry.tokens - 1
-
+	entry.tokens = entry.tokens - cost
+	log.Debug("Spend allowed. bucket is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
 	return nil
+}
+
+func (rl *TokenBucketRateLimiter) Janitor(sweepInterval, expiresAfter time.Duration) {
+	ticker := time.NewTicker(sweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-rl.ctx.Done():
+			return
+		case <-ticker.C:
+			rl.sweepAndSwap(expiresAfter)
+		}
+	}
+}
+
+func (rl *TokenBucketRateLimiter) sweepAndSwap(expiresAfter time.Duration) (deletedEntries int) {
+	// Only the janitor writes to oldBuckets (the swap below), so we shouldn't need to rlock it here.
+	deletedEntries = rl.oldBuckets.deleteExpired(expiresAfter)
+	metrics.EmitRatelimiterDeletedEntries(rl.ctx, rl.oldBuckets.name, deletedEntries)
+	metrics.EmitRatelimiterBucketsSize(rl.ctx, rl.oldBuckets.name, len(rl.oldBuckets.buckets))
+	rl.mutex.Lock()
+	rl.newBuckets, rl.oldBuckets = rl.oldBuckets, rl.newBuckets
+	rl.mutex.Unlock()
+	rl.newBuckets.log.Info("became new buckets")
+	rl.oldBuckets.log.Info("became old buckets")
+	return deletedEntries
 }
 
 func minUint16(x, y uint16) uint16 {
