@@ -104,7 +104,7 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 
 	// If the user is not subscribed to anything, just register everything in the list
 	if !hasTopicsBySub {
-		defer d.Register(ch, topics...)
+		d.Register(ch, topics...)
 		return
 	}
 
@@ -112,18 +112,8 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 		d.Unregister(ch, toUnregister...)
 	}
 
-	toRegister := make([]string, 0)
-
 	// Lock again
-	d.l.RLock()
-	for _, topic := range topics {
-		_, exists := topicsBySub[topic]
-		if !exists {
-			toRegister = append(toRegister, topic)
-		}
-	}
-	d.l.RUnlock()
-	d.Register(ch, toRegister...)
+	d.Register(ch, topics...)
 
 }
 
