@@ -175,15 +175,9 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	// Block on the first request to get the initial subscription topics
-	req, err := stream.Recv()
-	if err != nil {
-		log.Error("receiving subscription request", zap.Error(err))
-		return err
-	}
-	log = log.With(zap.Int("num_content_topics", len(req.ContentTopics)))
-	subC := s.dispatcher.Register(nil, req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC)
+	ch := make(chan interface{})
+	defer s.dispatcher.Unregister(ch)
+
 	requestChannel := make(chan *proto.SubscribeRequest)
 	go func() {
 		for {
@@ -208,8 +202,8 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		case req := <-requestChannel:
 			log.Info("updating subscription")
 			log = log.With(zap.Int("num_content_topics", len(req.ContentTopics)))
-			s.dispatcher.Update(subC, req.ContentTopics...)
-		case obj := <-subC:
+			s.dispatcher.Update(ch, req.ContentTopics...)
+		case obj := <-ch:
 			env, ok := obj.(*proto.Envelope)
 			if !ok {
 				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))

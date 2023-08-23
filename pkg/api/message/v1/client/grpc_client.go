@@ -50,8 +50,11 @@ func (c *grpcClient) Subscribe2(ctx context.Context, r *messagev1.SubscribeReque
 		return nil, err
 	}
 	return &grpcBidiStream{
-		stream: stream,
-		cancel: cancel,
+		subscribe2Client: stream,
+		grpcStream: grpcStream{
+			cancel: cancel,
+			stream: stream,
+		},
 	}, nil
 }
 

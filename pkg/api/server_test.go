@@ -421,7 +421,6 @@ func Test_Subscribe2UpdateTopics(t *testing.T) {
 		_, err = stream.Next(ctx)
 		require.Equal(t, io.EOF, err)
 	})
-	t.Fail()
 }
 
 func Test_SubscribeAllClientClose(t *testing.T) {
