@@ -395,9 +395,10 @@ func Test_Subscribe2UpdateTopics(t *testing.T) {
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
 
-		stream.Send(&messageV1.SubscribeRequest{
+		err = stream.Send(&messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic2"},
 		})
+		require.NoError(t, err)
 
 		topic1Envs := makeEnvelopes(1)
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: topic1Envs})
