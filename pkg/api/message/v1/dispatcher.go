@@ -93,7 +93,7 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 
 	// Lock the map so we can check if any existing subscriptions need to be removed
 	d.l.RLock()
-	topicsBySub, hasTopicsBySub := d.topicsBySub[ch]
+	topicsBySub := d.topicsBySub[ch]
 	toUnregister := make([]string, 0)
 	for topic := range topicsBySub {
 		if !newTopicMap[topic] {
@@ -101,12 +101,6 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 		}
 	}
 	d.l.RUnlock()
-
-	// If the user is not subscribed to anything, just register everything in the list
-	if !hasTopicsBySub {
-		d.Register(ch, topics...)
-		return
-	}
 
 	if len(toUnregister) > 0 {
 		d.Unregister(ch, toUnregister...)
