@@ -85,18 +85,17 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 		return
 	}
 
+	// Create a map of the new topics so we can check existing topics against it to see what needs to be added/removed
 	newTopicMap := make(map[string]bool)
 	for _, topic := range topics {
 		newTopicMap[topic] = true
 	}
 
-	// Copy the existing map
+	// Lock the map so we can check if any existing subscriptions need to be removed
 	d.l.RLock()
 	topicsBySub, hasTopicsBySub := d.topicsBySub[ch]
 	toUnregister := make([]string, 0)
-	existingTopicMap := make(map[string]bool, len(topicsBySub))
 	for topic := range topicsBySub {
-		existingTopicMap[topic] = true
 		if !newTopicMap[topic] {
 			toUnregister = append(toUnregister, topic)
 		}
@@ -114,12 +113,16 @@ func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
 	}
 
 	toRegister := make([]string, 0)
+
+	// Lock again
+	d.l.RLock()
 	for _, topic := range topics {
-		_, exists := existingTopicMap[topic]
+		_, exists := topicsBySub[topic]
 		if !exists {
 			toRegister = append(toRegister, topic)
 		}
 	}
+	d.l.RUnlock()
 	d.Register(ch, toRegister...)
 
 }
