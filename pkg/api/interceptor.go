@@ -143,6 +143,12 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wall
 			}
 		}
 	}
+	if wa.AllowLists {
+		if wa.AllowLister.IsDenyListed(wallet.String()) {
+			wa.Log.Debug("wallet deny listed", logging.WalletAddress(wallet.String()))
+			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
+		}
+	}
 	return nil
 }
 
@@ -157,13 +163,9 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 	}
 
 	// with no wallet apply regular limits
-	var allowListed bool
+	var priority bool
 	if len(wallet) > 0 && wa.AllowLists {
-		if wa.AllowLister.IsDenyListed(wallet.String()) {
-			wa.Log.Debug("wallet deny listed", logging.WalletAddress(wallet.String()))
-			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
-		}
-		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
+		priority = wa.AllowLister.IsAllowListed(wallet.String())
 	}
 
 	// default request cost is 1,
@@ -177,12 +179,12 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 	}
 	// need to separate the IP buckets between priority and regular wallets
 	var bucket string
-	if allowListed {
+	if priority {
 		bucket = "P" + ip
 	} else {
 		bucket = "R" + ip
 	}
-	err := wa.Limiter.Spend(bucket, uint16(cost), allowListed)
+	err := wa.Limiter.Spend(bucket, uint16(cost), priority)
 	if err == nil {
 		return nil
 	}
