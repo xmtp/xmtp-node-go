@@ -404,7 +404,7 @@ func Test_Subscribe2UpdateTopics(t *testing.T) {
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: topic1Envs})
 		require.NoError(t, err)
 
-		topic2Envs := []*messageV1.Envelope{&messageV1.Envelope{
+		topic2Envs := []*messageV1.Envelope{{
 			ContentTopic: "topic2",
 			Message:      []byte(fmt.Sprintf("msg %d", 2)),
 			TimestampNs:  uint64(1000),
