@@ -88,7 +88,7 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 
 func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest) bool {
 	envelopes := request.Envelopes
-	if envelopes == nil || len(envelopes) == 0 {
+	if len(envelopes) == 0 {
 		return false
 	}
 	// If any of the envelopes are not for a v3 topic, then we treat the request as non-v3
@@ -152,6 +152,7 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 
 	ip := clientIPFromContext(ctx)
 	if len(ip) == 0 {
+		// requests without an IP address are limited together as "ip_unknown"
 		ip = "ip_unknown"
 	}
 
@@ -164,6 +165,8 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 		allowListed = wa.AllowLister.IsAllowListed(wallet.String())
 	}
 
+	// default request cost is 1,
+	// note that nil req (subscription stream) has cost 1 as well
 	cost := 1
 	switch req := req.(type) {
 	case *messagev1.PublishRequest:
@@ -171,7 +174,14 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 	case *messagev1.BatchQueryRequest:
 		cost = len(req.Requests)
 	}
-	err := wa.Limiter.Spend(wallet.String(), uint16(cost), allowListed)
+	// need to separate the IP buckets between priority and regular wallets
+	var bucket string
+	if allowListed {
+		bucket = "P" + ip
+	} else {
+		bucket = "R" + ip
+	}
+	err := wa.Limiter.Spend(bucket, uint16(cost), allowListed)
 	if err == nil {
 		return nil
 	}
