@@ -203,6 +203,9 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 			log.Info("service closed")
 			return nil
 		case req := <-requestChannel:
+			if req == nil {
+				continue
+			}
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
 			s.dispatcher.Update(ch, req.ContentTopics...)
 		case obj := <-ch:
