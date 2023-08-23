@@ -18,7 +18,7 @@ const (
 )
 
 type RateLimiter interface {
-	Spend(walletAddress string, cost uint16, isAllowListed bool) error
+	Spend(bucket string, cost uint16, isAllowListed bool) error
 }
 
 // Entry represents a single wallet entry in the rate limiter
@@ -34,14 +34,14 @@ type Entry struct {
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
 	log     *zap.Logger
-	wallets map[string]*Entry
+	buckets map[string]*Entry
 	mutex   sync.RWMutex
 }
 
 func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
 	tb := new(TokenBucketRateLimiter)
 	tb.log = log.Named("ratelimiter")
-	tb.wallets = make(map[string]*Entry)
+	tb.buckets = make(map[string]*Entry)
 	tb.mutex = sync.RWMutex{}
 	return tb
 }
@@ -58,11 +58,11 @@ func getRates(isPriority bool) (ratePerMinute uint16, maxTokens uint16) {
 }
 
 // Will return the entry, with items filled based on the time since last access
-func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isPriority bool) *Entry {
+func (rl *TokenBucketRateLimiter) fillAndReturnEntry(bucket string, isPriority bool) *Entry {
 	ratePerMinute, maxTokens := getRates(isPriority)
 	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
 	rl.mutex.RLock()
-	currentVal, exists := rl.wallets[walletAddress]
+	currentVal, exists := rl.buckets[bucket]
 	rl.mutex.RUnlock()
 	if !exists {
 		rl.mutex.Lock()
@@ -71,7 +71,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isPri
 			lastSeen: time.Now(),
 			mutex:    sync.Mutex{},
 		}
-		rl.wallets[walletAddress] = currentVal
+		rl.buckets[bucket] = currentVal
 		rl.mutex.Unlock()
 
 		return currentVal
@@ -97,19 +97,19 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(walletAddress string, isPri
 	return currentVal
 }
 
-// The Spend function takes a WalletAddress and a boolean asserting whether to apply the AllowListed rate limits or the regular rate limits
-func (rl *TokenBucketRateLimiter) Spend(walletAddress string, cost uint16, isPriority bool) error {
-	entry := rl.fillAndReturnEntry(walletAddress, isPriority)
+// The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
+func (rl *TokenBucketRateLimiter) Spend(bucket string, cost uint16, isPriority bool) error {
+	entry := rl.fillAndReturnEntry(bucket, isPriority)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
-	log := rl.log.With(logging.WalletAddress(walletAddress))
+	log := rl.log.With(logging.String("bucket", bucket))
 	if entry.tokens < cost {
 		log.Info("Rate limit exceeded")
 		return errors.New("rate_limit_exceeded")
 	}
 
 	entry.tokens = entry.tokens - cost
-	log.Debug("Spend allowed. Wallet is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
+	log.Debug("Spend allowed. bucket is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
 	return nil
 }
 

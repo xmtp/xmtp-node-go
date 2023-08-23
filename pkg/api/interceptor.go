@@ -152,10 +152,11 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 
 	ip := clientIPFromContext(ctx)
 	if len(ip) == 0 {
-		// requests without an IP address are limited together as "ip_unknown"
+		// requests without an IP address are bucketed together as "ip_unknown"
 		ip = "ip_unknown"
 	}
 
+	// with no wallet apply regular limits
 	var allowListed bool
 	if len(wallet) > 0 && wa.AllowLists {
 		if wa.AllowLister.IsDenyListed(wallet.String()) {

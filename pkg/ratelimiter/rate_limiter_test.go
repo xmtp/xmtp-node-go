@@ -14,7 +14,7 @@ const walletAddress = "0x1234"
 func TestSpend(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.wallets[walletAddress] = &Entry{
+	rl.buckets[walletAddress] = &Entry{
 		lastSeen: time.Now(),
 		tokens:   uint16(1),
 		mutex:    sync.Mutex{},
@@ -41,7 +41,7 @@ func TestSpendInitialize(t *testing.T) {
 func TestSpendWithTime(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.wallets[walletAddress] = &Entry{
+	rl.buckets[walletAddress] = &Entry{
 		// Set the last seen to 1 minute ago
 		lastSeen: time.Now().Add(-1 * time.Minute),
 		tokens:   uint16(0),
@@ -57,7 +57,7 @@ func TestSpendWithTime(t *testing.T) {
 func TestSpendMaxBucket(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.wallets[walletAddress] = &Entry{
+	rl.buckets[walletAddress] = &Entry{
 		// Set last seen to 500 minutes ago
 		lastSeen: time.Now().Add(-500 * time.Minute),
 		tokens:   uint16(0),
@@ -71,7 +71,7 @@ func TestSpendMaxBucket(t *testing.T) {
 func TestSpendAllowListed(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.wallets[walletAddress] = &Entry{
+	rl.buckets[walletAddress] = &Entry{
 		// Set last seen to 500 minutes ago
 		lastSeen: time.Now().Add(-500 * time.Minute),
 		tokens:   uint16(0),
@@ -84,7 +84,7 @@ func TestSpendAllowListed(t *testing.T) {
 func TestMaxUint16(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.wallets[walletAddress] = &Entry{
+	rl.buckets[walletAddress] = &Entry{
 		// Set last seen to 1 million minutes ago
 		lastSeen: time.Now().Add(-1000000 * time.Minute),
 		tokens:   uint16(0),
