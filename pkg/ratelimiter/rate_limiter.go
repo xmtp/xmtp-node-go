@@ -118,7 +118,7 @@ func (rl *TokenBucketRateLimiter) Spend(bucket string, cost uint16, isPriority b
 	log := rl.log.With(logging.String("bucket", bucket))
 	if entry.tokens < cost {
 		log.Info("Rate limit exceeded")
-		return errors.New("rate_limit_exceeded")
+		return errors.New("rate limit exceeded")
 	}
 
 	entry.tokens = entry.tokens - cost
