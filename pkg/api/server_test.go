@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -332,6 +333,89 @@ func Test_SubscribeClientClose(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
 		time.Sleep(50 * time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
+		_, err = stream.Next(ctx)
+		require.Equal(t, io.EOF, err)
+	})
+}
+
+func Test_Subscribe2ClientClose(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPC(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.Subscribe2(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish 5 messages
+		envs := makeEnvelopes(10)
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+
+		// receive 5 and close the stream
+		subscribeExpect(t, stream, envs[:5])
+		err = stream.Close()
+		require.NoError(t, err)
+
+		// publish another 5
+		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		time.Sleep(50 * time.Millisecond)
+
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
+		_, err = stream.Next(ctx)
+		require.Equal(t, io.EOF, err)
+	})
+}
+
+func Test_Subscribe2UpdateTopics(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPC(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// start subscribe stream
+		stream, err := client.Subscribe2(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic"},
+		})
+		require.NoError(t, err)
+		defer stream.Close()
+		time.Sleep(50 * time.Millisecond)
+
+		// publish 5 messages
+		envs := makeEnvelopes(10)
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		// receive 5 and close the stream
+		subscribeExpect(t, stream, envs[:5])
+
+		err = stream.Send(&messageV1.SubscribeRequest{
+			ContentTopics: []string{"topic2"},
+		})
+		require.NoError(t, err)
+
+		topic1Envs := makeEnvelopes(1)
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: topic1Envs})
+		require.NoError(t, err)
+
+		topic2Envs := []*messageV1.Envelope{{
+			ContentTopic: "topic2",
+			Message:      []byte(fmt.Sprintf("msg %d", 2)),
+			TimestampNs:  uint64(1000),
+		}}
+
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: topic2Envs})
+		require.NoError(t, err)
+		subscribeExpect(t, stream, topic2Envs)
+
+		err = stream.Close()
+		require.NoError(t, err)
 
 		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 		defer cancel()

@@ -79,6 +79,38 @@ func (d *dispatcher) Unregister(ch chan interface{}, topics ...string) {
 	d.unregister(ch, topics...)
 }
 
+// Update takes in an array of topics and unregisters any topics that are not in the array and registers any topics that are not already registered.
+func (d *dispatcher) Update(ch chan interface{}, topics ...string) {
+	if ch == nil {
+		return
+	}
+
+	// Create a map of the new topics so we can check existing topics against it to see what needs to be added/removed
+	newTopicMap := make(map[string]bool)
+	for _, topic := range topics {
+		newTopicMap[topic] = true
+	}
+
+	// Lock the map so we can check if any existing subscriptions need to be removed
+	d.l.RLock()
+	topicsBySub := d.topicsBySub[ch]
+	toUnregister := make([]string, 0)
+	for topic := range topicsBySub {
+		if !newTopicMap[topic] {
+			toUnregister = append(toUnregister, topic)
+		}
+	}
+	d.l.RUnlock()
+
+	if len(toUnregister) > 0 {
+		d.Unregister(ch, toUnregister...)
+	}
+
+	// Lock again
+	d.Register(ch, topics...)
+
+}
+
 func (d *dispatcher) unregister(ch chan interface{}, topics ...string) {
 	subTopics := d.topicsBySub[ch]
 	if len(subTopics) == 0 {

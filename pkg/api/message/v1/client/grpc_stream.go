@@ -56,3 +56,12 @@ func (s *grpcStream) Close() error {
 	s.cancel()
 	return nil
 }
+
+type grpcBidiStream struct {
+	subscribe2Client messagev1.MessageApi_Subscribe2Client
+	grpcStream
+}
+
+func (s *grpcBidiStream) Send(req *messagev1.SubscribeRequest) error {
+	return s.subscribe2Client.Send(req)
+}

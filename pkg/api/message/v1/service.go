@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -153,6 +154,61 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			log.Info("service closed")
 			return nil
 		case obj := <-subC:
+			env, ok := obj.(*proto.Envelope)
+			if !ok {
+				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
+				continue
+			}
+
+			err := stream.Send(env)
+			if err != nil {
+				log.Error("sending envelope to subscriber", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
+	log := s.log.Named("subscribe2")
+	log.Debug("started")
+	defer log.Debug("stopped")
+	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
+	// See: https://github.com/xmtp/libxmtp/pull/58
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
+
+	ch := make(chan interface{})
+	defer s.dispatcher.Unregister(ch)
+
+	requestChannel := make(chan *proto.SubscribeRequest)
+	go func() {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF && err != context.Canceled {
+					log.Error("reading subscription", zap.Error(err))
+				}
+				close(requestChannel)
+				return
+			}
+			requestChannel <- req
+		}
+	}()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			log.Debug("stream closed")
+			return nil
+		case <-s.ctx.Done():
+			log.Info("service closed")
+			return nil
+		case req := <-requestChannel:
+			if req == nil {
+				continue
+			}
+			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
+			s.dispatcher.Update(ch, req.ContentTopics...)
+		case obj := <-ch:
 			env, ok := obj.(*proto.Envelope)
 			if !ok {
 				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
