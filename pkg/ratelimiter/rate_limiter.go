@@ -18,7 +18,7 @@ const (
 )
 
 type RateLimiter interface {
-	Spend(bucket string, cost uint16, isAllowListed bool) error
+	Spend(bucket string, cost uint16, isPriority bool) error
 }
 
 // Entry represents a single wallet entry in the rate limiter
@@ -31,11 +31,40 @@ type Entry struct {
 	mutex sync.Mutex
 }
 
+// Limit controls token refilling for bucket entries
+type Limit struct {
+	// Maximum number of tokens that can be accumulated
+	MaxTokens uint16
+	// Number of tokens to refill per minute
+	RatePerMinute uint16
+}
+
+func (l Limit) Refill(entry *Entry) {
+	now := time.Now()
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+	minutesSinceLastSeen := now.Sub(entry.lastSeen).Minutes()
+	if minutesSinceLastSeen > 0 {
+		// Only update the lastSeen if it has been >= 1 minute
+		// This allows for continuously sending nodes to still get credits
+		entry.lastSeen = now
+		// Convert to ints so that we can check if above MAX_UINT_16
+		additionalTokens := int(l.RatePerMinute) * int(minutesSinceLastSeen)
+		// Avoid overflows of UINT16 when new balance is above limit
+		if additionalTokens+int(entry.tokens) > MAX_UINT_16 {
+			additionalTokens = MAX_UINT_16 - int(entry.tokens)
+		}
+		entry.tokens = minUint16(entry.tokens+uint16(additionalTokens), l.MaxTokens)
+	}
+}
+
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
-	log     *zap.Logger
-	buckets map[string]*Entry
-	mutex   sync.RWMutex
+	log           *zap.Logger
+	buckets       map[string]*Entry
+	mutex         sync.RWMutex
+	PriorityLimit Limit
+	RegularLimit  Limit
 }
 
 func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
@@ -43,23 +72,23 @@ func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
 	tb.log = log.Named("ratelimiter")
 	tb.buckets = make(map[string]*Entry)
 	tb.mutex = sync.RWMutex{}
+	tb.PriorityLimit = Limit{PRIORITY_MAX_TOKENS, PRIORITY_RATE_PER_MINUTE}
+	tb.RegularLimit = Limit{REGULAR_MAX_TOKENS, REGULAR_RATE_PER_MINUTE}
 	return tb
 }
 
-func getRates(isPriority bool) (ratePerMinute uint16, maxTokens uint16) {
+func (rl *TokenBucketRateLimiter) getLimit(isPriority bool) Limit {
 	if isPriority {
-		ratePerMinute = PRIORITY_RATE_PER_MINUTE
-		maxTokens = PRIORITY_MAX_TOKENS
-	} else {
-		ratePerMinute = REGULAR_RATE_PER_MINUTE
-		maxTokens = REGULAR_MAX_TOKENS
+		return rl.PriorityLimit
 	}
-	return
+	return rl.RegularLimit
 }
 
 // Will return the entry, with items filled based on the time since last access
 func (rl *TokenBucketRateLimiter) fillAndReturnEntry(bucket string, isPriority bool) *Entry {
-	ratePerMinute, maxTokens := getRates(isPriority)
+
+	limit := rl.getLimit(isPriority)
+
 	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
 	rl.mutex.RLock()
 	currentVal, exists := rl.buckets[bucket]
@@ -67,7 +96,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(bucket string, isPriority b
 	if !exists {
 		rl.mutex.Lock()
 		currentVal = &Entry{
-			tokens:   uint16(maxTokens),
+			tokens:   uint16(limit.MaxTokens),
 			lastSeen: time.Now(),
 			mutex:    sync.Mutex{},
 		}
@@ -77,23 +106,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(bucket string, isPriority b
 		return currentVal
 	}
 
-	currentVal.mutex.Lock()
-	defer currentVal.mutex.Unlock()
-	now := time.Now()
-	minutesSinceLastSeen := now.Sub(currentVal.lastSeen).Minutes()
-	if minutesSinceLastSeen > 0 {
-		// Only update the lastSeen if it has been >= 1 minute
-		// This allows for continuously sending nodes to still get credits
-		currentVal.lastSeen = now
-		// Convert to ints so that we can check if above MAX_UINT_16
-		additionalTokens := int(ratePerMinute) * int(minutesSinceLastSeen)
-		// Avoid overflows of UINT16 when new balance is above limit
-		if additionalTokens+int(currentVal.tokens) > MAX_UINT_16 {
-			additionalTokens = MAX_UINT_16 - int(currentVal.tokens)
-		}
-		currentVal.tokens = minUint16(currentVal.tokens+uint16(additionalTokens), maxTokens)
-	}
-
+	limit.Refill(currentVal)
 	return currentVal
 }
 

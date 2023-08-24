@@ -13,6 +13,7 @@ import (
 	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messagev1api "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -690,4 +691,19 @@ func expectWalletDenied(t *testing.T, err error) {
 			"details": []interface{}{},
 		}, msg)
 	}
+}
+
+func Test_RegularRatelimits(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
+		server.authorizer.Enable = true
+		server.authorizer.Ratelimits = true
+		server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter).RegularLimit = ratelimiter.Limit{1, 0}
+		envs := makeEnvelopes(2)
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:1]})
+		require.NoError(t, err)
+		require.NotNil(t, publishRes)
+		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
+		require.Error(t, err)
+	})
 }
