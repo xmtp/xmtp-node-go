@@ -683,15 +683,13 @@ func Test_Ratelimits_Priority(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		err := server.AllowLister.Allow(ctx, data.WalletAddr)
 		require.NoError(t, err)
-		server.authorizer.Enable = true
 		server.authorizer.Ratelimits = true
-		server.authorizer.AllowLists = true
-		server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter).PriorityLimit = ratelimiter.Limit{1, 0}
+		server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter).PriorityLimit = ratelimiter.Limit{MaxTokens: 1, RatePerMinute: 0}
 		envs := makeEnvelopes(2)
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:1]})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
 		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
 	})
 }
@@ -699,14 +697,13 @@ func Test_Ratelimits_Priority(t *testing.T) {
 func Test_Ratelimits_Regular(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
-		server.authorizer.Enable = true
 		server.authorizer.Ratelimits = true
-		server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter).RegularLimit = ratelimiter.Limit{1, 0}
+		server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter).RegularLimit = ratelimiter.Limit{MaxTokens: 1, RatePerMinute: 0}
 		envs := makeEnvelopes(2)
 		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:1]})
 		require.NoError(t, err)
 		require.NotNil(t, publishRes)
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
+		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
 		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
 
 	})

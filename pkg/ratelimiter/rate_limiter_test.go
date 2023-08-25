@@ -24,7 +24,7 @@ func TestSpend(t *testing.T) {
 	require.NoError(t, err1)
 	err2 := rl.Spend(walletAddress, 1, false)
 	require.Error(t, err2)
-	if err2.Error() != "rate_limit_exceeded" {
+	if err2.Error() != "rate limit exceeded" {
 		t.Error("Incorrect error")
 	}
 }
