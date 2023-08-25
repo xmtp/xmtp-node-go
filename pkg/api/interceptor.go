@@ -13,6 +13,7 @@ import (
 
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
@@ -51,7 +52,7 @@ func (wa *WalletAuthorizer) Unary() grpc.UnaryServerInterceptor {
 		wallet, authErr := wa.getWallet(ctx)
 
 		if wa.Ratelimits {
-			if err := wa.applyLimits(ctx, req, wallet); err != nil {
+			if err := wa.applyLimits(ctx, info.FullMethod, req, wallet); err != nil {
 				return nil, err
 			}
 		}
@@ -78,7 +79,7 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 		if wa.Ratelimits {
 			ctx := stream.Context()
 			wallet, _ := wa.getWallet(ctx)
-			if err := wa.applyLimits(ctx, nil, wallet); err != nil {
+			if err := wa.applyLimits(ctx, info.FullMethod, nil, wallet); err != nil {
 				return err
 			}
 		}
@@ -152,7 +153,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wall
 	return nil
 }
 
-func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wallet types.WalletAddr) error {
+func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, req interface{}, wallet types.WalletAddr) error {
 	// * for limit exhaustion return status.Errorf(codes.ResourceExhausted, ...)
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
 
@@ -163,28 +164,27 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, req interface{}, wa
 	}
 
 	// with no wallet apply regular limits
-	var priority bool
+	var isPriority bool
 	if len(wallet) > 0 && wa.AllowLists {
-		priority = wa.AllowLister.IsAllowListed(wallet.String())
+		isPriority = wa.AllowLister.IsAllowListed(wallet.String())
 	}
-
-	// default request cost is 1,
-	// note that nil req (subscription stream) has cost 1 as well
 	cost := 1
+	limitType := ratelimiter.DEFAULT
 	switch req := req.(type) {
 	case *messagev1.PublishRequest:
 		cost = len(req.Envelopes)
+		limitType = ratelimiter.PUBLISH
 	case *messagev1.BatchQueryRequest:
 		cost = len(req.Requests)
 	}
 	// need to separate the IP buckets between priority and regular wallets
 	var bucket string
-	if priority {
-		bucket = "P" + ip
+	if isPriority {
+		bucket = "P" + ip + string(limitType)
 	} else {
-		bucket = "R" + ip
+		bucket = "R" + ip + string(limitType)
 	}
-	err := wa.Limiter.Spend(bucket, uint16(cost), priority)
+	err := wa.Limiter.Spend(limitType, bucket, uint16(cost), isPriority)
 	if err == nil {
 		return nil
 	}

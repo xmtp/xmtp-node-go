@@ -20,9 +20,9 @@ func TestSpend(t *testing.T) {
 		mutex:    sync.Mutex{},
 	}
 
-	err1 := rl.Spend(walletAddress, 1, false)
+	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.NoError(t, err1)
-	err2 := rl.Spend(walletAddress, 1, false)
+	err2 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.Error(t, err2)
 	if err2.Error() != "rate limit exceeded" {
 		t.Error("Incorrect error")
@@ -33,23 +33,24 @@ func TestSpend(t *testing.T) {
 func TestSpendInitialize(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	entry := rl.fillAndReturnEntry(walletAddress, false)
-	require.Equal(t, entry.tokens, REGULAR_MAX_TOKENS)
+	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, false)
+	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS)
 }
 
 // Set the clock back 1 minute and ensure that 1 item has been added to the bucket
 func TestSpendWithTime(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
+	rl.Limits[DEFAULT] = &Limit{100, 1}
 	rl.buckets[walletAddress] = &Entry{
 		// Set the last seen to 1 minute ago
 		lastSeen: time.Now().Add(-1 * time.Minute),
 		tokens:   uint16(0),
 		mutex:    sync.Mutex{},
 	}
-	err1 := rl.Spend(walletAddress, 1, false)
+	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.NoError(t, err1)
-	err2 := rl.Spend(walletAddress, 1, false)
+	err2 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.Error(t, err2)
 }
 
@@ -63,8 +64,8 @@ func TestSpendMaxBucket(t *testing.T) {
 		tokens:   uint16(0),
 		mutex:    sync.Mutex{},
 	}
-	entry := rl.fillAndReturnEntry(walletAddress, false)
-	require.Equal(t, entry.tokens, REGULAR_MAX_TOKENS)
+	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, false)
+	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS)
 }
 
 // Ensure that the allow list is being correctly applied
@@ -72,13 +73,13 @@ func TestSpendAllowListed(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
 	rl.buckets[walletAddress] = &Entry{
-		// Set last seen to 500 minutes ago
-		lastSeen: time.Now().Add(-500 * time.Minute),
+		// Set last seen to 5 minutes ago
+		lastSeen: time.Now().Add(-5 * time.Minute),
 		tokens:   uint16(0),
 		mutex:    sync.Mutex{},
 	}
-	entry := rl.fillAndReturnEntry(walletAddress, true)
-	require.Equal(t, entry.tokens, uint16(500*PRIORITY_RATE_PER_MINUTE))
+	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
+	require.Equal(t, entry.tokens, uint16(5*DEFAULT_RATE_PER_MINUTE*PRIORITY_MULTIPLIER))
 }
 
 func TestMaxUint16(t *testing.T) {
@@ -91,8 +92,8 @@ func TestMaxUint16(t *testing.T) {
 		mutex:    sync.Mutex{},
 	}
 
-	entry := rl.fillAndReturnEntry(walletAddress, true)
-	require.Equal(t, entry.tokens, uint16(PRIORITY_MAX_TOKENS))
+	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
+	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS*PRIORITY_MULTIPLIER)
 }
 
 // Ensures that the map can be accessed concurrently
@@ -100,16 +101,16 @@ func TestSpendConcurrent(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < int(PUBLISH_MAX_TOKENS); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = rl.Spend(walletAddress, 1, false)
+			_ = rl.Spend(PUBLISH, walletAddress, 1, false)
 		}()
 	}
 
 	wg.Wait()
 
-	entry := rl.fillAndReturnEntry(walletAddress, false)
+	entry := rl.fillAndReturnEntry(PUBLISH, walletAddress, false)
 	require.Equal(t, entry.tokens, uint16(0))
 }
