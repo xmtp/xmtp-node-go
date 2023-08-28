@@ -1,7 +1,6 @@
 package ratelimiter
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -100,23 +99,38 @@ func TestSpendConcurrent(t *testing.T) {
 }
 
 func TestBucketExpiration(t *testing.T) {
+	expiresAfter := 100 * time.Millisecond
+	sweepInterval := 60 * time.Millisecond
+
 	logger, _ := zap.NewDevelopment()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.Limits[DEFAULT] = &Limit{2, 0}
-	// expire entries after 100ms, sweep every 50ms
-	go rl.Janitor(ctx, time.Millisecond*50, time.Millisecond*100)
-	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
-	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false))
-	time.Sleep(50 * time.Millisecond)
-	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false))
-	time.Sleep(50 * time.Millisecond)
-	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false))
-	time.Sleep(50 * time.Millisecond)
-	// ip2 has been refreshed every 50ms so it should still be out of tokens
-	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false))
+	rl.Limits[DEFAULT] = &Limit{2, 0} // 2 tokens, no refill
+
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 add
+	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 add
+
+	time.Sleep(sweepInterval)
+	require.Equal(t, 0, rl.sweep(expiresAfter)) // sweep bucket2 and swap
+
+	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 refresh
+	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false)) // bucket2 add
+
+	time.Sleep(sweepInterval)
+	require.Equal(t, 1, rl.sweep(expiresAfter)) // sweep bucket1 and swap, delete ip1
+
+	// ip2 has been refreshed every 60ms so it should still be out of tokens
+	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 refresh
 	// ip1 entry should have expired by now, so we should have 2 tokens again
-	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
-	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 add
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 refresh
+	require.Error(t, rl.Spend(DEFAULT, "ip1", 1, false))   // bucket1 refresh
+
+	time.Sleep(sweepInterval)
+	require.Equal(t, 1, rl.sweep(expiresAfter)) // sweep bucket2 and swap, delete ip3
+
+	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false)) // ip2 should still be out of tokens
+	// ip3 should have expired now and we should have 2 tokens again
+	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false))
+	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false))
+	require.Error(t, rl.Spend(DEFAULT, "ip3", 1, false))
 }

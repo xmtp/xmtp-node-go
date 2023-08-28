@@ -50,7 +50,7 @@ func (b *Buckets) getAndRefill(bucket string, limit *Limit, multiplier uint16, c
 	return currentVal
 }
 
-func (b *Buckets) deleteExpired(expiresAfter time.Duration) {
+func (b *Buckets) deleteExpired(expiresAfter time.Duration) (deleted int) {
 	// Use RLock to iterate over the map
 	// to allow concurrent reads
 	b.mutex.RLock()
@@ -67,15 +67,15 @@ func (b *Buckets) deleteExpired(expiresAfter time.Duration) {
 	b.log.Info("found expired buckets", zap.Int("count", len(expired)))
 	// Use Lock for individual deletes to avoid prolonged
 	// lockout for readers.
-	count := 0
 	for _, bucket := range expired {
 		b.mutex.Lock()
 		// check lastSeen again in case it was updated in the meantime.
 		if entry, exists := b.buckets[bucket]; exists && time.Since(entry.lastSeen) > expiresAfter {
 			delete(b.buckets, bucket)
-			count++
+			deleted++
 		}
 		b.mutex.Unlock()
 	}
-	b.log.Info("deleted expired buckets", zap.Int("count", count))
+	b.log.Info("deleted expired buckets", zap.Int("count", deleted))
+	return deleted
 }

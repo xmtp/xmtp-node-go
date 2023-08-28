@@ -136,11 +136,16 @@ func (rl *TokenBucketRateLimiter) Janitor(ctx context.Context, sweepInterval, ex
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rl.buckets2.deleteExpired(expiresAfter)
-			rl.buckets1, rl.buckets2 = rl.buckets2, rl.buckets1
-			rl.log.Info("swapped buckets")
+			rl.sweep(expiresAfter)
 		}
 	}
+}
+
+func (rl *TokenBucketRateLimiter) sweep(expiresAfter time.Duration) int {
+	deleted := rl.buckets2.deleteExpired(expiresAfter)
+	rl.buckets1, rl.buckets2 = rl.buckets2, rl.buckets1
+	rl.log.Info("swapped buckets")
+	return deleted
 }
 
 func minUint16(x, y uint16) uint16 {
