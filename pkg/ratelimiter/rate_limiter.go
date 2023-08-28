@@ -70,6 +70,7 @@ func (l Limit) Refill(entry *Entry, multiplier uint16) {
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
 	log                *zap.Logger
+	mutex              sync.RWMutex
 	newBuckets         *Buckets // buckets that can be added to
 	oldBuckets         *Buckets // buckets to be swept for expired entries
 	PriorityMultiplier uint16
@@ -104,10 +105,14 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 	if isPriority {
 		multiplier = rl.PriorityMultiplier
 	}
+	rl.mutex.RLock()
 	if entry := rl.oldBuckets.getAndRefill(bucket, limit, multiplier, false); entry != nil {
+		rl.mutex.RUnlock()
 		return entry
 	}
-	return rl.newBuckets.getAndRefill(bucket, limit, multiplier, true)
+	entry := rl.newBuckets.getAndRefill(bucket, limit, multiplier, true)
+	rl.mutex.RUnlock()
+	return entry
 }
 
 // The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
@@ -140,8 +145,11 @@ func (rl *TokenBucketRateLimiter) Janitor(ctx context.Context, sweepInterval, ex
 }
 
 func (rl *TokenBucketRateLimiter) sweepAndSwap(expiresAfter time.Duration) (deletedEntries int) {
+	// Only the janitor writes to oldBuckets (see below), so we shouldn't need to rlock it here.
 	deletedEntries = rl.oldBuckets.deleteExpired(expiresAfter)
+	rl.mutex.Lock()
 	rl.newBuckets, rl.oldBuckets = rl.oldBuckets, rl.newBuckets
+	rl.mutex.Unlock()
 	rl.newBuckets.log.Info("became new buckets")
 	rl.oldBuckets.log.Info("became old buckets")
 	return deletedEntries
