@@ -136,3 +136,28 @@ func TestBucketExpiration(t *testing.T) {
 	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false)) // bucket2 refresh
 	require.Error(t, rl.Spend(DEFAULT, "ip3", 1, false))   // bucket2 refresh
 }
+
+func TestBucketExpirationIntegrity(t *testing.T) {
+	expiresAfter := 10 * time.Millisecond
+	logger, _ := zap.NewDevelopment()
+	rl := NewTokenBucketRateLimiter(logger)
+	rl.Limits[DEFAULT] = &Limit{2, 0} // 2 tokens, no refill
+
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 add
+
+	require.Equal(t, 0, rl.sweepAndSwap(expiresAfter)) // sweep bucket2 and swap
+
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 refresh
+	require.Error(t, rl.Spend(DEFAULT, "ip1", 1, false))   // should be out of tokens now
+
+	require.Equal(t, 0, rl.sweepAndSwap(expiresAfter)) // sweep bucket1 and swap
+
+	require.Error(t, rl.Spend(DEFAULT, "ip1", 1, false)) // should still be out of tokens
+
+	require.Equal(t, 0, rl.sweepAndSwap(expiresAfter)) // sweep bucket2 and swap
+
+	time.Sleep(2 * expiresAfter)
+	require.Equal(t, 1, rl.sweepAndSwap(expiresAfter)) // sweep bucket1 and swap, delete ip1
+
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 add
+}
