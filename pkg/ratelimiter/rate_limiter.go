@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -68,9 +69,11 @@ func (l Limit) Refill(entry *Entry, multiplier uint16) {
 
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
-	log                *zap.Logger
-	buckets            map[string]*Entry
-	mutex              sync.RWMutex
+	log *zap.Logger
+	// buckets that can be added to
+	buckets1 *Buckets
+	// buckets being GCed
+	buckets2           *Buckets
 	PriorityMultiplier uint16
 	Limits             map[LimitType]*Limit
 }
@@ -79,8 +82,8 @@ func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
 	tb := new(TokenBucketRateLimiter)
 	tb.log = log.Named("ratelimiter")
 	// TODO: need to periodically clear out expired items to avoid unlimited growth of the map.
-	tb.buckets = make(map[string]*Entry)
-	tb.mutex = sync.RWMutex{}
+	tb.buckets1 = NewBuckets(log.Named("buckets1"))
+	tb.buckets2 = NewBuckets(log.Named("buckets2"))
 	tb.PriorityMultiplier = PRIORITY_MULTIPLIER
 	tb.Limits = map[LimitType]*Limit{
 		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
@@ -103,25 +106,10 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 	if isPriority {
 		multiplier = rl.PriorityMultiplier
 	}
-	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
-	rl.mutex.RLock()
-	currentVal, exists := rl.buckets[bucket]
-	rl.mutex.RUnlock()
-	if !exists {
-		rl.mutex.Lock()
-		currentVal = &Entry{
-			tokens:   uint16(limit.MaxTokens * multiplier),
-			lastSeen: time.Now(),
-			mutex:    sync.Mutex{},
-		}
-		rl.buckets[bucket] = currentVal
-		rl.mutex.Unlock()
-
-		return currentVal
+	if entry := rl.buckets2.getAndRefill(bucket, limit, multiplier, false); entry != nil {
+		return entry
 	}
-
-	limit.Refill(currentVal, multiplier)
-	return currentVal
+	return rl.buckets1.getAndRefill(bucket, limit, multiplier, true)
 }
 
 // The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
@@ -138,6 +126,21 @@ func (rl *TokenBucketRateLimiter) Spend(limitType LimitType, bucket string, cost
 	entry.tokens = entry.tokens - cost
 	log.Debug("Spend allowed. bucket is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
 	return nil
+}
+
+func (rl *TokenBucketRateLimiter) Janitor(ctx context.Context, sweepInterval, expiresAfter time.Duration) {
+	ticker := time.NewTicker(sweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rl.buckets2.deleteExpired(expiresAfter)
+			rl.buckets1, rl.buckets2 = rl.buckets2, rl.buckets1
+			rl.log.Info("swapped buckets")
+		}
+	}
 }
 
 func minUint16(x, y uint16) uint16 {

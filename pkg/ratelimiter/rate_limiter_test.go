@@ -14,11 +14,7 @@ const walletAddress = "0x1234"
 func TestSpend(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.buckets[walletAddress] = &Entry{
-		lastSeen: time.Now(),
-		tokens:   uint16(1),
-		mutex:    sync.Mutex{},
-	}
+	rl.buckets1.getAndRefill(walletAddress, &Limit{1, 0}, 1, true)
 
 	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.NoError(t, err1)
@@ -42,12 +38,9 @@ func TestSpendWithTime(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
 	rl.Limits[DEFAULT] = &Limit{100, 1}
-	rl.buckets[walletAddress] = &Entry{
-		// Set the last seen to 1 minute ago
-		lastSeen: time.Now().Add(-1 * time.Minute),
-		tokens:   uint16(0),
-		mutex:    sync.Mutex{},
-	}
+	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	// Set the last seen to 1 minute ago
+	entry.lastSeen = time.Now().Add(-1 * time.Minute)
 	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.NoError(t, err1)
 	err2 := rl.Spend(DEFAULT, walletAddress, 1, false)
@@ -58,13 +51,10 @@ func TestSpendWithTime(t *testing.T) {
 func TestSpendMaxBucket(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.buckets[walletAddress] = &Entry{
-		// Set last seen to 500 minutes ago
-		lastSeen: time.Now().Add(-500 * time.Minute),
-		tokens:   uint16(0),
-		mutex:    sync.Mutex{},
-	}
-	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, false)
+	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	// Set last seen to 500 minutes ago
+	entry.lastSeen = time.Now().Add(-500 * time.Minute)
+	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, false)
 	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS)
 }
 
@@ -72,27 +62,20 @@ func TestSpendMaxBucket(t *testing.T) {
 func TestSpendAllowListed(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.buckets[walletAddress] = &Entry{
-		// Set last seen to 5 minutes ago
-		lastSeen: time.Now().Add(-5 * time.Minute),
-		tokens:   uint16(0),
-		mutex:    sync.Mutex{},
-	}
-	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
+	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	// Set last seen to 5 minutes ago
+	entry.lastSeen = time.Now().Add(-5 * time.Minute)
+	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
 	require.Equal(t, entry.tokens, uint16(5*DEFAULT_RATE_PER_MINUTE*PRIORITY_MULTIPLIER))
 }
 
 func TestMaxUint16(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.buckets[walletAddress] = &Entry{
-		// Set last seen to 1 million minutes ago
-		lastSeen: time.Now().Add(-1000000 * time.Minute),
-		tokens:   uint16(0),
-		mutex:    sync.Mutex{},
-	}
-
-	entry := rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
+	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	// Set last seen to 1 million minutes ago
+	entry.lastSeen = time.Now().Add(-1000000 * time.Minute)
+	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
 	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS*PRIORITY_MULTIPLIER)
 }
 

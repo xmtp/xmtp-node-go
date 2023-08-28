@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -87,9 +88,13 @@ func (s *Server) startGRPC() error {
 	stream = append(stream, telemetryInterceptor.Stream())
 
 	if s.Config.Authn.Enable {
+		limiter := ratelimiter.NewTokenBucketRateLimiter(s.Log)
+		// Expire buckets after 6 hours of inactivity,
+		// sweep for expired buckets every hour.
+		go limiter.Janitor(s.ctx, time.Hour, 6*time.Hour)
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
 			AuthnOptions: s.Config.Authn,
-			Limiter:      ratelimiter.NewTokenBucketRateLimiter(s.Log),
+			Limiter:      limiter,
 			AllowLister:  s.Config.AllowLister,
 			Log:          s.Log.Named("authn"),
 		})
