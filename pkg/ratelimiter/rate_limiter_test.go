@@ -156,7 +156,7 @@ func TestBucketExpirationIntegrity(t *testing.T) {
 
 	require.Equal(t, 0, rl.sweepAndSwap(expiresAfter)) // sweep bucket2 and swap
 
-	time.Sleep(2 * expiresAfter)
+	time.Sleep(2 * expiresAfter)                       // wait until ip1 expires
 	require.Equal(t, 1, rl.sweepAndSwap(expiresAfter)) // sweep bucket1 and swap, delete ip1
 
 	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false)) // bucket1 add
