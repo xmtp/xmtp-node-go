@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -96,4 +97,26 @@ func TestSpendConcurrent(t *testing.T) {
 
 	entry := rl.fillAndReturnEntry(PUBLISH, walletAddress, false)
 	require.Equal(t, entry.tokens, uint16(0))
+}
+
+func TestBucketExpiration(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rl := NewTokenBucketRateLimiter(logger)
+	rl.Limits[DEFAULT] = &Limit{2, 0}
+	// expire entries after 100ms, sweep every 50ms
+	go rl.Janitor(ctx, time.Millisecond*50, time.Millisecond*100)
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
+	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false))
+	time.Sleep(50 * time.Millisecond)
+	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false))
+	time.Sleep(50 * time.Millisecond)
+	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false))
+	time.Sleep(50 * time.Millisecond)
+	// ip2 has been refreshed every 50ms so it should still be out of tokens
+	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false))
+	// ip1 entry should have expired by now, so we should have 2 tokens again
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
+	require.NoError(t, rl.Spend(DEFAULT, "ip1", 1, false))
 }
