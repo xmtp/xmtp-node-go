@@ -53,13 +53,13 @@ func (b *Buckets) deleteExpired(expiresAfter time.Duration) {
 	// Use RLock to iterate over the map
 	// to allow concurrent reads
 	b.mutex.RLock()
-	defer b.mutex.RUnlock()
 	var expired []string
 	for bucket, entry := range b.buckets {
 		if time.Since(entry.lastSeen) > expiresAfter {
 			expired = append(expired, bucket)
 		}
 	}
+	b.mutex.RUnlock()
 	if len(expired) == 0 {
 		return
 	}
