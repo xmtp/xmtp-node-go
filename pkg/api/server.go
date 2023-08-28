@@ -89,11 +89,11 @@ func (s *Server) startGRPC() error {
 
 	if s.Config.Authn.Enable {
 		limiter := ratelimiter.NewTokenBucketRateLimiter(s.Log)
-		// Expire buckets after 6 hours of inactivity,
-		// sweep for expired buckets every hour.
+		// Expire buckets after 1 hour of inactivity,
+		// sweep for expired buckets every 10 minutes.
 		// Note: entry expiration should be at least some multiple of
-		// maximum limit max / limit rate minutes.
-		go limiter.Janitor(s.ctx, time.Hour, 6*time.Hour)
+		// maximum (limit max / limit rate) minutes.
+		go limiter.Janitor(s.ctx, 10*time.Minute, 1*time.Hour)
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
 			AuthnOptions: s.Config.Authn,
 			Limiter:      limiter,

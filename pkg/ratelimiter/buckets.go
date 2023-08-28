@@ -62,7 +62,7 @@ func (b *Buckets) deleteExpired(expiresAfter time.Duration) (deleted int) {
 	}
 	b.mutex.RUnlock()
 	if len(expired) == 0 {
-		return
+		return deleted
 	}
 	b.log.Info("found expired buckets", zap.Int("count", len(expired)))
 	// Use Lock for individual deletes to avoid prolonged

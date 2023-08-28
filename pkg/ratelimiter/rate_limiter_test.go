@@ -14,7 +14,7 @@ const walletAddress = "0x1234"
 func TestSpend(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	rl.buckets1.getAndRefill(walletAddress, &Limit{1, 0}, 1, true)
+	rl.newBuckets.getAndRefill(walletAddress, &Limit{1, 0}, 1, true)
 
 	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.NoError(t, err1)
@@ -38,7 +38,7 @@ func TestSpendWithTime(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
 	rl.Limits[DEFAULT] = &Limit{100, 1}
-	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	entry := rl.newBuckets.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
 	// Set the last seen to 1 minute ago
 	entry.lastSeen = time.Now().Add(-1 * time.Minute)
 	err1 := rl.Spend(DEFAULT, walletAddress, 1, false)
@@ -51,7 +51,7 @@ func TestSpendWithTime(t *testing.T) {
 func TestSpendMaxBucket(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	entry := rl.newBuckets.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
 	// Set last seen to 500 minutes ago
 	entry.lastSeen = time.Now().Add(-500 * time.Minute)
 	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, false)
@@ -62,7 +62,7 @@ func TestSpendMaxBucket(t *testing.T) {
 func TestSpendAllowListed(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	entry := rl.newBuckets.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
 	// Set last seen to 5 minutes ago
 	entry.lastSeen = time.Now().Add(-5 * time.Minute)
 	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
@@ -72,7 +72,7 @@ func TestSpendAllowListed(t *testing.T) {
 func TestMaxUint16(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	rl := NewTokenBucketRateLimiter(logger)
-	entry := rl.buckets1.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	entry := rl.newBuckets.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
 	// Set last seen to 1 million minutes ago
 	entry.lastSeen = time.Now().Add(-1000000 * time.Minute)
 	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
@@ -99,6 +99,7 @@ func TestSpendConcurrent(t *testing.T) {
 }
 
 func TestBucketExpiration(t *testing.T) {
+	// Set things up so that entries are expired after two sweep intervals
 	expiresAfter := 100 * time.Millisecond
 	sweepInterval := 60 * time.Millisecond
 
@@ -110,13 +111,13 @@ func TestBucketExpiration(t *testing.T) {
 	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 add
 
 	time.Sleep(sweepInterval)
-	require.Equal(t, 0, rl.sweep(expiresAfter)) // sweep bucket2 and swap
+	require.Equal(t, 0, rl.sweepAndSwap(expiresAfter)) // sweep bucket2 and swap
 
 	require.NoError(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 refresh
 	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false)) // bucket2 add
 
 	time.Sleep(sweepInterval)
-	require.Equal(t, 1, rl.sweep(expiresAfter)) // sweep bucket1 and swap, delete ip1
+	require.Equal(t, 1, rl.sweepAndSwap(expiresAfter)) // sweep bucket1 and swap, delete ip1
 
 	// ip2 has been refreshed every 60ms so it should still be out of tokens
 	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 refresh
@@ -126,11 +127,12 @@ func TestBucketExpiration(t *testing.T) {
 	require.Error(t, rl.Spend(DEFAULT, "ip1", 1, false))   // bucket1 refresh
 
 	time.Sleep(sweepInterval)
-	require.Equal(t, 1, rl.sweep(expiresAfter)) // sweep bucket2 and swap, delete ip3
+	require.Equal(t, 1, rl.sweepAndSwap(expiresAfter)) // sweep bucket2 and swap, delete ip3
 
-	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false)) // ip2 should still be out of tokens
+	// ip2 should still be out of tokens
+	require.Error(t, rl.Spend(DEFAULT, "ip2", 1, false)) // bucket1 refresh
 	// ip3 should have expired now and we should have 2 tokens again
-	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false))
-	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false))
-	require.Error(t, rl.Spend(DEFAULT, "ip3", 1, false))
+	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false)) // bucket2 add
+	require.NoError(t, rl.Spend(DEFAULT, "ip3", 1, false)) // bucket2 refresh
+	require.Error(t, rl.Spend(DEFAULT, "ip3", 1, false))   // bucket2 refresh
 }

@@ -69,11 +69,9 @@ func (l Limit) Refill(entry *Entry, multiplier uint16) {
 
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
-	log *zap.Logger
-	// buckets that can be added to
-	buckets1 *Buckets
-	// buckets being GCed
-	buckets2           *Buckets
+	log                *zap.Logger
+	newBuckets         *Buckets // buckets that can be added to
+	oldBuckets         *Buckets // buckets to be swept for expired entries
 	PriorityMultiplier uint16
 	Limits             map[LimitType]*Limit
 }
@@ -82,8 +80,8 @@ func NewTokenBucketRateLimiter(log *zap.Logger) *TokenBucketRateLimiter {
 	tb := new(TokenBucketRateLimiter)
 	tb.log = log.Named("ratelimiter")
 	// TODO: need to periodically clear out expired items to avoid unlimited growth of the map.
-	tb.buckets1 = NewBuckets(log.Named("buckets1"))
-	tb.buckets2 = NewBuckets(log.Named("buckets2"))
+	tb.newBuckets = NewBuckets(log.Named("buckets1"))
+	tb.oldBuckets = NewBuckets(log.Named("buckets2"))
 	tb.PriorityMultiplier = PRIORITY_MULTIPLIER
 	tb.Limits = map[LimitType]*Limit{
 		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
@@ -106,10 +104,10 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 	if isPriority {
 		multiplier = rl.PriorityMultiplier
 	}
-	if entry := rl.buckets2.getAndRefill(bucket, limit, multiplier, false); entry != nil {
+	if entry := rl.oldBuckets.getAndRefill(bucket, limit, multiplier, false); entry != nil {
 		return entry
 	}
-	return rl.buckets1.getAndRefill(bucket, limit, multiplier, true)
+	return rl.newBuckets.getAndRefill(bucket, limit, multiplier, true)
 }
 
 // The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
@@ -136,16 +134,17 @@ func (rl *TokenBucketRateLimiter) Janitor(ctx context.Context, sweepInterval, ex
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rl.sweep(expiresAfter)
+			rl.sweepAndSwap(expiresAfter)
 		}
 	}
 }
 
-func (rl *TokenBucketRateLimiter) sweep(expiresAfter time.Duration) int {
-	deleted := rl.buckets2.deleteExpired(expiresAfter)
-	rl.buckets1, rl.buckets2 = rl.buckets2, rl.buckets1
-	rl.log.Info("swapped buckets")
-	return deleted
+func (rl *TokenBucketRateLimiter) sweepAndSwap(expiresAfter time.Duration) (deletedEntries int) {
+	deletedEntries = rl.oldBuckets.deleteExpired(expiresAfter)
+	rl.newBuckets, rl.oldBuckets = rl.oldBuckets, rl.newBuckets
+	rl.newBuckets.log.Info("became new buckets")
+	rl.oldBuckets.log.Info("became old buckets")
+	return deletedEntries
 }
 
 func minUint16(x, y uint16) uint16 {
