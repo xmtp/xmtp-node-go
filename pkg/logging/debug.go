@@ -27,13 +27,13 @@ func IfDebug(field zap.Field) zap.Field {
 }
 
 // ToggleDebugLevel toggles the log level between DEBUG and INFO level.
-func ToggleDebugLevel() {
+func ToggleDebugLevel() error {
 	levelWaku := "DEBUG"
 	levelLibP2P := libp2p.LevelDebug
 	if IsDebugLevel() {
 		levelWaku = "INFO"
 		levelLibP2P = libp2p.LevelInfo
 	}
-	_ = waku.SetLogLevel(levelWaku)
 	libp2p.SetAllLoggers(levelLibP2P)
+	return waku.SetLogLevel(levelWaku)
 }
