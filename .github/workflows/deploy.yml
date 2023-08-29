@@ -2,7 +2,7 @@ name: Deploy Nodes
 on:
   push:
     branches:
-      - main
+      - ip-rate-limits
 jobs:
   deploy:
     concurrency: main
@@ -43,12 +43,3 @@ jobs:
           variable-value: ${{ steps.push.outputs.docker_image }}
           variable-value-required-prefix: "xmtp/node-go@sha256:"
 
-      - name: Deploy (production)
-        uses: xmtp-labs/terraform-deployer@v1
-        with:
-          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
-          terraform-org: xmtp
-          terraform-workspace: production
-          variable-name: xmtp_node_image
-          variable-value: ${{ steps.push.outputs.docker_image }}
-          variable-value-required-prefix: "xmtp/node-go@sha256:"
