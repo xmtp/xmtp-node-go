@@ -3,9 +3,11 @@ package metrics
 import (
 	"context"
 
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	"go.uber.org/zap"
 )
 
 var bucketsNameKey = newTagKey("name")
@@ -20,7 +22,12 @@ var ratelimiterBucketsGaugeView = &view.View{
 }
 
 func EmitRatelimiterBucketsSize(ctx context.Context, name string, size int) {
-	recordWithTags(ctx, []tag.Mutator{tag.Insert(topicCategoryTag, name)}, ratelimiterBucketsGaugeMeasure.M(int64(size)))
+	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(topicCategoryTag, name)}, ratelimiterBucketsGaugeMeasure.M(int64(size)))
+	if err != nil {
+		logging.From(ctx).Warn("recording metric",
+			zap.String("metric", ratelimiterBucketsGaugeMeasure.Name()),
+			zap.Error(err))
+	}
 }
 
 var ratelimiterBucketsDeletedCounterMeasure = stats.Int64("xmtp_ratelimiter_entries_deleted", "Count of deleted entries from ratelimiter buckets map", stats.UnitDimensionless)
@@ -33,5 +40,10 @@ var ratelimiterBucketsDeletedCounterView = &view.View{
 }
 
 func EmitRatelimiterDeletedEntries(ctx context.Context, name string, count int) {
-	recordWithTags(ctx, []tag.Mutator{tag.Insert(topicCategoryTag, name)}, ratelimiterBucketsGaugeMeasure.M(int64(count)))
+	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(topicCategoryTag, name)}, ratelimiterBucketsGaugeMeasure.M(int64(count)))
+	if err != nil {
+		logging.From(ctx).Warn("recording metric",
+			zap.String("metric", ratelimiterBucketsDeletedCounterMeasure.Name()),
+			zap.Error(err))
+	}
 }
