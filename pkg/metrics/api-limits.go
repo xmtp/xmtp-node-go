@@ -40,7 +40,7 @@ var ratelimiterBucketsDeletedCounterView = &view.View{
 }
 
 func EmitRatelimiterDeletedEntries(ctx context.Context, name string, count int) {
-	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(bucketsNameKey, name)}, ratelimiterBucketsGaugeMeasure.M(int64(count)))
+	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(bucketsNameKey, name)}, ratelimiterBucketsDeletedCounterMeasure.M(int64(count)))
 	if err != nil {
 		logging.From(ctx).Warn("recording metric",
 			zap.String("metric", ratelimiterBucketsDeletedCounterMeasure.Name()),

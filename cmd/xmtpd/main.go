@@ -14,6 +14,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/utils"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -149,6 +150,16 @@ func main() {
 		s.WaitForShutdown()
 		doneC <- true
 	})
+
+	// Toggle debug level on SIGUSR1
+	sigToggleC := make(chan os.Signal, 1)
+	signal.Notify(sigToggleC, syscall.SIGUSR1)
+	go func() {
+		for range sigToggleC {
+			log.Info("toggling debug level")
+			logging.ToggleDebugLevel()
+		}
+	}()
 
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC,
