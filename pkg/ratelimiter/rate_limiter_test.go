@@ -21,9 +21,7 @@ func TestSpend(t *testing.T) {
 	require.NoError(t, err1)
 	err2 := rl.Spend(DEFAULT, walletAddress, 1, false)
 	require.Error(t, err2)
-	if err2.Error() != "rate limit exceeded" {
-		t.Error("Incorrect error")
-	}
+	require.Equal(t, "1 exceeds rate limit 0x1234", err2.Error())
 }
 
 // Ensure that new entries are created for previously unseen wallets

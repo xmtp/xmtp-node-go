@@ -2,7 +2,7 @@ package ratelimiter
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -123,9 +123,16 @@ func (rl *TokenBucketRateLimiter) Spend(limitType LimitType, bucket string, cost
 	entry := rl.fillAndReturnEntry(limitType, bucket, isPriority)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
-	log := rl.log.With(logging.String("bucket", bucket))
+	log := rl.log.With(
+		logging.String("bucket", bucket),
+		logging.String("limitType", string(limitType)),
+		logging.Bool("isPriority", isPriority),
+		logging.Int("cost", int(cost)))
 	if entry.tokens < cost {
-		return errors.New("rate limit exceeded")
+		// Normally error strings should be fixed, but this error gets passed down to clients,
+		// so we want to include more information for debugging purposes.
+		// grpc Status has details in theory, but it seems messy to use, we may want to reconsider.
+		return fmt.Errorf("%d exceeds rate limit %s", cost, bucket)
 	}
 
 	entry.tokens = entry.tokens - cost

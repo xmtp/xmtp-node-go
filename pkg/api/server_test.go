@@ -772,7 +772,16 @@ func Test_Ratelimits_Regular(t *testing.T) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:1]})
 		require.NoError(t, err)
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[1:2]})
-		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
+		require.Error(t, err)
+		errMsg := "1 exceeds rate limit R"
+		if _, ok := status.FromError(err); ok {
+			// GRPC
+			errMsg += "ip_unknownPUB"
+		} else {
+			// HTTP
+			errMsg += "127.0.0.1PUB"
+		}
+		requireErrorEqual(t, err, codes.ResourceExhausted, errMsg)
 		// check that Query is not affected by publish quota
 		_, err = client.Query(ctx, &messageV1.QueryRequest{ContentTopics: []string{"topic"}})
 		require.NoError(t, err)
@@ -798,7 +807,16 @@ func Test_Ratelimits_Priority(t *testing.T) {
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:2]})
 		require.NoError(t, err)
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[2:3]})
-		requireErrorEqual(t, err, codes.ResourceExhausted, "rate limit exceeded")
+		require.Error(t, err)
+		errMsg := "1 exceeds rate limit P"
+		if _, ok := status.FromError(err); ok {
+			// GRPC
+			errMsg += "ip_unknownPUB"
+		} else {
+			// HTTP
+			errMsg += "127.0.0.1PUB"
+		}
+		requireErrorEqual(t, err, codes.ResourceExhausted, errMsg)
 		// check that query is not affected by publish quota
 		_, err = client.Query(ctx, &messageV1.QueryRequest{ContentTopics: []string{"topic"}})
 		require.NoError(t, err)
@@ -819,7 +837,7 @@ func requireErrorEqual(t *testing.T, err error, code codes.Code, msg string, det
 		err := json.Unmarshal([]byte(errJSON), &httpErr)
 		require.NoError(t, err)
 		require.Equal(t, float64(code), httpErr["code"])
-		require.Equal(t, msg, httpErr["message"])
+		require.Contains(t, msg, httpErr["message"])
 		require.ElementsMatch(t, details, httpErr["details"])
 	}
 }
