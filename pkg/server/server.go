@@ -138,7 +138,25 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	if !options.Relay.Disable {
 		var wakurelayopts []pubsub.Option
-		wakurelayopts = append(wakurelayopts, pubsub.WithPeerExchange(true))
+		directPeers := make([]peer.AddrInfo, 0, len(options.StaticNodes))
+		for _, staticNode := range options.StaticNodes {
+			ma, err := multiaddr.NewMultiaddr(staticNode)
+			if err != nil {
+				s.log.Error("building multiaddr from static node addr", zap.Error(err))
+				continue
+			}
+			pi, err := peer.AddrInfoFromP2pAddr(ma)
+			if err != nil {
+				s.log.Error("getting peer addr info from static node addr", zap.Error(err))
+				continue
+			}
+			if pi == nil {
+				s.log.Error("static node peer addr is nil", zap.String("peer", staticNode))
+				continue
+			}
+			directPeers = append(directPeers, *pi)
+		}
+		wakurelayopts = append(wakurelayopts, pubsub.WithPeerExchange(true), pubsub.WithDirectPeers(directPeers))
 		nodeOpts = append(nodeOpts, node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...))
 	}
 
