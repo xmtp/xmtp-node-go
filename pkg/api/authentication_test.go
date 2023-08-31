@@ -74,7 +74,7 @@ func Test_AuthnNoTokenMixedV0V3(t *testing.T) {
 	})
 }
 
-// Private key topic queries must be let through without authentication
+// Private key topic queries must be let through without authn
 func Test_AuthnAllowedWithoutAuthn(t *testing.T) {
 	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
