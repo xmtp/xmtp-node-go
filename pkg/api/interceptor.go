@@ -69,7 +69,7 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 
 func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest) bool {
 	envelopes := request.Envelopes
-	if envelopes == nil || len(envelopes) == 0 {
+	if len(envelopes) == 0 {
 		return false
 	}
 	// If any of the envelopes are not for a v3 topic, then we treat the request as non-v3

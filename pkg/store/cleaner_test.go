@@ -4,95 +4,95 @@ import (
 	"testing"
 	"time"
 
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	"github.com/stretchr/testify/require"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
 func TestStore_Cleaner(t *testing.T) {
-	pubSubTopic := "test-" + test.RandomStringLower(5)
 	tcs := []struct {
 		name      string
 		batchSize int
-		setup     func(t *testing.T, s *XmtpStore)
-		expected  []*pb.WakuMessage
+		setup     func(t *testing.T, s *Store)
+		expected  []*messagev1.Envelope
 	}{
 		{
 			name:      "no messages",
 			batchSize: 5,
-			setup:     func(t *testing.T, s *XmtpStore) {},
-			expected:  []*pb.WakuMessage{},
+			setup:     func(t *testing.T, s *Store) {},
+			expected:  []*messagev1.Envelope{},
 		},
 		{
 			name:      "less than batch size",
 			batchSize: 5,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
-				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("topic3", 3, "msg3"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic4", 4, "msg4"), pubSubTopic, fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic1", 1, "msg1"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic2", 2, "msg2"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic3", 3, "msg3"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic4", 4, "msg4"), fourDaysAgo)
 
-				storeMessage(t, s, test.NewMessage("topic5", 5, "msg5"), pubSubTopic)
-				storeMessage(t, s, test.NewMessage("/xmtp/topic6", 6, "msg6"), pubSubTopic)
-				storeMessage(t, s, test.NewMessage("topic7", 7, "msg7"), pubSubTopic)
-				storeMessage(t, s, test.NewMessage("/xmtp/topic8", 8, "msg8"), pubSubTopic)
+				storeMessage(t, s, test.NewEnvelope("topic5", 5, "msg5"))
+				storeMessage(t, s, test.NewEnvelope("/xmtp/topic6", 6, "msg6"))
+				storeMessage(t, s, test.NewEnvelope("topic7", 7, "msg7"))
+				storeMessage(t, s, test.NewEnvelope("/xmtp/topic8", 8, "msg8"))
 			},
-			expected: []*pb.WakuMessage{
-				test.NewMessage("topic1", 1, "msg1"),
-				test.NewMessage("/xmtp/topic2", 2, "msg2"),
-				test.NewMessage("topic3", 3, "msg3"),
-				test.NewMessage("/xmtp/topic4", 4, "msg4"),
-				test.NewMessage("topic5", 5, "msg5"),
-				test.NewMessage("/xmtp/topic6", 6, "msg6"),
-				test.NewMessage("topic7", 7, "msg7"),
-				test.NewMessage("/xmtp/topic8", 8, "msg8"),
+			expected: []*messagev1.Envelope{
+				test.NewEnvelope("topic1", 1, "msg1"),
+				test.NewEnvelope("/xmtp/topic2", 2, "msg2"),
+				test.NewEnvelope("topic3", 3, "msg3"),
+				test.NewEnvelope("/xmtp/topic4", 4, "msg4"),
+				test.NewEnvelope("topic5", 5, "msg5"),
+				test.NewEnvelope("/xmtp/topic6", 6, "msg6"),
+				test.NewEnvelope("topic7", 7, "msg7"),
+				test.NewEnvelope("/xmtp/topic8", 8, "msg8"),
 			},
 		},
 		{
 			name:      "equal to batch size",
 			batchSize: 3,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
-				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("topic3", 3, "msg3"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic4", 4, "msg4"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("topic5", 5, "msg5"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic6", 6, "msg6"), pubSubTopic, fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic1", 1, "msg1"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic2", 2, "msg2"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic3", 3, "msg3"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic4", 4, "msg4"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic5", 5, "msg5"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic6", 6, "msg6"), fourDaysAgo)
 
-				storeMessage(t, s, test.NewMessage("topic7", 7, "msg7"), pubSubTopic)
-				storeMessage(t, s, test.NewMessage("/xmtp/topic8", 8, "msg8"), pubSubTopic)
+				storeMessage(t, s, test.NewEnvelope("topic7", 7, "msg7"))
+				storeMessage(t, s, test.NewEnvelope("/xmtp/topic8", 8, "msg8"))
 			},
-			expected: []*pb.WakuMessage{
-				test.NewMessage("/xmtp/topic2", 2, "msg2"),
-				test.NewMessage("/xmtp/topic4", 4, "msg4"),
-				test.NewMessage("/xmtp/topic6", 6, "msg6"),
-				test.NewMessage("topic7", 7, "msg7"),
-				test.NewMessage("/xmtp/topic8", 8, "msg8"),
+			expected: []*messagev1.Envelope{
+				test.NewEnvelope("/xmtp/topic2", 2, "msg2"),
+				test.NewEnvelope("/xmtp/topic4", 4, "msg4"),
+				test.NewEnvelope("/xmtp/topic6", 6, "msg6"),
+				test.NewEnvelope("topic7", 7, "msg7"),
+				test.NewEnvelope("/xmtp/topic8", 8, "msg8"),
 			},
 		},
 		{
 			name:      "greater than batch size",
 			batchSize: 2,
-			setup: func(t *testing.T, s *XmtpStore) {
+			setup: func(t *testing.T, s *Store) {
 				fourDaysAgo := time.Now().UTC().Add(-4 * 24 * time.Hour).UnixNano()
-				storeMessageWithTime(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic2", 2, "msg2"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("topic3", 3, "msg3"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic4", 4, "msg4"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("topic5", 5, "msg5"), pubSubTopic, fourDaysAgo)
-				storeMessageWithTime(t, s, test.NewMessage("/xmtp/topic6", 6, "msg6"), pubSubTopic, fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic1", 1, "msg1"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic2", 2, "msg2"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic3", 3, "msg3"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic4", 4, "msg4"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("topic5", 5, "msg5"), fourDaysAgo)
+				storeMessageWithTime(t, s, test.NewEnvelope("/xmtp/topic6", 6, "msg6"), fourDaysAgo)
 
-				storeMessage(t, s, test.NewMessage("topic7", 7, "msg7"), pubSubTopic)
-				storeMessage(t, s, test.NewMessage("/xmtp/topic8", 8, "msg8"), pubSubTopic)
+				storeMessage(t, s, test.NewEnvelope("topic7", 7, "msg7"))
+				storeMessage(t, s, test.NewEnvelope("/xmtp/topic8", 8, "msg8"))
 			},
-			expected: []*pb.WakuMessage{
-				test.NewMessage("/xmtp/topic2", 2, "msg2"),
-				test.NewMessage("/xmtp/topic4", 4, "msg4"),
-				test.NewMessage("topic5", 5, "msg5"),
-				test.NewMessage("/xmtp/topic6", 6, "msg6"),
-				test.NewMessage("topic7", 7, "msg7"),
-				test.NewMessage("/xmtp/topic8", 8, "msg8"),
+			expected: []*messagev1.Envelope{
+				test.NewEnvelope("/xmtp/topic2", 2, "msg2"),
+				test.NewEnvelope("/xmtp/topic4", 4, "msg4"),
+				test.NewEnvelope("topic5", 5, "msg5"),
+				test.NewEnvelope("/xmtp/topic6", 6, "msg6"),
+				test.NewEnvelope("topic7", 7, "msg7"),
+				test.NewEnvelope("/xmtp/topic8", 8, "msg8"),
 			},
 		},
 	}
@@ -110,15 +110,26 @@ func TestStore_Cleaner(t *testing.T) {
 			}))
 			defer cleanup()
 
-			c := newTestClient(t, s.host.ID())
-			addStoreProtocol(t, c.host, s.host)
-
 			tc.setup(t, s)
 
-			query := &pb.HistoryQuery{
-				PubsubTopic: pubSubTopic,
-			}
-			expectQueryMessagesEventually(t, c, query, tc.expected)
+			query := &messagev1.QueryRequest{}
+			expectQueryMessagesEventually(t, s, query, tc.expected)
 		})
 	}
+}
+
+func expectQueryMessagesEventually(t *testing.T, s *Store, query *messagev1.QueryRequest, expectedMsgs []*messagev1.Envelope) []*messagev1.Envelope {
+	var msgs []*messagev1.Envelope
+	require.Eventually(t, func() bool {
+		msgs = queryMessages(t, s, query)
+		return len(msgs) == len(expectedMsgs)
+	}, 3*time.Second, 500*time.Millisecond, "expected %d == %d", len(msgs), len(expectedMsgs))
+	require.ElementsMatch(t, expectedMsgs, msgs)
+	return msgs
+}
+
+func queryMessages(t *testing.T, s *Store, query *messagev1.QueryRequest) []*messagev1.Envelope {
+	res, err := s.FindMessages(query)
+	require.NoError(t, err)
+	return res.Envelopes
 }

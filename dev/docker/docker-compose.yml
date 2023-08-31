@@ -17,3 +17,30 @@ services:
       - 9090:9090
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  nats-1:
+    image: nats
+    ports:
+      - 14222:4222
+      - 18222:8222
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --http_port=8222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
+  nats-1-metrics:
+    image: natsio/prometheus-nats-exporter:latest
+    command: "--varz http://nats-1:8222"
+    ports:
+      - 17777:7777
+  nats-2:
+    image: nats
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --http_port=8222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
+    ports:
+      - 24222:4222
+  nats-2-metrics:
+    image: natsio/prometheus-nats-exporter:latest
+    command: "--varz http://nats-2:8222"
+  nats-3:
+    image: nats
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --http_port=8222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
+    ports:
+      - 34222:4222
+  nats-3-metrics:
+    image: natsio/prometheus-nats-exporter:latest
+    command: "--varz http://nats-3:8222"

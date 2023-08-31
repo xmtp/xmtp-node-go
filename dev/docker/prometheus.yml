@@ -5,5 +5,7 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets:
-          - 'host.docker.internal:8008'
-          - 'host.docker.internal:8009'
+          - host.docker.internal:8009
+          - nats-1-metrics:7777
+          - nats-2-metrics:7777
+          - nats-3-metrics:7777

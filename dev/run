@@ -3,13 +3,12 @@ set -e
 
 MESSAGE_DB_DSN="postgres://postgres:xmtp@localhost:15432/postgres?sslmode=disable"
 AUTHZ_DB_DSN="postgres://postgres:xmtp@localhost:15432/postgres?sslmode=disable"
-NODE_KEY="8a30dcb604b0b53627a5adc054dbf434b446628d4bd1eccc681d223f0550ce67"
 
 go run cmd/xmtpd/main.go \
+    --nats.url=nats://localhost:14222,nats://localhost:24222,nats://localhost:34222 \
     --message-db-connection-string "${MESSAGE_DB_DSN}" \
     --message-db-reader-connection-string "${MESSAGE_DB_DSN}" \
     --authz-db-connection-string "${AUTHZ_DB_DSN}" \
-    --nodekey "${NODE_KEY}" \
     --metrics \
     --metrics-period 5s \
     --go-profiling \

@@ -1,10 +1,4 @@
 services:
-  nodes:
-    image: nginx
-    ports:
-      - 8000:80
-    volumes:
-      - ./nodes:/usr/share/nginx/html
   api:
     image: nginx
     ports:
@@ -15,6 +9,15 @@ services:
     image: postgres:13
     environment:
       POSTGRES_PASSWORD: xmtp
+  nats-1:
+    image: nats
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
+  nats-2:
+    image: nats
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
+  nats-3:
+    image: nats
+    command: "--cluster_name=NATS --cluster=nats://0.0.0.0:6222 --routes=nats://nats-1:6222,nats://nats-2:6222,nats://nats-3:6222"
   node1:
     build:
       context: ../../../
@@ -26,28 +29,19 @@ services:
       - 18008:8008
     restart: always
     command:
-    - --store
+    - --nats.url=nats://nats-0:4222,nats://nats-1:4222,nats://nats-2:4222
     - --metrics
     - --metrics-address=0.0.0.0
-    - --ws
-    - --ws-port=6001
-    - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
-    - --static-node=/dns4/node3/tcp/6001/ws/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
-    - --static-node=/dns4/node4/tcp/6001/ws/p2p/16Uiu2HAmD8P5wpT3nfQauUDiMj9eUpiWU2KrR1ZfVGu7qLjGZVua
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      GOWAKU-NODEKEY: 8a30dcb604b0b53627a5adc054dbf434b446628d4bd1eccc681d223f0550ce67
   node2:
     build:
       context: ../../../
@@ -58,28 +52,19 @@ services:
       - 25555:5555
     restart: always
     command:
-    - --store
+    - --nats.url=nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
     - --metrics
     - --metrics-address=0.0.0.0
-    - --ws
-    - --ws-port=6001
-    - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
-    - --static-node=/dns4/node3/tcp/6001/ws/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
-    - --static-node=/dns4/node4/tcp/6001/ws/p2p/16Uiu2HAmD8P5wpT3nfQauUDiMj9eUpiWU2KrR1ZfVGu7qLjGZVua
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      GOWAKU-NODEKEY: 5757057f3daac3fa80e43a06d24edf15fcaba11eb16ede5fd53b78ba68ef1436
   node3:
     build:
       context: ../../../
@@ -90,28 +75,19 @@ services:
       - 35555:5555
     restart: always
     command:
-    - --store
+    - --nats.url=nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
     - --metrics
     - --metrics-address=0.0.0.0
-    - --ws
-    - --ws-port=6001
-    - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
-    - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
-    - --static-node=/dns4/node4/tcp/6001/ws/p2p/16Uiu2HAmD8P5wpT3nfQauUDiMj9eUpiWU2KrR1ZfVGu7qLjGZVua
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      GOWAKU-NODEKEY: f643b771ad9e1bc9519d4dc754370c4ff32dd7a9f76f6026b5a6448289212fd7
   node4:
     build:
       context: ../../../
@@ -122,25 +98,16 @@ services:
       - 45555:5555
     restart: always
     command:
-    - --store
+    - --nats.url=nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
     - --metrics
     - --metrics-address=0.0.0.0
-    - --ws
-    - --ws-port=6001
-    - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
     - --wait-for-db=10s
-    - --static-node=/dns4/node1/tcp/6001/ws/p2p/16Uiu2HAmNCxLZCkXNbpVPBpSSnHj9iq4HZQj7fxRzw2kj1kKSHHA
-    - --static-node=/dns4/node2/tcp/6001/ws/p2p/16Uiu2HAmPexvM9XDgoac3i3V4PHGHpk11ZoYpNjG5TsuGfeQy79R
-    - --static-node=/dns4/node3/tcp/6001/ws/p2p/16Uiu2HAmRFvBjrt91Xcyi9QVz9mH7G2D1wrDifa3Z2C8azGr3edr
     environment:
       ENV: dev
       GOLOG_LOG_FMT: json
       MESSAGE_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       MESSAGE_DB_READER_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
       AUTHZ_DB_CONNECTION_STRING: postgres://postgres:xmtp@db:5432/postgres?sslmode=disable
-      GOWAKU-NODEKEY: 3ec2707fdd0584ad441fabcfbe928966378f797f929b3293ac8dc6a37206f3da

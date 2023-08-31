@@ -28,7 +28,7 @@ func NewRunner(ctx context.Context, log *zap.Logger, config *Config) *Runner {
 }
 
 func (r *Runner) Start() error {
-	if r.config.Continuous {
+	if r.config.Continuous || r.config.ContinuousExitOnError {
 		go func() {
 			err := http.ListenAndServe("0.0.0.0:6061", nil)
 			if err != nil {
@@ -37,7 +37,7 @@ func (r *Runner) Start() error {
 		}()
 	}
 
-	return r.withMetricsServer(func() error {
+	return r.withMetricsServer(r.ctx, func() error {
 		for {
 			g, _ := errgroup.WithContext(r.ctx)
 			for _, test := range r.suite.Tests() {
@@ -51,7 +51,7 @@ func (r *Runner) Start() error {
 				return err
 			}
 
-			if !r.config.Continuous {
+			if !r.config.Continuous && !r.config.ContinuousExitOnError {
 				break
 			}
 			time.Sleep(time.Duration(r.config.DelayBetweenRunsSeconds) * time.Second)

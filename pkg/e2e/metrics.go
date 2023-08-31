@@ -44,9 +44,9 @@ var (
 	}
 )
 
-func (r *Runner) withMetricsServer(fn func() error) error {
-	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, r.log)
-	metrics.Start(context.Background())
+func (r *Runner) withMetricsServer(ctx context.Context, fn func() error) error {
+	metrics := metrics.NewMetricsServer()
+	metrics.Start(ctx)
 	defer func() {
 		err := metrics.Stop(r.ctx)
 		if err != nil {

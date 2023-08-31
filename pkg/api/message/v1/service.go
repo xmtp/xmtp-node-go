@@ -3,90 +3,56 @@ package api
 import (
 	"context"
 	"io"
-	"strings"
 	"sync"
-	"time"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
-	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
+	"github.com/nats-io/nats.go"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
-	validXMTPTopicPrefix = "/xmtp/0/"
-	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
-
 	MaxContentTopicNameSize = 300
 
 	// 1048576 - 300 - 62 = 1048214
-	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
+	MaxMessageSize = 1024*1024 - MaxContentTopicNameSize - 62
 )
 
 type Service struct {
 	proto.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log  *zap.Logger
-	waku *wakunode.WakuNode
+	log   *zap.Logger
+	nats  *nats.Conn
+	store *store.Store
 
 	// Configured internally.
-	ctx        context.Context
-	ctxCancel  func()
-	wg         sync.WaitGroup
-	dispatcher *dispatcher
-	relaySub   *wakurelay.Subscription
+	ctx       context.Context
+	ctxCancel func()
+	wg        sync.WaitGroup
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
+func NewService(logger *zap.Logger, nats *nats.Conn, store *store.Store) (s *Service, err error) {
 	s = &Service{
-		waku: node,
-		log:  logger.Named("message/v1"),
+		log:   logger.Named("message/v1"),
+		nats:  nats,
+		store: store,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-	s.dispatcher = newDispatcher()
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "subscribing to relay")
-	}
-	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case wakuEnv := <-s.relaySub.C:
-				if wakuEnv == nil {
-					continue
-				}
-				env := buildEnvelope(wakuEnv.Message())
-				s.dispatcher.Submit(env.ContentTopic, env)
-			}
-		}
-	})
 
 	return s, nil
 }
 
 func (s *Service) Close() {
 	s.log.Info("closing")
-	if s.relaySub != nil {
-		s.relaySub.Unsubscribe()
-	}
-	if s.dispatcher != nil {
-		s.dispatcher.Close()
-	}
 
 	if s.ctxCancel != nil {
 		s.ctxCancel()
@@ -104,31 +70,24 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
 		}
 
-		wakuMsg := &wakupb.WakuMessage{
-			ContentTopic: env.ContentTopic,
-			Timestamp:    toWakuTimestamp(env.TimestampNs),
-			Payload:      env.Message,
-		}
-
 		if len(env.Message) > MaxMessageSize {
 			return nil, status.Errorf(codes.InvalidArgument, "message too big")
 		}
 
-		store, ok := s.waku.Store().(*store.XmtpStore)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-		}
-
 		if !topic.IsEphemeral(env.ContentTopic) {
-			_, err := store.InsertMessage(wakuMsg)
+			_, err := s.store.InsertMessage(env)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, err
 			}
 		}
 
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		envB, err := pb.Marshal(env)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, err
+		}
+		err = s.nats.Publish(env.ContentTopic, envB)
+		if err != nil {
+			return nil, err
 		}
 		metrics.EmitPublishedEnvelope(ctx, env)
 	}
@@ -142,29 +101,35 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
-	subC := s.dispatcher.Register(nil, req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC)
 
-	for {
-		select {
-		case <-stream.Context().Done():
-			log.Debug("stream closed")
-			return nil
-		case <-s.ctx.Done():
-			log.Info("service closed")
-			return nil
-		case obj := <-subC:
-			env, ok := obj.(*proto.Envelope)
-			if !ok {
-				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-				continue
-			}
-
-			err := stream.Send(env)
+	for _, topic := range req.ContentTopics {
+		sub, err := s.nats.Subscribe(topic, func(msg *nats.Msg) {
+			var env proto.Envelope
+			err := pb.Unmarshal(msg.Data, &env)
 			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
+				log.Info("error unmarshaling envelope", zap.Error(err))
+				return
 			}
+			err = stream.Send(&env)
+			if err != nil {
+				log.Error("error sending envelope to subscriber", zap.Error(err))
+			}
+		})
+		if err != nil {
+			return err
 		}
+		defer func() {
+			_ = sub.Unsubscribe()
+		}()
+	}
+
+	select {
+	case <-stream.Context().Done():
+		log.Debug("stream closed")
+		return nil
+	case <-s.ctx.Done():
+		log.Info("service closed")
+		return nil
 	}
 }
 
@@ -176,15 +141,16 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	ch := make(chan interface{})
-	defer s.dispatcher.Unregister(ch)
-
 	requestChannel := make(chan *proto.SubscribeRequest)
 	go func() {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
-				if err != io.EOF && err != context.Canceled {
+				if e, ok := status.FromError(err); ok {
+					if e.Code() != codes.Canceled {
+						log.Error("reading subscription", zap.Error(err))
+					}
+				} else if err != io.EOF && err != context.Canceled {
 					log.Error("reading subscription", zap.Error(err))
 				}
 				close(requestChannel)
@@ -194,31 +160,59 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		}
 	}()
 
+	subs := map[string]*nats.Subscription{}
+	defer func() {
+		for _, sub := range subs {
+			_ = sub.Unsubscribe()
+		}
+	}()
 	for {
 		select {
+		case req := <-requestChannel:
+			if req == nil {
+				continue
+			}
+			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
+
+			topics := map[string]bool{}
+			for _, topic := range req.ContentTopics {
+				topics[topic] = true
+
+				// If topic not in existing subscriptions, then subscribe.
+				if _, ok := subs[topic]; !ok {
+					sub, err := s.nats.Subscribe(topic, func(msg *nats.Msg) {
+						var env proto.Envelope
+						err := pb.Unmarshal(msg.Data, &env)
+						if err != nil {
+							log.Info("error unmarshaling envelope", zap.Error(err))
+							return
+						}
+						err = stream.Send(&env)
+						if err != nil {
+							log.Error("error sending envelope to subscriber", zap.Error(err))
+						}
+					})
+					if err != nil {
+						return err
+					}
+					subs[topic] = sub
+				}
+			}
+
+			// If subscription not in topic, then unsubscribe.
+			for topic, sub := range subs {
+				if topics[topic] {
+					continue
+				}
+				_ = sub.Unsubscribe()
+				delete(subs, topic)
+			}
 		case <-stream.Context().Done():
 			log.Debug("stream closed")
 			return nil
 		case <-s.ctx.Done():
 			log.Info("service closed")
 			return nil
-		case req := <-requestChannel:
-			if req == nil {
-				continue
-			}
-			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
-			s.dispatcher.Update(ch, req.ContentTopics...)
-		case obj := <-ch:
-			env, ok := obj.(*proto.Envelope)
-			if !ok {
-				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-				continue
-			}
-
-			err := stream.Send(env)
-			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
-			}
 		}
 	}
 }
@@ -228,8 +222,10 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 	log.Debug("started")
 	defer log.Debug("stopped")
 
+	// Subscribe to all nats subjects via wildcard
+	// https://docs.nats.io/nats-concepts/subjects#wildcards
 	return s.Subscribe(&proto.SubscribeRequest{
-		ContentTopics: []string{contentTopicAllXMTP},
+		ContentTopics: []string{"*"},
 	}, stream)
 }
 
@@ -264,31 +260,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
-	store, ok := s.waku.Store().(*store.XmtpStore)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-	}
-	start := time.Now()
-	res, err := store.FindMessages(buildWakuQuery(req))
-	duration := time.Since(start)
-	if err != nil {
-		metrics.EmitQuery(ctx, req, 0, err, duration)
-		return nil, status.Errorf(codes.Internal, err.Error())
-	}
-	metrics.EmitQuery(ctx, req, len(res.Messages), nil, duration)
-	if duration > 10*time.Millisecond {
-		log.With(zap.Duration("duration", duration), zap.Int("results", len(res.Messages))).Info("slow query")
-	}
-
-	envs := make([]*proto.Envelope, 0, len(res.Messages))
-	for _, msg := range res.Messages {
-		envs = append(envs, buildEnvelope(msg))
-	}
-
-	return &proto.QueryResponse{
-		Envelopes:  envs,
-		PagingInfo: buildPagingInfo(res.PagingInfo),
-	}, nil
+	return s.store.FindMessages(req)
 }
 
 func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
@@ -316,90 +288,4 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	return &proto.BatchQueryResponse{
 		Responses: responses,
 	}, nil
-}
-
-func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
-	return &proto.Envelope{
-		ContentTopic: msg.ContentTopic,
-		TimestampNs:  fromWakuTimestamp(msg.Timestamp),
-		Message:      msg.Payload,
-	}
-}
-
-func buildWakuQuery(req *proto.QueryRequest) *wakupb.HistoryQuery {
-	contentFilters := []*wakupb.ContentFilter{}
-	for _, contentTopic := range req.ContentTopics {
-		if contentTopic != "" {
-			contentFilters = append(contentFilters, &wakupb.ContentFilter{
-				ContentTopic: contentTopic,
-			})
-		}
-	}
-
-	return &wakupb.HistoryQuery{
-		ContentFilters: contentFilters,
-		StartTime:      toWakuTimestamp(req.StartTimeNs),
-		EndTime:        toWakuTimestamp(req.EndTimeNs),
-		PagingInfo:     buildWakuPagingInfo(req.PagingInfo),
-	}
-}
-
-func buildPagingInfo(pi *wakupb.PagingInfo) *proto.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	var pagingInfo proto.PagingInfo
-	pagingInfo.Limit = uint32(pi.PageSize)
-	switch pi.Direction {
-	case wakupb.PagingInfo_BACKWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_DESCENDING
-	case wakupb.PagingInfo_FORWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_ASCENDING
-	}
-	if index := pi.Cursor; index != nil {
-		pagingInfo.Cursor = &proto.Cursor{
-			Cursor: &proto.Cursor_Index{
-				Index: &proto.IndexCursor{
-					Digest:       index.Digest,
-					SenderTimeNs: uint64(index.SenderTime),
-				}}}
-	}
-	return &pagingInfo
-}
-
-func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	pagingInfo := &wakupb.PagingInfo{
-		PageSize: uint64(pi.Limit),
-	}
-	switch pi.Direction {
-	case proto.SortDirection_SORT_DIRECTION_ASCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_FORWARD
-	case proto.SortDirection_SORT_DIRECTION_DESCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_BACKWARD
-	}
-	if ic := pi.Cursor.GetIndex(); ic != nil {
-		pagingInfo.Cursor = &wakupb.Index{
-			Digest:     ic.Digest,
-			SenderTime: toWakuTimestamp(ic.SenderTimeNs),
-		}
-	}
-	return pagingInfo
-}
-
-func isValidTopic(topic string) bool {
-	return strings.HasPrefix(topic, validXMTPTopicPrefix)
-}
-
-func fromWakuTimestamp(ts int64) uint64 {
-	if ts < 0 {
-		return 0
-	}
-	return uint64(ts)
-}
-
-func toWakuTimestamp(ts uint64) int64 {
-	return int64(ts)
 }

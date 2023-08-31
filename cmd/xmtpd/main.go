@@ -10,10 +10,7 @@ import (
 	"sync"
 	"syscall"
 
-	golog "github.com/ipfs/go-log"
 	"github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
-	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -68,21 +65,8 @@ func main() {
 		}()
 	}
 
-	cleanup, err := initWakuLogging(options)
-	if err != nil {
-		log.Fatal("initializing waku logger", zap.Error(err))
-	}
-	defer cleanup()
-
 	if options.Version {
 		fmt.Printf("Version: %s", Commit)
-		return
-	}
-
-	if options.GenerateKey {
-		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatal("writing private key file", zap.Error(err))
-		}
 		return
 	}
 
@@ -102,7 +86,7 @@ func main() {
 
 	if options.Tracing.Enable {
 		log.Info("starting tracer")
-		tracing.Start(Commit, utils.Logger())
+		tracing.Start(Commit, log)
 		defer func() {
 			log.Info("stopping tracer")
 			tracing.Stop()
@@ -169,28 +153,6 @@ func main() {
 
 func fatal(msg string, args ...any) {
 	log.Fatalf(msg, args...)
-}
-
-func initWakuLogging(options server.Options) (func(), error) {
-	err := utils.SetLogLevel(options.LogLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "parsing log level")
-	}
-	utils.InitLogger(options.LogEncoding)
-
-	lvl, err := golog.LevelFromString(options.LogLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "parsing log level")
-	}
-	golog.SetAllLoggers(lvl)
-
-	// Note that libp2p reads the encoding from GOLOG_LOG_FMT env var.
-	if options.LogEncoding == "json" && os.Getenv("GOLOG_LOG_FMT") == "" {
-		utils.Logger().Warn("Set GOLOG_LOG_FMT=json to use json for libp2p logs")
-	}
-
-	cleanup := func() { _ = utils.Logger().Sync() }
-	return cleanup, nil
 }
 
 func buildLogger(options server.Options) (*zap.Logger, error) {

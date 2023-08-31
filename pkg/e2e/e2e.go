@@ -24,8 +24,6 @@ type Config struct {
 	Continuous              bool
 	ContinuousExitOnError   bool
 	NetworkEnv              string
-	BootstrapAddrs          []string
-	NodesURL                string
 	APIURL                  string
 	DelayBetweenRunsSeconds int
 	GitCommit               string

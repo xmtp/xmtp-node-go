@@ -4,16 +4,14 @@ import (
 	"context"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/xmtp/xmtp-node-go/pkg/e2e"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
 )
 
 const (
 	localNetworkEnv = "local"
-	localNodesURL   = "http://localhost:8000"
-	remoteNodesURL  = "http://nodes.xmtp.com"
 )
 
 var (
@@ -27,17 +25,13 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
 	log, err := zap.NewProduction()
 	if err != nil {
 		panic(err)
 	}
+	ctx := logging.With(context.Background(), log)
 
 	networkEnv := envVar("XMTPD_E2E_ENV", localNetworkEnv)
-	nodesURL := envVar("XMTPD_E2E_NODES_URL", localNodesURL)
-	if networkEnv != localNetworkEnv {
-		nodesURL = remoteNodesURL
-	}
 
 	apiURL := envVar("XMTPD_E2E_API_URL", remoteAPIURLByEnv[networkEnv])
 
@@ -45,8 +39,6 @@ func main() {
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
 		ContinuousExitOnError:   envVarBool("E2E_CONTINUOUS_EXIT_ON_ERROR"),
 		NetworkEnv:              networkEnv,
-		BootstrapAddrs:          envVarStrings("XMTPD_E2E_BOOTSTRAP_ADDRS"),
-		NodesURL:                nodesURL,
 		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 		GitCommit:               GitCommit,
@@ -64,19 +56,6 @@ func envVar(name, defaultVal string) string {
 		return defaultVal
 	}
 	return val
-}
-
-func envVarStrings(name string) []string {
-	val := os.Getenv(name)
-	vals := strings.Split(val, ",")
-	retVals := make([]string, 0, len(vals))
-	for _, v := range vals {
-		if v == "" {
-			continue
-		}
-		retVals = append(retVals, v)
-	}
-	return retVals
 }
 
 func envVarBool(name string) bool {
