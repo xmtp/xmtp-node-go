@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
@@ -18,7 +17,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -57,26 +55,65 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "subscribing to relay")
-	}
-	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case wakuEnv := <-s.relaySub.C:
-				if wakuEnv == nil {
-					continue
-				}
-				env := buildEnvelope(wakuEnv.Message())
-				s.dispatcher.Submit(env.ContentTopic, env)
-			}
-		}
-	})
+	s.pollForMessages()
+	// s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "subscribing to relay")
+	// }
+	// tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
+	// 	for {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return
+	// 		case wakuEnv := <-s.relaySub.C:
+	// 			if wakuEnv == nil {
+	// 				continue
+	// 			}
+	// 			env := buildEnvelope(wakuEnv.Message())
+	// 			s.dispatcher.Submit(env.ContentTopic, env)
+	// 		}
+	// 	}
+	// })
 
 	return s, nil
+}
+
+func (s *Service) pollForMessages() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	store, ok := s.waku.Store().(*store.XmtpStore)
+	if !ok {
+		panic("could not start store")
+	}
+
+	lastChecked := time.Now()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			newLastChecked := time.Now()
+			res, err := store.FindMessages(&wakupb.HistoryQuery{
+				StartTime: toWakuTimestamp(uint64(lastChecked.UnixNano())),
+				PagingInfo: &wakupb.PagingInfo{
+					PageSize:  100,
+					Direction: wakupb.PagingInfo_FORWARD,
+				},
+			})
+			if err != nil {
+				s.log.Error("error querying store", zap.Error(err))
+				continue
+			}
+			if s.dispatcher != nil {
+				for _, msg := range res.Messages {
+					s.dispatcher.Submit(msg.ContentTopic, buildEnvelope(msg))
+				}
+			}
+			lastChecked = newLastChecked
+		}
+
+	}
+
 }
 
 func (s *Service) Close() {
