@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -57,6 +58,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
+	go s.pollForMessages()
 	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "subscribing to relay")
@@ -77,6 +79,60 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	})
 
 	return s, nil
+}
+
+func (s *Service) pollForMessages() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	store, ok := s.waku.Store().(*store.XmtpStore)
+	if !ok {
+		panic("could not start store")
+	}
+
+	lastChecked := time.Now()
+	recentMessages := []*wakupb.WakuMessage{}
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			newLastChecked := time.Now()
+			messages, err := store.FindMessagesSince(lastChecked.Add(-100 * time.Millisecond).UnixNano())
+			if err != nil {
+				s.log.Error("error querying store", zap.Error(err))
+				continue
+			}
+			s.log.Info("checking for messages", zap.Time("since", lastChecked), zap.Duration("duration", time.Now().Sub(newLastChecked)))
+			messages = dedupeRecentMessages(recentMessages, messages)
+			if s.dispatcher != nil {
+				for _, msg := range messages {
+					s.dispatcher.Submit(msg.ContentTopic, buildEnvelope(msg))
+				}
+			}
+			lastChecked = newLastChecked
+			recentMessages = messages
+		}
+	}
+}
+
+func dedupeRecentMessages(lastMessages []*wakupb.WakuMessage, newMessages []*wakupb.WakuMessage) []*wakupb.WakuMessage {
+	if len(newMessages) == 0 || len(lastMessages) == 0 {
+		return newMessages
+	}
+	out := []*wakupb.WakuMessage{}
+	for _, newMessage := range newMessages {
+		exists := false
+		for _, oldMessage := range lastMessages {
+			if newMessage.ContentTopic == oldMessage.ContentTopic && newMessage.Timestamp == oldMessage.Timestamp && bytes.Equal(newMessage.Payload, oldMessage.Payload) {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			out = append(out, newMessage)
+		}
+	}
+	return out
 }
 
 func (s *Service) Close() {
@@ -126,10 +182,10 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			}
 		}
 
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
+		// _, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		// if err != nil {
+		// 	return nil, status.Errorf(codes.Internal, err.Error())
+		// }
 		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
