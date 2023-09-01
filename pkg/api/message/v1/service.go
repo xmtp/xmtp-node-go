@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -90,7 +89,6 @@ func (s *Service) pollForMessages() {
 	}
 
 	lastChecked := time.Now()
-	recentMessages := []*wakupb.WakuMessage{}
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -98,41 +96,20 @@ func (s *Service) pollForMessages() {
 		case <-ticker.C:
 			newLastChecked := time.Now()
 			s.log.Info("checking for messages", zap.Time("since", lastChecked))
-			messages, err := store.FindMessagesSince(lastChecked.Add(-100 * time.Millisecond).UnixNano())
+			res, err := store.FindMessagesSince(lastChecked.UnixNano())
 			if err != nil {
 				s.log.Error("error querying store", zap.Error(err))
 				continue
 			}
-			messages = dedupeRecentMessages(recentMessages, messages)
 			if s.dispatcher != nil {
-				for _, msg := range messages {
+				for _, msg := range res {
 					s.dispatcher.Submit(msg.ContentTopic, buildEnvelope(msg))
 				}
 			}
 			lastChecked = newLastChecked
-			recentMessages = messages
 		}
 	}
-}
 
-func dedupeRecentMessages(lastMessages []*wakupb.WakuMessage, newMessages []*wakupb.WakuMessage) []*wakupb.WakuMessage {
-	if len(newMessages) == 0 || len(lastMessages) == 0 {
-		return newMessages
-	}
-	out := []*wakupb.WakuMessage{}
-	for _, newMessage := range newMessages {
-		exists := false
-		for _, oldMessage := range lastMessages {
-			if newMessage.ContentTopic == oldMessage.ContentTopic && newMessage.Timestamp == oldMessage.Timestamp && bytes.Equal(newMessage.Payload, oldMessage.Payload) {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			out = append(out, newMessage)
-		}
-	}
-	return out
 }
 
 func (s *Service) Close() {
