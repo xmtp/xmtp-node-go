@@ -5,6 +5,7 @@ on:
       - poll-for-messages
 jobs:
   deploy:
+    concurrency: main
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -38,6 +39,16 @@ jobs:
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
           terraform-org: xmtp
           terraform-workspace: dev
+          variable-name: xmtpd_e2e_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/node-go-e2e@sha256:"
+
+      - name: Deploy (production)
+        uses: xmtp-labs/terraform-deployer@v1
+        with:
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: production
           variable-name: xmtpd_e2e_image
           variable-value: ${{ steps.push.outputs.docker_image }}
           variable-value-required-prefix: "xmtp/node-go-e2e@sha256:"
