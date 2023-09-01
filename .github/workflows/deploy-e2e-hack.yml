@@ -1,9 +1,8 @@
 name: Deploy E2E
 on:
-  workflow_run:
-    workflows: ["Deploy Nodes"]
-    branches: [poll-for-messages]
-    types: [completed]
+  push:
+    branches:
+      - poll-for-messages
 jobs:
   deploy:
     concurrency: main
