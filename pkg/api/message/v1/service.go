@@ -55,7 +55,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	s.pollForMessages()
+	go s.pollForMessages()
 	// s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	// if err != nil {
 	// 	return nil, errors.Wrap(err, "subscribing to relay")
@@ -79,7 +79,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 }
 
 func (s *Service) pollForMessages() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
@@ -94,6 +94,8 @@ func (s *Service) pollForMessages() {
 		case <-ticker.C:
 			newLastChecked := time.Now()
 			res, err := store.FindMessages(&wakupb.HistoryQuery{
+				// This is unfortunately client timestamps, not server timestamps.
+				// Clock drift will cause some issues here, but maybe we just ignore that.
 				StartTime: toWakuTimestamp(uint64(lastChecked.UnixNano())),
 				PagingInfo: &wakupb.PagingInfo{
 					PageSize:  100,
@@ -163,10 +165,10 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			}
 		}
 
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
+		// _, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		// if err != nil {
+		// 	return nil, status.Errorf(codes.Internal, err.Error())
+		// }
 		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
