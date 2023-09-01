@@ -81,7 +81,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 }
 
 func (s *Service) pollForMessages() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	store, ok := s.waku.Store().(*store.XmtpStore)
 	if !ok {
