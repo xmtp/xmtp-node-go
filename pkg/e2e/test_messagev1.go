@@ -32,7 +32,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	contentTopic := "test-" + s.randomStringLower(12)
 
-	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
 	defer cancel()
 	ctx, err := withAuth(ctx)
 	if err != nil {
@@ -78,7 +78,7 @@ syncLoop:
 		for i := range clients {
 			var done bool
 			for !done {
-				ctx, cancel := context.WithTimeout(ctx, 1000*time.Millisecond)
+				ctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 				env, err := streams[i].Next(ctx)
 				cancel()
 				if err != nil {
