@@ -97,12 +97,12 @@ func (s *Service) pollForMessages() {
 			return
 		case <-ticker.C:
 			newLastChecked := time.Now()
-			s.log.Info("checking for messages", zap.Time("since", lastChecked))
 			messages, err := store.FindMessagesSince(lastChecked.Add(-100 * time.Millisecond).UnixNano())
 			if err != nil {
 				s.log.Error("error querying store", zap.Error(err))
 				continue
 			}
+			s.log.Info("checking for messages", zap.Time("since", lastChecked), zap.Duration("duration", time.Now().Sub(newLastChecked)))
 			messages = dedupeRecentMessages(recentMessages, messages)
 			if s.dispatcher != nil {
 				for _, msg := range messages {
