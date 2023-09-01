@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
@@ -17,6 +18,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -56,24 +58,24 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
 	go s.pollForMessages()
-	// s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "subscribing to relay")
-	// }
-	// tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-	// 	for {
-	// 		select {
-	// 		case <-ctx.Done():
-	// 			return
-	// 		case wakuEnv := <-s.relaySub.C:
-	// 			if wakuEnv == nil {
-	// 				continue
-	// 			}
-	// 			env := buildEnvelope(wakuEnv.Message())
-	// 			s.dispatcher.Submit(env.ContentTopic, env)
-	// 		}
-	// 	}
-	// })
+	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "subscribing to relay")
+	}
+	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case wakuEnv := <-s.relaySub.C:
+				if wakuEnv == nil {
+					continue
+				}
+				env := buildEnvelope(wakuEnv.Message())
+				s.dispatcher.Submit(env.ContentTopic, env)
+			}
+		}
+	})
 
 	return s, nil
 }
@@ -93,27 +95,19 @@ func (s *Service) pollForMessages() {
 			return
 		case <-ticker.C:
 			newLastChecked := time.Now()
-			res, err := store.FindMessages(&wakupb.HistoryQuery{
-				// This is unfortunately client timestamps, not server timestamps.
-				// Clock drift will cause some issues here, but maybe we just ignore that.
-				StartTime: toWakuTimestamp(uint64(lastChecked.UnixNano())),
-				PagingInfo: &wakupb.PagingInfo{
-					PageSize:  100,
-					Direction: wakupb.PagingInfo_FORWARD,
-				},
-			})
+			s.log.Info("checking for messages", zap.Time("since", lastChecked))
+			res, err := store.FindMessagesSince(lastChecked.UnixNano())
 			if err != nil {
 				s.log.Error("error querying store", zap.Error(err))
 				continue
 			}
 			if s.dispatcher != nil {
-				for _, msg := range res.Messages {
+				for _, msg := range res {
 					s.dispatcher.Submit(msg.ContentTopic, buildEnvelope(msg))
 				}
 			}
 			lastChecked = newLastChecked
 		}
-
 	}
 
 }
