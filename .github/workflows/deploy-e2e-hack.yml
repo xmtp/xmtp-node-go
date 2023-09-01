@@ -5,9 +5,7 @@ on:
       - poll-for-messages
 jobs:
   deploy:
-    concurrency: main
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Set up Docker Buildx
         id: buildx
