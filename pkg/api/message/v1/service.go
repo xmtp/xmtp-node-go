@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -9,6 +8,8 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
@@ -24,11 +25,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
 	validXMTPTopicPrefix = "/xmtp/0/"
-	contentTopicAllXMTP  = validXMTPTopicPrefix + "*"
+	natsWildcardTopic    = "*"
 
 	MaxContentTopicNameSize = 300
 
@@ -44,11 +46,13 @@ type Service struct {
 	waku *wakunode.WakuNode
 
 	// Configured internally.
-	ctx        context.Context
-	ctxCancel  func()
-	wg         sync.WaitGroup
-	dispatcher *dispatcher
-	relaySub   *wakurelay.Subscription
+	ctx       context.Context
+	ctxCancel func()
+	wg        sync.WaitGroup
+	relaySub  *wakurelay.Subscription
+
+	ns *server.Server
+	nc *nats.Conn
 }
 
 func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
@@ -57,8 +61,24 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 		log:  logger.Named("message/v1"),
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-	s.dispatcher = newDispatcher()
-	go s.pollForMessages()
+
+	// Initialize nats for API subscribers.
+	s.ns, err = server.NewServer(&server.Options{
+		Port: server.RANDOM_PORT,
+	})
+	if err != nil {
+		return nil, err
+	}
+	go s.ns.Start()
+	if !s.ns.ReadyForConnections(4 * time.Second) {
+		return nil, errors.New("nats not ready")
+	}
+	s.nc, err = nats.Connect(s.ns.ClientURL())
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize waku relay subscription.
 	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "subscribing to relay")
@@ -73,7 +93,17 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 					continue
 				}
 				env := buildEnvelope(wakuEnv.Message())
-				s.dispatcher.Submit(env.ContentTopic, env)
+
+				envB, err := pb.Marshal(env)
+				if err != nil {
+					s.log.Error("marshalling envelope", zap.Error(err))
+					continue
+				}
+				err = s.nc.Publish(env.ContentTopic, envB)
+				if err != nil {
+					s.log.Error("publishing envelope to local nats", zap.Error(err))
+					continue
+				}
 			}
 		}
 	})
@@ -81,72 +111,23 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	return s, nil
 }
 
-func (s *Service) pollForMessages() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	store, ok := s.waku.Store().(*store.XmtpStore)
-	if !ok {
-		panic("could not start store")
-	}
-
-	lastChecked := time.Now()
-	recentMessages := []*wakupb.WakuMessage{}
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-ticker.C:
-			newLastChecked := time.Now()
-			messages, err := store.FindMessagesSince(lastChecked.Add(-100 * time.Millisecond).UnixNano())
-			if err != nil {
-				s.log.Error("error querying store", zap.Error(err))
-				continue
-			}
-			s.log.Info("checking for messages", zap.Time("since", lastChecked), zap.Duration("duration", time.Now().Sub(newLastChecked)))
-			messages = dedupeRecentMessages(recentMessages, messages)
-			if s.dispatcher != nil {
-				for _, msg := range messages {
-					s.dispatcher.Submit(msg.ContentTopic, buildEnvelope(msg))
-				}
-			}
-			lastChecked = newLastChecked
-			recentMessages = messages
-		}
-	}
-}
-
-func dedupeRecentMessages(lastMessages []*wakupb.WakuMessage, newMessages []*wakupb.WakuMessage) []*wakupb.WakuMessage {
-	if len(newMessages) == 0 || len(lastMessages) == 0 {
-		return newMessages
-	}
-	out := []*wakupb.WakuMessage{}
-	for _, newMessage := range newMessages {
-		exists := false
-		for _, oldMessage := range lastMessages {
-			if newMessage.ContentTopic == oldMessage.ContentTopic && newMessage.Timestamp == oldMessage.Timestamp && bytes.Equal(newMessage.Payload, oldMessage.Payload) {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			out = append(out, newMessage)
-		}
-	}
-	return out
-}
-
 func (s *Service) Close() {
 	s.log.Info("closing")
 	if s.relaySub != nil {
 		s.relaySub.Unsubscribe()
 	}
-	if s.dispatcher != nil {
-		s.dispatcher.Close()
-	}
 
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
+
+	if s.nc != nil {
+		s.nc.Close()
+	}
+	if s.ns != nil {
+		s.ns.Shutdown()
+	}
+
 	s.wg.Wait()
 	s.log.Info("closed")
 }
@@ -182,10 +163,10 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			}
 		}
 
-		// _, err := s.waku.Relay().Publish(ctx, wakuMsg)
-		// if err != nil {
-		// 	return nil, status.Errorf(codes.Internal, err.Error())
-		// }
+		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
 		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
@@ -195,32 +176,47 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("started")
 	defer log.Debug("stopped")
+
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
-	subC := s.dispatcher.Register(nil, req.ContentTopics...)
-	defer s.dispatcher.Unregister(subC)
 
-	for {
-		select {
-		case <-stream.Context().Done():
-			log.Debug("stream closed")
-			return nil
-		case <-s.ctx.Done():
-			log.Info("service closed")
-			return nil
-		case obj := <-subC:
-			env, ok := obj.(*proto.Envelope)
-			if !ok {
-				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-				continue
-			}
-
-			err := stream.Send(env)
+	var streamLock sync.Mutex
+	for _, topic := range req.ContentTopics {
+		sub, err := s.nc.Subscribe(topic, func(msg *nats.Msg) {
+			var env proto.Envelope
+			err := pb.Unmarshal(msg.Data, &env)
 			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
+				log.Error("parsing envelope from bytes", zap.Error(err))
+				return
 			}
+			if topic == natsWildcardTopic && !isValidSubscribeAllTopic(env.ContentTopic) {
+				return
+			}
+			func() {
+				streamLock.Lock()
+				defer streamLock.Unlock()
+				err := stream.Send(&env)
+				if err != nil {
+					log.Error("sending envelope to subscribe", zap.Error(err))
+				}
+			}()
+		})
+		if err != nil {
+			return err
 		}
+		defer func() {
+			_ = sub.Unsubscribe()
+		}()
+	}
+
+	select {
+	case <-stream.Context().Done():
+		log.Debug("stream closed")
+		return nil
+	case <-s.ctx.Done():
+		log.Info("service closed")
+		return nil
 	}
 }
 
@@ -228,28 +224,44 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 	log := s.log.Named("subscribe2")
 	log.Debug("started")
 	defer log.Debug("stopped")
+
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	ch := make(chan interface{})
-	defer s.dispatcher.Unregister(ch)
-
 	requestChannel := make(chan *proto.SubscribeRequest)
 	go func() {
 		for {
-			req, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF && err != context.Canceled {
-					log.Error("reading subscription", zap.Error(err))
-				}
-				close(requestChannel)
+			select {
+			case <-stream.Context().Done():
 				return
+			case <-s.ctx.Done():
+				return
+			default:
+				req, err := stream.Recv()
+				if err != nil {
+					if e, ok := status.FromError(err); ok {
+						if e.Code() != codes.Canceled {
+							log.Error("reading subscription", zap.Error(err))
+						}
+					} else if err != io.EOF && err != context.Canceled {
+						log.Error("reading subscription", zap.Error(err))
+					}
+					close(requestChannel)
+					return
+				}
+				requestChannel <- req
 			}
-			requestChannel <- req
 		}
 	}()
 
+	subs := map[string]*nats.Subscription{}
+	defer func() {
+		for _, sub := range subs {
+			_ = sub.Unsubscribe()
+		}
+	}()
+	var streamLock sync.Mutex
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -263,17 +275,44 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				continue
 			}
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
-			s.dispatcher.Update(ch, req.ContentTopics...)
-		case obj := <-ch:
-			env, ok := obj.(*proto.Envelope)
-			if !ok {
-				log.Warn("non-envelope received on subscription channel", zap.Any("object", obj))
-				continue
+
+			topics := map[string]bool{}
+			for _, topic := range req.ContentTopics {
+				topics[topic] = true
+
+				// If topic not in existing subscriptions, then subscribe.
+				if _, ok := subs[topic]; !ok {
+					sub, err := s.nc.Subscribe(topic, func(msg *nats.Msg) {
+						var env proto.Envelope
+						err := pb.Unmarshal(msg.Data, &env)
+						if err != nil {
+							log.Info("unmarshaling envelope", zap.Error(err))
+							return
+						}
+						func() {
+							streamLock.Lock()
+							defer streamLock.Unlock()
+
+							err = stream.Send(&env)
+							if err != nil {
+								log.Error("sending envelope to subscriber", zap.Error(err))
+							}
+						}()
+					})
+					if err != nil {
+						return err
+					}
+					subs[topic] = sub
+				}
 			}
 
-			err := stream.Send(env)
-			if err != nil {
-				log.Error("sending envelope to subscriber", zap.Error(err))
+			// If subscription not in topic, then unsubscribe.
+			for topic, sub := range subs {
+				if topics[topic] {
+					continue
+				}
+				_ = sub.Unsubscribe()
+				delete(subs, topic)
 			}
 		}
 	}
@@ -284,8 +323,10 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 	log.Debug("started")
 	defer log.Debug("stopped")
 
+	// Subscribe to all nats subjects via wildcard
+	// https://docs.nats.io/nats-concepts/subjects#wildcards
 	return s.Subscribe(&proto.SubscribeRequest{
-		ContentTopics: []string{contentTopicAllXMTP},
+		ContentTopics: []string{natsWildcardTopic},
 	}, stream)
 }
 
@@ -445,7 +486,7 @@ func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
 	return pagingInfo
 }
 
-func isValidTopic(topic string) bool {
+func isValidSubscribeAllTopic(topic string) bool {
 	return strings.HasPrefix(topic, validXMTPTopicPrefix)
 }
 
