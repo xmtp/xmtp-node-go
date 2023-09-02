@@ -15,7 +15,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/status-im/go-waku/tests"
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakustore "github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,11 +63,9 @@ func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
-func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func NewNode(t *testing.T, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
-
 	prvKey := NewPrivateKey(t)
-
 	ctx := context.Background()
 	opts = append([]wakunode.WakuNodeOption{
 		wakunode.WithPrivateKey(prvKey),
@@ -79,13 +76,6 @@ func NewNode(t *testing.T, storeNodes []*wakunode.WakuNode, opts ...wakunode.Wak
 	}, opts...)
 	node, err := wakunode.New(ctx, opts...)
 	require.NoError(t, err)
-
-	// Connect to store nodes before starting, similar to what happens in the
-	// main entrypoint in server.go.
-	for _, storeNode := range storeNodes {
-		_, err := node.AddPeer(storeNode.ListenAddresses()[0], string(wakustore.StoreID_v20beta4))
-		require.NoError(t, err)
-	}
 
 	err = node.Start()
 	require.NoError(t, err)

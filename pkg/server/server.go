@@ -25,7 +25,6 @@ import (
 	"github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
-	"github.com/status-im/go-waku/waku/v2/protocol/store"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -47,6 +46,7 @@ import (
 type Server struct {
 	log           *zap.Logger
 	hostAddr      *net.TCPAddr
+	store         *xmtpstore.Store
 	db            *sql.DB
 	readerDB      *sql.DB
 	cleanerDB     *sql.DB
@@ -87,38 +87,10 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	s.ctx, s.cancel = context.WithCancel(logging.With(ctx, s.log))
 
-	s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating db")
-	}
-	s.log.Info("created db")
-
-	s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating reader db")
-	}
-
-	s.cleanerDB, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Cleaner.ReadTimeout, options.Cleaner.WriteTimeout, options.Store.MaxOpenConns)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating cleaner db")
-	}
-
 	if options.Metrics.Enable {
 		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
 		metrics.RegisterViews(s.log)
 		s.metricsServer.Start(s.ctx)
-	}
-
-	if options.Authz.DbConnectionString != "" {
-		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
-		if err != nil {
-			return nil, errors.Wrap(err, "creating authz db")
-		}
-		s.allowLister = authz.NewDatabaseWalletAllowLister(db, s.log)
-		err = s.allowLister.Start(s.ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "creating wallet authorizer")
-		}
 	}
 
 	nodeOpts := []node.WakuNodeOption{
@@ -165,32 +137,45 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		nodeOpts = append(nodeOpts, node.WithWakuFilter(true, filter.WithTimeout(time.Duration(options.Filter.Timeout)*time.Second)))
 	}
 
-	if options.Store.Enable {
-		nodeOpts = append(nodeOpts, node.WithWakuStore(false, options.Store.ShouldResume))
-		dbStore, err := xmtpstore.NewDBStore(s.log, xmtpstore.WithDBStoreDB(s.db))
+	if options.Authz.DbConnectionString != "" {
+		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
 		if err != nil {
-			return nil, errors.Wrap(err, "creating db store")
+			return nil, errors.Wrap(err, "creating authz db")
 		}
-		nodeOpts = append(nodeOpts, node.WithMessageProvider(dbStore))
-		// Not actually using the store just yet, as I would like to release this in chunks rather than have a monstrous PR.
+		s.allowLister = authz.NewDatabaseWalletAllowLister(db, s.log)
+		err = s.allowLister.Start(s.ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating wallet authorizer")
+		}
+	}
 
-		nodeOpts = append(nodeOpts, node.WithWakuStoreFactory(func(w *node.WakuNode) store.Store {
-			store, err := xmtpstore.NewXmtpStore(
-				xmtpstore.WithLog(s.log),
-				xmtpstore.WithHost(w.Host()),
-				xmtpstore.WithDB(s.db),
-				xmtpstore.WithReaderDB(s.readerDB),
-				xmtpstore.WithCleanerDB(s.cleanerDB),
-				xmtpstore.WithCleaner(options.Cleaner),
-				xmtpstore.WithMessageProvider(dbStore),
-				xmtpstore.WithStatsPeriod(options.Metrics.StatusPeriod),
-				xmtpstore.WithResumeStartTime(options.Store.ResumeStartTime),
-			)
-			if err != nil {
-				s.log.Fatal("initializing store", zap.Error(err))
-			}
-			return store
-		}))
+	if options.Store.Enable {
+		s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating db")
+		}
+		s.log.Info("created db")
+
+		s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating reader db")
+		}
+
+		s.cleanerDB, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.Cleaner.ReadTimeout, options.Store.Cleaner.WriteTimeout, options.Store.MaxOpenConns)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating cleaner db")
+		}
+
+		s.store, err = xmtpstore.New(&xmtpstore.Config{
+			Options:   options.Store,
+			Log:       log,
+			DB:        s.db,
+			ReaderDB:  s.readerDB,
+			CleanerDB: s.cleanerDB,
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing store")
+		}
 	}
 
 	if options.LightPush.Enable {
@@ -206,10 +191,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
 	}
 
-	err = addPeers(s.wakuNode, options.Store.Nodes, string(store.StoreID_v20beta4))
-	if err != nil {
-		return nil, errors.Wrap(err, "adding peer")
-	}
 	err = addPeers(s.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
 	if err != nil {
 		return nil, errors.Wrap(err, "adding peer")
@@ -256,6 +237,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Options:     options.API,
 			Log:         s.log.Named("api"),
 			Waku:        s.wakuNode,
+			Store:       s.store,
 			AllowLister: s.allowLister,
 		},
 	)
@@ -276,16 +258,29 @@ func (s *Server) WaitForShutdown() {
 func (s *Server) Shutdown() {
 	s.log.Info("shutting down...")
 
-	// shut the node down
+	// Close waku node.
 	s.wakuNode.Stop()
 
+	// Close allow lister.
 	if s.allowLister != nil {
 		s.allowLister.Stop()
 	}
 
-	// Close the DB.
-	s.db.Close()
+	// Close the DBs and store.
+	if s.db != nil {
+		s.db.Close()
+	}
+	if s.readerDB != nil {
+		s.readerDB.Close()
+	}
+	if s.cleanerDB != nil {
+		s.cleanerDB.Close()
+	}
+	if s.store != nil {
+		s.store.Close()
+	}
 
+	// Close metrics server.
 	if s.metricsServer != nil {
 		if err := s.metricsServer.Stop(s.ctx); err != nil {
 			s.log.Error("stopping metrics", zap.Error(err))
@@ -351,8 +346,8 @@ func (s *Server) staticNodesConnectLoop(staticNodes []string) {
 }
 
 func (s *Server) statusMetricsLoop(options Options) {
-	s.log.Info("starting status metrics loop", zap.Duration("period", options.Metrics.StatusPeriod))
-	ticker := time.NewTicker(options.Metrics.StatusPeriod)
+	s.log.Info("starting status metrics loop", zap.Duration("period", options.MetricsPeriod))
+	ticker := time.NewTicker(options.MetricsPeriod)
 	bootstrapPeers := map[peer.ID]bool{}
 	for _, addr := range options.StaticNodes {
 		maddr, err := multiaddr.NewMultiaddr(addr)

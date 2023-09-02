@@ -26,7 +26,7 @@ services:
       - 18008:8008
     restart: always
     command:
-    - --store
+    - --store.enable
     - --metrics
     - --metrics-address=0.0.0.0
     - --ws
@@ -58,7 +58,7 @@ services:
       - 25555:5555
     restart: always
     command:
-    - --store
+    - --store.enable
     - --metrics
     - --metrics-address=0.0.0.0
     - --ws
@@ -90,7 +90,7 @@ services:
       - 35555:5555
     restart: always
     command:
-    - --store
+    - --store.enable
     - --metrics
     - --metrics-address=0.0.0.0
     - --ws
@@ -122,7 +122,7 @@ services:
       - 45555:5555
     restart: always
     command:
-    - --store
+    - --store.enable
     - --metrics
     - --metrics-address=0.0.0.0
     - --ws

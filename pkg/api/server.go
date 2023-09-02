@@ -46,7 +46,7 @@ type Server struct {
 }
 
 func New(config *Config) (*Server, error) {
-	if err := config.check(); err != nil {
+	if err := config.validate(); err != nil {
 		return nil, err
 	}
 
@@ -114,7 +114,7 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log)
+	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.Store)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}

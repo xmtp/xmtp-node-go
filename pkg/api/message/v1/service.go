@@ -44,8 +44,9 @@ type Service struct {
 	proto.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log  *zap.Logger
-	waku *wakunode.WakuNode
+	log   *zap.Logger
+	waku  *wakunode.WakuNode
+	store *store.Store
 
 	// Configured internally.
 	ctx       context.Context
@@ -57,10 +58,11 @@ type Service struct {
 	nc *nats.Conn
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store) (s *Service, err error) {
 	s = &Service{
-		waku: node,
-		log:  logger.Named("message/v1"),
+		waku:  node,
+		log:   logger.Named("message/v1"),
+		store: store,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -143,29 +145,22 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
 		}
 
-		wakuMsg := &wakupb.WakuMessage{
-			ContentTopic: env.ContentTopic,
-			Timestamp:    toWakuTimestamp(env.TimestampNs),
-			Payload:      env.Message,
-		}
-
 		if len(env.Message) > MaxMessageSize {
 			return nil, status.Errorf(codes.InvalidArgument, "message too big")
 		}
 
-		store, ok := s.waku.Store().(*store.XmtpStore)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-		}
-
 		if !topic.IsEphemeral(env.ContentTopic) {
-			_, err := store.InsertMessage(wakuMsg)
+			_, err := s.store.InsertMessage(env)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, err.Error())
 			}
 		}
 
-		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		_, err := s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+			ContentTopic: env.ContentTopic,
+			Timestamp:    int64(env.TimestampNs),
+			Payload:      env.Message,
+		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
@@ -368,31 +363,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
-	store, ok := s.waku.Store().(*store.XmtpStore)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "waku store not xmtp store")
-	}
-	start := time.Now()
-	res, err := store.FindMessages(buildWakuQuery(req))
-	duration := time.Since(start)
-	if err != nil {
-		metrics.EmitQuery(ctx, req, 0, err, duration)
-		return nil, status.Errorf(codes.Internal, err.Error())
-	}
-	metrics.EmitQuery(ctx, req, len(res.Messages), nil, duration)
-	if duration > 10*time.Millisecond {
-		log.With(zap.Duration("duration", duration), zap.Int("results", len(res.Messages))).Info("slow query")
-	}
-
-	envs := make([]*proto.Envelope, 0, len(res.Messages))
-	for _, msg := range res.Messages {
-		envs = append(envs, buildEnvelope(msg))
-	}
-
-	return &proto.QueryResponse{
-		Envelopes:  envs,
-		PagingInfo: buildPagingInfo(res.PagingInfo),
-	}, nil
+	return s.store.Query(req)
 }
 
 func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
@@ -430,69 +401,6 @@ func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
 	}
 }
 
-func buildWakuQuery(req *proto.QueryRequest) *wakupb.HistoryQuery {
-	contentFilters := []*wakupb.ContentFilter{}
-	for _, contentTopic := range req.ContentTopics {
-		if contentTopic != "" {
-			contentFilters = append(contentFilters, &wakupb.ContentFilter{
-				ContentTopic: contentTopic,
-			})
-		}
-	}
-
-	return &wakupb.HistoryQuery{
-		ContentFilters: contentFilters,
-		StartTime:      toWakuTimestamp(req.StartTimeNs),
-		EndTime:        toWakuTimestamp(req.EndTimeNs),
-		PagingInfo:     buildWakuPagingInfo(req.PagingInfo),
-	}
-}
-
-func buildPagingInfo(pi *wakupb.PagingInfo) *proto.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	var pagingInfo proto.PagingInfo
-	pagingInfo.Limit = uint32(pi.PageSize)
-	switch pi.Direction {
-	case wakupb.PagingInfo_BACKWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_DESCENDING
-	case wakupb.PagingInfo_FORWARD:
-		pagingInfo.Direction = proto.SortDirection_SORT_DIRECTION_ASCENDING
-	}
-	if index := pi.Cursor; index != nil {
-		pagingInfo.Cursor = &proto.Cursor{
-			Cursor: &proto.Cursor_Index{
-				Index: &proto.IndexCursor{
-					Digest:       index.Digest,
-					SenderTimeNs: uint64(index.SenderTime),
-				}}}
-	}
-	return &pagingInfo
-}
-
-func buildWakuPagingInfo(pi *proto.PagingInfo) *wakupb.PagingInfo {
-	if pi == nil {
-		return nil
-	}
-	pagingInfo := &wakupb.PagingInfo{
-		PageSize: uint64(pi.Limit),
-	}
-	switch pi.Direction {
-	case proto.SortDirection_SORT_DIRECTION_ASCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_FORWARD
-	case proto.SortDirection_SORT_DIRECTION_DESCENDING:
-		pagingInfo.Direction = wakupb.PagingInfo_BACKWARD
-	}
-	if ic := pi.Cursor.GetIndex(); ic != nil {
-		pagingInfo.Cursor = &wakupb.Index{
-			Digest:     ic.Digest,
-			SenderTime: toWakuTimestamp(ic.SenderTimeNs),
-		}
-	}
-	return pagingInfo
-}
-
 func isValidSubscribeAllTopic(topic string) bool {
 	return strings.HasPrefix(topic, validXMTPTopicPrefix)
 }
@@ -502,10 +410,6 @@ func fromWakuTimestamp(ts int64) uint64 {
 		return 0
 	}
 	return uint64(ts)
-}
-
-func toWakuTimestamp(ts uint64) int64 {
-	return int64(ts)
 }
 
 func buildNatsSubject(topic string) string {

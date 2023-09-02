@@ -30,34 +30,12 @@ type LightpushOptions struct {
 	Nodes  []string `long:"lightpush-node" description:"Multiaddr of a peer that supports lightpush protocol. Option may be repeated"`
 }
 
-// StoreOptions are settings used for enabling the store protocol, used to
-// retrieve message history from other nodes as well as acting as a store
-// node and provide message history to nodes that ask for it.
-type StoreOptions struct {
-	Enable                   bool          `long:"store" description:"Enable store protocol"`
-	ShouldResume             bool          `long:"resume" description:"fix the gap in message history"`
-	ResumeStartTime          int64         `long:"resume-start-time" description:"resume from this start time" default:"-1"`
-	RetentionMaxDays         int           `long:"keep-history-days" description:"maximum number of days before a message is removed from the store" default:"30"`
-	RetentionMaxMessages     int           `long:"max-history-messages" description:"maximum number of messages to store" default:"50000"`
-	Nodes                    []string      `long:"store-node" description:"Multiaddr of a peer that supports store protocol. Option may be repeated"`
-	DbConnectionString       string        `long:"message-db-connection-string" description:"A Postgres database connection string"`
-	DbReaderConnectionString string        `long:"message-db-reader-connection-string" description:"A Postgres database reader connection string"`
-	ReadTimeout              time.Duration `long:"message-db-read-timeout" description:"Timeout for reading from the database" default:"10s"`
-	WriteTimeout             time.Duration `long:"message-db-write-timeout" description:"Timeout for writing to the database" default:"10s"`
-	MaxOpenConns             int           `long:"max-open-conns" description:"Maximum number of open connections" default:"80"`
-}
-
-func (s *StoreOptions) RetentionMaxDaysDuration() time.Duration {
-	return time.Duration(s.RetentionMaxDays) * time.Hour * 24
-}
-
 // MetricsOptions are settings used to start a prometheus server for obtaining
 // useful node metrics to monitor the health of behavior of the go-waku node.
 type MetricsOptions struct {
-	Enable       bool          `long:"metrics" description:"Enable the metrics server"`
-	Address      string        `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
-	Port         int           `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
-	StatusPeriod time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
+	Enable  bool   `long:"metrics" description:"Enable the metrics server"`
+	Address string `long:"metrics-address" description:"Listening address of the metrics server" default:"127.0.0.1"`
+	Port    int    `long:"metrics-port" description:"Listening HTTP port of the metrics server" default:"8008"`
 }
 
 // TracingOptions are settings controlling collection of DD APM traces and error tracking.
@@ -103,15 +81,15 @@ type Options struct {
 	WaitForDB              time.Duration `long:"wait-for-db" description:"wait for DB on start, up to specified duration"`
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
+	MetricsPeriod          time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 
-	API       api.Options          `group:"API Options" namespace:"api"`
-	Authz     AuthzOptions         `group:"Authz Options"`
-	Relay     RelayOptions         `group:"Relay Options"`
-	Store     StoreOptions         `group:"Store Options"`
-	Filter    FilterOptions        `group:"Filter Options"`
-	LightPush LightpushOptions     `group:"LightPush Options"`
-	Metrics   MetricsOptions       `group:"Metrics Options"`
-	Tracing   TracingOptions       `group:"DD APM Tracing Options"`
-	Profiling ProfilingOptions     `group:"DD APM Profiling Options" namespace:"profiling"`
-	Cleaner   store.CleanerOptions `group:"DB Cleaner Options" namespace:"cleaner"`
+	API       api.Options      `group:"API Options" namespace:"api"`
+	Authz     AuthzOptions     `group:"Authz Options"`
+	Relay     RelayOptions     `group:"Relay Options"`
+	Store     store.Options    `group:"Store Options" namespace:"store"`
+	Filter    FilterOptions    `group:"Filter Options"`
+	LightPush LightpushOptions `group:"LightPush Options"`
+	Metrics   MetricsOptions   `group:"Metrics Options"`
+	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
+	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
 }
