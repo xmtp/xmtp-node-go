@@ -226,28 +226,6 @@ func messagesFromStoredMessages(storedMessages []persistence.StoredMessage) []*p
 	return out
 }
 
-func findMessagesSince(db *sql.DB, receiverTimestamp int64) (results []*pb.WakuMessage, err error) {
-	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
-
-	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").From("message")
-
-	sb.Where(sb.GreaterEqualThan("receiverTimestamp", receiverTimestamp))
-	addSort(sb, pb.PagingInfo_FORWARD)
-
-	sql, args := sb.Build()
-	rows, err := db.Query(sql, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	messages, err := rowsToMessages(rows)
-	if err != nil {
-		return nil, err
-	}
-	return messagesFromStoredMessages(messages), nil
-}
-
 func rowsToMessages(rows *sql.Rows) (result []persistence.StoredMessage, err error) {
 	defer rows.Close()
 
