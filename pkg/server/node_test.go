@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/stretchr/testify/require"
+	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 

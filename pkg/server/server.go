@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -16,18 +15,18 @@ import (
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	libp2p "github.com/libp2p/go-libp2p"
-	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/status-im/go-waku/waku/v2/node"
-	"github.com/status-im/go-waku/waku/v2/protocol/relay"
-	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
+	"github.com/waku-org/go-waku/waku/v2/node"
+	"github.com/waku-org/go-waku/waku/v2/protocol/relay"
+	"github.com/waku-org/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
@@ -39,6 +38,7 @@ import (
 	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Server struct {
@@ -91,46 +91,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		s.metricsServer.Start(s.ctx)
 	}
 
-	nodeOpts := []node.WakuNodeOption{
-		node.WithLogger(s.log.Named("gowaku")),
-		node.WithPrivateKey(prvKey),
-		node.WithHostAddress(s.hostAddr),
-		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
-	}
-
-	if options.EnableWS {
-		nodeOpts = append(nodeOpts, node.WithWebsockets(options.WSAddress, options.WSPort))
-	}
-
-	libp2pOpts := node.DefaultLibP2POptions
-	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.
-
-	nodeOpts = append(nodeOpts, node.WithLibP2POptions(libp2pOpts...))
-
-	if !options.Relay.Disable {
-		var wakurelayopts []pubsub.Option
-		directPeers := make([]peer.AddrInfo, 0, len(options.StaticNodes))
-		for _, staticNode := range options.StaticNodes {
-			ma, err := multiaddr.NewMultiaddr(staticNode)
-			if err != nil {
-				s.log.Error("building multiaddr from static node addr", zap.Error(err))
-				continue
-			}
-			pi, err := peer.AddrInfoFromP2pAddr(ma)
-			if err != nil {
-				s.log.Error("getting peer addr info from static node addr", zap.Error(err))
-				continue
-			}
-			if pi == nil {
-				s.log.Error("static node peer addr is nil", zap.String("peer", staticNode))
-				continue
-			}
-			directPeers = append(directPeers, *pi)
-		}
-		wakurelayopts = append(wakurelayopts, pubsub.WithPeerExchange(true), pubsub.WithDirectPeers(directPeers))
-		nodeOpts = append(nodeOpts, node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...))
-	}
-
 	if options.Authz.DbConnectionString != "" {
 		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
 		if err != nil {
@@ -172,7 +132,52 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	s.wakuNode, err = node.New(s.ctx, nodeOpts...)
+	level, err := zapcore.ParseLevel(options.LogLevel)
+	if err != nil {
+		return nil, errors.Wrap(err, "parsing log level")
+	}
+	wakuOpts := []node.WakuNodeOption{
+		node.WithLogger(s.log.Named("gowaku")),
+		node.WithLogLevel(level),
+		node.WithPrivateKey(prvKey),
+		node.WithHostAddress(s.hostAddr),
+		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
+	}
+
+	if options.EnableWS {
+		wakuOpts = append(wakuOpts, node.WithWebsockets(options.WSAddress, options.WSPort))
+	}
+
+	libp2pOpts := node.DefaultLibP2POptions
+	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.
+
+	wakuOpts = append(wakuOpts, node.WithLibP2POptions(libp2pOpts...))
+
+	if !options.Relay.Disable {
+		var wakurelayopts []pubsub.Option
+		directPeers := make([]peer.AddrInfo, 0, len(options.StaticNodes))
+		for _, staticNode := range options.StaticNodes {
+			ma, err := multiaddr.NewMultiaddr(staticNode)
+			if err != nil {
+				s.log.Error("building multiaddr from static node addr", zap.Error(err))
+				continue
+			}
+			pi, err := peer.AddrInfoFromP2pAddr(ma)
+			if err != nil {
+				s.log.Error("getting peer addr info from static node addr", zap.Error(err))
+				continue
+			}
+			if pi == nil {
+				s.log.Error("static node peer addr is nil", zap.String("peer", staticNode))
+				continue
+			}
+			directPeers = append(directPeers, *pi)
+		}
+		wakurelayopts = append(wakurelayopts, pubsub.WithPeerExchange(true), pubsub.WithDirectPeers(directPeers))
+		wakuOpts = append(wakuOpts, node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...))
+	}
+
+	s.wakuNode, err = node.New(wakuOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing waku node")
 	}
@@ -181,8 +186,9 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
 	}
 
-	if err = s.wakuNode.Start(); err != nil {
-		s.log.Fatal(fmt.Errorf("could not start waku node, %w", err).Error())
+	err = s.wakuNode.Start(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "starting waku node")
 	}
 
 	s.authenticator = authn.NewXmtpAuthentication(s.ctx, s.wakuNode.Host(), s.log)
@@ -195,12 +201,10 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	if !options.Relay.Disable {
 		for _, nodeTopic := range options.Relay.Topics {
 			nodeTopic := nodeTopic
-			sub, err := s.wakuNode.Relay().SubscribeToTopic(s.ctx, nodeTopic)
+			_, err := s.wakuNode.Relay().SubscribeToTopic(s.ctx, nodeTopic)
 			if err != nil {
 				return nil, errors.Wrap(err, "subscribing to pubsub topic")
 			}
-			// Unregister from broadcaster. Otherwise this channel will fill until it blocks publishing
-			s.wakuNode.Broadcaster().Unregister(&nodeTopic, sub.C)
 		}
 	}
 
@@ -354,7 +358,7 @@ func (s *Server) statusMetricsLoop(options Options) {
 }
 
 func loadPrivateKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
-	src, err := ioutil.ReadFile(path)
+	src, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +419,7 @@ func WritePrivateKeyToFile(path string, overwrite bool) error {
 		return err
 	}
 
-	return ioutil.WriteFile(path, output, 0600)
+	return os.WriteFile(path, output, 0600)
 }
 
 func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {

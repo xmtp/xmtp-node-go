@@ -3,8 +3,9 @@ package metrics
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -35,11 +36,11 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 	byProtocol := map[string]int64{}
 	ps := host.Peerstore()
 	for _, peer := range ps.Peers() {
-		protos, err := ps.GetProtocols(peer)
+		protocols, err := ps.GetProtocols(peer)
 		if err != nil {
 			continue
 		}
-		for _, proto := range protos {
+		for _, proto := range protocol.ConvertToStrings(protocols) {
 			byProtocol[proto]++
 		}
 	}
