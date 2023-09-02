@@ -58,7 +58,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	s.dispatcher = newDispatcher()
-	go s.pollForMessages()
+	// go s.pollForMessages()
 	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "subscribing to relay")
@@ -182,10 +182,10 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			}
 		}
 
-		// _, err := s.waku.Relay().Publish(ctx, wakuMsg)
-		// if err != nil {
-		// 	return nil, status.Errorf(codes.Internal, err.Error())
-		// }
+		_, err := s.waku.Relay().Publish(ctx, wakuMsg)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
 		metrics.EmitPublishedEnvelope(ctx, env)
 	}
 	return &proto.PublishResponse{}, nil
@@ -200,6 +200,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 	subC := s.dispatcher.Register(nil, req.ContentTopics...)
 	defer s.dispatcher.Unregister(subC)
+	defer close(subC)
 
 	for {
 		select {
@@ -234,6 +235,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 	ch := make(chan interface{})
 	defer s.dispatcher.Unregister(ch)
+	defer close(ch)
 
 	requestChannel := make(chan *proto.SubscribeRequest)
 	go func() {
