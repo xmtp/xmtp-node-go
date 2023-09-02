@@ -51,6 +51,7 @@ type DatabaseWalletAllowLister struct {
 	db              *bun.DB
 	log             *zap.Logger
 	permissions     map[string]Permission
+	permissionsLock sync.RWMutex
 	refreshInterval time.Duration
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -69,6 +70,9 @@ func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAl
 
 // Get the permissions for a wallet address
 func (d *DatabaseWalletAllowLister) GetPermissions(walletAddress string) Permission {
+	d.permissionsLock.RLock()
+	defer d.permissionsLock.RUnlock()
+
 	permission, hasPermission := d.permissions[walletAddress]
 	if !hasPermission {
 		return Unspecified
@@ -97,6 +101,9 @@ func (d *DatabaseWalletAllowLister) Allow(ctx context.Context, walletAddress str
 }
 
 func (d *DatabaseWalletAllowLister) Apply(ctx context.Context, walletAddress string, permission Permission) error {
+	d.permissionsLock.Lock()
+	defer d.permissionsLock.Unlock()
+
 	wallet := WalletAddress{
 		WalletAddress: walletAddress,
 		Permission:    unmapPermission(permission),
@@ -132,6 +139,9 @@ func (d *DatabaseWalletAllowLister) Start(ctx context.Context) error {
 // Currently just loads absolutely everything, since n is going to be small enough for now.
 // Should be possible to do incrementally if we need to using the created_at field
 func (d *DatabaseWalletAllowLister) loadPermissions() error {
+	d.permissionsLock.Lock()
+	defer d.permissionsLock.Unlock()
+
 	var wallets []WalletAddress
 	query := d.db.NewSelect().Model(&wallets).Where("deleted_at IS NULL")
 	if err := query.Scan(d.ctx); err != nil {

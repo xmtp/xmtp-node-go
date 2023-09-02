@@ -164,7 +164,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		metrics.EmitPublishedEnvelope(ctx, env)
+		metrics.EmitPublishedEnvelope(ctx, log, env)
 	}
 	return &proto.PublishResponse{}, nil
 }

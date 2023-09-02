@@ -6,7 +6,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/waku-org/go-waku/waku/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -16,16 +15,20 @@ import (
 
 // Server wraps go-waku metrics server, so that we don't need to reference the go-waku package anywhere
 type Server struct {
+	log  *zap.Logger
 	waku *metrics.Server
 	http *http.Server
 }
 
-func NewMetricsServer(address string, port int, logger *zap.Logger) *Server {
-	return &Server{waku: metrics.NewMetricsServer(address, port, logger)}
+func NewMetricsServer(address string, port int, log *zap.Logger) *Server {
+	return &Server{
+		log:  log,
+		waku: metrics.NewMetricsServer(address, port, log),
+	}
 }
 
 func (s *Server) Start(ctx context.Context) {
-	log := logging.From(ctx).Named("metrics")
+	log := s.log.Named("metrics")
 	go tracing.PanicWrap(ctx, "waku metrics server", func(_ context.Context) { s.waku.Start() })
 	s.http = &http.Server{Addr: ":8009", Handler: promhttp.Handler()}
 	go tracing.PanicWrap(ctx, "metrics server", func(_ context.Context) {

@@ -83,7 +83,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log = s.log.With(logging.HostID("node", id))
 
-	s.ctx, s.cancel = context.WithCancel(logging.With(ctx, s.log))
+	s.ctx, s.cancel = context.WithCancel(ctx)
 
 	if options.Metrics.Enable {
 		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
@@ -351,7 +351,7 @@ func (s *Server) statusMetricsLoop(options Options) {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitPeersByProtocol(s.ctx, s.wakuNode.Host())
+			metrics.EmitPeersByProtocol(s.ctx, s.log, s.wakuNode.Host())
 			if len(bootstrapPeers) > 0 {
 				metrics.EmitBootstrapPeersConnected(s.ctx, s.wakuNode.Host(), bootstrapPeers)
 			}
