@@ -1,4 +1,6 @@
 #!/bin/bash
 set -e
 
+ulimit -n 2048
+
 go test ./... "$@"

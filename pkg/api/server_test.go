@@ -28,8 +28,10 @@ func Test_HTTPNotFound(t *testing.T) {
 
 	// Root path responds with 404.
 	var rootRes map[string]interface{}
-	resp, err := http.Post(server.httpListenAddr()+"/not-found", "application/json", nil)
+	client := http.Client{Timeout: time.Second * 2}
+	resp, err := client.Post(server.httpListenAddr()+"/not-found", "application/json", nil)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	err = json.Unmarshal(body, &rootRes)
@@ -48,8 +50,10 @@ func Test_HTTPRootPath(t *testing.T) {
 	defer cleanup()
 
 	// Root path responds with 404.
-	resp, err := http.Post(server.httpListenAddr(), "", nil)
+	client := http.Client{Timeout: time.Second * 2}
+	resp, err := client.Post(server.httpListenAddr(), "", nil)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NotEmpty(t, body)
