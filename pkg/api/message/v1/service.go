@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"strings"
 	"sync"
@@ -99,7 +101,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger) (s *Service, err er
 					s.log.Error("marshalling envelope", zap.Error(err))
 					continue
 				}
-				err = s.nc.Publish(env.ContentTopic, envB)
+				err = s.nc.Publish(buildNatsSubject(env.ContentTopic), envB)
 				if err != nil {
 					s.log.Error("publishing envelope to local nats", zap.Error(err))
 					continue
@@ -183,7 +185,11 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 
 	var streamLock sync.Mutex
 	for _, topic := range req.ContentTopics {
-		sub, err := s.nc.Subscribe(topic, func(msg *nats.Msg) {
+		subject := topic
+		if subject != natsWildcardTopic {
+			subject = buildNatsSubject(topic)
+		}
+		sub, err := s.nc.Subscribe(subject, func(msg *nats.Msg) {
 			var env proto.Envelope
 			err := pb.Unmarshal(msg.Data, &env)
 			if err != nil {
@@ -283,7 +289,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 				// If topic not in existing subscriptions, then subscribe.
 				if _, ok := subs[topic]; !ok {
-					sub, err := s.nc.Subscribe(topic, func(msg *nats.Msg) {
+					sub, err := s.nc.Subscribe(buildNatsSubject(topic), func(msg *nats.Msg) {
 						var env proto.Envelope
 						err := pb.Unmarshal(msg.Data, &env)
 						if err != nil {
@@ -500,4 +506,9 @@ func fromWakuTimestamp(ts int64) uint64 {
 
 func toWakuTimestamp(ts uint64) int64 {
 	return int64(ts)
+}
+
+func buildNatsSubject(topic string) string {
+	hash := sha256.Sum256([]byte(topic))
+	return hex.EncodeToString(hash[:])
 }
