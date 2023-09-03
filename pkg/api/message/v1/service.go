@@ -135,7 +135,7 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Info("received message")
+		log.Debug("received message")
 
 		if len(env.ContentTopic) > MaxContentTopicNameSize {
 			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")

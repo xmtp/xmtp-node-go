@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -78,6 +79,11 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 			fields = append(fields, []zapcore.Field{
 				zap.String("error_code", errCode),
 				zap.String("error_message", grpcErr.Message()),
+			}...)
+		} else {
+			fields = append(fields, []zapcore.Field{
+				zap.String("error_code", codes.Internal.String()),
+				zap.String("error_message", err.Error()),
 			}...)
 		}
 	}
