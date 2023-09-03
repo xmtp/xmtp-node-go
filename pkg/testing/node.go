@@ -71,7 +71,6 @@ func NewNode(t *testing.T, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode,
 		wakunode.WithPrivateKey(prvKey),
 		wakunode.WithHostAddress(hostAddr),
 		wakunode.WithWakuRelay(),
-		wakunode.WithWakuFilter(true),
 		wakunode.WithWebsockets("0.0.0.0", 0),
 	}, opts...)
 	node, err := wakunode.New(ctx, opts...)

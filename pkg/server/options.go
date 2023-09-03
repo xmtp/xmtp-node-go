@@ -13,23 +13,6 @@ type RelayOptions struct {
 	MinRelayPeersToPublish int      `long:"min-relay-peers-to-publish" description:"Minimum number of peers to publish to Relay" default:"0"`
 }
 
-type FilterOptions struct {
-	Enable  bool     `long:"filter" description:"Enable filter protocol"`
-	Nodes   []string `long:"filter-node" description:"Multiaddr of a peer that supports filter protocol. Option may be repeated"`
-	Timeout int      `long:"filter-timeout" description:"Timeout for filter node in seconds" default:"14400"`
-}
-
-// LightpushOptions are settings used to enable the lightpush protocol. This is
-// a lightweight protocol used to avoid having to run the relay protocol which
-// is more resource intensive. With this protocol a message is pushed to a peer
-// that supports both the lightpush protocol and relay protocol. That peer will
-// broadcast the message and return a confirmation that the message was
-// broadcasted
-type LightpushOptions struct {
-	Enable bool     `long:"lightpush" description:"Enable lightpush protocol"`
-	Nodes  []string `long:"lightpush-node" description:"Multiaddr of a peer that supports lightpush protocol. Option may be repeated"`
-}
-
 // MetricsOptions are settings used to start a prometheus server for obtaining
 // useful node metrics to monitor the health of behavior of the go-waku node.
 type MetricsOptions struct {
@@ -87,8 +70,6 @@ type Options struct {
 	Authz     AuthzOptions     `group:"Authz Options"`
 	Relay     RelayOptions     `group:"Relay Options"`
 	Store     store.Options    `group:"Store Options" namespace:"store"`
-	Filter    FilterOptions    `group:"Filter Options"`
-	LightPush LightpushOptions `group:"LightPush Options"`
 	Metrics   MetricsOptions   `group:"Metrics Options"`
 	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
 	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`

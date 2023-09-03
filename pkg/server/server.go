@@ -22,8 +22,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/status-im/go-waku/waku/v2/node"
-	"github.com/status-im/go-waku/waku/v2/protocol/filter"
-	"github.com/status-im/go-waku/waku/v2/protocol/lightpush"
 	"github.com/status-im/go-waku/waku/v2/protocol/relay"
 	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/uptrace/bun"
@@ -133,10 +131,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		nodeOpts = append(nodeOpts, node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...))
 	}
 
-	if options.Filter.Enable {
-		nodeOpts = append(nodeOpts, node.WithWakuFilter(true, filter.WithTimeout(time.Duration(options.Filter.Timeout)*time.Second)))
-	}
-
 	if options.Authz.DbConnectionString != "" {
 		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
 		if err != nil {
@@ -178,10 +172,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	if options.LightPush.Enable {
-		nodeOpts = append(nodeOpts, node.WithLightPush())
-	}
-
 	s.wakuNode, err = node.New(s.ctx, nodeOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing waku node")
@@ -189,15 +179,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	if options.Metrics.Enable {
 		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
-	}
-
-	err = addPeers(s.wakuNode, options.LightPush.Nodes, string(lightpush.LightPushID_v20beta1))
-	if err != nil {
-		return nil, errors.Wrap(err, "adding peer")
-	}
-	err = addPeers(s.wakuNode, options.Filter.Nodes, string(filter.FilterID_v20beta1))
-	if err != nil {
-		return nil, errors.Wrap(err, "adding peer")
 	}
 
 	if err = s.wakuNode.Start(); err != nil {
@@ -370,25 +351,6 @@ func (s *Server) statusMetricsLoop(options Options) {
 			}
 		}
 	}
-}
-
-func addPeers(wakuNode *node.WakuNode, addresses []string, protocols ...string) error {
-	for _, addrString := range addresses {
-		if addrString == "" {
-			continue
-		}
-
-		addr, err := multiaddr.NewMultiaddr(addrString)
-		if err != nil {
-			return errors.Wrap(err, "invalid multiaddress")
-		}
-
-		_, err = wakuNode.AddPeer(addr, protocols...)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func loadPrivateKeyFromFile(path string) (*ecdsa.PrivateKey, error) {

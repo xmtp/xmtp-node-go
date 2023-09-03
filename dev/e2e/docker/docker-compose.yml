@@ -32,8 +32,6 @@ services:
     - --ws
     - --ws-port=6001
     - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
@@ -64,8 +62,6 @@ services:
     - --ws
     - --ws-port=6001
     - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
@@ -96,8 +92,6 @@ services:
     - --ws
     - --ws-port=6001
     - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json
@@ -128,8 +122,6 @@ services:
     - --ws
     - --ws-port=6001
     - --port=6000
-    - --lightpush
-    - --filter
     - --api.authn.enable
     - --api.authn.allowlists
     - --log-encoding=json

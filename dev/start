@@ -4,8 +4,6 @@ set -e
 PORT="${PORT:-9002}"
 
 dev/run \
-    --filter \
-    --lightpush \
     --ws \
     --ws-port="${PORT}" \
     --api.authn.enable \

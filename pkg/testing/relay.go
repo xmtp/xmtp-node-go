@@ -8,19 +8,9 @@ import (
 
 	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/filter"
 	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/stretchr/testify/require"
 )
-
-func SubscribeTo(t *testing.T, n *wakunode.WakuNode, contentTopics []string) chan *protocol.Envelope {
-	ctx := context.Background()
-	_, f, err := n.Filter().Subscribe(ctx, filter.ContentFilter{
-		ContentTopics: contentTopics,
-	})
-	require.NoError(t, err)
-	return f.Chan
-}
 
 func Subscribe(t *testing.T, n *wakunode.WakuNode) chan *protocol.Envelope {
 	ctx := context.Background()
