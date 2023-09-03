@@ -44,9 +44,9 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		res := handler(srv, stream)
-		ti.record(stream.Context(), info.FullMethod, nil)
-		return res
+		err := handler(srv, stream)
+		ti.record(stream.Context(), info.FullMethod, err)
+		return err
 	}
 }
 
