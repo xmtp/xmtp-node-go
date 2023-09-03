@@ -2,8 +2,8 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"fmt"
+	"hash/fnv"
 	"io"
 	"strings"
 	"sync"
@@ -509,6 +509,7 @@ func toWakuTimestamp(ts uint64) int64 {
 }
 
 func buildNatsSubject(topic string) string {
-	hash := sha256.Sum256([]byte(topic))
-	return hex.EncodeToString(hash[:])
+	hasher := fnv.New64a()
+	hasher.Write([]byte(topic))
+	return fmt.Sprintf("%x", hasher.Sum64())
 }
