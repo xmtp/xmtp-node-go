@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -43,9 +44,9 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		res := handler(srv, stream)
-		ti.record(stream.Context(), info.FullMethod, nil)
-		return res
+		err := handler(srv, stream)
+		ti.record(stream.Context(), info.FullMethod, err)
+		return err
 	}
 }
 
@@ -78,6 +79,11 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 			fields = append(fields, []zapcore.Field{
 				zap.String("error_code", errCode),
 				zap.String("error_message", grpcErr.Message()),
+			}...)
+		} else {
+			fields = append(fields, []zapcore.Field{
+				zap.String("error_code", codes.Internal.String()),
+				zap.String("error_message", err.Error()),
 			}...)
 		}
 	}
