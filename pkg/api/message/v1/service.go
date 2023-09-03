@@ -203,6 +203,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			}()
 		})
 		if err != nil {
+			log.Error("error subscribing", zap.Error(err))
 			return err
 		}
 		defer func() {
