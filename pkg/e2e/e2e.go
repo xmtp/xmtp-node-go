@@ -2,11 +2,14 @@ package e2e
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/rand"
 	"sync"
 	"time"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
 )
@@ -29,6 +32,9 @@ type Config struct {
 	APIURL                  string
 	DelayBetweenRunsSeconds int
 	GitCommit               string
+
+	V2WalletKey       *ecdsa.PrivateKey
+	V2InstallationKey *ecdsa.PrivateKey
 }
 
 type testRunFunc func(log *zap.Logger) error
@@ -39,19 +45,35 @@ type Test struct {
 }
 
 func NewSuite(ctx context.Context, log *zap.Logger, config *Config) *Suite {
+	if config.V2WalletKey == nil {
+		log.Info("no v2 auth wallet key provided, generating a new one to use")
+		config.V2WalletKey, _ = ethcrypto.GenerateKey()
+	}
+	v2WalletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.V2WalletKey.PublicKey))
+
+	if config.V2InstallationKey == nil {
+		log.Info("no v2 auth identity key provided, generating a new one to use")
+		config.V2InstallationKey, _ = ethcrypto.GenerateKey()
+	}
+	v2IdentityPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.V2InstallationKey.PublicKey))
+
 	e := &Suite{
 		ctx:    ctx,
 		log:    log,
 		rand:   rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		config: config,
 	}
+
+	log.Info("e2e suite initialized",
+		zap.String("v2_wallet_key_public_address", crypto.PublicKeyToAddress(v2WalletPublicKey).String()),
+		zap.String("v2_identity_key_public_address", crypto.PublicKeyToAddress(v2IdentityPublicKey).String()),
+	)
 	return e
 }
 
 func (s *Suite) Tests() []*Test {
 	return []*Test{
 		s.newTest("messagev1 publish subscribe query", s.testMessageV1PublishSubscribeQuery),
-		// s.newTest("messagev1 publish batch query", s.testMessageV1PublishBatchQuery),
 	}
 }
 
@@ -74,12 +96,12 @@ func (s *Suite) randomStringLower(n int) string {
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
-func withAuth(ctx context.Context) (context.Context, error) {
-	token, _, err := api.GenerateToken(time.Now(), false)
+func (s *Suite) withAuth(ctx context.Context) (context.Context, error) {
+	token, _, err := api.BuildV2AuthToken(s.config.V2WalletKey, s.config.V2InstallationKey, time.Now())
 	if err != nil {
 		return ctx, err
 	}
-	et, err := api.EncodeToken(token)
+	et, err := api.EncodeAuthToken(token)
 	if err != nil {
 		return ctx, err
 	}

@@ -34,7 +34,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 
 	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
 	defer cancel()
-	ctx, err := withAuth(ctx)
+	ctx, err := s.withAuth(ctx)
 	if err != nil {
 		return err
 	}

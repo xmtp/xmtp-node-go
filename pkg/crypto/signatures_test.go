@@ -1,10 +1,11 @@
-package crypto
+package crypto_test
 
 import (
 	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
 
@@ -15,14 +16,14 @@ func TestStaticSignatureRoundTrip(t *testing.T) {
 	bpk, _ := hex.DecodeString("0497a556a06d5270300967b2d64ae2997af9efe872f8d146c155b91f6bc2315cf6a941a7ea80bb84edea2ffff5637b4f736e2aa64cfb98d6276e168dd1e7cdfc6d")
 	msg := []byte("TestPeerID|0x12345")
 
-	PK, _ := PrivateKeyFromBytes(bPK)
-	pk, _ := PublicKeyFromBytes(bpk)
+	PK, _ := crypto.PrivateKeyFromBytes(bPK)
+	pk, _ := crypto.PublicKeyFromBytes(bpk)
 
-	generatedSig, recovery, err := Sign(PK, msg)
+	generatedSig, recovery, err := crypto.Sign(PK, msg)
 	require.NoError(t, err)
 	require.True(t, recovery == 0 || recovery == 1, "bad recovery code")
 
-	isValid := Verify(pk, msg, generatedSig)
+	isValid := crypto.Verify(pk, msg, generatedSig)
 	require.True(t, isValid, "Signature validation failed")
 }
 
@@ -31,9 +32,9 @@ func TestStaticWalletVerify(t *testing.T) {
 	bSig, _ := hex.DecodeString("b6c023b2f93db3f51c392f8b9019ff2a4f19b30cac6b61f8356f027431332173043c8e0553d87740745a953d437d64a747865c4c28938d3fbbe10f961fd05b8f")
 	expectedAddr := types.WalletAddr("0x9727188932c3f9a218e8Fc9D8744b1B8b751Abfc")
 	recovery := uint8(0)
-	sig, _ := SignatureFromBytes(bSig)
+	sig, _ := crypto.SignatureFromBytes(bSig)
 
-	walletAddr, err := RecoverWalletAddress(bMsg, sig, recovery)
+	walletAddr, err := crypto.RecoverWalletAddress(bMsg, sig, recovery)
 	require.NoError(t, err)
 	require.Equal(t, expectedAddr, walletAddr)
 }

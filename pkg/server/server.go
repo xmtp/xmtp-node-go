@@ -34,6 +34,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/api"
 	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
@@ -464,13 +465,13 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	var prvKey *ecdsa.PrivateKey
 	var err error
 	if options.NodeKey != "" {
-		if prvKey, err = hexToECDSA(options.NodeKey); err != nil {
+		if prvKey, err = crypto.HexToECDSA(options.NodeKey); err != nil {
 			return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 		}
 	} else {
 		keyString := os.Getenv("GOWAKU-NODEKEY")
 		if keyString != "" {
-			if prvKey, err = hexToECDSA(keyString); err != nil {
+			if prvKey, err = crypto.HexToECDSA(keyString); err != nil {
 				return nil, fmt.Errorf("error converting key into valid ecdsa key: %w", err)
 			}
 		} else {
@@ -549,14 +550,4 @@ func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, ma
 		return nil, errors.New("timeout waiting for db")
 	}
 	return db, nil
-}
-
-func hexToECDSA(key string) (*ecdsa.PrivateKey, error) {
-	if len(key) == 60 {
-		key = "0000" + key
-	}
-	if len(key) == 62 {
-		key = "00" + key
-	}
-	return ethcrypto.HexToECDSA(key)
 }

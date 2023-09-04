@@ -1,16 +1,18 @@
 package api
 
 import (
+	"crypto/ecdsa"
 	"encoding/base64"
 	"time"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	envelope "github.com/xmtp/proto/v3/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"google.golang.org/protobuf/proto"
 )
 
-func decodeToken(s string) (*messagev1.Token, error) {
+func decodeAuthToken(s string) (*messagev1.Token, error) {
 	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return nil, err
@@ -27,7 +29,7 @@ func decodeToken(s string) (*messagev1.Token, error) {
 	return &token, nil
 }
 
-func EncodeToken(token *messagev1.Token) (string, error) {
+func EncodeAuthToken(token *messagev1.Token) (string, error) {
 	b, err := proto.Marshal(token)
 	if err != nil {
 		return "", err
@@ -35,50 +37,49 @@ func EncodeToken(token *messagev1.Token) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func GenerateToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.AuthData, error) {
-	wPri, wPub, err := crypto.GenerateKeyPair()
+func generateV2AuthToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+	v2WalletKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
-	iPri, iPub, err := crypto.GenerateKeyPair()
+	v2IdentityKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
+
+	return BuildV2AuthToken(v2WalletKey, v2IdentityKey, createdAt)
+}
+
+func BuildV2AuthToken(v2WalletKey, v2IdentityKey *ecdsa.PrivateKey, createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+	walletPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2WalletKey))
+	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&v2WalletKey.PublicKey))
+	identityPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2IdentityKey))
+	identityPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&v2IdentityKey.PublicKey))
+
 	key := &envelope.PublicKey{
 		Timestamp: uint64(time.Now().UnixNano()),
 		Union: &envelope.PublicKey_Secp256K1Uncompressed_{
 			Secp256K1Uncompressed: &envelope.PublicKey_Secp256K1Uncompressed{
-				Bytes: iPub[:],
+				Bytes: identityPublicKey[:],
 			},
 		},
 	}
+
 	// The wallet signs the identity public key.
-	keySig, keyRec, err := crypto.SignDigest(wPri, crypto.EtherHash(createIdentitySignRequest(key)))
-	if v1 {
-		// Legacy clients package the identity key signature as .EcdsaCompact.
-		key.Signature = &envelope.Signature{
-			Union: &envelope.Signature_EcdsaCompact{
-				EcdsaCompact: &envelope.Signature_ECDSACompact{
-					Bytes:    keySig[:],
-					Recovery: uint32(keyRec),
-				},
+	keySig, keyRec, err := crypto.SignDigest(walletPrivateKey, crypto.EtherHash(createIdentitySignRequest(key)))
+	key.Signature = &envelope.Signature{
+		Union: &envelope.Signature_WalletEcdsaCompact{
+			WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{
+				Bytes:    keySig[:],
+				Recovery: uint32(keyRec),
 			},
-		}
-	} else {
-		key.Signature = &envelope.Signature{
-			Union: &envelope.Signature_WalletEcdsaCompact{
-				WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{
-					Bytes:    keySig[:],
-					Recovery: uint32(keyRec),
-				},
-			},
-		}
+		},
 	}
 
 	if err != nil {
 		return nil, nil, err
 	}
-	wallet := crypto.PublicKeyToAddress(wPub)
+	wallet := crypto.PublicKeyToAddress(walletPublicKey)
 	data := &messagev1.AuthData{
 		WalletAddr: string(wallet),
 		CreatedNs:  uint64(createdAt.UnixNano()),
@@ -89,7 +90,7 @@ func GenerateToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.A
 	}
 
 	// The identity key signs the auth data.
-	sig, rec, err := crypto.Sign(iPri, dataBytes)
+	sig, rec, err := crypto.Sign(identityPrivateKey, dataBytes)
 	if err != nil {
 		return nil, nil, err
 	}

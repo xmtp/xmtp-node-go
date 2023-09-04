@@ -104,7 +104,7 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}) erro
 	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
 		return status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
 	}
-	token, err := decodeToken(strings.TrimSpace(words[1]))
+	token, err := decodeAuthToken(strings.TrimSpace(words[1]))
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "extracting token: %s", err)
 	}
