@@ -1,16 +1,18 @@
 package api
 
 import (
+	"crypto/ecdsa"
 	"encoding/base64"
 	"time"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	envelope "github.com/xmtp/proto/v3/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"google.golang.org/protobuf/proto"
 )
 
-func decodeToken(s string) (*messagev1.Token, error) {
+func decodeAuthToken(s string) (*messagev1.Token, error) {
 	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return nil, err
@@ -27,7 +29,7 @@ func decodeToken(s string) (*messagev1.Token, error) {
 	return &token, nil
 }
 
-func EncodeToken(token *messagev1.Token) (string, error) {
+func EncodeAuthToken(token *messagev1.Token) (string, error) {
 	b, err := proto.Marshal(token)
 	if err != nil {
 		return "", err
@@ -35,50 +37,50 @@ func EncodeToken(token *messagev1.Token) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func GenerateToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.AuthData, error) {
-	wPri, wPub, err := crypto.GenerateKeyPair()
+func generateAuthToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.AuthData, error) {
+	walletKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
-	iPri, iPub, err := crypto.GenerateKeyPair()
+	installationKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
+
+	return BuildAuthToken(walletKey, installationKey, createdAt)
+}
+
+// TODO: can this v1 arg be removed?
+func BuildAuthToken(walletKey, installationKey *ecdsa.PrivateKey, createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+	walletPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(walletKey))
+	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&walletKey.PublicKey))
+	installationPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(installationKey))
+	installationPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&installationKey.PublicKey))
+
 	key := &envelope.PublicKey{
 		Timestamp: uint64(time.Now().UnixNano()),
 		Union: &envelope.PublicKey_Secp256K1Uncompressed_{
 			Secp256K1Uncompressed: &envelope.PublicKey_Secp256K1Uncompressed{
-				Bytes: iPub[:],
+				Bytes: installationPublicKey[:],
 			},
 		},
 	}
+
 	// The wallet signs the identity public key.
-	keySig, keyRec, err := crypto.SignDigest(wPri, crypto.EtherHash(createIdentitySignRequest(key)))
-	if v1 {
-		// Legacy clients package the identity key signature as .EcdsaCompact.
-		key.Signature = &envelope.Signature{
-			Union: &envelope.Signature_EcdsaCompact{
-				EcdsaCompact: &envelope.Signature_ECDSACompact{
-					Bytes:    keySig[:],
-					Recovery: uint32(keyRec),
-				},
+	keySig, keyRec, err := crypto.SignDigest(walletPrivateKey, crypto.EtherHash(createIdentitySignRequest(key)))
+	key.Signature = &envelope.Signature{
+		Union: &envelope.Signature_WalletEcdsaCompact{
+			WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{
+				Bytes:    keySig[:],
+				Recovery: uint32(keyRec),
 			},
-		}
-	} else {
-		key.Signature = &envelope.Signature{
-			Union: &envelope.Signature_WalletEcdsaCompact{
-				WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{
-					Bytes:    keySig[:],
-					Recovery: uint32(keyRec),
-				},
-			},
-		}
+		},
 	}
 
 	if err != nil {
 		return nil, nil, err
 	}
-	wallet := crypto.PublicKeyToAddress(wPub)
+	wallet := crypto.PublicKeyToAddress(walletPublicKey)
 	data := &messagev1.AuthData{
 		WalletAddr: string(wallet),
 		CreatedNs:  uint64(createdAt.UnixNano()),
@@ -89,7 +91,7 @@ func GenerateToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.A
 	}
 
 	// The identity key signs the auth data.
-	sig, rec, err := crypto.Sign(iPri, dataBytes)
+	sig, rec, err := crypto.Sign(installationPrivateKey, dataBytes)
 	if err != nil {
 		return nil, nil, err
 	}

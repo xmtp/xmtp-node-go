@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/e2e"
 	"go.uber.org/zap"
 )
@@ -29,9 +31,7 @@ var (
 func main() {
 	ctx := context.Background()
 	log, err := zap.NewProduction()
-	if err != nil {
-		panic(err)
-	}
+	requireNoError(err)
 
 	networkEnv := envVar("XMTPD_E2E_ENV", localNetworkEnv)
 	nodesURL := envVar("XMTPD_E2E_NODES_URL", localNodesURL)
@@ -40,6 +40,20 @@ func main() {
 	}
 
 	apiURL := envVar("XMTPD_E2E_API_URL", remoteAPIURLByEnv[networkEnv])
+
+	walletKeyHex := envVar("XMTPD_E2E_AUTH_WALLET_KEY", "")
+	var walletKey *ecdsa.PrivateKey
+	if walletKeyHex != "" {
+		walletKey, err = crypto.HexToECDSA(walletKeyHex)
+		requireNoError(err)
+	}
+
+	installationKeyHex := envVar("XMTPD_E2E_AUTH_INSTALLATION_KEY", "")
+	var installationKey *ecdsa.PrivateKey
+	if installationKeyHex != "" {
+		installationKey, err = crypto.HexToECDSA(installationKeyHex)
+		requireNoError(err)
+	}
 
 	runner := e2e.NewRunner(ctx, log, &e2e.Config{
 		Continuous:              envVarBool("E2E_CONTINUOUS"),
@@ -50,11 +64,19 @@ func main() {
 		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 		GitCommit:               GitCommit,
+		WalletKey:               walletKey,
+		InstallationKey:         installationKey,
 	})
 
 	err = runner.Start()
 	if err != nil {
 		log.Fatal("running e2e", zap.Error(err))
+	}
+}
+
+func requireNoError(err error) {
+	if err != nil {
+		panic(err)
 	}
 }
 

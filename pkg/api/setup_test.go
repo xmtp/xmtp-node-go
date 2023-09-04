@@ -149,29 +149,29 @@ func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
 }
 
 func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := GenerateToken(time.Now(), false)
+	token, _, err := generateAuthToken(time.Now(), false)
 	require.NoError(t, err)
 	token.AuthDataBytes = nil
 	token.AuthDataSignature = nil
-	et, err := EncodeToken(token)
+	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
 }
 
 // Test possible malicious behavior of the client.
 func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := GenerateToken(time.Now(), false)
+	token, _, err := generateAuthToken(time.Now(), false)
 	require.NoError(t, err)
 	token.IdentityKey = nil
-	et, err := EncodeToken(token)
+	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
 }
 
 func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
-	token, data, err := GenerateToken(when, false)
+	token, data, err := generateAuthToken(when, false)
 	require.NoError(t, err)
-	et, err := EncodeToken(token)
+	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et), data
 }

@@ -21,7 +21,7 @@ func Test_NominalV1(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, data, err := GenerateToken(now.Add(-time.Minute), true)
+	token, data, err := generateAuthToken(now.Add(-time.Minute), true)
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func Test_NominalV2(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, data, err := GenerateToken(now.Add(-time.Minute), false)
+	token, data, err := generateAuthToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func Test_XmtpjsToken(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Unix(0, tokenCreatedNs).Add(10 * time.Minute)
-	token, err := decodeToken(tokenBytes)
+	token, err := decodeAuthToken(tokenBytes)
 	require.NoError(t, err)
 	walletAddr, err := validateToken(ctx, logger, token, now)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func Test_BadAuthSig(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token, _, err := GenerateToken(now.Add(-time.Minute), false)
+	token, _, err := generateAuthToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 	token.GetAuthDataSignature().GetEcdsaCompact().Bytes = randomBytes(64)
 	_, err = validateToken(ctx, logger, token, now)
@@ -71,9 +71,9 @@ func Test_SignatureMismatch(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := logging.With(context.Background(), logger)
 	now := time.Now()
-	token1, _, err := GenerateToken(now.Add(-time.Minute), false)
+	token1, _, err := generateAuthToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
-	token2, _, err := GenerateToken(now.Add(-time.Minute), false)
+	token2, _, err := generateAuthToken(now.Add(-time.Minute), false)
 	require.NoError(t, err)
 
 	// Nominal Checks
@@ -93,19 +93,19 @@ func Test_SignatureMismatch(t *testing.T) {
 }
 
 func Test_DecodeXmtpjsToken(t *testing.T) {
-	_, err := decodeToken("CpIBCOqy8+iqMBJECkIKQGsPVyMg1ZjfJXCu7+IxuRJ9/JrWvPIPsZ+GjRM+eQ8kLCfuOequP3GscERICC3qRk/l4eCW/kqM5fbd5/TcQHEaQwpBBAzYR20tIAxsD3cXSnrDBoZ8xr2FPgA9d4u1QzaNt/t0tpQ9G6i9ju35nCDTr35iMbZvbYfZJKYbed2ABOZ2xdMSNgoqMHg1NDY3ZUU5ZGU5MmE3ZDgzMGE3MTMxNTZkZjg4ZGQ2Qjg3MDQwZUY2EMCs9dTXv42GFxpGCkQKQBoIQ77Vi0SU3M5s1WsthNiJgI8Vx89cSzZvJiaIVNJYCJO2x55eEex5R4o55XFvoNrgGcRyDOGg3WMsTWlWOx8QAQ==")
+	_, err := decodeAuthToken("CpIBCOqy8+iqMBJECkIKQGsPVyMg1ZjfJXCu7+IxuRJ9/JrWvPIPsZ+GjRM+eQ8kLCfuOequP3GscERICC3qRk/l4eCW/kqM5fbd5/TcQHEaQwpBBAzYR20tIAxsD3cXSnrDBoZ8xr2FPgA9d4u1QzaNt/t0tpQ9G6i9ju35nCDTr35iMbZvbYfZJKYbed2ABOZ2xdMSNgoqMHg1NDY3ZUU5ZGU5MmE3ZDgzMGE3MTMxNTZkZjg4ZGQ2Qjg3MDQwZUY2EMCs9dTXv42GFxpGCkQKQBoIQ77Vi0SU3M5s1WsthNiJgI8Vx89cSzZvJiaIVNJYCJO2x55eEex5R4o55XFvoNrgGcRyDOGg3WMsTWlWOx8QAQ==")
 	require.NoError(t, err)
 }
 
 func Test_DecodeInvalidToken(t *testing.T) {
-	token, err := decodeToken("aGk=")
+	token, err := decodeAuthToken("aGk=")
 	require.Error(t, err)
 	require.Nil(t, token)
 	require.Contains(t, err.Error(), "missing identity key")
 }
 
 func Test_DecodeEmptyToken(t *testing.T) {
-	token, err := decodeToken("")
+	token, err := decodeAuthToken("")
 	require.Error(t, err)
 	require.Nil(t, token)
 	require.Contains(t, err.Error(), "missing identity key")
