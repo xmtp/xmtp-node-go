@@ -149,7 +149,7 @@ func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
 }
 
 func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := generateAuthToken(time.Now(), false)
+	token, _, err := generateV2AuthToken(time.Now())
 	require.NoError(t, err)
 	token.AuthDataBytes = nil
 	token.AuthDataSignature = nil
@@ -160,7 +160,7 @@ func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
 
 // Test possible malicious behavior of the client.
 func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := generateAuthToken(time.Now(), false)
+	token, _, err := generateV2AuthToken(time.Now())
 	require.NoError(t, err)
 	token.IdentityKey = nil
 	et, err := EncodeAuthToken(token)
@@ -169,7 +169,7 @@ func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
 }
 
 func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
-	token, data, err := generateAuthToken(when, false)
+	token, data, err := generateV2AuthToken(when)
 	require.NoError(t, err)
 	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)

@@ -744,7 +744,7 @@ func Test_BatchQueryOverLimitError(t *testing.T) {
 }
 
 func Test_Publish_DenyListed(t *testing.T) {
-	token, data, err := generateAuthToken(time.Now(), false)
+	token, data, err := generateV2AuthToken(time.Now())
 	require.NoError(t, err)
 	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)

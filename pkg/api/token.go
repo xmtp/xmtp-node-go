@@ -37,31 +37,30 @@ func EncodeAuthToken(token *messagev1.Token) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func generateAuthToken(createdAt time.Time, v1 bool) (*messagev1.Token, *messagev1.AuthData, error) {
-	walletKey, err := ethcrypto.GenerateKey()
+func generateV2AuthToken(createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+	v2WalletKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
-	installationKey, err := ethcrypto.GenerateKey()
+	v2IdentityKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return BuildAuthToken(walletKey, installationKey, createdAt)
+	return BuildV2AuthToken(v2WalletKey, v2IdentityKey, createdAt)
 }
 
-// TODO: can this v1 arg be removed?
-func BuildAuthToken(walletKey, installationKey *ecdsa.PrivateKey, createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
-	walletPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(walletKey))
-	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&walletKey.PublicKey))
-	installationPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(installationKey))
-	installationPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&installationKey.PublicKey))
+func BuildV2AuthToken(v2WalletKey, v2IdentityKey *ecdsa.PrivateKey, createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+	walletPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2WalletKey))
+	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&v2WalletKey.PublicKey))
+	identityPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2IdentityKey))
+	identityPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&v2IdentityKey.PublicKey))
 
 	key := &envelope.PublicKey{
 		Timestamp: uint64(time.Now().UnixNano()),
 		Union: &envelope.PublicKey_Secp256K1Uncompressed_{
 			Secp256K1Uncompressed: &envelope.PublicKey_Secp256K1Uncompressed{
-				Bytes: installationPublicKey[:],
+				Bytes: identityPublicKey[:],
 			},
 		},
 	}
@@ -91,7 +90,7 @@ func BuildAuthToken(walletKey, installationKey *ecdsa.PrivateKey, createdAt time
 	}
 
 	// The identity key signs the auth data.
-	sig, rec, err := crypto.Sign(installationPrivateKey, dataBytes)
+	sig, rec, err := crypto.Sign(identityPrivateKey, dataBytes)
 	if err != nil {
 		return nil, nil, err
 	}

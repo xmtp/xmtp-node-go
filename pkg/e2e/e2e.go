@@ -33,8 +33,8 @@ type Config struct {
 	DelayBetweenRunsSeconds int
 	GitCommit               string
 
-	WalletKey       *ecdsa.PrivateKey
-	InstallationKey *ecdsa.PrivateKey
+	V2WalletKey       *ecdsa.PrivateKey
+	V2InstallationKey *ecdsa.PrivateKey
 }
 
 type testRunFunc func(log *zap.Logger) error
@@ -45,17 +45,17 @@ type Test struct {
 }
 
 func NewSuite(ctx context.Context, log *zap.Logger, config *Config) *Suite {
-	if config.WalletKey == nil {
-		log.Info("no auth wallet key provided, generating a new one to use")
-		config.WalletKey, _ = ethcrypto.GenerateKey()
+	if config.V2WalletKey == nil {
+		log.Info("no v2 auth wallet key provided, generating a new one to use")
+		config.V2WalletKey, _ = ethcrypto.GenerateKey()
 	}
-	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.WalletKey.PublicKey))
+	v2WalletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.V2WalletKey.PublicKey))
 
-	if config.InstallationKey == nil {
-		log.Info("no auth installation key provided, generating a new one to use")
-		config.InstallationKey, _ = ethcrypto.GenerateKey()
+	if config.V2InstallationKey == nil {
+		log.Info("no v2 auth identity key provided, generating a new one to use")
+		config.V2InstallationKey, _ = ethcrypto.GenerateKey()
 	}
-	installationPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.InstallationKey.PublicKey))
+	v2IdentityPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&config.V2InstallationKey.PublicKey))
 
 	e := &Suite{
 		ctx:    ctx,
@@ -65,8 +65,8 @@ func NewSuite(ctx context.Context, log *zap.Logger, config *Config) *Suite {
 	}
 
 	log.Info("e2e suite initialized",
-		zap.String("wallet_key_public_address", crypto.PublicKeyToAddress(walletPublicKey).String()),
-		zap.String("installation_key_public_address", crypto.PublicKeyToAddress(installationPublicKey).String()),
+		zap.String("v2_wallet_key_public_address", crypto.PublicKeyToAddress(v2WalletPublicKey).String()),
+		zap.String("v2_identity_key_public_address", crypto.PublicKeyToAddress(v2IdentityPublicKey).String()),
 	)
 	return e
 }
@@ -97,7 +97,7 @@ func (s *Suite) randomStringLower(n int) string {
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
 func (s *Suite) withAuth(ctx context.Context) (context.Context, error) {
-	token, _, err := api.BuildAuthToken(s.config.WalletKey, s.config.InstallationKey, time.Now())
+	token, _, err := api.BuildV2AuthToken(s.config.V2WalletKey, s.config.V2InstallationKey, time.Now())
 	if err != nil {
 		return ctx, err
 	}

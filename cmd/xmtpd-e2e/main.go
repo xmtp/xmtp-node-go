@@ -41,17 +41,17 @@ func main() {
 
 	apiURL := envVar("XMTPD_E2E_API_URL", remoteAPIURLByEnv[networkEnv])
 
-	walletKeyHex := envVar("XMTPD_E2E_AUTH_WALLET_KEY", "")
-	var walletKey *ecdsa.PrivateKey
-	if walletKeyHex != "" {
-		walletKey, err = crypto.HexToECDSA(walletKeyHex)
+	v2WalletKeyHex := envVar("XMTPD_E2E_V2_AUTH_WALLET_KEY", "")
+	var v2WalletKey *ecdsa.PrivateKey
+	if v2WalletKeyHex != "" {
+		v2WalletKey, err = crypto.HexToECDSA(v2WalletKeyHex)
 		requireNoError(err)
 	}
 
-	installationKeyHex := envVar("XMTPD_E2E_AUTH_INSTALLATION_KEY", "")
-	var installationKey *ecdsa.PrivateKey
-	if installationKeyHex != "" {
-		installationKey, err = crypto.HexToECDSA(installationKeyHex)
+	v2IdentityKeyHex := envVar("XMTPD_E2E_V2_AUTH_IDENTITY_KEY", "")
+	var v2IdentityKey *ecdsa.PrivateKey
+	if v2IdentityKeyHex != "" {
+		v2IdentityKey, err = crypto.HexToECDSA(v2IdentityKeyHex)
 		requireNoError(err)
 	}
 
@@ -64,8 +64,8 @@ func main() {
 		APIURL:                  apiURL,
 		DelayBetweenRunsSeconds: envVarInt("XMTPD_E2E_DELAY", 5),
 		GitCommit:               GitCommit,
-		WalletKey:               walletKey,
-		InstallationKey:         installationKey,
+		V2WalletKey:             v2WalletKey,
+		V2InstallationKey:       v2IdentityKey,
 	})
 
 	err = runner.Start()
