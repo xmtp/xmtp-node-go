@@ -789,9 +789,9 @@ func Test_Ratelimits_Regular(t *testing.T) {
 }
 
 func Test_Ratelimits_Priority(t *testing.T) {
-	token, data, err := GenerateToken(time.Now(), false)
+	token, data, err := generateV2AuthToken(time.Now())
 	require.NoError(t, err)
-	et, err := EncodeToken(token)
+	et, err := EncodeAuthToken(token)
 	require.NoError(t, err)
 	ctx := metadata.AppendToOutgoingContext(context.Background(), authorizationMetadataKey, "Bearer "+et)
 
