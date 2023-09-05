@@ -14,4 +14,5 @@ type WalletAddress struct {
 	CreatedAt     time.Time  `bun:"created_at"`
 	DeletedAt     *time.Time `bun:"deleted_at"`
 	Permission    string     `bun:"permission"`
+	Comment       string     `bun:"comment"`
 }
