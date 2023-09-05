@@ -189,7 +189,7 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 	if err == nil {
 		return nil
 	}
-	wa.Log.Debug("rate limited",
+	wa.Log.Info("rate limited",
 		logging.String("client_ip", ip),
 		logging.WalletAddress(wallet.String()),
 		logging.Bool("priority", isPriority),
