@@ -100,7 +100,7 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 	t.Run("grpc", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		server, cleanup := newTestServer(t)
 		defer cleanup()
@@ -127,7 +127,7 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 func testGRPC(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	server, cleanup := newTestServer(t)
 	defer cleanup()

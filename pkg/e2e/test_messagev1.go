@@ -36,7 +36,7 @@ func (s *Suite) testMessageV1PublishSubscribeQuery(log *zap.Logger) error {
 	defer cancel()
 	ctx, err := s.withAuth(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "adding auth token")
 	}
 
 	// Subscribe across nodes.
@@ -70,7 +70,7 @@ syncLoop:
 			},
 		})
 		if err != nil {
-			return errors.Wrap(err, "publishing")
+			return errors.Wrap(err, "publishing sync envelope")
 		}
 		syncEnvs = append(syncEnvs, syncEnv)
 
@@ -87,7 +87,7 @@ syncLoop:
 						prevSyncEnvs[string(syncEnv.Message)] = true
 						continue syncLoop
 					}
-					return err
+					return errors.Wrap(err, "reading sync envelope")
 				}
 				if prevSyncEnvs[string(env.Message)] {
 					s.log.Info("skipping previous sync envelope", zap.String("value", string(env.Message)))

@@ -8,7 +8,7 @@
 
 region="${REGION:-us-east-2}"
 cluster="${ENV:-dev}"
-task="${TASK:-node-0}"
+task="${TASK:-group1-node-0}"
 container="${CONTAINER:-$task}"
 task=$(aws --region "$region" \
         --query 'taskArns[0]' \

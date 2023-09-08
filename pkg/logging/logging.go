@@ -27,6 +27,9 @@ var (
 	ENode      = logging.ENode
 	TCPAddr    = logging.TCPAddr
 	UDPAddr    = logging.UDPAddr
+	String     = zap.String
+	Bool       = zap.Bool
+	Int        = zap.Int
 )
 
 // WalletAddress creates a field for a wallet address.

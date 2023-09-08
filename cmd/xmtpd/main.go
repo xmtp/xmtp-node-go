@@ -51,7 +51,7 @@ func main() {
 		return
 	}
 
-	log, err := buildLogger(options)
+	log, logCfg, err := buildLogger(options)
 	if err != nil {
 		fatal("Could not build logger: %s", err)
 	}
@@ -150,6 +150,20 @@ func main() {
 		doneC <- true
 	})
 
+	// Toggle debug level on SIGUSR1
+	sigToggleC := make(chan os.Signal, 1)
+	signal.Notify(sigToggleC, syscall.SIGUSR1)
+	go func() {
+		for range sigToggleC {
+			log.Info("toggling debug level")
+			newLevel := zapcore.DebugLevel
+			if logCfg.Level.Enabled(zapcore.DebugLevel) {
+				newLevel = zapcore.InfoLevel
+			}
+			logCfg.Level.SetLevel(newLevel)
+		}
+	}()
+
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC,
 		syscall.SIGHUP,
@@ -193,12 +207,12 @@ func initWakuLogging(options server.Options) (func(), error) {
 	return cleanup, nil
 }
 
-func buildLogger(options server.Options) (*zap.Logger, error) {
+func buildLogger(options server.Options) (*zap.Logger, *zap.Config, error) {
 	atom := zap.NewAtomicLevel()
 	level := zapcore.InfoLevel
 	err := level.Set(options.LogLevel)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	atom.SetLevel(level)
 
@@ -219,10 +233,10 @@ func buildLogger(options server.Options) (*zap.Logger, error) {
 	}
 	log, err := cfg.Build()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	log = log.Named("xmtpd")
 
-	return log, nil
+	return log, &cfg, nil
 }

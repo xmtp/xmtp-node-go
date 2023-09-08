@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -61,11 +60,8 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 		ri.ZapFields()...,
 	)
 
-	md, _ := metadata.FromIncomingContext(ctx)
-	if ips := md.Get("x-forwarded-for"); len(ips) > 0 {
-		// There are potentially multiple comma separated IPs bundled in that first value
-		ips := strings.Split(ips[0], ",")
-		fields = append(fields, zap.String("client_ip", strings.TrimSpace(ips[0])))
+	if ip := clientIPFromContext(ctx); len(ip) > 0 {
+		fields = append(fields, zap.String("client_ip", ip))
 	}
 
 	logFn := ti.log.Debug

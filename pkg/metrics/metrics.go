@@ -59,6 +59,8 @@ func RegisterViews(logger *zap.Logger) {
 		publishedEnvelopeCounterView,
 		queryDurationView,
 		queryResultView,
+		ratelimiterBucketsGaugeView,
+		ratelimiterBucketsDeletedCounterView,
 	); err != nil {
 		logger.Fatal("registering metrics views", zap.Error(err))
 	}
