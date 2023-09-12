@@ -201,10 +201,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	if !options.Relay.Disable {
 		for _, nodeTopic := range options.Relay.Topics {
 			nodeTopic := nodeTopic
-			_, err := s.wakuNode.Relay().SubscribeToTopic(s.ctx, nodeTopic)
+			sub, err := s.wakuNode.Relay().SubscribeToTopic(s.ctx, nodeTopic)
 			if err != nil {
 				return nil, errors.Wrap(err, "subscribing to pubsub topic")
 			}
+			// Unregister from broadcaster. Otherwise this channel will fill until it blocks publishing
+			sub.Unsubscribe()
 		}
 	}
 
