@@ -1,104 +1,50 @@
 package store
 
 import (
-	"context"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/status-im/go-waku/tests"
-	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
-	"github.com/status-im/go-waku/waku/v2/protocol/store"
-	"github.com/status-im/go-waku/waku/v2/utils"
 	"github.com/stretchr/testify/require"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
-func TestStore_ExcludeRelayPings(t *testing.T) {
-	t.Parallel()
+type testStoreOption func(c *Config)
 
-	s, cleanup := newTestStore(t)
-	defer cleanup()
-
-	c := newTestClient(t, s.host.ID())
-	addStoreProtocol(t, c.host, s.host)
-
-	pubSubTopic := newTopic()
-
-	storeMessage(t, s, test.NewMessage("topic1", 1, "msg1"), pubSubTopic)
-	storeMessage(t, s, test.NewMessage(relayPingContentTopic, 2, ""), pubSubTopic)
-	storeMessage(t, s, test.NewMessage("topic2", 3, "msg2"), pubSubTopic)
-	storeMessage(t, s, test.NewMessage(relayPingContentTopic, 4, "msg4"), pubSubTopic)
-
-	query := &pb.HistoryQuery{
-		PubsubTopic: pubSubTopic,
+func WithCleaner(opts CleanerOptions) testStoreOption {
+	return func(c *Config) {
+		c.Options.Cleaner = opts
 	}
-	expectQueryMessagesEventually(t, c, query, []*pb.WakuMessage{
-		test.NewMessage("topic1", 1, "msg1"),
-		test.NewMessage("topic2", 3, "msg2"),
-	})
 }
 
-func newTestStore(t *testing.T, opts ...Option) (*XmtpStore, func()) {
+func newTestStore(t *testing.T, opts ...testStoreOption) (*Store, func()) {
+	log := test.NewLog(t)
 	db, _, dbCleanup := test.NewDB(t)
-	log := utils.Logger()
-	dbStore, err := NewDBStore(log, WithDBStoreDB(db))
-	require.NoError(t, err)
 
-	host := test.NewPeer(t)
-	log = log.With(logging.HostID("node", host.ID()))
-	store, err := NewXmtpStore(
-		append(
-			[]Option{
-				WithLog(log),
-				WithHost(host),
-				WithDB(db),
-				WithReaderDB(db),
-				WithCleanerDB(db),
-				WithMessageProvider(dbStore),
-			},
-			opts...,
-		)...,
-	)
-	require.NoError(t, err)
+	c := &Config{
+		Log:       log,
+		DB:        db,
+		ReaderDB:  db,
+		CleanerDB: db,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
 
-	store.Start(context.Background())
+	store, err := New(c)
+	require.NoError(t, err)
 
 	return store, func() {
-		store.Stop()
+		store.Close()
 		dbCleanup()
 	}
 }
 
-func addStoreProtocol(t *testing.T, h1, h2 host.Host) {
-	h1.Peerstore().AddAddr(h2.ID(), tests.GetHostAddress(h2), peerstore.PermanentAddrTTL)
-	err := h1.Peerstore().AddProtocols(h2.ID(), string(store.StoreID_v20beta4))
+func storeMessage(t *testing.T, s *Store, env *messagev1.Envelope) {
+	_, err := s.InsertMessage(env)
 	require.NoError(t, err)
 }
 
-func expectMessages(t *testing.T, s *XmtpStore, pubSubTopic string, msgs []*pb.WakuMessage) {
-	res, err := s.FindMessages(&pb.HistoryQuery{
-		PubsubTopic: pubSubTopic,
-	})
+func storeMessageWithTime(t *testing.T, s *Store, env *messagev1.Envelope, receiverTime int64) {
+	err := s.insertMessage(env, receiverTime)
 	require.NoError(t, err)
-	require.Empty(t, res.Error)
-	require.Len(t, res.Messages, len(msgs))
-	require.ElementsMatch(t, msgs, res.Messages)
-}
-
-func storeMessage(t *testing.T, s *XmtpStore, msg *pb.WakuMessage, pubSubTopic string) {
-	_, err := s.storeMessage(test.NewEnvelope(t, msg, pubSubTopic))
-	require.NoError(t, err)
-}
-
-func storeMessageWithTime(t *testing.T, s *XmtpStore, msg *pb.WakuMessage, pubSubTopic string, receiverTime int64) {
-	env := protocol.NewEnvelope(msg, receiverTime, pubSubTopic)
-	_, err := s.storeMessage(env)
-	require.NoError(t, err)
-}
-
-func newTopic() string {
-	return "test-" + test.RandomStringLower(5)
 }

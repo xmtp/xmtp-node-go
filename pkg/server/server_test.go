@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -20,11 +21,11 @@ func TestServer_NewShutdown(t *testing.T) {
 func TestServer_StaticNodesReconnect(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := test.NewNode(t, nil)
+	n1, cleanup := test.NewNode(t)
 	defer cleanup()
 	n1ID := n1.Host().ID()
 
-	n2, cleanup := test.NewNode(t, nil)
+	n2, cleanup := test.NewNode(t)
 	defer cleanup()
 	n2ID := n2.Host().ID()
 
@@ -50,7 +51,7 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 	s, err := New(context.Background(), test.NewLog(t), Options{
 		NodeKey: newNodeKey(t),
 		Address: "localhost",
-		Store: StoreOptions{
+		Store: store.Options{
 			Enable:                   true,
 			DbConnectionString:       dbDSN,
 			DbReaderConnectionString: dbDSN,
@@ -64,9 +65,9 @@ func newTestServer(t *testing.T, staticNodes []string) (*Server, func()) {
 			GRPCPort: 0,
 		},
 		Metrics: MetricsOptions{
-			Enable:       true,
-			StatusPeriod: 5 * time.Second,
+			Enable: true,
 		},
+		MetricsPeriod: 5 * time.Second,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, s)

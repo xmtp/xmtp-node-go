@@ -16,7 +16,7 @@ type CleanerOptions struct {
 	WriteTimeout  time.Duration `long:"write-timeout" description:"Timeout for writing to the database" default:"60s"`
 }
 
-func (s *XmtpStore) cleanerLoop() {
+func (s *Store) cleanerLoop() {
 	log := s.log.Named("cleaner")
 
 	for {
@@ -29,21 +29,21 @@ func (s *XmtpStore) cleanerLoop() {
 			if err != nil {
 				log.Error("error deleting non-xmtp messages", zap.Error(err), zap.Duration("duration", time.Since(started)))
 			}
-			if count >= int64(s.cleaner.BatchSize-10) {
-				time.Sleep(s.cleaner.ActivePeriod)
+			if count >= int64(s.config.Cleaner.BatchSize-10) {
+				time.Sleep(s.config.Cleaner.ActivePeriod)
 			} else {
-				time.Sleep(s.cleaner.PassivePeriod)
+				time.Sleep(s.config.Cleaner.PassivePeriod)
 			}
 		}
 	}
 }
 
-func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
+func (s *Store) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	started := time.Now().UTC()
-	timestampThreshold := time.Now().UTC().Add(time.Duration(s.cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
+	timestampThreshold := time.Now().UTC().Add(time.Duration(s.config.Cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
 	whereClause := "receivertimestamp < $1 AND should_expire IS TRUE"
 
-	rows, err := s.cleanerDB.Query("SELECT COUNT(1) FROM message WHERE "+whereClause, timestampThreshold)
+	rows, err := s.config.CleanerDB.Query("SELECT COUNT(1) FROM message WHERE "+whereClause, timestampThreshold)
 	if err != nil {
 		return 0, err
 	}
@@ -56,7 +56,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if count < int64(s.cleaner.BatchSize) {
+	if count < int64(s.config.Cleaner.BatchSize) {
 		return 0, nil
 	}
 
@@ -64,7 +64,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	// reader for the non-indexed NOT LIKE query first, because ctid can change
 	// during a full vacuum of the DB, so we want to avoid conflicting with
 	// that scenario and deleting the wrong data.
-	res, err := s.cleanerDB.Exec(`
+	res, err := s.config.CleanerDB.Exec(`
 		WITH msg AS (
 			SELECT ctid
 			FROM message
@@ -73,7 +73,7 @@ func (s *XmtpStore) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 			FOR UPDATE SKIP LOCKED
 		)
 		DELETE FROM message WHERE ctid IN (TABLE msg);
-	`, timestampThreshold, s.cleaner.BatchSize)
+	`, timestampThreshold, s.config.Cleaner.BatchSize)
 	if err != nil {
 		return 0, err
 	}

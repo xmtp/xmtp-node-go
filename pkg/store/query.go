@@ -1,23 +1,17 @@
 package store
 
 import (
+	"crypto/sha256"
 	"database/sql"
 
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
-	"github.com/status-im/go-waku/waku/persistence"
-	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 )
 
-/*
-*
-Executes the appropriate database queries to find messages and build a response based on a HistoryQuery
-*
-*/
-func FindMessages(db *sql.DB, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
+func (s *Store) Query(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error) {
 	sql, args := buildSqlQuery(query)
 
-	rows, err := db.Query(sql, args...)
+	rows, err := s.config.DB.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -26,18 +20,10 @@ func FindMessages(db *sql.DB, query *pb.HistoryQuery) (*pb.HistoryResponse, erro
 	return buildResponse(rows, query)
 }
 
-func getContentTopics(filters []*pb.ContentFilter) []string {
-	out := make([]string, len(filters))
-	for i, filter := range filters {
-		out[i] = filter.ContentTopic
-	}
-	return out
-}
-
-func buildSqlQuery(query *pb.HistoryQuery) (string, []interface{}) {
+func buildSqlQuery(query *messagev1.QueryRequest) (querySql string, args []interface{}) {
 	pagingInfo := query.PagingInfo
 	if pagingInfo == nil {
-		pagingInfo = new(pb.PagingInfo)
+		pagingInfo = new(messagev1.PagingInfo)
 	}
 	cursor := pagingInfo.Cursor
 	direction := getDirection(pagingInfo)
@@ -50,34 +36,35 @@ func buildSqlQuery(query *pb.HistoryQuery) (string, []interface{}) {
 	ub := sqlBuilder.PostgreSQL.NewUnionBuilder()
 
 	sb1 := buildSqlQueryWithoutCursor(query)
+	index := cursor.GetIndex()
 	switch direction {
-	case pb.PagingInfo_FORWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			sb1.Where(sb1.GreaterThan("senderTimestamp", cursor.SenderTime))
-		} else if cursor.Digest != nil {
-			sb1.Where(sb1.GreaterThan("id", cursor.Digest))
+	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
+		if index.SenderTimeNs != 0 && index.Digest != nil {
+			sb1.Where(sb1.GreaterThan("senderTimestamp", index.SenderTimeNs))
+		} else if index.Digest != nil {
+			sb1.Where(sb1.GreaterThan("id", index.Digest))
 		}
-	case pb.PagingInfo_BACKWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			sb1.Where(sb1.LessThan("senderTimestamp", cursor.SenderTime))
-		} else if cursor.Digest != nil {
-			sb1.Where(sb1.LessThan("id", cursor.Digest))
+	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
+		if index.SenderTimeNs != 0 && index.Digest != nil {
+			sb1.Where(sb1.LessThan("senderTimestamp", index.SenderTimeNs))
+		} else if index.Digest != nil {
+			sb1.Where(sb1.LessThan("id", index.Digest))
 		}
 	}
 
 	sb2 := buildSqlQueryWithoutCursor(query)
 	switch direction {
-	case pb.PagingInfo_FORWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", cursor.SenderTime), sb2.GreaterThan("id", cursor.Digest)))
-		} else if cursor.Digest != nil {
-			sb2.Where(sb2.GreaterThan("id", cursor.Digest))
+	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
+		if index.SenderTimeNs != 0 && index.Digest != nil {
+			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", index.SenderTimeNs), sb2.GreaterThan("id", index.Digest)))
+		} else if index.Digest != nil {
+			sb2.Where(sb2.GreaterThan("id", index.Digest))
 		}
-	case pb.PagingInfo_BACKWARD:
-		if cursor.SenderTime != 0 && cursor.Digest != nil {
-			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", cursor.SenderTime), sb2.LessThan("id", cursor.Digest)))
-		} else if cursor.Digest != nil {
-			sb2.Where(sb2.LessThan("id", cursor.Digest))
+	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
+		if index.SenderTimeNs != 0 && index.Digest != nil {
+			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", index.SenderTimeNs), sb2.LessThan("id", index.Digest)))
+		} else if index.Digest != nil {
+			sb2.Where(sb2.LessThan("id", index.Digest))
 		}
 	}
 
@@ -88,43 +75,38 @@ func buildSqlQuery(query *pb.HistoryQuery) (string, []interface{}) {
 
 	// Add sorting.
 	switch direction {
-	case pb.PagingInfo_BACKWARD:
+	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
 		ub.OrderBy("senderTimestamp desc", "id desc")
-	case pb.PagingInfo_FORWARD:
+	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
 		ub.OrderBy("senderTimestamp asc", "id asc")
 	}
 
 	return ub.Build()
 }
 
-func buildSqlQueryWithoutCursor(query *pb.HistoryQuery) *sqlBuilder.SelectBuilder {
+func buildSqlQueryWithoutCursor(query *messagev1.QueryRequest) *sqlBuilder.SelectBuilder {
 	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
 
 	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").From("message")
 
-	contentTopics := getContentTopics(query.ContentFilters)
-	if len(contentTopics) > 0 {
-		sb.Where(sb.In("contentTopic", sqlBuilder.Flatten(contentTopics)...))
+	if len(query.ContentTopics) > 0 {
+		sb.Where(sb.In("contentTopic", sqlBuilder.Flatten(query.ContentTopics)...))
 	}
 
-	if query.PubsubTopic != "" {
-		sb.Where(sb.Equal("pubsubTopic", query.PubsubTopic))
+	if query.StartTimeNs != 0 {
+		sb.Where(sb.GreaterEqualThan("senderTimestamp", query.StartTimeNs))
 	}
 
-	if query.StartTime != 0 {
-		sb.Where(sb.GreaterEqualThan("senderTimestamp", query.StartTime))
-	}
-
-	if query.EndTime != 0 {
-		sb.Where(sb.LessEqualThan("senderTimestamp", query.EndTime))
+	if query.EndTimeNs != 0 {
+		sb.Where(sb.LessEqualThan("senderTimestamp", query.EndTimeNs))
 	}
 
 	pagingInfo := query.PagingInfo
 	if pagingInfo == nil {
-		pagingInfo = new(pb.PagingInfo)
+		pagingInfo = new(messagev1.PagingInfo)
 	}
 
-	pageSize := pagingInfo.PageSize
+	pageSize := pagingInfo.Limit
 	addLimit(sb, pageSize)
 
 	direction := getDirection(pagingInfo)
@@ -133,133 +115,122 @@ func buildSqlQueryWithoutCursor(query *pb.HistoryQuery) *sqlBuilder.SelectBuilde
 	return sb
 }
 
-func getDirection(pagingInfo *pb.PagingInfo) (direction pb.PagingInfo_Direction) {
-	if pagingInfo == nil {
-		direction = pb.PagingInfo_BACKWARD
+func getDirection(pagingInfo *messagev1.PagingInfo) (direction messagev1.SortDirection) {
+	if pagingInfo == nil || pagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = messagev1.SortDirection_SORT_DIRECTION_DESCENDING
 	} else {
 		direction = pagingInfo.Direction
 	}
 	return
 }
 
-func addLimit(sb *sqlBuilder.SelectBuilder, pageSize uint64) {
+func addLimit(sb *sqlBuilder.SelectBuilder, pageSize uint32) {
 	if pageSize == 0 {
 		pageSize = maxPageSize
 	}
 	sb.Limit(int(pageSize))
 }
 
-func addSort(sb *sqlBuilder.SelectBuilder, direction pb.PagingInfo_Direction) {
+func addSort(sb *sqlBuilder.SelectBuilder, direction messagev1.SortDirection) {
 	switch direction {
-	case pb.PagingInfo_BACKWARD:
+	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
 		sb.OrderBy("senderTimestamp desc", "id desc")
-	case pb.PagingInfo_FORWARD:
+	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
 		sb.OrderBy("senderTimestamp asc", "id asc")
 	}
 }
 
-func buildResponse(rows *sql.Rows, query *pb.HistoryQuery) (*pb.HistoryResponse, error) {
-	storedMessages, err := rowsToMessages(rows)
+func buildResponse(rows *sql.Rows, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+	envs, err := rowsToEnvelopes(rows)
 	if err != nil {
 		return nil, err
 	}
-	messages := messagesFromStoredMessages(storedMessages)
-	pagingInfo, err := buildPagingInfo(storedMessages, query.PagingInfo)
+	pagingInfo, err := buildPagingInfo(envs, query.PagingInfo)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.HistoryResponse{
-		Messages:   messages,
+	return &messagev1.QueryResponse{
+		Envelopes:  envs,
 		PagingInfo: pagingInfo,
 	}, nil
 }
 
 // Builds the paging info based on the response.
-// Since we do not get a total count in our query, and I would like to avoid adding that, there is one important difference with go-waku here.
-// On the last page of results, go-waku will reduce the page-size to the number of remaining items.
-// We will leave it intact, as we do not have that information on hand.
 // Clients may be relying on this behaviour to know when to stop paginating
-func buildPagingInfo(messages []persistence.StoredMessage, pagingInfo *pb.PagingInfo) (*pb.PagingInfo, error) {
+func buildPagingInfo(envs []*messagev1.Envelope, pagingInfo *messagev1.PagingInfo) (*messagev1.PagingInfo, error) {
 	currentPageSize := getPageSize(pagingInfo)
 	newPageSize := minOf(currentPageSize, maxPageSize)
 	direction := getDirection(pagingInfo)
 
-	if len(messages) < currentPageSize {
-		return &pb.PagingInfo{PageSize: uint64(0), Cursor: nil, Direction: direction}, nil
+	if len(envs) < currentPageSize {
+		return &messagev1.PagingInfo{Limit: 0, Cursor: nil, Direction: direction}, nil
 	}
 
-	newCursor, err := findNextCursor(messages)
+	newCursor, err := findNextCursor(envs)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.PagingInfo{
-		PageSize:  uint64(newPageSize),
+	return &messagev1.PagingInfo{
+		Limit:     uint32(newPageSize),
 		Cursor:    newCursor,
 		Direction: direction,
 	}, nil
 }
 
-func findNextCursor(messages []persistence.StoredMessage) (*pb.Index, error) {
-	if len(messages) == 0 {
+func findNextCursor(envs []*messagev1.Envelope) (*messagev1.Cursor, error) {
+	if len(envs) == 0 {
 		return nil, nil
 	}
 
-	lastMessage := messages[len(messages)-1]
-	envelope := protocol.NewEnvelope(lastMessage.Message, lastMessage.ReceiverTime, lastMessage.PubsubTopic)
-	return computeIndex(envelope)
+	lastEnv := envs[len(envs)-1]
+	return buildCursor(lastEnv), nil
 }
 
-func getPageSize(pagingInfo *pb.PagingInfo) int {
-	if pagingInfo == nil || pagingInfo.PageSize == 0 {
+func buildCursor(env *messagev1.Envelope) *messagev1.Cursor {
+	return &messagev1.Cursor{
+		Cursor: &messagev1.Cursor_Index{
+			Index: &messagev1.IndexCursor{
+				Digest:       computeDigest(env),
+				SenderTimeNs: env.TimestampNs,
+			},
+		},
+	}
+}
+
+func computeDigest(env *messagev1.Envelope) []byte {
+	digest := sha256.Sum256(append([]byte(env.ContentTopic), env.Message...))
+	return digest[:]
+}
+
+func getPageSize(pagingInfo *messagev1.PagingInfo) int {
+	if pagingInfo == nil || pagingInfo.Limit == 0 {
 		return maxPageSize
 	}
-	return int(pagingInfo.PageSize)
+	return int(pagingInfo.Limit)
 }
 
-func messagesFromStoredMessages(storedMessages []persistence.StoredMessage) []*pb.WakuMessage {
-	out := make([]*pb.WakuMessage, len(storedMessages))
-	for i, msg := range storedMessages {
-		out[i] = msg.Message
-	}
-	return out
-}
-
-func rowsToMessages(rows *sql.Rows) (result []persistence.StoredMessage, err error) {
+func rowsToEnvelopes(rows *sql.Rows) ([]*messagev1.Envelope, error) {
 	defer rows.Close()
 
+	var result []*messagev1.Envelope
 	for rows.Next() {
 		var id []byte
 		var receiverTimestamp int64
-		var senderTimestamp int64
-		var contentTopic string
-		var payload []byte
 		var version uint32
 		var pubsubTopic string
+		var env messagev1.Envelope
 
-		err = rows.Scan(&id, &receiverTimestamp, &senderTimestamp, &contentTopic, &pubsubTopic, &payload, &version)
+		err := rows.Scan(&id, &receiverTimestamp, &env.TimestampNs, &env.ContentTopic, &pubsubTopic, &env.Message, &version)
 		if err != nil {
-			return
+			return nil, err
 		}
 
-		msg := new(pb.WakuMessage)
-		msg.ContentTopic = contentTopic
-		msg.Payload = payload
-		msg.Timestamp = senderTimestamp
-		msg.Version = version
-
-		record := persistence.StoredMessage{
-			ID:           id,
-			PubsubTopic:  pubsubTopic,
-			ReceiverTime: receiverTimestamp,
-			Message:      msg,
-		}
-
-		result = append(result, record)
+		result = append(result, &env)
 	}
 
-	err = rows.Err()
+	err := rows.Err()
 	if err != nil {
 		return nil, err
 	}

@@ -5,4 +5,4 @@ set -e
 export GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
 
 docker_compose build
-docker_compose up -d
+docker_compose up -d --remove-orphans
