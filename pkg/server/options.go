@@ -73,12 +73,4 @@ type Options struct {
 	Metrics   MetricsOptions   `group:"Metrics Options"`
 	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
 	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
-
-	// Legacy args
-	StoreEnable     bool `long:"store"`
-	FilterEnable    bool `long:"filter"`
-	LightpushEnable bool `long:"lightpush"`
-	KeepHistoryDays int  `long:"keep-history-days" default:"7"`
-	Resume          bool `long:"resume"`
-	CleanerEnable   bool `long:"cleaner.enable"`
 }

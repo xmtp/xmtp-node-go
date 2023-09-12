@@ -143,10 +143,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	if options.StoreEnable || options.Store.Enable {
-		if options.CleanerEnable {
-			options.Store.Cleaner.Enable = true
-		}
+	if options.Store.Enable {
 		s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating db")
