@@ -17,6 +17,7 @@ import (
 	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	api "github.com/xmtp/xmtp-node-go/pkg/api"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
@@ -139,7 +140,7 @@ func (s *Service) Close() {
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
 	for _, env := range req.Envelopes {
 		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Debug("received message")
+		log.Info("received message", zap.String("client_ip", api.ClientIPFromContext(ctx)))
 
 		if len(env.ContentTopic) > MaxContentTopicNameSize {
 			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
