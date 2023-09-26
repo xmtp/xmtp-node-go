@@ -104,7 +104,7 @@ func (s *Store) metricsLoop(ctx context.Context) {
 
 func (s *Store) InsertMessage(env *messagev1.Envelope) (bool, error) {
 	var stored bool
-	err := tracing.Wrap(s.ctx, "storing message", func(ctx context.Context, span tracing.Span) error {
+	err := tracing.Wrap(s.ctx, s.log, "storing message", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
 		tracing.SpanResource(span, "store")
 		tracing.SpanType(span, "db")
 		err := s.insertMessage(env, s.now().UnixNano())

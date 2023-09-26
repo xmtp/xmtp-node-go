@@ -69,7 +69,9 @@ func NewNode(t *testing.T, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode,
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 	prvKey := NewPrivateKey(t)
 	ctx := context.Background()
+	log := NewLog(t)
 	opts = append([]wakunode.WakuNodeOption{
+		wakunode.WithLogger(log),
 		wakunode.WithPrivateKey(prvKey),
 		wakunode.WithHostAddress(hostAddr),
 		wakunode.WithWakuRelay(),

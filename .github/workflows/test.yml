@@ -21,6 +21,11 @@ jobs:
           export PATH="${PATH}:${GOPATH}/bin"
           go install github.com/jstemmer/go-junit-report/v2@latest
           go test -v ./... | go-junit-report -set-exit-code -iocopy -out report.xml
+      - name: Run Race Tests
+        run: |
+          export GOPATH="${HOME}/go/"
+          export PATH="${PATH}:${GOPATH}/bin"
+          go test -v ./... -race
       - uses: datadog/junit-upload-github-action@v1
         with:
             api-key: ${{ secrets.DD_API_KEY }}

@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.uber.org/zap"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
@@ -52,12 +51,11 @@ func Stop() {
 
 // Wrap executes action in the context of a span.
 // Tags the span with the error if action returns one.
-func Wrap(ctx context.Context, operation string, action func(context.Context, Span) error) error {
+func Wrap(ctx context.Context, log *zap.Logger, operation string, action func(context.Context, *zap.Logger, Span) error) error {
 	span, ctx := tracer.StartSpanFromContext(ctx, operation)
 	defer span.Finish()
-	log := logging.From(ctx).With(zap.String("span", operation))
-	ctx = logging.With(ctx, Link(span, log))
-	err := action(ctx, span)
+	log = Link(span, log.With(zap.String("span", operation)))
+	err := action(ctx, log, span)
 	if err != nil {
 		span.Finish(WithError(err))
 	}

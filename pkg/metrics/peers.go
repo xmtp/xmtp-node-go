@@ -6,7 +6,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -32,7 +31,7 @@ var BootstrapPeersView = &view.View{
 	Aggregation: view.LastValue(),
 }
 
-func EmitPeersByProtocol(ctx context.Context, host host.Host) {
+func EmitPeersByProtocol(ctx context.Context, log *zap.Logger, host host.Host) {
 	byProtocol := map[string]int64{}
 	ps := host.Peerstore()
 	for _, peer := range ps.Peers() {
@@ -48,7 +47,7 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 		mutators := []tag.Mutator{tag.Insert(TagProto, proto)}
 		err := recordWithTags(ctx, mutators, PeersByProto.M(count))
 		if err != nil {
-			logging.From(ctx).Warn("recording metric", zap.String("metric", PeersByProto.Name()), zap.String("proto", proto), zap.Error(err))
+			log.Warn("recording metric", zap.String("metric", PeersByProto.Name()), zap.String("proto", proto), zap.Error(err))
 		}
 	}
 }

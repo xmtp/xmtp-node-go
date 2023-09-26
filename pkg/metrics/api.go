@@ -41,7 +41,7 @@ var apiRequestsView = &view.View{
 	TagKeys:     apiRequestTagKeys,
 }
 
-func EmitAPIRequest(ctx context.Context, fields []zapcore.Field) {
+func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field) {
 	mutators := make([]tag.Mutator, 0, len(fields))
 	for _, field := range fields {
 		key, ok := apiRequestTagKeysByName[field.Key]
@@ -52,7 +52,7 @@ func EmitAPIRequest(ctx context.Context, fields []zapcore.Field) {
 	}
 	err := recordWithTags(ctx, mutators, apiRequestsMeasure.M(1))
 	if err != nil {
-		logging.From(ctx).Error("recording metric", fields...)
+		log.Error("recording metric", fields...)
 	}
 }
 
@@ -75,14 +75,14 @@ var publishedEnvelopeCounterView = &view.View{
 	TagKeys:     append([]tag.Key{topicCategoryTag}, appClientVersionTagKeys...),
 }
 
-func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
+func EmitPublishedEnvelope(ctx context.Context, log *zap.Logger, env *proto.Envelope) {
 	mutators := contextMutators(ctx)
 	topicCategory := topic.Category(env.ContentTopic)
 	mutators = append(mutators, tag.Insert(topicCategoryTag, topicCategory))
 	size := int64(len(env.Message))
 	err := recordWithTags(ctx, mutators, publishedEnvelopeMeasure.M(size))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
+		log.Error("recording metric",
 			zap.Error(err),
 			zap.String("metric", publishedEnvelopeView.Name),
 			zap.Int64("size", size),
@@ -91,7 +91,7 @@ func EmitPublishedEnvelope(ctx context.Context, env *proto.Envelope) {
 	}
 	err = recordWithTags(ctx, mutators, publishedEnvelopeCounterMeasure.M(1))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
+		log.Error("recording metric",
 			zap.Error(err),
 			zap.String("metric", publishedEnvelopeCounterView.Name),
 			zap.Int64("size", size),
@@ -147,7 +147,7 @@ var queryResultView = &view.View{
 	TagKeys:     append([]tag.Key{topicCategoryTag, queryErrorTag, queryParametersTag}, appClientVersionTagKeys...),
 }
 
-func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err error, duration time.Duration) {
+func EmitQuery(ctx context.Context, log *zap.Logger, req *proto.QueryRequest, results int, err error, duration time.Duration) {
 	mutators := []tag.Mutator{}
 	if len(req.ContentTopics) > 0 {
 		topicCategory := topic.Category(req.ContentTopics[0])
@@ -160,7 +160,7 @@ func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err er
 	mutators = append(mutators, tag.Insert(queryParametersTag, parameters))
 	err = recordWithTags(ctx, mutators, queryDurationMeasure.M(duration.Milliseconds()))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
+		log.Error("recording metric",
 			zap.Error(err),
 			zap.Duration("duration", duration),
 			zap.String("parameters", parameters),
@@ -169,7 +169,7 @@ func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err er
 	}
 	err = recordWithTags(ctx, mutators, queryResultMeasure.M(int64(results)))
 	if err != nil {
-		logging.From(ctx).Error("recording metric",
+		log.Error("recording metric",
 			zap.Error(err),
 			zap.Int("results", results),
 			zap.String("parameters", parameters),

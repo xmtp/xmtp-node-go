@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -21,10 +20,10 @@ var ratelimiterBucketsGaugeView = &view.View{
 	TagKeys:     []tag.Key{bucketsNameKey},
 }
 
-func EmitRatelimiterBucketsSize(ctx context.Context, name string, size int) {
+func EmitRatelimiterBucketsSize(ctx context.Context, log *zap.Logger, name string, size int) {
 	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(bucketsNameKey, name)}, ratelimiterBucketsGaugeMeasure.M(int64(size)))
 	if err != nil {
-		logging.From(ctx).Warn("recording metric",
+		log.Warn("recording metric",
 			zap.String("metric", ratelimiterBucketsGaugeMeasure.Name()),
 			zap.Error(err))
 	}
@@ -39,10 +38,10 @@ var ratelimiterBucketsDeletedCounterView = &view.View{
 	TagKeys:     []tag.Key{bucketsNameKey},
 }
 
-func EmitRatelimiterDeletedEntries(ctx context.Context, name string, count int) {
+func EmitRatelimiterDeletedEntries(ctx context.Context, log *zap.Logger, name string, count int) {
 	err := recordWithTags(ctx, []tag.Mutator{tag.Insert(bucketsNameKey, name)}, ratelimiterBucketsDeletedCounterMeasure.M(int64(count)))
 	if err != nil {
-		logging.From(ctx).Warn("recording metric",
+		log.Warn("recording metric",
 			zap.String("metric", ratelimiterBucketsDeletedCounterMeasure.Name()),
 			zap.Error(err))
 	}

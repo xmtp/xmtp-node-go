@@ -33,6 +33,10 @@ const (
 	authorizationMetadataKey = "authorization"
 )
 
+var (
+	prometheusOnce sync.Once
+)
+
 type Server struct {
 	*Config
 
@@ -79,7 +83,9 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating grpc listener")
 	}
 
-	prometheus.EnableHandlingTimeHistogram()
+	prometheusOnce.Do(func() {
+		prometheus.EnableHandlingTimeHistogram()
+	})
 	unary := []grpc.UnaryServerInterceptor{prometheus.UnaryServerInterceptor}
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 
