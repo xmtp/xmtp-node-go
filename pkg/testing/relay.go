@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	"github.com/status-im/go-waku/waku/v2/protocol"
-	"github.com/status-im/go-waku/waku/v2/protocol/pb"
 	"github.com/stretchr/testify/require"
+	wakunode "github.com/waku-org/go-waku/waku/v2/node"
+	"github.com/waku-org/go-waku/waku/v2/protocol"
+	"github.com/waku-org/go-waku/waku/v2/protocol/pb"
 )
 
-func Subscribe(t *testing.T, n *wakunode.WakuNode) chan *protocol.Envelope {
+func Subscribe(t *testing.T, n *wakunode.WakuNode) <-chan *protocol.Envelope {
 	ctx := context.Background()
 	sub, err := n.Relay().Subscribe(ctx)
 	require.NoError(t, err)
-	return sub.C
+	return sub.Ch
 }
 
 func Publish(t *testing.T, n *wakunode.WakuNode, msg *pb.WakuMessage) {

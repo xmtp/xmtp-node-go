@@ -9,22 +9,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/status-im/go-waku/tests"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
 	"github.com/stretchr/testify/require"
+	"github.com/waku-org/go-waku/tests"
+	wakunode "github.com/waku-org/go-waku/waku/v2/node"
+	"github.com/waku-org/go-waku/waku/v2/peers"
 )
 
-func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...string) {
+func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...protocol.ID) {
 	ctx := context.Background()
 	err := n1.DialPeer(ctx, n2.ListenAddresses()[0].String())
 	require.NoError(t, err)
 
 	if len(protocols) > 0 {
-		_, err = n1.AddPeer(n2.ListenAddresses()[0], protocols...)
+		_, err = n1.AddPeer(n2.ListenAddresses()[0], peers.PeerExchange, protocols...)
 		require.NoError(t, err)
 	}
 
@@ -73,10 +75,10 @@ func NewNode(t *testing.T, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode,
 		wakunode.WithWakuRelay(),
 		wakunode.WithWebsockets("0.0.0.0", 0),
 	}, opts...)
-	node, err := wakunode.New(ctx, opts...)
+	node, err := wakunode.New(opts...)
 	require.NoError(t, err)
 
-	err = node.Start()
+	err = node.Start(ctx)
 	require.NoError(t, err)
 
 	return node, func() {

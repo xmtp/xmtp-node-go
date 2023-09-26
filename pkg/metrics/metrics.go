@@ -5,8 +5,7 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/status-im/go-waku/waku/metrics"
-	v2metrics "github.com/status-im/go-waku/waku/v2/metrics"
+	"github.com/waku-org/go-waku/waku/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.opencensus.io/stats"
@@ -20,12 +19,6 @@ type Server struct {
 	waku *metrics.Server
 	http *http.Server
 }
-
-// re-export go-waku functions
-var (
-	RecordStoreError = v2metrics.RecordStoreError
-	RecordMessage    = v2metrics.RecordMessage
-)
 
 func NewMetricsServer(address string, port int, logger *zap.Logger) *Server {
 	return &Server{waku: metrics.NewMetricsServer(address, port, logger)}

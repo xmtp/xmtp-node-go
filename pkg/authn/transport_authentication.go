@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	libp2pProtocol "github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	libp2pProtocol "github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/xmtp/go-msgio/protoio"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"

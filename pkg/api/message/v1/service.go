@@ -13,9 +13,9 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	wakunode "github.com/status-im/go-waku/waku/v2/node"
-	wakupb "github.com/status-im/go-waku/waku/v2/protocol/pb"
-	wakurelay "github.com/status-im/go-waku/waku/v2/protocol/relay"
+	wakunode "github.com/waku-org/go-waku/waku/v2/node"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
+	wakurelay "github.com/waku-org/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -92,7 +92,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store)
 			select {
 			case <-ctx.Done():
 				return
-			case wakuEnv := <-s.relaySub.C:
+			case wakuEnv := <-s.relaySub.Ch:
 				if wakuEnv == nil {
 					continue
 				}

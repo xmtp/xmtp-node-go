@@ -78,7 +78,7 @@ syncLoop:
 		for i := range clients {
 			var done bool
 			for !done {
-				ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				env, err := streams[i].Next(ctx)
 				cancel()
 				if err != nil {
@@ -86,6 +86,10 @@ syncLoop:
 						s.log.Info("waiting for subscription sync", zap.Int("client", i))
 						prevSyncEnvs[string(syncEnv.Message)] = true
 						continue syncLoop
+					}
+					if strings.Contains(err.Error(), "429 Too Many Requests") {
+						s.log.Info("waiting for subscription sync", zap.Int("client", i), zap.Error(err))
+						time.Sleep(1 * time.Minute)
 					}
 					return errors.Wrap(err, "reading sync envelope")
 				}
