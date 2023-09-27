@@ -4,94 +4,68 @@ import (
 	"context"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/stats/view"
-	metricstag "go.opencensus.io/tag"
 	"go.uber.org/zap"
 )
 
 var (
-	successfulRuns     = stats.Int64("successful_runs", "Number of successful runs", stats.UnitDimensionless)
-	failedRuns         = stats.Int64("failed_runs", "Number of failed runs", stats.UnitDimensionless)
-	runDurationSeconds = stats.Float64("run_duration_seconds", "Duration of the run in seconds", stats.UnitSeconds)
+	testNameTagKey   = "test"
+	testStatusTagKey = "status"
 
-	testNameTagKey   = metricstag.MustNewKey("test")
-	testStatusTagKey = metricstag.MustNewKey("status")
-
-	views = []*view.View{
-		{
-			Name:        "xmtpd_e2e_successful_runs",
-			Measure:     successfulRuns,
-			Description: "Number of successful runs",
-			Aggregation: view.Count(),
-			TagKeys:     []metricstag.Key{testNameTagKey},
+	successfulRuns = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "xmtpd_e2e_successful_runs",
+			Help: "Number of successful runs",
 		},
-		{
-			Name:        "xmtpd_e2e_failed_runs",
-			Measure:     failedRuns,
-			Description: "Number of failed runs",
-			Aggregation: view.Count(),
-			TagKeys:     []metricstag.Key{testNameTagKey},
+		[]string{testNameTagKey},
+	)
+	failedRuns = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "xmtpd_e2e_failed_runs",
+			Help: "Number of failed runs",
 		},
-		{
-			Name:        "xmtpd_e2e_run_duration_seconds",
-			Measure:     runDurationSeconds,
-			Description: "Duration of the run in seconds",
-			Aggregation: view.Distribution(append(floatRange(30), 40, 50, 60, 90, 120, 300)...),
-			TagKeys:     []metricstag.Key{testNameTagKey, testStatusTagKey},
+		[]string{testNameTagKey},
+	)
+	runDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "xmtpd_e2e_run_duration_seconds",
+			Help:    "Duration of the run in seconds",
+			Buckets: append(floatRange(30), 40, 50, 60, 90, 120, 300),
 		},
-	}
+		[]string{testNameTagKey, testStatusTagKey},
+	)
 )
 
 func (r *Runner) withMetricsServer(fn func() error) error {
-	metrics := metrics.NewMetricsServer("0.0.0.0", 8008, r.log)
-	metrics.Start(context.Background())
+	metrics, err := metrics.NewMetricsServer(context.Background(), "0.0.0.0", 8008, r.log, r.prom)
+	if err != nil {
+		return err
+	}
 	defer func() {
-		err := metrics.Stop(r.ctx)
+		err := metrics.Close()
 		if err != nil {
 			r.log.Error("stopping metrics server", zap.Error(err))
 		}
 	}()
 
-	err := view.Register(views...)
-	if err != nil {
-		return err
-	}
+	r.prom.MustRegister(successfulRuns)
+	r.prom.MustRegister(failedRuns)
+	r.prom.MustRegister(runDuration)
 
 	return fn()
 }
 
-func recordSuccessfulRun(ctx context.Context, tags ...tag) error {
-	return recordWithTags(ctx, tags, successfulRuns.M(1))
+func recordSuccessfulRun(ctx context.Context, testName string) {
+	successfulRuns.WithLabelValues(testName).Inc()
 }
 
-func recordFailedRun(ctx context.Context, tags ...tag) error {
-	return recordWithTags(ctx, tags, failedRuns.M(1))
+func recordFailedRun(ctx context.Context, testName string) {
+	failedRuns.WithLabelValues(testName).Inc()
 }
 
-func recordRunDuration(ctx context.Context, duration time.Duration, tags ...tag) error {
-	return recordWithTags(ctx, tags, runDurationSeconds.M(duration.Seconds()))
-}
-
-type tag struct {
-	key   metricstag.Key
-	value string
-}
-
-func newTag(key metricstag.Key, value string) tag {
-	return tag{
-		key:   key,
-		value: value,
-	}
-}
-
-func recordWithTags(ctx context.Context, tags []tag, ms ...stats.Measurement) error {
-	mutators := make([]metricstag.Mutator, len(tags))
-	for i, tag := range tags {
-		mutators[i] = metricstag.Upsert(tag.key, tag.value)
-	}
-	return stats.RecordWithTags(ctx, mutators, ms...)
+func recordRunDuration(ctx context.Context, duration time.Duration, testName, testStatus string) {
+	runDuration.WithLabelValues(testName, testStatus).Observe(duration.Seconds())
 }
 
 func floatRange(n int) []float64 {

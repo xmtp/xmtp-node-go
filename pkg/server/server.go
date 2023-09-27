@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -85,10 +86,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
+	promReg := prometheus.NewRegistry()
 	if options.Metrics.Enable {
-		s.metricsServer = metrics.NewMetricsServer(options.Metrics.Address, options.Metrics.Port, s.log)
-		metrics.RegisterViews(s.log)
-		s.metricsServer.Start(s.ctx)
+		s.metricsServer, err = metrics.NewMetricsServer(s.ctx, options.Metrics.Address, options.Metrics.Port, s.log, promReg)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing metrics server")
+		}
 	}
 
 	if options.Authz.DbConnectionString != "" {
@@ -142,6 +145,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		node.WithPrivateKey(prvKey),
 		node.WithHostAddress(s.hostAddr),
 		node.WithKeepAlive(time.Duration(options.KeepAlive) * time.Second),
+		node.WithPrometheusRegisterer(promReg),
 	}
 
 	if options.EnableWS {
@@ -269,7 +273,7 @@ func (s *Server) Shutdown() {
 
 	// Close metrics server.
 	if s.metricsServer != nil {
-		if err := s.metricsServer.Stop(s.ctx); err != nil {
+		if err := s.metricsServer.Close(); err != nil {
 			s.log.Error("stopping metrics", zap.Error(err))
 		}
 	}
@@ -351,7 +355,7 @@ func (s *Server) statusMetricsLoop(options Options) {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			metrics.EmitPeersByProtocol(s.ctx, s.log, s.wakuNode.Host())
+			metrics.EmitPeersByProtocol(s.ctx, s.wakuNode.Host())
 			if len(bootstrapPeers) > 0 {
 				metrics.EmitBootstrapPeersConnected(s.ctx, s.wakuNode.Host(), bootstrapPeers)
 			}

@@ -32,7 +32,6 @@ require (
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
 	github.com/xmtp/proto/v3 v3.27.0
 	github.com/yoheimuta/protolint v0.39.0
-	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.53.0
@@ -76,7 +75,6 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gopacket v1.1.19 // indirect

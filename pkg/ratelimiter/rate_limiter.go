@@ -156,8 +156,8 @@ func (rl *TokenBucketRateLimiter) Janitor(sweepInterval, expiresAfter time.Durat
 func (rl *TokenBucketRateLimiter) sweepAndSwap(expiresAfter time.Duration) (deletedEntries int) {
 	// Only the janitor writes to oldBuckets (the swap below), so we shouldn't need to rlock it here.
 	deletedEntries = rl.oldBuckets.deleteExpired(expiresAfter)
-	metrics.EmitRatelimiterDeletedEntries(rl.ctx, rl.log, rl.oldBuckets.name, deletedEntries)
-	metrics.EmitRatelimiterBucketsSize(rl.ctx, rl.log, rl.oldBuckets.name, len(rl.oldBuckets.buckets))
+	metrics.EmitRatelimiterDeletedEntries(rl.ctx, rl.oldBuckets.name, deletedEntries)
+	metrics.EmitRatelimiterBucketsSize(rl.ctx, rl.oldBuckets.name, len(rl.oldBuckets.buckets))
 	rl.mutex.Lock()
 	rl.newBuckets, rl.oldBuckets = rl.oldBuckets, rl.newBuckets
 	rl.mutex.Unlock()
