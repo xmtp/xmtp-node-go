@@ -8,7 +8,7 @@ LD_FLAGS="-X 'main.Commit=${COMMIT}'"
 
 for dir in ./cmd/*; do
     if [ -d "$dir" ]; then
-        go build -ldflags="${LD_FLAGS}" -o "./bin/${dir##*/}" "${dir}" &
+        go build -tags="gowaku_no_rln" -ldflags="${LD_FLAGS}" -o "./bin/${dir##*/}" "${dir}" &
     fi
 done
 
