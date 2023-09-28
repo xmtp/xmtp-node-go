@@ -2,70 +2,69 @@ package metrics
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/waku-org/go-waku/waku/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/tag"
 	"go.uber.org/zap"
 )
 
-// Server wraps go-waku metrics server, so that we don't need to reference the go-waku package anywhere
 type Server struct {
+	ctx  context.Context
 	log  *zap.Logger
-	waku *metrics.Server
-	http *http.Server
+	http net.Listener
 }
 
-func NewMetricsServer(address string, port int, log *zap.Logger) *Server {
-	return &Server{
-		log:  log,
-		waku: metrics.NewMetricsServer(address, port, log),
+func NewMetricsServer(ctx context.Context, address string, port int, log *zap.Logger, reg *prometheus.Registry) (*Server, error) {
+	s := &Server{
+		ctx: ctx,
+		log: log.Named("metrics"),
 	}
-}
 
-func (s *Server) Start(ctx context.Context) {
-	log := s.log.Named("metrics")
-	go tracing.PanicWrap(ctx, "waku metrics server", func(_ context.Context) { s.waku.Start() })
-	s.http = &http.Server{Addr: ":8009", Handler: promhttp.Handler()}
+	var err error
+	addr := fmt.Sprintf("%s:%d", address, port)
+	s.http, err = net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	registerCollectors(reg)
+	srv := http.Server{
+		Addr:    addr,
+		Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}),
+	}
+
 	go tracing.PanicWrap(ctx, "metrics server", func(_ context.Context) {
-		log.Info("server stopped", zap.Error(s.http.ListenAndServe()))
+		s.log.Info("serving metrics http", zap.String("address", s.http.Addr().String()))
+		err = srv.Serve(s.http)
+		if err != nil {
+			s.log.Error("serving http", zap.Error(err))
+		}
 	})
+
+	return s, nil
 }
 
-func (s *Server) Stop(ctx context.Context) error {
-	wErr := s.waku.Stop(ctx)
-	err := s.http.Shutdown(ctx)
-	if wErr != nil {
-		return wErr
+func (s *Server) Close() error {
+	return s.http.Close()
+}
+
+func registerCollectors(reg prometheus.Registerer) {
+	cols := []prometheus.Collector{
+		PeersByProto,
+		BootstrapPeers,
+		StoredMessages,
+		apiRequests,
+		publishedEnvelopeSize,
+		publishedEnvelopeCount,
+		queryDuration,
+		queryResultLength,
+		ratelimiterBuckets,
+		ratelimiterBucketsDeleted,
 	}
-	return err
-}
-
-func RegisterViews(logger *zap.Logger) {
-	if err := view.Register(
-		PeersByProtoView,
-		BootstrapPeersView,
-		StoredMessageView,
-		apiRequestsView,
-		publishedEnvelopeView,
-		publishedEnvelopeCounterView,
-		queryDurationView,
-		queryResultView,
-		ratelimiterBucketsGaugeView,
-		ratelimiterBucketsDeletedCounterView,
-	); err != nil {
-		logger.Fatal("registering metrics views", zap.Error(err))
+	for _, col := range cols {
+		reg.MustRegister(col)
 	}
-}
-
-func record(ctx context.Context, measurement stats.Measurement) {
-	stats.Record(ctx, measurement)
-}
-
-func recordWithTags(ctx context.Context, mutators []tag.Mutator, measurement stats.Measurement) error {
-	return stats.RecordWithTags(ctx, mutators, measurement)
 }

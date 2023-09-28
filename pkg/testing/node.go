@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/waku-org/go-waku/tests"
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
-	"github.com/waku-org/go-waku/waku/v2/peers"
+	"github.com/waku-org/go-waku/waku/v2/peerstore"
 )
 
 func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...protocol.ID) {
@@ -26,7 +26,7 @@ func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protoco
 	require.NoError(t, err)
 
 	if len(protocols) > 0 {
-		_, err = n1.AddPeer(n2.ListenAddresses()[0], peers.PeerExchange, protocols...)
+		_, err = n1.AddPeer(n2.ListenAddresses()[0], peerstore.Static, n1.Relay().PubSub().GetTopics(), protocols...)
 		require.NoError(t, err)
 	}
 

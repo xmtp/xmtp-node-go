@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -15,6 +16,7 @@ type Runner struct {
 	ctx    context.Context
 	log    *zap.Logger
 	config *Config
+	prom   *prometheus.Registry
 	suite  *Suite
 }
 
@@ -23,6 +25,7 @@ func NewRunner(ctx context.Context, log *zap.Logger, config *Config) *Runner {
 		ctx:    ctx,
 		log:    log,
 		config: config,
+		prom:   prometheus.NewRegistry(),
 		suite:  NewSuite(ctx, log, config),
 	}
 }
@@ -61,7 +64,6 @@ func (r *Runner) Start() error {
 }
 
 func (r *Runner) runTest(test *Test) error {
-	nameTag := newTag(testNameTagKey, test.Name)
 	started := time.Now().UTC()
 	log := r.log.With(zap.String("test", test.Name))
 
@@ -70,35 +72,15 @@ func (r *Runner) runTest(test *Test) error {
 	duration := ended.Sub(started)
 	log = log.With(zap.Duration("duration", duration))
 	if err != nil {
-		recordErr := recordFailedRun(r.ctx, nameTag)
-		if recordErr != nil {
-			log.Error("recording failed run metric", zap.Error(recordErr))
-		}
+		recordFailedRun(r.ctx, test.Name)
 		log.Error("test failed", zap.Error(err))
-
-		statusTag := newTag(testStatusTagKey, "failed")
-		err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
-		if err != nil {
-			log.Error("recording run duration", zap.Error(err))
-			return err
-		}
-
+		recordRunDuration(r.ctx, duration, test.Name, "failed")
 		return err
 	}
 	log.Info("test passed")
 
-	err = recordSuccessfulRun(r.ctx, nameTag)
-	if err != nil {
-		log.Error("recording successful run metric", zap.Error(err))
-		return err
-	}
-
-	statusTag := newTag(testStatusTagKey, "success")
-	err = recordRunDuration(r.ctx, duration, nameTag, statusTag)
-	if err != nil {
-		log.Error("recording run duration", zap.Error(err))
-		return err
-	}
+	recordSuccessfulRun(r.ctx, test.Name)
+	recordRunDuration(r.ctx, duration, test.Name, "success")
 
 	return nil
 }

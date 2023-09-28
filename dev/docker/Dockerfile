@@ -10,7 +10,7 @@ COPY . .
 
 # Build the final node binary
 ARG GIT_COMMIT=unknown
-RUN go build -ldflags="-X 'main.Commit=$GIT_COMMIT'" -o bin/xmtpd cmd/xmtpd/main.go
+RUN go build -tags="gowaku_no_rln" -ldflags="-X 'main.Commit=$GIT_COMMIT'" -o bin/xmtpd cmd/xmtpd/main.go
 
 # ACTUAL IMAGE -------------------------------------------------------
 

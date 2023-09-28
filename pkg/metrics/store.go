@@ -5,25 +5,23 @@ import (
 	"database/sql"
 	"fmt"
 
-	"go.opencensus.io/stats"
-	"go.opencensus.io/stats/view"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
-var StoredMessages = stats.Int64("stored_messages", "Count of stored messages", stats.UnitDimensionless)
-var StoredMessageView = &view.View{
-	Name:        "xmtp_stored_messages",
-	Measure:     StoredMessages,
-	Description: "Count of stored messages",
-	Aggregation: view.LastValue(),
-}
+var StoredMessages = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "xmtp_stored_messages",
+		Help: "Count of stored messages",
+	},
+)
 
 func EmitStoredMessages(ctx context.Context, db *sql.DB, logger *zap.Logger) {
 	count, err := messageCountEstimate(db)
 	if err != nil {
 		logger.Error("counting messages", zap.Error(err))
 	}
-	stats.Record(ctx, StoredMessages.M(count))
+	StoredMessages.Set(float64(count))
 }
 
 func messageCountEstimate(db *sql.DB) (count int64, err error) {
