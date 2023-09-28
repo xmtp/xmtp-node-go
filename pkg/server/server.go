@@ -21,6 +21,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -87,6 +88,8 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
 	promReg := prometheus.NewRegistry()
+	promReg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	promReg.MustRegister(collectors.NewGoCollector())
 	if options.Metrics.Enable {
 		s.metricsServer, err = metrics.NewMetricsServer(s.ctx, options.Metrics.Address, options.Metrics.Port, s.log, promReg)
 		if err != nil {
