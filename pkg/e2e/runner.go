@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -21,11 +22,14 @@ type Runner struct {
 }
 
 func NewRunner(ctx context.Context, log *zap.Logger, config *Config) *Runner {
+	promReg := prometheus.NewRegistry()
+	promReg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	promReg.MustRegister(collectors.NewGoCollector())
 	return &Runner{
 		ctx:    ctx,
 		log:    log,
 		config: config,
-		prom:   prometheus.NewRegistry(),
+		prom:   promReg,
 		suite:  NewSuite(ctx, log, config),
 	}
 }
