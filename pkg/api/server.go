@@ -131,7 +131,7 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS server if a store is provided
 	if s.Config.MlsStore != nil && s.Config.EnableMls {
-		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Store)
+		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Store, s.Config.MlsStore)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
