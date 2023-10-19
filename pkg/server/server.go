@@ -233,10 +233,14 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
+
 		mlsStore, err = mlsstore.New(mlsstore.Config{
 			Log: s.log,
 			DB:  mlsDb,
 		})
+		if err != nil {
+			return nil, errors.Wrap(err, "creating mls store")
+		}
 	}
 
 	// Initialize gRPC server.
