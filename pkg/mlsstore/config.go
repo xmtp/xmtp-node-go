@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type MlsOptions struct {
+type StoreOptions struct {
 	DbConnectionString string        `long:"db-connection-string" description:"Connection string for MLS DB"`
 	ReadTimeout        time.Duration `long:"read-timeout" description:"Timeout for reading from the database" default:"10s"`
 	WriteTimeout       time.Duration `long:"write-timeout" description:"Timeout for writing to the database" default:"10s"`
