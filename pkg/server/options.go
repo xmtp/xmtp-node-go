@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 )
 
@@ -66,11 +67,12 @@ type Options struct {
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 	MetricsPeriod          time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
 
-	API       api.Options      `group:"API Options" namespace:"api"`
-	Authz     AuthzOptions     `group:"Authz Options"`
-	Relay     RelayOptions     `group:"Relay Options"`
-	Store     store.Options    `group:"Store Options" namespace:"store"`
-	Metrics   MetricsOptions   `group:"Metrics Options"`
-	Tracing   TracingOptions   `group:"DD APM Tracing Options"`
-	Profiling ProfilingOptions `group:"DD APM Profiling Options" namespace:"profiling"`
+	API       api.Options           `group:"API Options" namespace:"api"`
+	Authz     AuthzOptions          `group:"Authz Options"`
+	Relay     RelayOptions          `group:"Relay Options"`
+	Store     store.Options         `group:"Store Options" namespace:"store"`
+	Metrics   MetricsOptions        `group:"Metrics Options"`
+	Tracing   TracingOptions        `group:"DD APM Tracing Options"`
+	Profiling ProfilingOptions      `group:"DD APM Profiling Options" namespace:"profiling"`
+	MlsStore  mlsstore.StoreOptions `group:"MLS Options" namespace:"mlsstore"`
 }

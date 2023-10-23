@@ -37,6 +37,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 	messagemigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -225,6 +226,23 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
+	var mlsStore mlsstore.MlsStore
+
+	if options.MlsStore.DbConnectionString != "" {
+		mlsDb, err := createBunDB(options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.MlsStore.MaxOpenConns)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating mls db")
+		}
+
+		mlsStore, err = mlsstore.New(mlsstore.Config{
+			Log: s.log,
+			DB:  mlsDb,
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "creating mls store")
+		}
+	}
+
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
 		&api.Config{
@@ -232,6 +250,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:         s.log.Named("api"),
 			Waku:        s.wakuNode,
 			Store:       s.store,
+			MlsStore:    mlsStore,
 			AllowLister: s.allowLister,
 		},
 	)

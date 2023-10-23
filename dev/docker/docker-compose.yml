@@ -11,6 +11,13 @@ services:
       POSTGRES_PASSWORD: xmtp
     ports:
       - 6543:5432
+  mls-db:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: xmtp
+    ports:
+      - 7654:5432
+
   prometheus:
     image: prom/prometheus
     ports:

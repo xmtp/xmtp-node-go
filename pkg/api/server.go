@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	swgui "github.com/swaggest/swgui/v3"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	v3Proto "github.com/xmtp/proto/v3/go/message_api/v3"
 	messagev1openapi "github.com/xmtp/proto/v3/openapi/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -27,6 +28,7 @@ import (
 
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
+	messagev3 "github.com/xmtp/xmtp-node-go/pkg/api/message/v3"
 )
 
 const (
@@ -43,6 +45,7 @@ type Server struct {
 	grpcListener net.Listener
 	httpListener net.Listener
 	messagev1    *messagev1.Service
+	messagev3    *messagev3.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
 
@@ -125,6 +128,15 @@ func (s *Server) startGRPC() error {
 		return errors.Wrap(err, "creating message service")
 	}
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
+
+	// Enable the MLS server if a store is provided
+	if s.Config.MlsStore != nil && s.Config.EnableMls {
+		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Store, s.Config.MlsStore)
+		if err != nil {
+			return errors.Wrap(err, "creating mls service")
+		}
+		v3Proto.RegisterMlsApiServer(grpcServer, s.messagev3)
+	}
 	prometheus.Register(grpcServer)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "grpc", func(ctx context.Context) {
@@ -169,6 +181,13 @@ func (s *Server) startHTTP() error {
 	err = proto.RegisterMessageApiHandler(s.ctx, gwmux, conn)
 	if err != nil {
 		return errors.Wrap(err, "registering message handler")
+	}
+
+	if s.Config.MlsStore != nil && s.Config.EnableMls {
+		err = v3Proto.RegisterMlsApiHandler(s.ctx, gwmux, conn)
+		if err != nil {
+			return errors.Wrap(err, "registering mls handler")
+		}
 	}
 
 	addr := addrString(s.HTTPAddress, s.HTTPPort)

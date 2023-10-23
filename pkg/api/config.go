@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
@@ -25,6 +26,7 @@ type Options struct {
 	HTTPPort    uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
 	Authn       AuthnOptions `group:"API Authentication Options" namespace:"authn"`
 	MaxMsgSize  int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
+	EnableMls   bool         `long:"enable-mls" description:"Enable the MLS server"`
 }
 
 type Config struct {
@@ -33,6 +35,7 @@ type Config struct {
 	Waku        *wakunode.WakuNode
 	Log         *zap.Logger
 	Store       *store.Store
+	MlsStore    mlsstore.MlsStore
 }
 
 // AuthnOptions bundle command line options associated with the authn package.
