@@ -130,8 +130,8 @@ func (s *Server) startGRPC() error {
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
 
 	// Enable the MLS server if a store is provided
-	if s.Config.MlsStore != nil && s.Config.EnableMls {
-		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Store, s.Config.MlsStore)
+	if s.Config.MlsStore != nil && s.Config.MlsValidator != nil && s.Config.EnableMls {
+		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Store, s.Config.MlsStore, s.Config.MlsValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}

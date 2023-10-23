@@ -8,6 +8,7 @@ import (
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
@@ -31,11 +32,12 @@ type Options struct {
 
 type Config struct {
 	Options
-	AllowLister authz.WalletAllowLister
-	Waku        *wakunode.WakuNode
-	Log         *zap.Logger
-	Store       *store.Store
-	MlsStore    mlsstore.MlsStore
+	AllowLister  authz.WalletAllowLister
+	Waku         *wakunode.WakuNode
+	Log          *zap.Logger
+	Store        *store.Store
+	MlsStore     mlsstore.MlsStore
+	MlsValidator mlsvalidate.MlsValidationService
 }
 
 // AuthnOptions bundle command line options associated with the authn package.

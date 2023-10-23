@@ -92,6 +92,13 @@ func main() {
 		return
 	}
 
+	if options.CreateMlsMigration != "" && options.MlsStore.DbConnectionString != "" {
+		if err := server.CreateMlsMigration(options.CreateMlsMigration, options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.Store.MaxOpenConns); err != nil {
+			log.Fatal("creating authz db migration", zap.Error(err))
+		}
+		return
+	}
+
 	if options.Tracing.Enable {
 		log.Info("starting tracer")
 		tracing.Start(Commit, utils.Logger())

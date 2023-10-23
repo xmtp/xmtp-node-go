@@ -11,6 +11,7 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/migrate"
 	"github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 )
 
 const (
@@ -41,6 +42,20 @@ func NewAuthzDB(t *testing.T) (*bun.DB, string, func()) {
 
 	ctx := context.Background()
 	migrator := migrate.NewMigrator(bunDB, authz.Migrations)
+	err := migrator.Init(ctx)
+	require.NoError(t, err)
+	_, err = migrator.Migrate(ctx)
+	require.NoError(t, err)
+
+	return bunDB, dsn, cleanup
+}
+
+func NewMlsDB(t *testing.T) (*bun.DB, string, func()) {
+	db, dsn, cleanup := NewDB(t)
+	bunDB := bun.NewDB(db, pgdialect.New())
+
+	ctx := context.Background()
+	migrator := migrate.NewMigrator(bunDB, mls.Migrations)
 	err := migrator.Init(ctx)
 	require.NoError(t, err)
 	_, err = migrator.Migrate(ctx)

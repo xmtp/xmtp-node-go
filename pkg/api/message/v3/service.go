@@ -6,6 +6,7 @@ import (
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	proto "github.com/xmtp/proto/v3/go/message_api/v3"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -16,21 +17,23 @@ import (
 type Service struct {
 	proto.UnimplementedMlsApiServer
 
-	log          *zap.Logger
-	waku         *wakunode.WakuNode
-	messageStore *store.Store
-	mlsStore     mlsstore.MlsStore
+	log               *zap.Logger
+	waku              *wakunode.WakuNode
+	messageStore      *store.Store
+	mlsStore          mlsstore.MlsStore
+	validationService mlsvalidate.MlsValidationService
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MlsValidationService) (s *Service, err error) {
 	s = &Service{
-		log:          logger.Named("message/v3"),
-		waku:         node,
-		messageStore: messageStore,
-		mlsStore:     mlsStore,
+		log:               logger.Named("message/v3"),
+		waku:              node,
+		messageStore:      messageStore,
+		mlsStore:          mlsStore,
+		validationService: validationService,
 	}
 
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
@@ -45,11 +48,50 @@ func (s *Service) Close() {
 }
 
 func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterInstallationRequest) (*proto.RegisterInstallationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	results, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{req.LastResortKeyPackage.KeyPackageTlsSerialized})
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+	}
+	if len(results) != 1 {
+		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
+	}
+
+	installationId := results[0].InstallationId
+	walletAddress := results[0].WalletAddress
+
+	err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proto.RegisterInstallationResponse{
+		InstallationId: installationId,
+	}, nil
 }
 
 func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	ids := req.InstallationIds
+	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
+	}
+
+	resPackages := make([]*proto.ConsumeKeyPackagesResponse_KeyPackage, len(keyPackages))
+	for _, keyPackage := range keyPackages {
+		// Return the key packages in the original order
+		targetIndex := indexOf(keyPackage.InstallationId, ids)
+		if targetIndex == -1 {
+			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
+		}
+
+		resPackages[targetIndex] = &proto.ConsumeKeyPackagesResponse_KeyPackage{
+			KeyPackageTlsSerialized: keyPackage.Data,
+		}
+	}
+
+	return &proto.ConsumeKeyPackagesResponse{
+		KeyPackages: resPackages,
+	}, nil
 }
 
 func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupRequest) (*emptypb.Empty, error) {
@@ -61,7 +103,27 @@ func (s *Service) PublishWelcomes(ctx context.Context, req *proto.PublishWelcome
 }
 
 func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPackagesRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	keyPackageBytes := make([][]byte, len(req.KeyPackages))
+	for i, keyPackage := range req.KeyPackages {
+		keyPackageBytes[i] = keyPackage.KeyPackageTlsSerialized
+	}
+	validationResults, err := s.validationService.ValidateKeyPackages(ctx, keyPackageBytes)
+	if err != nil {
+		// TODO: Differentiate between validation errors and internal errors
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+	}
+
+	keyPackageModels := make([]*mlsstore.KeyPackage, len(validationResults))
+	for i, validationResult := range validationResults {
+		kp := mlsstore.NewKeyPackage(validationResult.InstallationId, keyPackageBytes[i], false)
+		keyPackageModels[i] = &kp
+	}
+	err = s.mlsStore.InsertKeyPackages(ctx, keyPackageModels)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
+	}
+
+	return &emptypb.Empty{}, nil
 }
 
 func (s *Service) RevokeInstallation(ctx context.Context, req *proto.RevokeInstallationRequest) (*emptypb.Empty, error) {
@@ -70,4 +132,14 @@ func (s *Service) RevokeInstallation(ctx context.Context, req *proto.RevokeInsta
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentityUpdatesRequest) (*proto.GetIdentityUpdatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+}
+
+func indexOf(target string, ids []string) int {
+	for i, id := range ids {
+		if id == target {
+			return i
+		}
+	}
+
+	return -1
 }
