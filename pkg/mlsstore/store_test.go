@@ -97,7 +97,7 @@ func TestInsertKeyPackages(t *testing.T) {
 	require.NoError(t, err)
 
 	keyPackagesFromDb := []*KeyPackage{}
-	store.db.NewSelect().Model(&keyPackagesFromDb).Where("installation_id = ?", installationId).Scan(ctx)
+	require.NoError(t, store.db.NewSelect().Model(&keyPackagesFromDb).Where("installation_id = ?", installationId).Scan(ctx))
 	require.Len(t, keyPackagesFromDb, 2)
 
 	hasLastResort := false

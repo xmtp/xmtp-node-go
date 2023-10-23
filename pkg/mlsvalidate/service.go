@@ -2,7 +2,6 @@ package mlsvalidate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	svc "github.com/xmtp/proto/v3/go/mls_validation/v1"
@@ -52,7 +51,7 @@ func (s *MlsValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyP
 	out := make([]IdentityValidationResult, len(response.Responses))
 	for i, response := range response.Responses {
 		if !response.IsOk {
-			return nil, errors.New(fmt.Sprintf("validation failed with error %s", response.ErrorMessage))
+			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
 		}
 		out[i] = IdentityValidationResult{
 			WalletAddress:  response.WalletAddress,
@@ -85,7 +84,7 @@ func (s *MlsValidationServiceImpl) ValidateGroupMessages(ctx context.Context, gr
 	out := make([]GroupMessageValidationResult, len(response.Responses))
 	for i, response := range response.Responses {
 		if !response.IsOk {
-			return nil, errors.New(fmt.Sprintf("validation failed with error %s", response.ErrorMessage))
+			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
 		}
 		out[i] = GroupMessageValidationResult{
 			GroupId: response.GroupId,
