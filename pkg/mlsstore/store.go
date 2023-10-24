@@ -201,8 +201,8 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId string) e
 	return err
 }
 
-func NewKeyPackage(installationId string, data []byte, isLastResort bool) KeyPackage {
-	return KeyPackage{
+func NewKeyPackage(installationId string, data []byte, isLastResort bool) *KeyPackage {
+	return &KeyPackage{
 		ID:             buildKeyPackageId(data),
 		InstallationId: installationId,
 		CreatedAt:      nowNs(),
