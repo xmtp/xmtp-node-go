@@ -24,7 +24,7 @@ type Service struct {
 	log               *zap.Logger
 	waku              *wakunode.WakuNode
 	messageStore      *store.Store
-	MLSStore          mlsstore.MlsStore
+	mlsStore          mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
 }
 
@@ -33,7 +33,7 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store
 		log:               logger.Named("message/v3"),
 		waku:              node,
 		messageStore:      messageStore,
-		MLSStore:          mlsStore,
+		mlsStore:          mlsStore,
 		validationService: validationService,
 	}
 
@@ -58,7 +58,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	installationId := results[0].InstallationId
 	walletAddress := results[0].WalletAddress
 
-	if err = s.MLSStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized); err != nil {
+	if err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized); err != nil {
 		return nil, err
 	}
 
@@ -69,7 +69,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 
 func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
 	ids := req.InstallationIds
-	keyPackages, err := s.MLSStore.ConsumeKeyPackages(ctx, ids)
+	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
 	}
@@ -189,7 +189,7 @@ func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPac
 		keyPackageModels[i] = kp
 	}
 
-	if err = s.MLSStore.InsertKeyPackages(ctx, keyPackageModels); err != nil {
+	if err = s.mlsStore.InsertKeyPackages(ctx, keyPackageModels); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -206,7 +206,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	}
 
 	walletAddresses := req.WalletAddresses
-	updates, err := s.MLSStore.GetIdentityUpdates(ctx, req.WalletAddresses, int64(req.StartTimeNs))
+	updates, err := s.mlsStore.GetIdentityUpdates(ctx, req.WalletAddresses, int64(req.StartTimeNs))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get identity updates: %s", err)
 	}
