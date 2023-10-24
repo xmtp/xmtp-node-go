@@ -69,7 +69,7 @@ func (s *Store) CreateInstallation(ctx context.Context, installationId string, w
 		}
 
 		_, err = tx.NewInsert().
-			Model(&keyPackage).
+			Model(keyPackage).
 			Ignore().
 			Exec(ctx)
 
