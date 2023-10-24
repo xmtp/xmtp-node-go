@@ -61,7 +61,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
-	MLSStore      *mlsstore.Store
+	mlsDB         *bun.DB
 }
 
 // Create a new Server
@@ -229,20 +229,17 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
+	var MLSStore *mlsstore.Store
 	if options.MLSStore.DbConnectionString != "" {
-		s.log.Info("creating mls db")
-		mlsDb, err := createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns)
-		if err != nil {
+		if s.mlsDB, err = createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns); err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
 		s.log.Info("creating mls store")
-		s.MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
+		if MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
 			Log: s.log,
-			DB:  mlsDb,
-		})
-
-		if err != nil {
+			DB:  s.mlsDB,
+		}); err != nil {
 			return nil, errors.Wrap(err, "creating mls store")
 		}
 	}
@@ -263,7 +260,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:          s.log.Named("`api"),
 			Waku:         s.wakuNode,
 			Store:        s.store,
-			MLSStore:     s.MLSStore,
+			MLSStore:     MLSStore,
 			AllowLister:  s.allowLister,
 			MLSValidator: MLSValidator,
 		},
@@ -306,8 +303,8 @@ func (s *Server) Shutdown() {
 	if s.store != nil {
 		s.store.Close()
 	}
-	if s.MLSStore != nil {
-		s.MLSStore.Close()
+	if s.mlsDB != nil {
+		s.mlsDB.Close()
 	}
 
 	// Close metrics server.
