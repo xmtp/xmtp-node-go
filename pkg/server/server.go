@@ -248,8 +248,8 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	var MLSValidator mlsvalidate.MLSValidationService
-	if options.MlsValidation.GRPCAddress != "" {
-		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MlsValidation)
+	if options.MLSValidation.GRPCAddress != "" {
+		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MLSValidation)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls validation service")
 		}

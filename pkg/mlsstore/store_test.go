@@ -10,7 +10,7 @@ import (
 
 func NewTestStore(t *testing.T) (*Store, func()) {
 	log := test.NewLog(t)
-	db, _, dbCleanup := test.NewMlsDB(t)
+	db, _, dbCleanup := test.NewMLSDB(t)
 	ctx := context.Background()
 	c := Config{
 		Log: log,

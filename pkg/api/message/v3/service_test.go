@@ -57,7 +57,7 @@ func (m *mockedMlsValidationService) mockValidateGroupMessages(groupId string) *
 
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mockedMlsValidationService, func()) {
 	log := test.NewLog(t)
-	mlsDb, _, mlsDbCleanup := test.NewMlsDB(t)
+	mlsDb, _, mlsDbCleanup := test.NewMLSDB(t)
 	mlsStore, err := mlsstore.New(ctx, mlsstore.Config{
 		Log: log,
 		DB:  mlsDb,
