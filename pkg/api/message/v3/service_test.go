@@ -25,7 +25,12 @@ type mockedMlsValidationService struct {
 func (m *mockedMlsValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
 	args := m.Called(ctx, keyPackages)
 
-	return args.Get(0).([]mlsvalidate.IdentityValidationResult), args.Error(1)
+	response := args.Get(0)
+	if response == nil {
+		return nil, args.Error(1)
+	}
+
+	return response.([]mlsvalidate.IdentityValidationResult), args.Error(1)
 }
 
 func (m *mockedMlsValidationService) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]mlsvalidate.GroupMessageValidationResult, error) {
