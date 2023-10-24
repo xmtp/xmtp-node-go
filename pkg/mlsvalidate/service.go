@@ -32,8 +32,8 @@ type MLSValidationServiceImpl struct {
 	grpcClient svc.ValidationApiClient
 }
 
-func NewMlsValidationService(ctx context.Context, options MlsValidationOptions) (*MLSValidationServiceImpl, error) {
-	conn, err := grpc.DialContext(ctx, options.GrpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewMlsValidationService(ctx context.Context, options MLSValidationOptions) (*MLSValidationServiceImpl, error) {
+	conn, err := grpc.DialContext(ctx, options.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
