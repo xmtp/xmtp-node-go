@@ -10,25 +10,25 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MockedGrpcService struct {
+type MockedGRPCService struct {
 	mock.Mock
 }
 
-func (m *MockedGrpcService) ValidateKeyPackages(ctx context.Context, req *svc.ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*svc.ValidateKeyPackagesResponse, error) {
+func (m *MockedGRPCService) ValidateKeyPackages(ctx context.Context, req *svc.ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*svc.ValidateKeyPackagesResponse, error) {
 	args := m.Called(ctx, req)
 
 	return args.Get(0).(*svc.ValidateKeyPackagesResponse), args.Error(1)
 }
 
-func (m *MockedGrpcService) ValidateGroupMessages(ctx context.Context, req *svc.ValidateGroupMessagesRequest, opts ...grpc.CallOption) (*svc.ValidateGroupMessagesResponse, error) {
+func (m *MockedGRPCService) ValidateGroupMessages(ctx context.Context, req *svc.ValidateGroupMessagesRequest, opts ...grpc.CallOption) (*svc.ValidateGroupMessagesResponse, error) {
 	args := m.Called(ctx, req)
 
 	return args.Get(0).(*svc.ValidateGroupMessagesResponse), args.Error(1)
 }
 
-func getMockedService() (*MockedGrpcService, MlsValidationService) {
-	mockService := new(MockedGrpcService)
-	service := &MlsValidationServiceImpl{
+func getMockedService() (*MockedGRPCService, MLSValidationService) {
+	mockService := new(MockedGRPCService)
+	service := &MLSValidationServiceImpl{
 		grpcClient: mockService,
 	}
 

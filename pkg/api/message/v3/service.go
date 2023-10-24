@@ -20,19 +20,19 @@ type Service struct {
 	log               *zap.Logger
 	waku              *wakunode.WakuNode
 	messageStore      *store.Store
-	mlsStore          mlsstore.MlsStore
-	validationService mlsvalidate.MlsValidationService
+	MLSStore          mlsstore.MlsStore
+	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MlsValidationService) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
 		log:               logger.Named("message/v3"),
 		waku:              node,
 		messageStore:      messageStore,
-		mlsStore:          mlsStore,
+		MLSStore:          mlsStore,
 		validationService: validationService,
 	}
 
@@ -59,7 +59,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	installationId := results[0].InstallationId
 	walletAddress := results[0].WalletAddress
 
-	err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized)
+	err = s.MLSStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 
 func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
 	ids := req.InstallationIds
-	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
+	keyPackages, err := s.MLSStore.ConsumeKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
 	}
@@ -122,7 +122,7 @@ func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPac
 		kp := mlsstore.NewKeyPackage(validationResult.InstallationId, keyPackageBytes[i], false)
 		keyPackageModels[i] = kp
 	}
-	err = s.mlsStore.InsertKeyPackages(ctx, keyPackageModels)
+	err = s.MLSStore.InsertKeyPackages(ctx, keyPackageModels)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
