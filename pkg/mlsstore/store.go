@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -120,36 +121,9 @@ func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string
 	return keyPackages, nil
 }
 
-type IdentityUpdateKind int
-
-const (
-	Create IdentityUpdateKind = iota
-	Revoke
-)
-
-type IdentityUpdate struct {
-	Kind           IdentityUpdateKind
-	InstallationId string
-	TimestampNs    uint64
-}
-
-// Add the required methods to make a valid sort.Sort interface
-type IdentityUpdateList []IdentityUpdate
-
-func (a IdentityUpdateList) Len() int {
-	return len(a)
-}
-
-func (a IdentityUpdateList) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-
-func (a IdentityUpdateList) Less(i, j int) bool {
-	return a[i].TimestampNs < a[j].TimestampNs
-}
-
 func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
 	updated := make([]*Installation, 0)
+	// Find all installations that were changed since the startTimeNs
 	err := s.db.NewSelect().
 		Model(&updated).
 		Where("wallet_address IN (?)", bun.In(walletAddresses)).
@@ -163,6 +137,7 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 		return nil, err
 	}
 
+	// The returned list is only partially sorted
 	out := make(map[string]IdentityUpdateList)
 	for _, installation := range updated {
 		if installation.CreatedAt > startTimeNs {
@@ -179,6 +154,10 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 				TimestampNs:    uint64(*installation.RevokedAt),
 			})
 		}
+	}
+	// Sort the updates by timestamp now that the full list is assembled
+	for _, updates := range out {
+		sort.Sort(updates)
 	}
 
 	return out, nil
@@ -240,4 +219,32 @@ func nowNs() int64 {
 func buildKeyPackageId(keyPackageData []byte) string {
 	digest := sha256.Sum256(keyPackageData)
 	return hex.EncodeToString(digest[:])
+}
+
+type IdentityUpdateKind int
+
+const (
+	Create IdentityUpdateKind = iota
+	Revoke
+)
+
+type IdentityUpdate struct {
+	Kind           IdentityUpdateKind
+	InstallationId string
+	TimestampNs    uint64
+}
+
+// Add the required methods to make a valid sort.Sort interface
+type IdentityUpdateList []IdentityUpdate
+
+func (a IdentityUpdateList) Len() int {
+	return len(a)
+}
+
+func (a IdentityUpdateList) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a IdentityUpdateList) Less(i, j int) bool {
+	return a[i].TimestampNs < a[j].TimestampNs
 }

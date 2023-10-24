@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"sort"
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
@@ -212,7 +211,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	resUpdates := make([]*proto.GetIdentityUpdatesResponse_WalletUpdates, len(walletAddresses))
 	for i, walletAddress := range walletAddresses {
 		walletUpdates := updates[walletAddress]
-		sort.Sort(walletUpdates)
+
 		resUpdates[i] = &proto.GetIdentityUpdatesResponse_WalletUpdates{
 			Updates: []*proto.GetIdentityUpdatesResponse_Update{},
 		}
