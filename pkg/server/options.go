@@ -76,6 +76,6 @@ type Options struct {
 	Metrics       MetricsOptions                   `group:"Metrics Options"`
 	Tracing       TracingOptions                   `group:"DD APM Tracing Options"`
 	Profiling     ProfilingOptions                 `group:"DD APM Profiling Options" namespace:"profiling"`
-	MlsStore      mlsstore.StoreOptions            `group:"MLS Options" namespace:"mls-store"`
-	MlsValidation mlsvalidate.MlsValidationOptions `group:"MLS Validation Options" namespace:"mls-validation"`
+	MLSStore      mlsstore.StoreOptions            `group:"MLS Options" namespace:"mls-store"`
+	MlsValidation mlsvalidate.MLSValidationOptions `group:"MLS Validation Options" namespace:"mls-validation"`
 }

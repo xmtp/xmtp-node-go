@@ -61,7 +61,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
-	mlsStore      *mlsstore.Store
+	MLSStore      *mlsstore.Store
 }
 
 // Create a new Server
@@ -229,15 +229,15 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
-	if options.MlsStore.DbConnectionString != "" {
+	if options.MLSStore.DbConnectionString != "" {
 		s.log.Info("creating mls db")
-		mlsDb, err := createBunDB(options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.MlsStore.MaxOpenConns)
+		mlsDb, err := createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
 		s.log.Info("creating mls store")
-		s.mlsStore, err = mlsstore.New(s.ctx, mlsstore.Config{
+		s.MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
 			Log: s.log,
 			DB:  mlsDb,
 		})
@@ -247,9 +247,9 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	var mlsValidator mlsvalidate.MlsValidationService
-	if options.MlsValidation.GrpcAddress != "" {
-		mlsValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MlsValidation)
+	var MLSValidator mlsvalidate.MLSValidationService
+	if options.MlsValidation.GRPCAddress != "" {
+		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MlsValidation)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls validation service")
 		}
@@ -263,9 +263,9 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:          s.log.Named("`api"),
 			Waku:         s.wakuNode,
 			Store:        s.store,
-			MlsStore:     s.mlsStore,
+			MLSStore:     s.MLSStore,
 			AllowLister:  s.allowLister,
-			MlsValidator: mlsValidator,
+			MLSValidator: MLSValidator,
 		},
 	)
 	if err != nil {
@@ -306,8 +306,8 @@ func (s *Server) Shutdown() {
 	if s.store != nil {
 		s.store.Close()
 	}
-	if s.mlsStore != nil {
-		s.mlsStore.Close()
+	if s.MLSStore != nil {
+		s.MLSStore.Close()
 	}
 
 	// Close metrics server.

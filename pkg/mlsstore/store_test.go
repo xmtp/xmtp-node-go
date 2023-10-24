@@ -38,9 +38,9 @@ func TestCreateInstallation(t *testing.T) {
 	require.NoError(t, store.db.NewSelect().Model(installationFromDb).Where("id = ?", installationId).Scan(ctx))
 	require.Equal(t, walletAddress, installationFromDb.WalletAddress)
 
-	keyPackageFromDb := &KeyPackage{}
-	require.NoError(t, store.db.NewSelect().Model(keyPackageFromDb).Where("installation_id = ?", installationId).Scan(ctx))
-	require.Equal(t, installationId, keyPackageFromDb.InstallationId)
+	keyPackageFromDB := &KeyPackage{}
+	require.NoError(t, store.db.NewSelect().Model(keyPackageFromDB).Where("installation_id = ?", installationId).Scan(ctx))
+	require.Equal(t, installationId, keyPackageFromDB.InstallationId)
 }
 
 func TestCreateInstallationIdempotent(t *testing.T) {

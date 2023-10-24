@@ -23,26 +23,26 @@ type IdentityInput struct {
 	Identity         []byte
 }
 
-type MlsValidationService interface {
+type MLSValidationService interface {
 	ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
 	ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]GroupMessageValidationResult, error)
 }
 
-type MlsValidationServiceImpl struct {
+type MLSValidationServiceImpl struct {
 	grpcClient svc.ValidationApiClient
 }
 
-func NewMlsValidationService(ctx context.Context, options MlsValidationOptions) (*MlsValidationServiceImpl, error) {
-	conn, err := grpc.DialContext(ctx, options.GrpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewMlsValidationService(ctx context.Context, options MLSValidationOptions) (*MLSValidationServiceImpl, error) {
+	conn, err := grpc.DialContext(ctx, options.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
-	return &MlsValidationServiceImpl{
+	return &MLSValidationServiceImpl{
 		grpcClient: svc.NewValidationApiClient(conn),
 	}, nil
 }
 
-func (s *MlsValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error) {
+func (s *MLSValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error) {
 	req := makeValidateKeyPackageRequest(keyPackages)
 	response, err := s.grpcClient.ValidateKeyPackages(ctx, req)
 	if err != nil {
@@ -73,7 +73,7 @@ func makeValidateKeyPackageRequest(keyPackageBytes [][]byte) *svc.ValidateKeyPac
 	}
 }
 
-func (s *MlsValidationServiceImpl) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]GroupMessageValidationResult, error) {
+func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]GroupMessageValidationResult, error) {
 	req := makeValidateGroupMessagesRequest(groupMessages)
 
 	response, err := s.grpcClient.ValidateGroupMessages(ctx, req)

@@ -36,8 +36,8 @@ type Config struct {
 	Waku         *wakunode.WakuNode
 	Log          *zap.Logger
 	Store        *store.Store
-	MlsStore     mlsstore.MlsStore
-	MlsValidator mlsvalidate.MlsValidationService
+	MLSStore     mlsstore.MlsStore
+	MLSValidator mlsvalidate.MLSValidationService
 }
 
 // AuthnOptions bundle command line options associated with the authn package.

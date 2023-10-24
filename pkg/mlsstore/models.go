@@ -18,6 +18,7 @@ type KeyPackage struct {
 	InstallationId string `bun:"installation_id,notnull"`
 	CreatedAt      int64  `bun:"created_at,notnull"`
 	ConsumedAt     *int64 `bun:"consumed_at"`
+	NotConsumed    bool   `bun:"not_consumed,default:true"`
 	IsLastResort   bool   `bun:"is_last_resort,notnull"`
 	Data           []byte `bun:"data,notnull,type:bytea"`
 }

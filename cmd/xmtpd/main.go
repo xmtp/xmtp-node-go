@@ -92,8 +92,8 @@ func main() {
 		return
 	}
 
-	if options.CreateMlsMigration != "" && options.MlsStore.DbConnectionString != "" {
-		if err := server.CreateMlsMigration(options.CreateMlsMigration, options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.Store.MaxOpenConns); err != nil {
+	if options.CreateMlsMigration != "" && options.MLSStore.DbConnectionString != "" {
+		if err := server.CreateMlsMigration(options.CreateMlsMigration, options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.Store.MaxOpenConns); err != nil {
 			log.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return
