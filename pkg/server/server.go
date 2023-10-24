@@ -229,14 +229,14 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
-	var mlsStore mlsstore.MlsStore
-
 	if options.MlsStore.DbConnectionString != "" {
+		s.log.Info("creating mls db")
 		mlsDb, err := createBunDB(options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.MlsStore.MaxOpenConns)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
+		s.log.Info("creating mls store")
 		s.mlsStore, err = mlsstore.New(s.ctx, mlsstore.Config{
 			Log: s.log,
 			DB:  mlsDb,
@@ -263,7 +263,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:          s.log.Named("`api"),
 			Waku:         s.wakuNode,
 			Store:        s.store,
-			MlsStore:     mlsStore,
+			MlsStore:     s.mlsStore,
 			AllowLister:  s.allowLister,
 			MlsValidator: mlsValidator,
 		},

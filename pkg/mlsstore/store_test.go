@@ -2,8 +2,6 @@ package mlsstore
 
 import (
 	"context"
-	"crypto/rand"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,25 +23,15 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	return store, dbCleanup
 }
 
-func randomBytes(n int) []byte {
-	b := make([]byte, n)
-	_, _ = rand.Reader.Read(b)
-	return b
-}
-
-func randomString(n int) string {
-	return fmt.Sprintf("%x", randomBytes(n))
-}
-
 func TestCreateInstallation(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := randomString(32)
-	walletAddress := randomString(32)
+	installationId := test.RandomString(32)
+	walletAddress := test.RandomString(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, randomBytes(32))
+	err := store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32))
 	require.NoError(t, err)
 
 	installationFromDb := &Installation{}
@@ -60,13 +48,13 @@ func TestCreateInstallationIdempotent(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := randomString(32)
-	walletAddress := randomString(32)
-	keyPackage := randomBytes(32)
+	installationId := test.RandomString(32)
+	walletAddress := test.RandomString(32)
+	keyPackage := test.RandomBytes(32)
 
 	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
 	require.NoError(t, err)
-	err = store.CreateInstallation(ctx, installationId, walletAddress, randomBytes(32))
+	err = store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32))
 	require.NoError(t, err)
 
 	keyPackageFromDb := &KeyPackage{}
@@ -79,14 +67,14 @@ func TestInsertKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := randomString(32)
-	walletAddress := randomString(32)
-	keyPackage := randomBytes(32)
+	installationId := test.RandomString(32)
+	walletAddress := test.RandomString(32)
+	keyPackage := test.RandomBytes(32)
 
 	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
 	require.NoError(t, err)
 
-	keyPackage2 := randomBytes(32)
+	keyPackage2 := test.RandomBytes(32)
 	err = store.InsertKeyPackages(ctx, []*KeyPackage{{
 		ID:             buildKeyPackageId(keyPackage2),
 		InstallationId: installationId,
@@ -122,9 +110,9 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := randomString(32)
-	walletAddress := randomString(32)
-	keyPackage := randomBytes(32)
+	installationId := test.RandomString(32)
+	walletAddress := test.RandomString(32)
+	keyPackage := test.RandomBytes(32)
 
 	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
 	require.NoError(t, err)
@@ -141,14 +129,14 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := randomString(32)
-	walletAddress := randomString(32)
-	keyPackage := randomBytes(32)
+	installationId := test.RandomString(32)
+	walletAddress := test.RandomString(32)
+	keyPackage := test.RandomBytes(32)
 
 	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
 	require.NoError(t, err)
 
-	keyPackage2 := randomBytes(32)
+	keyPackage2 := test.RandomBytes(32)
 	require.NoError(t, store.InsertKeyPackages(ctx, []*KeyPackage{{
 		ID:             buildKeyPackageId(keyPackage2),
 		InstallationId: installationId,
@@ -168,4 +156,73 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 	require.Len(t, consumeResult, 1)
 	// Now we are out of regular key packages. Expect to consume the last resort
 	require.Equal(t, keyPackage, consumeResult[0].Data)
+}
+
+func TestGetIdentityUpdates(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	walletAddress := test.RandomString(32)
+
+	installationId1 := test.RandomString(32)
+	keyPackage1 := test.RandomBytes(32)
+
+	err := store.CreateInstallation(ctx, installationId1, walletAddress, keyPackage1)
+	require.NoError(t, err)
+
+	installationId2 := test.RandomString(32)
+	keyPackage2 := test.RandomBytes(32)
+
+	err = store.CreateInstallation(ctx, installationId2, walletAddress, keyPackage2)
+	require.NoError(t, err)
+
+	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
+	require.NoError(t, err)
+	require.Len(t, identityUpdates[walletAddress], 2)
+	require.Equal(t, identityUpdates[walletAddress][0].InstallationId, installationId1)
+	require.Equal(t, identityUpdates[walletAddress][0].Kind, Create)
+	require.Equal(t, identityUpdates[walletAddress][1].InstallationId, installationId2)
+
+	// Make sure that date filtering works
+	identityUpdates, err = store.GetIdentityUpdates(ctx, []string{walletAddress}, nowNs()+1000000)
+	require.NoError(t, err)
+	require.Len(t, identityUpdates[walletAddress], 0)
+}
+
+func TestGetIdentityUpdatesMultipleWallets(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	walletAddress1 := test.RandomString(32)
+	installationId1 := test.RandomString(32)
+	keyPackage1 := test.RandomBytes(32)
+
+	err := store.CreateInstallation(ctx, installationId1, walletAddress1, keyPackage1)
+	require.NoError(t, err)
+
+	walletAddress2 := test.RandomString(32)
+	installationId2 := test.RandomString(32)
+	keyPackage2 := test.RandomBytes(32)
+
+	err = store.CreateInstallation(ctx, installationId2, walletAddress2, keyPackage2)
+	require.NoError(t, err)
+
+	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress1, walletAddress2}, 0)
+	require.NoError(t, err)
+	require.Len(t, identityUpdates[walletAddress1], 1)
+	require.Len(t, identityUpdates[walletAddress2], 1)
+}
+
+func TestGetIdentityUpdatesNoResult(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	walletAddress := test.RandomString(32)
+
+	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
+	require.NoError(t, err)
+	require.Len(t, identityUpdates[walletAddress], 0)
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,22 @@ import (
 )
 
 const maxPageSize = 100
+
+const timestampGeneratorSql = `(
+	(
+		EXTRACT(
+			EPOCH
+			FROM
+				clock_timestamp()
+		) :: bigint * 1000000000
+	) + (
+		EXTRACT(
+			MICROSECONDS
+			FROM
+				clock_timestamp()
+		) :: bigint * 1000
+	)
+)`
 
 type Store struct {
 	config  *Config
@@ -125,6 +142,61 @@ func (s *Store) InsertMessage(env *messagev1.Envelope) (bool, error) {
 		return nil
 	})
 	return stored, err
+}
+
+func (s *Store) InsertMlsMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error) {
+	tmpEnvelope := &messagev1.Envelope{
+		ContentTopic: contentTopic,
+		Message:      data,
+	}
+	digest := computeDigest(tmpEnvelope)
+	var envelope messagev1.Envelope
+
+	err := tracing.Wrap(s.ctx, s.log, "storing mls message", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
+		tracing.SpanResource(span, "store")
+		tracing.SpanType(span, "db")
+
+		stmnt := fmt.Sprintf(`INSERT INTO
+		message (
+			id,
+			receiverTimestamp,
+			senderTimestamp,
+			contentTopic,
+			pubsubTopic,
+			payload,
+			version,
+			should_expire
+		)
+	VALUES
+		(
+			$1,
+			%s,
+			%s,
+			$2,
+			$3,
+			$4,
+			$5,
+			$6
+		) RETURNING senderTimestamp`, timestampGeneratorSql, timestampGeneratorSql)
+
+		var senderTimestamp uint64
+		err := s.config.DB.QueryRowContext(ctx, stmnt, digest, contentTopic, "", data, 0, false).Scan(&senderTimestamp)
+		if err != nil {
+			return err
+		}
+		envelope = messagev1.Envelope{
+			ContentTopic: contentTopic,
+			TimestampNs:  senderTimestamp,
+			Message:      data,
+		}
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &envelope, nil
 }
 
 func (s *Store) insertMessage(env *messagev1.Envelope, receiverTimestamp int64) error {

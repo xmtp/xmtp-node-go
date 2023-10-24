@@ -18,3 +18,9 @@ func RandomString(n int) string {
 func RandomStringLower(n int) string {
 	return strings.ToLower(RandomString(n))
 }
+
+func RandomBytes(n int) []byte {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return b
+}
