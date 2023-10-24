@@ -41,12 +41,6 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) Close() {
-	if s.db != nil {
-		s.db.Close()
-	}
-}
-
 // Creates the installation and last resort key package
 func (s *Store) CreateInstallation(ctx context.Context, installationId string, walletAddress string, lastResortKeyPackage []byte) error {
 	createdAt := nowNs()

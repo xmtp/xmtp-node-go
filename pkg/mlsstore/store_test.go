@@ -2,6 +2,7 @@ package mlsstore
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -225,4 +226,25 @@ func TestGetIdentityUpdatesNoResult(t *testing.T) {
 	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
 	require.NoError(t, err)
 	require.Len(t, identityUpdates[walletAddress], 0)
+}
+
+func TestIdentityUpdateSort(t *testing.T) {
+	updates := IdentityUpdateList([]IdentityUpdate{
+		{
+			Kind:        Create,
+			TimestampNs: 2,
+		},
+		{
+			Kind:        Create,
+			TimestampNs: 3,
+		},
+		{
+			Kind:        Create,
+			TimestampNs: 1,
+		},
+	})
+	sort.Sort(updates)
+	require.Equal(t, updates[0].TimestampNs, uint64(1))
+	require.Equal(t, updates[1].TimestampNs, uint64(2))
+	require.Equal(t, updates[2].TimestampNs, uint64(3))
 }
