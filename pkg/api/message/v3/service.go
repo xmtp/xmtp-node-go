@@ -137,13 +137,3 @@ func (s *Service) RevokeInstallation(ctx context.Context, req *proto.RevokeInsta
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentityUpdatesRequest) (*proto.GetIdentityUpdatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
 }
-
-func indexOf(target string, ids []string) int {
-	for i, id := range ids {
-		if id == target {
-			return i
-		}
-	}
-
-	return -1
-}
