@@ -33,7 +33,7 @@ CREATE INDEX idx_installations_revoked_at ON installations(revoked_at);
 
 --bun:split
 -- Adding indexes for the key_packages table
-CREATE INDEX idx_key_packages_installation_id_not_is_last_resort_created_at ON key_packages(
+CREATE INDEX idx_key_packages_installation_id_not_consumed_is_last_resort_created_at ON key_packages(
     installation_id,
     not_consumed,
     is_last_resort,
