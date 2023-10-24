@@ -15,6 +15,7 @@ CREATE TABLE key_packages (
     installation_id TEXT NOT NULL,
     created_at BIGINT NOT NULL,
     consumed_at BIGINT,
+    not_consumed BOOLEAN DEFAULT TRUE NOT NULL,
     is_last_resort BOOLEAN NOT NULL,
     data BYTEA NOT NULL,
     -- Add a foreign key constraint to ensure key packages cannot be added for unregistered installations
@@ -32,13 +33,12 @@ CREATE INDEX idx_installations_revoked_at ON installations(revoked_at);
 
 --bun:split
 -- Adding indexes for the key_packages table
-CREATE INDEX idx_key_packages_installation_id ON key_packages(installation_id);
+CREATE INDEX idx_key_packages_installation_id_not_is_last_resort_created_at ON key_packages(
+    installation_id,
+    not_consumed,
+    is_last_resort,
+    created_at
+);
 
 --bun:split
-CREATE INDEX idx_key_packages_created_at ON key_packages(created_at);
-
---bun:split
-CREATE INDEX idx_key_packages_consumed_at ON key_packages(consumed_at);
-
---bun:split
-CREATE INDEX idx_key_packages_is_last_resort ON key_packages(is_last_resort);
+CREATE INDEX idx_key_packages_is_last_resort_id ON key_packages(is_last_resort, id);

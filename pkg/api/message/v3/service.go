@@ -75,16 +75,20 @@ func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyP
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
 	}
+	keyPackageMap := make(map[string]int)
+	for idx, id := range ids {
+		keyPackageMap[id] = idx
+	}
 
 	resPackages := make([]*proto.ConsumeKeyPackagesResponse_KeyPackage, len(keyPackages))
 	for _, keyPackage := range keyPackages {
-		// Return the key packages in the original order
-		targetIndex := indexOf(keyPackage.InstallationId, ids)
-		if targetIndex == -1 {
+
+		idx, ok := keyPackageMap[keyPackage.InstallationId]
+		if !ok {
 			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
 		}
 
-		resPackages[targetIndex] = &proto.ConsumeKeyPackagesResponse_KeyPackage{
+		resPackages[idx] = &proto.ConsumeKeyPackagesResponse_KeyPackage{
 			KeyPackageTlsSerialized: keyPackage.Data,
 		}
 	}
@@ -116,7 +120,7 @@ func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPac
 	keyPackageModels := make([]*mlsstore.KeyPackage, len(validationResults))
 	for i, validationResult := range validationResults {
 		kp := mlsstore.NewKeyPackage(validationResult.InstallationId, keyPackageBytes[i], false)
-		keyPackageModels[i] = &kp
+		keyPackageModels[i] = kp
 	}
 	err = s.mlsStore.InsertKeyPackages(ctx, keyPackageModels)
 	if err != nil {

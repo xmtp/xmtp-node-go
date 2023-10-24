@@ -93,7 +93,7 @@ func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string
 		err := tx.NewRaw(`
 			SELECT DISTINCT ON(installation_id) * FROM key_packages
 			WHERE "installation_id" IN (?)
-			AND "consumed_at" IS NULL
+			AND not_consumed = TRUE
 			ORDER BY installation_id ASC, is_last_resort ASC, created_at ASC
 			`,
 			bun.In(installationIds)).
@@ -110,6 +110,7 @@ func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string
 		_, err = tx.NewUpdate().
 			Table("key_packages").
 			Set("consumed_at = ?", nowNs()).
+			Set("not_consumed = FALSE").
 			Where("is_last_resort = FALSE").
 			Where("id IN (?)", bun.In(extractIds(keyPackages))).
 			Exec(ctx)
@@ -124,12 +125,13 @@ func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string
 	return keyPackages, nil
 }
 
-func NewKeyPackage(installationId string, data []byte, isLastResort bool) KeyPackage {
-	return KeyPackage{
+func NewKeyPackage(installationId string, data []byte, isLastResort bool) *KeyPackage {
+	return &KeyPackage{
 		ID:             buildKeyPackageId(data),
 		InstallationId: installationId,
 		CreatedAt:      nowNs(),
 		IsLastResort:   isLastResort,
+		NotConsumed:    true,
 		Data:           data,
 	}
 }
