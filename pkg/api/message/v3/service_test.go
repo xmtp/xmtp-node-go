@@ -70,10 +70,12 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		ReaderDB:  messageDb,
 		CleanerDB: messageDb,
 	})
+	require.NoError(t, err)
 	node, nodeCleanup := test.NewNode(t)
 	mlsValidationService := newMockedValidationService()
 
 	svc, err := NewService(node, log, messageStore, mlsStore, mlsValidationService)
+	require.NoError(t, err)
 
 	return svc, mlsDb, mlsValidationService, func() {
 		messageStore.Close()

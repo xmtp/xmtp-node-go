@@ -303,6 +303,7 @@ func TestMlsMessagePublish(t *testing.T) {
 	response, err := store.Query(&messagev1.QueryRequest{
 		ContentTopics: []string{contentTopic},
 	})
+	require.NoError(t, err)
 	require.Len(t, response.Envelopes, 1)
 	require.Equal(t, response.Envelopes[0].Message, message)
 	require.Equal(t, response.Envelopes[0].ContentTopic, contentTopic)

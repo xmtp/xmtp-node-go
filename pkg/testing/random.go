@@ -1,6 +1,7 @@
 package testing
 
 import (
+	cryptoRand "crypto/rand"
 	"math/rand"
 	"strings"
 )
@@ -21,6 +22,6 @@ func RandomStringLower(n int) string {
 
 func RandomBytes(n int) []byte {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	_, _ = cryptoRand.Read(b)
 	return b
 }
