@@ -50,7 +50,6 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
-
 	if len(results) != 1 {
 		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
 	}
@@ -176,7 +175,6 @@ func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPac
 	for i, keyPackage := range req.KeyPackages {
 		keyPackageBytes[i] = keyPackage.KeyPackageTlsSerialized
 	}
-
 	validationResults, err := s.validationService.ValidateKeyPackages(ctx, keyPackageBytes)
 	if err != nil {
 		// TODO: Differentiate between validation errors and internal errors
