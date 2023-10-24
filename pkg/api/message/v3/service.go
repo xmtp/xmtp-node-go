@@ -263,8 +263,9 @@ func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
 		if welcome == nil || welcome.WelcomeMessage == nil {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
-		ciphertext := welcome.WelcomeMessage.GetV1().Ciphertext
-		if len(ciphertext) == 0 {
+
+		v1 := welcome.WelcomeMessage.GetV1()
+		if v1 == nil || len(v1.Ciphertext) == 0 {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
 	}
