@@ -1,6 +1,6 @@
 # The MIT License (MIT)
 
-Copyright © `2022` `XMTP Labs`
+Copyright © `2023` `XMTP Labs (xmtp.org)`
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
