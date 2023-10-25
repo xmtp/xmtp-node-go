@@ -55,8 +55,9 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 
 	installationId := results[0].InstallationId
 	walletAddress := results[0].WalletAddress
+	credentialIdentity := results[0].CredentialIdentity
 
-	if err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized); err != nil {
+	if err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized, credentialIdentity); err != nil {
 		return nil, err
 	}
 
