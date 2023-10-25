@@ -22,9 +22,9 @@ type Store struct {
 }
 
 type MlsStore interface {
-	CreateInstallation(ctx context.Context, installationId string, walletAddress string, lastResortKeyPackage []byte) error
+	CreateInstallation(ctx context.Context, installationId InstallationId, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error
 	InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage) error
-	ConsumeKeyPackages(ctx context.Context, installationIds []string) ([]*KeyPackage, error)
+	ConsumeKeyPackages(ctx context.Context, installationIds []InstallationId) ([]*KeyPackage, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 }
 
@@ -43,13 +43,14 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId string, walletAddress string, lastResortKeyPackage []byte) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId InstallationId, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error {
 	createdAt := nowNs()
 
 	installation := Installation{
-		ID:            installationId,
-		WalletAddress: walletAddress,
-		CreatedAt:     createdAt,
+		ID:                 installationId,
+		WalletAddress:      walletAddress,
+		CreatedAt:          createdAt,
+		CredentialIdentity: credentialIdentity,
 	}
 
 	keyPackage := NewKeyPackage(installationId, lastResortKeyPackage, true)
@@ -83,7 +84,7 @@ func (s *Store) InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage
 	return err
 }
 
-func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string) ([]*KeyPackage, error) {
+func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []InstallationId) ([]*KeyPackage, error) {
 	keyPackages := make([]*KeyPackage, 0)
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewRaw(`
@@ -163,7 +164,7 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 	return out, nil
 }
 
-func (s *Store) RevokeInstallation(ctx context.Context, installationId string) error {
+func (s *Store) RevokeInstallation(ctx context.Context, installationId InstallationId) error {
 	_, err := s.db.NewUpdate().
 		Model(&Installation{}).
 		Set("revoked_at = ?", nowNs()).
@@ -174,7 +175,7 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId string) e
 	return err
 }
 
-func NewKeyPackage(installationId string, data []byte, isLastResort bool) *KeyPackage {
+func NewKeyPackage(installationId InstallationId, data []byte, isLastResort bool) *KeyPackage {
 	return &KeyPackage{
 		ID:             buildKeyPackageId(data),
 		InstallationId: installationId,
@@ -229,9 +230,10 @@ const (
 )
 
 type IdentityUpdate struct {
-	Kind           IdentityUpdateKind
-	InstallationId string
-	TimestampNs    uint64
+	Kind               IdentityUpdateKind
+	InstallationId     []byte
+	CredentialIdentity []byte
+	TimestampNs        uint64
 }
 
 // Add the required methods to make a valid sort.Sort interface

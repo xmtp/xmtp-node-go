@@ -29,10 +29,10 @@ func TestCreateInstallation(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32))
+	err := store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32), test.RandomBytes(32))
 	require.NoError(t, err)
 
 	installationFromDb := &Installation{}
@@ -49,13 +49,13 @@ func TestCreateInstallationIdempotent(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
+	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage)
 	require.NoError(t, err)
-	err = store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32))
+	err = store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32), test.RandomBytes(32))
 	require.NoError(t, err)
 
 	keyPackageFromDb := &KeyPackage{}
@@ -68,11 +68,11 @@ func TestInsertKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
+	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage)
 	require.NoError(t, err)
 
 	keyPackage2 := test.RandomBytes(32)
@@ -111,14 +111,14 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
+	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage)
 	require.NoError(t, err)
 
-	consumeResult, err := store.ConsumeKeyPackages(ctx, []string{installationId})
+	consumeResult, err := store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	require.Equal(t, keyPackage, consumeResult[0].Data)
@@ -130,11 +130,11 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage)
+	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage)
 	require.NoError(t, err)
 
 	keyPackage2 := test.RandomBytes(32)
@@ -146,13 +146,13 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 		Data:           keyPackage2,
 	}}))
 
-	consumeResult, err := store.ConsumeKeyPackages(ctx, []string{installationId})
+	consumeResult, err := store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	require.Equal(t, keyPackage2, consumeResult[0].Data)
 	require.Equal(t, installationId, consumeResult[0].InstallationId)
 
-	consumeResult, err = store.ConsumeKeyPackages(ctx, []string{installationId})
+	consumeResult, err = store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	// Now we are out of regular key packages. Expect to consume the last resort
@@ -166,16 +166,16 @@ func TestGetIdentityUpdates(t *testing.T) {
 	ctx := context.Background()
 	walletAddress := test.RandomString(32)
 
-	installationId1 := test.RandomString(32)
+	installationId1 := test.RandomBytes(32)
 	keyPackage1 := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId1, walletAddress, keyPackage1)
+	err := store.CreateInstallation(ctx, installationId1, walletAddress, keyPackage1, keyPackage1)
 	require.NoError(t, err)
 
-	installationId2 := test.RandomString(32)
+	installationId2 := test.RandomBytes(32)
 	keyPackage2 := test.RandomBytes(32)
 
-	err = store.CreateInstallation(ctx, installationId2, walletAddress, keyPackage2)
+	err = store.CreateInstallation(ctx, installationId2, walletAddress, keyPackage2, keyPackage2)
 	require.NoError(t, err)
 
 	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
@@ -197,17 +197,17 @@ func TestGetIdentityUpdatesMultipleWallets(t *testing.T) {
 
 	ctx := context.Background()
 	walletAddress1 := test.RandomString(32)
-	installationId1 := test.RandomString(32)
+	installationId1 := test.RandomBytes(32)
 	keyPackage1 := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId1, walletAddress1, keyPackage1)
+	err := store.CreateInstallation(ctx, installationId1, walletAddress1, keyPackage1, keyPackage1)
 	require.NoError(t, err)
 
 	walletAddress2 := test.RandomString(32)
-	installationId2 := test.RandomString(32)
+	installationId2 := test.RandomBytes(32)
 	keyPackage2 := test.RandomBytes(32)
 
-	err = store.CreateInstallation(ctx, installationId2, walletAddress2, keyPackage2)
+	err = store.CreateInstallation(ctx, installationId2, walletAddress2, keyPackage2, keyPackage2)
 	require.NoError(t, err)
 
 	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress1, walletAddress2}, 0)

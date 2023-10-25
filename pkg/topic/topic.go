@@ -43,6 +43,6 @@ func BuildGroupTopic(groupId string) string {
 	return fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)
 }
 
-func BuildWelcomeTopic(installationId string) string {
-	return fmt.Sprintf("/xmtp/3/w-%s/proto", installationId)
+func BuildWelcomeTopic(installationId []byte) string {
+	return fmt.Sprintf("/xmtp/3/w-%x/proto", installationId)
 }

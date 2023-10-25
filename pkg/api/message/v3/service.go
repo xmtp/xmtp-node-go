@@ -66,20 +66,20 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 }
 
 func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
-	ids := req.InstallationIds
+	ids := mlsstore.InstallationIdArray(req.InstallationIds)
 	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
 	}
 	keyPackageMap := make(map[string]int)
 	for idx, id := range ids {
-		keyPackageMap[id] = idx
+		keyPackageMap[id.String()] = idx
 	}
 
 	resPackages := make([]*proto.ConsumeKeyPackagesResponse_KeyPackage, len(keyPackages))
 	for _, keyPackage := range keyPackages {
 
-		idx, ok := keyPackageMap[keyPackage.InstallationId]
+		idx, ok := keyPackageMap[keyPackage.InstallationId.String()]
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
 		}
@@ -117,7 +117,7 @@ func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupR
 	for i, result := range validationResults {
 		message := messages[i]
 
-		if err = isReadyToSend(result.GroupId, message); err != nil {
+		if err = requireReadyToSend(result.GroupId, message); err != nil {
 			return nil, err
 		}
 
@@ -132,7 +132,7 @@ func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupR
 
 func (s *Service) publishMessage(ctx context.Context, contentTopic string, message []byte) error {
 	log := s.log.Named("publish-mls").With(zap.String("content_topic", contentTopic))
-	env, err := s.messageStore.InsertMlsMessage(ctx, contentTopic, message)
+	env, err := s.messageStore.InsertMLSMessage(ctx, contentTopic, message)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 	}
@@ -293,7 +293,7 @@ func validateGetIdentityUpdatesRequest(req *proto.GetIdentityUpdatesRequest) err
 	return nil
 }
 
-func isReadyToSend(groupId string, message []byte) error {
+func requireReadyToSend(groupId string, message []byte) error {
 	if groupId == "" {
 		return status.Errorf(codes.InvalidArgument, "group id is empty")
 	}

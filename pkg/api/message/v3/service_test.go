@@ -18,11 +18,11 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
-type mockedMlsValidationService struct {
+type mockedMLSValidationService struct {
 	mock.Mock
 }
 
-func (m *mockedMlsValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
+func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
 	args := m.Called(ctx, keyPackages)
 
 	response := args.Get(0)
@@ -33,26 +33,27 @@ func (m *mockedMlsValidationService) ValidateKeyPackages(ctx context.Context, ke
 	return response.([]mlsvalidate.IdentityValidationResult), args.Error(1)
 }
 
-func (m *mockedMlsValidationService) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]mlsvalidate.GroupMessageValidationResult, error) {
+func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]mlsvalidate.GroupMessageValidationResult, error) {
 	args := m.Called(ctx, groupMessages)
 
 	return args.Get(0).([]mlsvalidate.GroupMessageValidationResult), args.Error(1)
 }
 
-func newMockedValidationService() *mockedMlsValidationService {
-	return new(mockedMlsValidationService)
+func newMockedValidationService() *mockedMLSValidationService {
+	return new(mockedMLSValidationService)
 }
 
-func (m *mockedMlsValidationService) mockValidateKeyPackages(installationId, walletAddress string) *mock.Call {
+func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId mlsstore.InstallationId, walletAddress string) *mock.Call {
 	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
 		{
-			InstallationId: installationId,
-			WalletAddress:  walletAddress,
+			InstallationId:     installationId,
+			WalletAddress:      walletAddress,
+			CredentialIdentity: []byte("test"),
 		},
 	}, nil)
 }
 
-func (m *mockedMlsValidationService) mockValidateGroupMessages(groupId string) *mock.Call {
+func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId string) *mock.Call {
 	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
 		{
 			GroupId: groupId,
@@ -60,7 +61,7 @@ func (m *mockedMlsValidationService) mockValidateGroupMessages(groupId string) *
 	}, nil)
 }
 
-func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mockedMlsValidationService, func()) {
+func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mockedMLSValidationService, func()) {
 	log := test.NewLog(t)
 	mlsDb, _, mlsDbCleanup := test.NewMLSDB(t)
 	mlsStore, err := mlsstore.New(ctx, mlsstore.Config{
@@ -95,7 +96,7 @@ func TestRegisterInstallation(t *testing.T) {
 	svc, mlsDb, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 
 	mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
@@ -138,7 +139,7 @@ func TestUploadKeyPackages(t *testing.T) {
 	svc, mlsDb, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 
 	mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
@@ -170,7 +171,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	installationId1 := test.RandomString(32)
+	installationId1 := test.RandomBytes(32)
 	walletAddress1 := test.RandomString(32)
 
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, walletAddress1)
@@ -184,7 +185,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 	require.NotNil(t, res)
 
 	// Add a second key package
-	installationId2 := test.RandomString(32)
+	installationId2 := test.RandomBytes(32)
 	walletAddress2 := test.RandomString(32)
 	// Unset the original mock so we can set a new one
 	mockCall.Unset()
@@ -199,7 +200,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 	require.NotNil(t, res)
 
 	consumeRes, err := svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
-		InstallationIds: []string{installationId1, installationId2},
+		InstallationIds: [][]byte{installationId1, installationId2},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, consumeRes)
@@ -209,7 +210,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 
 	// Now do it with the installationIds reversed
 	consumeRes, err = svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
-		InstallationIds: []string{installationId2, installationId1},
+		InstallationIds: [][]byte{installationId2, installationId1},
 	})
 
 	require.NoError(t, err)
@@ -226,7 +227,7 @@ func TestConsumeKeyPackagesFail(t *testing.T) {
 	defer cleanup()
 
 	consumeRes, err := svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
-		InstallationIds: []string{test.RandomString(32)},
+		InstallationIds: [][]byte{test.RandomBytes(32)},
 	})
 	require.Error(t, err)
 	require.Nil(t, consumeRes)
@@ -266,7 +267,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	installationId := test.RandomString(32)
+	installationId := test.RandomBytes(32)
 	walletAddress := test.RandomString(32)
 
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
@@ -292,7 +293,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	}
 
 	mockCall.Unset()
-	mlsValidationService.mockValidateKeyPackages(test.RandomString(32), walletAddress)
+	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), walletAddress)
 	_, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),

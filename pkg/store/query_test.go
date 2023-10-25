@@ -294,7 +294,7 @@ func TestMlsMessagePublish(t *testing.T) {
 	contentTopic := "foo"
 	ctx := context.Background()
 
-	env, err := store.InsertMlsMessage(ctx, contentTopic, message)
+	env, err := store.InsertMLSMessage(ctx, contentTopic, message)
 	require.NoError(t, err)
 
 	require.Equal(t, env.ContentTopic, contentTopic)

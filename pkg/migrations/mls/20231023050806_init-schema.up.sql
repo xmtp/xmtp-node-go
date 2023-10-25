@@ -3,16 +3,17 @@ SET
 
 --bun:split
 CREATE TABLE installations (
-    id TEXT PRIMARY KEY,
+    id BYTEA PRIMARY KEY,
     wallet_address TEXT NOT NULL,
     created_at BIGINT NOT NULL,
+    credential_identity BYTEA NOT NULL,
     revoked_at BIGINT
 );
 
 --bun:split
 CREATE TABLE key_packages (
     id TEXT PRIMARY KEY,
-    installation_id TEXT NOT NULL,
+    installation_id BYTEA NOT NULL,
     created_at BIGINT NOT NULL,
     consumed_at BIGINT,
     not_consumed BOOLEAN DEFAULT TRUE NOT NULL,

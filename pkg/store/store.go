@@ -144,7 +144,7 @@ func (s *Store) InsertMessage(env *messagev1.Envelope) (bool, error) {
 	return stored, err
 }
 
-func (s *Store) InsertMlsMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error) {
+func (s *Store) InsertMLSMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error) {
 	tmpEnvelope := &messagev1.Envelope{
 		ContentTopic: contentTopic,
 		Message:      data,
