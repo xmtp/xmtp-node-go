@@ -130,7 +130,7 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomBytes(32)
+	installationId := InstallationId(test.RandomBytes(32))
 	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
 
