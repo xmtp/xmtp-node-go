@@ -235,7 +235,8 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	case mlsstore.Create:
 		base.Kind = &proto.GetIdentityUpdatesResponse_Update_NewInstallation{
 			NewInstallation: &proto.GetIdentityUpdatesResponse_NewInstallationUpdate{
-				InstallationId: update.InstallationId,
+				InstallationId:     update.InstallationId,
+				CredentialIdentity: update.CredentialIdentity,
 			},
 		}
 	case mlsstore.Revoke:

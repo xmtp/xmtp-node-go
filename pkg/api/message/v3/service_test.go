@@ -285,6 +285,8 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, identityUpdates)
 	require.Len(t, identityUpdates.Updates, 1)
+	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().InstallationId, installationId)
+	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().CredentialIdentity, []byte("test"))
 
 	for _, walletUpdate := range identityUpdates.Updates {
 		for _, update := range walletUpdate.Updates {

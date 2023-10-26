@@ -143,9 +143,10 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 	for _, installation := range updated {
 		if installation.CreatedAt > startTimeNs {
 			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:           Create,
-				InstallationId: installation.ID,
-				TimestampNs:    uint64(installation.CreatedAt),
+				Kind:               Create,
+				InstallationId:     installation.ID,
+				CredentialIdentity: installation.CredentialIdentity,
+				TimestampNs:        uint64(installation.CreatedAt),
 			})
 		}
 		if installation.RevokedAt != nil && *installation.RevokedAt > startTimeNs {
