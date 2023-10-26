@@ -159,7 +159,7 @@ func (s *Service) PublishWelcomes(ctx context.Context, req *proto.PublishWelcome
 	// TODO: Wrap this in a transaction so publishing is all or nothing
 	for _, welcome := range req.WelcomeMessages {
 		contentTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
-		if err = s.publishMessage(ctx, contentTopic, welcome.WelcomeMessage.GetV1().Ciphertext); err != nil {
+		if err = s.publishMessage(ctx, contentTopic, welcome.WelcomeMessage.GetV1().WelcomeMessageTlsSerialized); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to publish welcome message: %s", err)
 		}
 	}
@@ -266,7 +266,7 @@ func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
 		}
 
 		v1 := welcome.WelcomeMessage.GetV1()
-		if v1 == nil || len(v1.Ciphertext) == 0 {
+		if v1 == nil || len(v1.WelcomeMessageTlsSerialized) == 0 {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
 	}
