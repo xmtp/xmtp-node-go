@@ -67,20 +67,20 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 }
 
 func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
-	ids := mlsstore.InstallationIdArray(req.InstallationIds)
+	ids := req.InstallationIds
 	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
 	}
 	keyPackageMap := make(map[string]int)
 	for idx, id := range ids {
-		keyPackageMap[id.String()] = idx
+		keyPackageMap[string(id)] = idx
 	}
 
 	resPackages := make([]*proto.ConsumeKeyPackagesResponse_KeyPackage, len(keyPackages))
 	for _, keyPackage := range keyPackages {
 
-		idx, ok := keyPackageMap[keyPackage.InstallationId.String()]
+		idx, ok := keyPackageMap[string(keyPackage.InstallationId)]
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
 		}

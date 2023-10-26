@@ -118,7 +118,7 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage)
 	require.NoError(t, err)
 
-	consumeResult, err := store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
+	consumeResult, err := store.ConsumeKeyPackages(ctx, [][]byte{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	require.Equal(t, keyPackage, consumeResult[0].Data)
@@ -146,13 +146,13 @@ func TestConsumeMultipleKeyPackages(t *testing.T) {
 		Data:           keyPackage2,
 	}}))
 
-	consumeResult, err := store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
+	consumeResult, err := store.ConsumeKeyPackages(ctx, [][]byte{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	require.Equal(t, keyPackage2, consumeResult[0].Data)
 	require.Equal(t, installationId, consumeResult[0].InstallationId)
 
-	consumeResult, err = store.ConsumeKeyPackages(ctx, []InstallationId{installationId})
+	consumeResult, err = store.ConsumeKeyPackages(ctx, [][]byte{installationId})
 	require.NoError(t, err)
 	require.Len(t, consumeResult, 1)
 	// Now we are out of regular key packages. Expect to consume the last resort

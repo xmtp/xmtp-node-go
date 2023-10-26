@@ -22,9 +22,9 @@ type Store struct {
 }
 
 type MlsStore interface {
-	CreateInstallation(ctx context.Context, installationId InstallationId, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error
+	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error
 	InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage) error
-	ConsumeKeyPackages(ctx context.Context, installationIds []InstallationId) ([]*KeyPackage, error)
+	ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 }
 
@@ -43,7 +43,7 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId InstallationId, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error {
 	createdAt := nowNs()
 
 	installation := Installation{
@@ -84,7 +84,7 @@ func (s *Store) InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage
 	return err
 }
 
-func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []InstallationId) ([]*KeyPackage, error) {
+func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error) {
 	keyPackages := make([]*KeyPackage, 0)
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewRaw(`
@@ -164,7 +164,7 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 	return out, nil
 }
 
-func (s *Store) RevokeInstallation(ctx context.Context, installationId InstallationId) error {
+func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) error {
 	_, err := s.db.NewUpdate().
 		Model(&Installation{}).
 		Set("revoked_at = ?", nowNs()).
@@ -175,7 +175,7 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId Installat
 	return err
 }
 
-func NewKeyPackage(installationId InstallationId, data []byte, isLastResort bool) *KeyPackage {
+func NewKeyPackage(installationId []byte, data []byte, isLastResort bool) *KeyPackage {
 	return &KeyPackage{
 		ID:             buildKeyPackageId(data),
 		InstallationId: installationId,

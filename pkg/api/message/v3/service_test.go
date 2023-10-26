@@ -43,7 +43,7 @@ func newMockedValidationService() *mockedMLSValidationService {
 	return new(mockedMLSValidationService)
 }
 
-func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId mlsstore.InstallationId, walletAddress string) *mock.Call {
+func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, walletAddress string) *mock.Call {
 	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
 		{
 			InstallationId:     installationId,
