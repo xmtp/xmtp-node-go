@@ -5,9 +5,8 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -86,84 +85,41 @@ func (s *Store) InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage
 }
 
 func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []InstallationId) ([]*KeyPackage, error) {
-	tx, err := s.db.DB.BeginTx(ctx, &sql.TxOptions{})
+	keyPackages := make([]*KeyPackage, 0)
+	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
+		err := tx.NewRaw(`
+			SELECT DISTINCT ON(installation_id) * FROM key_packages
+			WHERE "installation_id" IN (?)
+			AND not_consumed = TRUE
+			ORDER BY installation_id ASC, is_last_resort ASC, created_at ASC
+			`,
+			bun.In(installationIds)).
+			Scan(ctx, &keyPackages)
+
+		if err != nil {
+			return err
+		}
+
+		if len(keyPackages) < len(installationIds) {
+			return errors.New("key packages not found")
+		}
+
+		_, err = tx.NewUpdate().
+			Table("key_packages").
+			Set("consumed_at = ?", nowNs()).
+			Set("not_consumed = FALSE").
+			Where("is_last_resort = FALSE").
+			Where("id IN (?)", bun.In(extractIds(keyPackages))).
+			Exec(ctx)
+
+		return err
+	})
+
 	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	sql, args := buildSelectKeyPackagesQuery(installationIds)
-	rows, err := tx.QueryContext(ctx, sql, args...)
-	if err != nil {
-		panic(err)
-		return nil, err
-	}
-	var keyPackages []*KeyPackage
-	if keyPackages, err = rowsToKeyPackages(rows); err != nil {
-		panic(err)
-		return nil, err
-	}
-
-	sql, args = buildConsumeKeyPackagesQuery(extractIds(keyPackages))
-	fmt.Println(sql, args)
-	if _, err = tx.ExecContext(ctx, sql, args...); err != nil {
-		panic(err)
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 
 	return keyPackages, nil
-}
-
-func buildSelectKeyPackagesQuery(installationIDs []InstallationId) (string, []interface{}) {
-	placeholders := make([]string, len(installationIDs))
-	args := make([]interface{}, len(installationIDs))
-	for i, id := range installationIDs {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = id
-	}
-
-	return `
-	SELECT DISTINCT ON(installation_id) 
-	id, installation_id, created_at, consumed_at, not_consumed, is_last_resort, data
-	FROM key_packages
-	WHERE "installation_id" IN (` + strings.Join(placeholders, ",") + `)
-	AND not_consumed = TRUE
-	ORDER BY installation_id ASC, is_last_resort ASC, created_at ASC`, args
-}
-
-func rowsToKeyPackages(rows *sql.Rows) ([]*KeyPackage, error) {
-	defer rows.Close()
-	var result []*KeyPackage
-
-	for rows.Next() {
-		kp := &KeyPackage{}
-		var installationId InstallationId
-		if err := rows.Scan(&kp.ID, &installationId, &kp.CreatedAt, &kp.ConsumedAt, &kp.NotConsumed, &kp.IsLastResort, &kp.Data); err != nil {
-			return nil, err
-		}
-		kp.InstallationId = installationId
-		result = append(result, kp)
-	}
-
-	return result, nil
-}
-
-func buildConsumeKeyPackagesQuery(keyPackageIds []string) (string, []interface{}) {
-	args := []interface{}{nowNs()}
-	placeHolders := []string{}
-	for i, id := range keyPackageIds {
-		args = append(args, id)
-		placeHolders = append(placeHolders, fmt.Sprintf("$%d", i+2))
-	}
-
-	return `UPDATE key_packages
-	SET consumed_at = $1, not_consumed = FALSE
-	WHERE is_last_resort = FALSE
-	AND id in (` + strings.Join(placeHolders, ",") + `)`, args
 }
 
 func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
