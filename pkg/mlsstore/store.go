@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -21,9 +22,10 @@ type Store struct {
 }
 
 type MlsStore interface {
-	CreateInstallation(ctx context.Context, installationId string, walletAddress string, lastResortKeyPackage []byte) error
+	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error
 	InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage) error
-	ConsumeKeyPackages(ctx context.Context, installationIds []string) ([]*KeyPackage, error)
+	ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error)
+	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -40,20 +42,15 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) Close() {
-	if s.db != nil {
-		s.db.Close()
-	}
-}
-
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId string, walletAddress string, lastResortKeyPackage []byte) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error {
 	createdAt := nowNs()
 
 	installation := Installation{
-		ID:            installationId,
-		WalletAddress: walletAddress,
-		CreatedAt:     createdAt,
+		ID:                 installationId,
+		WalletAddress:      walletAddress,
+		CreatedAt:          createdAt,
+		CredentialIdentity: credentialIdentity,
 	}
 
 	keyPackage := NewKeyPackage(installationId, lastResortKeyPackage, true)
@@ -87,7 +84,7 @@ func (s *Store) InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage
 	return err
 }
 
-func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string) ([]*KeyPackage, error) {
+func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error) {
 	keyPackages := make([]*KeyPackage, 0)
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewRaw(`
@@ -125,7 +122,61 @@ func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds []string
 	return keyPackages, nil
 }
 
-func NewKeyPackage(installationId string, data []byte, isLastResort bool) *KeyPackage {
+func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
+	updated := make([]*Installation, 0)
+	// Find all installations that were changed since the startTimeNs
+	err := s.db.NewSelect().
+		Model(&updated).
+		Where("wallet_address IN (?)", bun.In(walletAddresses)).
+		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Where("created_at > ?", startTimeNs).WhereOr("revoked_at > ?", startTimeNs)
+		}).
+		Order("created_at ASC").
+		Scan(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// The returned list is only partially sorted
+	out := make(map[string]IdentityUpdateList)
+	for _, installation := range updated {
+		if installation.CreatedAt > startTimeNs {
+			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
+				Kind:               Create,
+				InstallationId:     installation.ID,
+				CredentialIdentity: installation.CredentialIdentity,
+				TimestampNs:        uint64(installation.CreatedAt),
+			})
+		}
+		if installation.RevokedAt != nil && *installation.RevokedAt > startTimeNs {
+			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
+				Kind:           Revoke,
+				InstallationId: installation.ID,
+				TimestampNs:    uint64(*installation.RevokedAt),
+			})
+		}
+	}
+	// Sort the updates by timestamp now that the full list is assembled
+	for _, updates := range out {
+		sort.Sort(updates)
+	}
+
+	return out, nil
+}
+
+func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) error {
+	_, err := s.db.NewUpdate().
+		Model(&Installation{}).
+		Set("revoked_at = ?", nowNs()).
+		Where("id = ?", installationId).
+		Where("revoked_at IS NULL").
+		Exec(ctx)
+
+	return err
+}
+
+func NewKeyPackage(installationId []byte, data []byte, isLastResort bool) *KeyPackage {
 	return &KeyPackage{
 		ID:             buildKeyPackageId(data),
 		InstallationId: installationId,
@@ -170,4 +221,33 @@ func nowNs() int64 {
 func buildKeyPackageId(keyPackageData []byte) string {
 	digest := sha256.Sum256(keyPackageData)
 	return hex.EncodeToString(digest[:])
+}
+
+type IdentityUpdateKind int
+
+const (
+	Create IdentityUpdateKind = iota
+	Revoke
+)
+
+type IdentityUpdate struct {
+	Kind               IdentityUpdateKind
+	InstallationId     []byte
+	CredentialIdentity []byte
+	TimestampNs        uint64
+}
+
+// Add the required methods to make a valid sort.Sort interface
+type IdentityUpdateList []IdentityUpdate
+
+func (a IdentityUpdateList) Len() int {
+	return len(a)
+}
+
+func (a IdentityUpdateList) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a IdentityUpdateList) Less(i, j int) bool {
+	return a[i].TimestampNs < a[j].TimestampNs
 }
