@@ -50,7 +50,7 @@ func NewAuthzDB(t *testing.T) (*bun.DB, string, func()) {
 	return bunDB, dsn, cleanup
 }
 
-func NewMlsDB(t *testing.T) (*bun.DB, string, func()) {
+func NewMLSDB(t *testing.T) (*bun.DB, string, func()) {
 	db, dsn, cleanup := NewDB(t)
 	bunDB := bun.NewDB(db, pgdialect.New())
 

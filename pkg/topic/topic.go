@@ -1,6 +1,9 @@
 package topic
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 var topicCategoryByPrefix = map[string]string{
 	"test":         "test",
@@ -34,4 +37,12 @@ func Category(contentTopic string) string {
 		}
 	}
 	return "invalid"
+}
+
+func BuildGroupTopic(groupId string) string {
+	return fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)
+}
+
+func BuildWelcomeTopic(installationId []byte) string {
+	return fmt.Sprintf("/xmtp/3/w-%x/proto", installationId)
 }

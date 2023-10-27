@@ -61,7 +61,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
-	MLSStore      *mlsstore.Store
+	mlsDB         *bun.DB
 }
 
 // Create a new Server
@@ -229,27 +229,24 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
-	var MLSStore mlsstore.MlsStore
-
+	var MLSStore *mlsstore.Store
 	if options.MLSStore.DbConnectionString != "" {
-		mlsDb, err := createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns)
-		if err != nil {
+		if s.mlsDB, err = createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns); err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
-		s.MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
+		s.log.Info("creating mls store")
+		if MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
 			Log: s.log,
-			DB:  mlsDb,
-		})
-
-		if err != nil {
+			DB:  s.mlsDB,
+		}); err != nil {
 			return nil, errors.Wrap(err, "creating mls store")
 		}
 	}
 
 	var MLSValidator mlsvalidate.MLSValidationService
-	if options.MlsValidation.GRPCAddress != "" {
-		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MlsValidation)
+	if options.MLSValidation.GRPCAddress != "" {
+		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MLSValidation)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls validation service")
 		}
@@ -306,8 +303,8 @@ func (s *Server) Shutdown() {
 	if s.store != nil {
 		s.store.Close()
 	}
-	if s.MLSStore != nil {
-		s.MLSStore.Close()
+	if s.mlsDB != nil {
+		s.mlsDB.Close()
 	}
 
 	// Close metrics server.
