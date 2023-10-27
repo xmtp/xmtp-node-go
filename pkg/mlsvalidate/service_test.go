@@ -41,10 +41,11 @@ func TestValidateKeyPackages(t *testing.T) {
 	ctx := context.Background()
 
 	firstResponse := svc.ValidateKeyPackagesResponse_ValidationResponse{
-		IsOk:           true,
-		WalletAddress:  "0x123",
-		InstallationId: "123",
-		ErrorMessage:   "",
+		IsOk:                    true,
+		WalletAddress:           "0x123",
+		InstallationId:          []byte("123"),
+		CredentialIdentityBytes: []byte("456"),
+		ErrorMessage:            "",
 	}
 
 	mockGrpc.On("ValidateKeyPackages", ctx, mock.Anything).Return(&svc.ValidateKeyPackagesResponse{
@@ -55,7 +56,8 @@ func TestValidateKeyPackages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res))
 	assert.Equal(t, "0x123", res[0].WalletAddress)
-	assert.Equal(t, "123", res[0].InstallationId)
+	assert.Equal(t, []byte("123"), res[0].InstallationId)
+	assert.Equal(t, []byte("456"), res[0].CredentialIdentity)
 }
 
 func TestValidateKeyPackagesError(t *testing.T) {
