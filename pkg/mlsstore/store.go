@@ -11,7 +11,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
-	"github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
+	mlsMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	"go.uber.org/zap"
 )
 
@@ -196,7 +196,7 @@ func extractIds(keyPackages []*KeyPackage) []string {
 }
 
 func (s *Store) migrate(ctx context.Context) error {
-	migrator := migrate.NewMigrator(s.db, messages.Migrations)
+	migrator := migrate.NewMigrator(s.db, mlsMigrations.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
 		return err
