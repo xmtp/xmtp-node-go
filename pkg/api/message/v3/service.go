@@ -45,7 +45,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 		return nil, err
 	}
 
-	results, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{req.LastResortKeyPackage.KeyPackageTlsSerialized})
+	results, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
@@ -57,7 +57,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	accountAddress := results[0].AccountAddress
 	credentialIdentity := results[0].CredentialIdentity
 
-	if err = s.mlsStore.CreateInstallation(ctx, installationId, accountAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized, credentialIdentity); err != nil {
+	if err = s.mlsStore.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
 		return nil, err
 	}
 
@@ -66,31 +66,31 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	}, nil
 }
 
-func (s *Service) ConsumeKeyPackages(ctx context.Context, req *proto.ConsumeKeyPackagesRequest) (*proto.ConsumeKeyPackagesResponse, error) {
+func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPackagesRequest) (*proto.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationIds
-	keyPackages, err := s.mlsStore.ConsumeKeyPackages(ctx, ids)
+	installations, err := s.mlsStore.FetchKeyPackages(ctx, ids)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to consume key packages: %s", err)
+		return nil, status.Errorf(codes.Internal, "failed to fetch key packages: %s", err)
 	}
 	keyPackageMap := make(map[string]int)
 	for idx, id := range ids {
 		keyPackageMap[string(id)] = idx
 	}
 
-	resPackages := make([]*proto.ConsumeKeyPackagesResponse_KeyPackage, len(keyPackages))
-	for _, keyPackage := range keyPackages {
+	resPackages := make([]*proto.FetchKeyPackagesResponse_KeyPackage, len(installations))
+	for _, installation := range installations {
 
-		idx, ok := keyPackageMap[string(keyPackage.InstallationId)]
+		idx, ok := keyPackageMap[string(installation.ID)]
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
 		}
 
-		resPackages[idx] = &proto.ConsumeKeyPackagesResponse_KeyPackage{
-			KeyPackageTlsSerialized: keyPackage.Data,
+		resPackages[idx] = &proto.FetchKeyPackagesResponse_KeyPackage{
+			KeyPackageTlsSerialized: installation.KeyPackage,
 		}
 	}
 
-	return &proto.ConsumeKeyPackagesResponse{
+	return &proto.FetchKeyPackagesResponse{
 		KeyPackages: resPackages,
 	}, nil
 }
@@ -166,28 +166,22 @@ func (s *Service) PublishWelcomes(ctx context.Context, req *proto.PublishWelcome
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) UploadKeyPackages(ctx context.Context, req *proto.UploadKeyPackagesRequest) (res *emptypb.Empty, err error) {
-	if err = validateUploadKeyPackagesRequest(req); err != nil {
+func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPackageRequest) (res *emptypb.Empty, err error) {
+	if err = validateUploadKeyPackageRequest(req); err != nil {
 		return nil, err
 	}
 	// Extract the key packages from the request
-	keyPackageBytes := make([][]byte, len(req.KeyPackages))
-	for i, keyPackage := range req.KeyPackages {
-		keyPackageBytes[i] = keyPackage.KeyPackageTlsSerialized
-	}
-	validationResults, err := s.validationService.ValidateKeyPackages(ctx, keyPackageBytes)
+	keyPackageBytes := req.KeyPackage.KeyPackageTlsSerialized
+
+	validationResults, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{keyPackageBytes})
 	if err != nil {
 		// TODO: Differentiate between validation errors and internal errors
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
+	installationId := validationResults[0].InstallationId
+	expiration := validationResults[0].Expiration
 
-	keyPackageModels := make([]*mlsstore.KeyPackage, len(validationResults))
-	for i, validationResult := range validationResults {
-		kp := mlsstore.NewKeyPackage(validationResult.InstallationId, keyPackageBytes[i], false)
-		keyPackageModels[i] = kp
-	}
-
-	if err = s.mlsStore.InsertKeyPackages(ctx, keyPackageModels); err != nil {
+	if err = s.mlsStore.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -275,15 +269,15 @@ func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
 }
 
 func validateRegisterInstallationRequest(req *proto.RegisterInstallationRequest) error {
-	if req == nil || req.LastResortKeyPackage == nil {
-		return status.Errorf(codes.InvalidArgument, "no last resort key package")
+	if req == nil || req.KeyPackage == nil {
+		return status.Errorf(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
 
-func validateUploadKeyPackagesRequest(req *proto.UploadKeyPackagesRequest) error {
-	if req == nil || len(req.KeyPackages) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no key packages to upload")
+func validateUploadKeyPackageRequest(req *proto.UploadKeyPackageRequest) error {
+	if req == nil || req.KeyPackage == nil {
+		return status.Errorf(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }

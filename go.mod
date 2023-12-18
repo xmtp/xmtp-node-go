@@ -187,3 +187,5 @@ require (
 
 // From node-go
 replace github.com/ethereum/go-ethereum v1.10.17 => github.com/status-im/go-ethereum v1.10.4-status.2
+
+replace github.com/xmtp/proto/v3 v3.36.1-0.20231219054634-2ff03b7d5090 => github.com/Bren2010/proto/v3 v3.0.0-20240104022019-f50c3c99cd1d

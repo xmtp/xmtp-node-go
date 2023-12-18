@@ -13,6 +13,7 @@ type IdentityValidationResult struct {
 	AccountAddress     string
 	InstallationId     []byte
 	CredentialIdentity []byte
+	Expiration         uint64
 }
 
 type GroupMessageValidationResult struct {
@@ -58,6 +59,7 @@ func (s *MLSValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyP
 			AccountAddress:     response.AccountAddress,
 			InstallationId:     response.InstallationId,
 			CredentialIdentity: response.CredentialIdentityBytes,
+			Expiration:         response.Expiration,
 		}
 	}
 	return out, nil
