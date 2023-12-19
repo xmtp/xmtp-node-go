@@ -10,7 +10,7 @@ import (
 )
 
 type IdentityValidationResult struct {
-	WalletAddress      string
+	AccountAddress     string
 	InstallationId     []byte
 	CredentialIdentity []byte
 }
@@ -55,7 +55,7 @@ func (s *MLSValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyP
 			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
 		}
 		out[i] = IdentityValidationResult{
-			WalletAddress:      response.WalletAddress,
+			AccountAddress:     response.AccountAddress,
 			InstallationId:     response.InstallationId,
 			CredentialIdentity: response.CredentialIdentityBytes,
 		}
