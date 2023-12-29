@@ -1140,14 +1140,6 @@ github.com/xdg/stringprep v1.0.0/go.mod h1:Jhud4/sHMO4oL310DaZAKk9ZaJ08SJfe+sJh0
 github.com/xlab/treeprint v0.0.0-20180616005107-d6fb6747feb6/go.mod h1:ce1O1j6UtZfjr22oyGxGLbauSBp2YVXpARAosm7dHBg=
 github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3 h1:wzUffJGCTBGXIDyNU+1UBu1fn2Nzo+OQzM1pLrheh58=
 github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3/go.mod h1:bJREWk+NDnZYjgLQdAi8SUWuq/5pkMme4GqiffEhUF4=
-github.com/xmtp/proto/v3 v3.27.0 h1:G70006UEffkCmWvp9G/7Dywosj1sLm9StR5HWEb891U=
-github.com/xmtp/proto/v3 v3.27.0/go.mod h1:NF2zAjtNpVIhS4tFG19g4L1tJcPZHm81oeDFXltmOiY=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019020501-b49bc6ffb5eb h1:q2lR64lGFehm8m0FtcdRDMeH8MlkMyU4sz235+Ufq9E=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019020501-b49bc6ffb5eb/go.mod h1:NF2zAjtNpVIhS4tFG19g4L1tJcPZHm81oeDFXltmOiY=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019022514-1cc4b0d5a51a h1:kDEPyzhqQO9YdRAfvl21ysitvzWjdu4Ai8YCvHwqqbY=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019022514-1cc4b0d5a51a/go.mod h1:NF2zAjtNpVIhS4tFG19g4L1tJcPZHm81oeDFXltmOiY=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019163152-2a17d00f45f4 h1:Mxnc833msN9gX8DJyELd+E7oUJNHlhbIsZlTd88kg5M=
-github.com/xmtp/proto/v3 v3.29.1-0.20231019163152-2a17d00f45f4/go.mod h1:NF2zAjtNpVIhS4tFG19g4L1tJcPZHm81oeDFXltmOiY=
 github.com/xmtp/proto/v3 v3.30.0 h1:x6LGCWpO2HTQNhUiTXfE0l+u2HSL3Z35p41xhgy6hlw=
 github.com/xmtp/proto/v3 v3.30.0/go.mod h1:NF2zAjtNpVIhS4tFG19g4L1tJcPZHm81oeDFXltmOiY=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 h1:bAn7/zixMGCfxrRTfdpNzjtPYqr8smhKouy9mxVdGPU=

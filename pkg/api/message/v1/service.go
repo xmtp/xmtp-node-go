@@ -178,6 +178,8 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
+	metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
+
 	var streamLock sync.Mutex
 	for _, topic := range req.ContentTopics {
 		subject := topic
@@ -277,6 +279,8 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				continue
 			}
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
+
+			metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
 
 			topics := map[string]bool{}
 			for _, topic := range req.ContentTopics {
