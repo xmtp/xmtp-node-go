@@ -59,6 +59,7 @@ func registerCollectors(reg prometheus.Registerer) {
 		apiRequests,
 		apiRequestsDuration,
 		subscribeTopicsLength,
+		subscribedTopics,
 		publishedEnvelopeSize,
 		publishedEnvelopeCount,
 		queryDuration,

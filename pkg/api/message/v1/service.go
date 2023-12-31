@@ -178,7 +178,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
+	metrics.EmitSubscribeTopics(stream.Context(), log, len(req.ContentTopics))
 
 	var streamLock sync.Mutex
 	for _, topic := range req.ContentTopics {
@@ -217,11 +217,15 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	select {
 	case <-stream.Context().Done():
 		log.Debug("stream closed")
-		return nil
+		break
 	case <-s.ctx.Done():
 		log.Info("service closed")
-		return nil
+		break
 	}
+
+	metrics.EmitUnsubscribeTopics(stream.Context(), log, len(req.ContentTopics))
+
+	return nil
 }
 
 func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
@@ -264,6 +268,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		for _, sub := range subs {
 			_ = sub.Unsubscribe()
 		}
+		metrics.EmitUnsubscribeTopics(stream.Context(), log, len(subs))
 	}()
 	var streamLock sync.Mutex
 	for {
@@ -280,7 +285,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 			}
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
 
-			metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
+			metrics.EmitSubscribeTopics(stream.Context(), log, len(req.ContentTopics))
 
 			topics := map[string]bool{}
 			for _, topic := range req.ContentTopics {
@@ -313,13 +318,16 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 			}
 
 			// If subscription not in topic, then unsubscribe.
+			var count int
 			for topic, sub := range subs {
 				if topics[topic] {
 					continue
 				}
 				_ = sub.Unsubscribe()
 				delete(subs, topic)
+				count++
 			}
+			metrics.EmitUnsubscribeTopics(stream.Context(), log, count)
 		}
 	}
 }
