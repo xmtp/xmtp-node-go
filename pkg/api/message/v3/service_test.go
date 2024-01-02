@@ -43,11 +43,11 @@ func newMockedValidationService() *mockedMLSValidationService {
 	return new(mockedMLSValidationService)
 }
 
-func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, walletAddress string) *mock.Call {
+func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
 	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
 		{
 			InstallationId:     installationId,
-			WalletAddress:      walletAddress,
+			AccountAddress:     accountAddress,
 			CredentialIdentity: []byte("test"),
 		},
 	}, nil)
@@ -97,9 +97,9 @@ func TestRegisterInstallation(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
+	accountAddress := test.RandomString(32)
 
-	mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
+	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
@@ -115,7 +115,7 @@ func TestRegisterInstallation(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, installations, 1)
-	require.Equal(t, walletAddress, installations[0].WalletAddress)
+	require.Equal(t, accountAddress, installations[0].WalletAddress)
 }
 
 func TestRegisterInstallationError(t *testing.T) {
@@ -140,9 +140,9 @@ func TestUploadKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
+	accountAddress := test.RandomString(32)
 
-	mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
+	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
@@ -172,9 +172,9 @@ func TestConsumeKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	installationId1 := test.RandomBytes(32)
-	walletAddress1 := test.RandomString(32)
+	accountAddress1 := test.RandomString(32)
 
-	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, walletAddress1)
+	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, accountAddress1)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
@@ -186,10 +186,10 @@ func TestConsumeKeyPackages(t *testing.T) {
 
 	// Add a second key package
 	installationId2 := test.RandomBytes(32)
-	walletAddress2 := test.RandomString(32)
+	accountAddress2 := test.RandomString(32)
 	// Unset the original mock so we can set a new one
 	mockCall.Unset()
-	mlsValidationService.mockValidateKeyPackages(installationId2, walletAddress2)
+	mlsValidationService.mockValidateKeyPackages(installationId2, accountAddress2)
 
 	res, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
@@ -268,9 +268,9 @@ func TestGetIdentityUpdates(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
+	accountAddress := test.RandomString(32)
 
-	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, walletAddress)
+	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	_, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
@@ -280,7 +280,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 
 	identityUpdates, err := svc.GetIdentityUpdates(ctx, &proto.GetIdentityUpdatesRequest{
-		WalletAddresses: []string{walletAddress},
+		AccountAddresses: []string{accountAddress},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, identityUpdates)
@@ -295,7 +295,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	}
 
 	mockCall.Unset()
-	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), walletAddress)
+	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), accountAddress)
 	_, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
 		LastResortKeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
@@ -304,7 +304,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 
 	identityUpdates, err = svc.GetIdentityUpdates(ctx, &proto.GetIdentityUpdatesRequest{
-		WalletAddresses: []string{walletAddress},
+		AccountAddresses: []string{accountAddress},
 	})
 	require.NoError(t, err)
 	require.Len(t, identityUpdates.Updates, 1)

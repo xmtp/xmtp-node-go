@@ -42,7 +42,7 @@ func TestValidateKeyPackages(t *testing.T) {
 
 	firstResponse := svc.ValidateKeyPackagesResponse_ValidationResponse{
 		IsOk:                    true,
-		WalletAddress:           "0x123",
+		AccountAddress:          "0x123",
 		InstallationId:          []byte("123"),
 		CredentialIdentityBytes: []byte("456"),
 		ErrorMessage:            "",
@@ -55,7 +55,7 @@ func TestValidateKeyPackages(t *testing.T) {
 	res, err := service.ValidateKeyPackages(ctx, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res))
-	assert.Equal(t, "0x123", res[0].WalletAddress)
+	assert.Equal(t, "0x123", res[0].AccountAddress)
 	assert.Equal(t, []byte("123"), res[0].InstallationId)
 	assert.Equal(t, []byte("456"), res[0].CredentialIdentity)
 }

@@ -54,10 +54,10 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	}
 
 	installationId := results[0].InstallationId
-	walletAddress := results[0].WalletAddress
+	accountAddress := results[0].AccountAddress
 	credentialIdentity := results[0].CredentialIdentity
 
-	if err = s.mlsStore.CreateInstallation(ctx, installationId, walletAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized, credentialIdentity); err != nil {
+	if err = s.mlsStore.CreateInstallation(ctx, installationId, accountAddress, req.LastResortKeyPackage.KeyPackageTlsSerialized, credentialIdentity); err != nil {
 		return nil, err
 	}
 
@@ -203,15 +203,15 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 		return nil, err
 	}
 
-	walletAddresses := req.WalletAddresses
-	updates, err := s.mlsStore.GetIdentityUpdates(ctx, req.WalletAddresses, int64(req.StartTimeNs))
+	accountAddresses := req.AccountAddresses
+	updates, err := s.mlsStore.GetIdentityUpdates(ctx, req.AccountAddresses, int64(req.StartTimeNs))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get identity updates: %s", err)
 	}
 
-	resUpdates := make([]*proto.GetIdentityUpdatesResponse_WalletUpdates, len(walletAddresses))
-	for i, walletAddress := range walletAddresses {
-		walletUpdates := updates[walletAddress]
+	resUpdates := make([]*proto.GetIdentityUpdatesResponse_WalletUpdates, len(accountAddresses))
+	for i, accountAddress := range accountAddresses {
+		walletUpdates := updates[accountAddress]
 
 		resUpdates[i] = &proto.GetIdentityUpdatesResponse_WalletUpdates{
 			Updates: []*proto.GetIdentityUpdatesResponse_Update{},
@@ -289,7 +289,7 @@ func validateUploadKeyPackagesRequest(req *proto.UploadKeyPackagesRequest) error
 }
 
 func validateGetIdentityUpdatesRequest(req *proto.GetIdentityUpdatesRequest) error {
-	if req == nil || len(req.WalletAddresses) == 0 {
+	if req == nil || len(req.AccountAddresses) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no wallet addresses to get updates for")
 	}
 	return nil
