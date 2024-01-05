@@ -89,6 +89,7 @@ func NewTokenBucketRateLimiter(ctx context.Context, log *zap.Logger) *TokenBucke
 	tb.newBuckets = NewBuckets(log, "buckets1")
 	tb.oldBuckets = NewBuckets(log, "buckets2")
 	tb.PriorityMultiplier = DEFAULT_PRIORITY_MULTIPLIER
+	tb.PublishPriorityMultiplier = PUBLISH_PRIORITY_MULTIPLIER
 	tb.Limits = map[LimitType]*Limit{
 		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
 		PUBLISH: {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
@@ -108,7 +109,11 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 	limit := rl.getLimit(limitType)
 	multiplier := uint16(1)
 	if isPriority {
-		multiplier = rl.PriorityMultiplier
+		if limitType == PUBLISH {
+			multiplier = rl.PublishPriorityMultiplier
+		} else {
+			multiplier = rl.PriorityMultiplier
+		}
 	}
 	rl.mutex.RLock()
 	if entry := rl.oldBuckets.getAndRefill(bucket, limit, multiplier, false); entry != nil {
