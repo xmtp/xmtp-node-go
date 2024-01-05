@@ -65,7 +65,17 @@ func TestSpendAllowListed(t *testing.T) {
 	// Set last seen to 5 minutes ago
 	entry.lastSeen = time.Now().Add(-5 * time.Minute)
 	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
-	require.Equal(t, entry.tokens, uint16(5*DEFAULT_RATE_PER_MINUTE*PRIORITY_MULTIPLIER))
+	require.Equal(t, entry.tokens, uint16(5*DEFAULT_RATE_PER_MINUTE*DEFAULT_PRIORITY_MULTIPLIER))
+}
+
+func TestSpendAllowListedPublish(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	rl := NewTokenBucketRateLimiter(context.Background(), logger)
+	entry := rl.newBuckets.getAndRefill(walletAddress, &Limit{0, 0}, 1, true)
+	// Set last seen to 5 minutes ago
+	entry.lastSeen = time.Now().Add(-5 * time.Minute)
+	entry = rl.fillAndReturnEntry(PUBLISH, walletAddress, true)
+	require.Equal(t, entry.tokens, uint16(5*PUBLISH_RATE_PER_MINUTE*PUBLISH_PRIORITY_MULTIPLIER))
 }
 
 func TestMaxUint16(t *testing.T) {
@@ -75,7 +85,7 @@ func TestMaxUint16(t *testing.T) {
 	// Set last seen to 1 million minutes ago
 	entry.lastSeen = time.Now().Add(-1000000 * time.Minute)
 	entry = rl.fillAndReturnEntry(DEFAULT, walletAddress, true)
-	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS*PRIORITY_MULTIPLIER)
+	require.Equal(t, entry.tokens, DEFAULT_MAX_TOKENS*DEFAULT_PRIORITY_MULTIPLIER)
 }
 
 // Ensures that the map can be accessed concurrently

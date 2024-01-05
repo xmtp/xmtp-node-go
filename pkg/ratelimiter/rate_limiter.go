@@ -14,12 +14,13 @@ import (
 type LimitType string
 
 const (
-	PRIORITY_MULTIPLIER     = uint16(5)
-	DEFAULT_RATE_PER_MINUTE = uint16(2000)
-	DEFAULT_MAX_TOKENS      = uint16(10000)
-	PUBLISH_RATE_PER_MINUTE = uint16(200)
-	PUBLISH_MAX_TOKENS      = uint16(1000)
-	MAX_UINT_16             = 65535
+	DEFAULT_PRIORITY_MULTIPLIER = uint16(5)
+	PUBLISH_PRIORITY_MULTIPLIER = uint16(25)
+	DEFAULT_RATE_PER_MINUTE     = uint16(2000)
+	DEFAULT_MAX_TOKENS          = uint16(10000)
+	PUBLISH_RATE_PER_MINUTE     = uint16(200)
+	PUBLISH_MAX_TOKENS          = uint16(1000)
+	MAX_UINT_16                 = 65535
 
 	DEFAULT LimitType = "DEF"
 	PUBLISH LimitType = "PUB"
@@ -70,13 +71,14 @@ func (l Limit) Refill(entry *Entry, multiplier uint16) {
 
 // TokenBucketRateLimiter implements the RateLimiter interface
 type TokenBucketRateLimiter struct {
-	log                *zap.Logger
-	ctx                context.Context
-	mutex              sync.RWMutex
-	newBuckets         *Buckets // buckets that can be added to
-	oldBuckets         *Buckets // buckets to be swept for expired entries
-	PriorityMultiplier uint16
-	Limits             map[LimitType]*Limit
+	log                       *zap.Logger
+	ctx                       context.Context
+	mutex                     sync.RWMutex
+	newBuckets                *Buckets // buckets that can be added to
+	oldBuckets                *Buckets // buckets to be swept for expired entries
+	PriorityMultiplier        uint16
+	PublishPriorityMultiplier uint16
+	Limits                    map[LimitType]*Limit
 }
 
 func NewTokenBucketRateLimiter(ctx context.Context, log *zap.Logger) *TokenBucketRateLimiter {
@@ -86,7 +88,7 @@ func NewTokenBucketRateLimiter(ctx context.Context, log *zap.Logger) *TokenBucke
 	// TODO: need to periodically clear out expired items to avoid unlimited growth of the map.
 	tb.newBuckets = NewBuckets(log, "buckets1")
 	tb.oldBuckets = NewBuckets(log, "buckets2")
-	tb.PriorityMultiplier = PRIORITY_MULTIPLIER
+	tb.PriorityMultiplier = DEFAULT_PRIORITY_MULTIPLIER
 	tb.Limits = map[LimitType]*Limit{
 		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
 		PUBLISH: {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
