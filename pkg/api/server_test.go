@@ -802,7 +802,7 @@ func Test_Ratelimits_Priority(t *testing.T) {
 		limiter, ok := server.authorizer.Limiter.(*ratelimiter.TokenBucketRateLimiter)
 		require.True(t, ok)
 		limiter.Limits[ratelimiter.PUBLISH] = &ratelimiter.Limit{MaxTokens: 1, RatePerMinute: 0}
-		limiter.PriorityMultiplier = 2
+		limiter.PublishPriorityMultiplier = 2
 		envs := makeEnvelopes(3)
 		_, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[0:2]})
 		require.NoError(t, err)
