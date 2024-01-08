@@ -2,7 +2,6 @@ package mlsstore
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"time"
 
@@ -88,10 +87,6 @@ func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) 
 		Scan(ctx, &installations)
 	if err != nil {
 		return nil, err
-	}
-
-	if len(installations) < len(installationIds) {
-		return nil, errors.New("key packages not found")
 	}
 
 	return installations, nil

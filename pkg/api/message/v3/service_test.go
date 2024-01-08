@@ -220,7 +220,7 @@ func TestFetchKeyPackages(t *testing.T) {
 	require.Equal(t, []byte("test"), consumeRes.KeyPackages[1].KeyPackageTlsSerialized)
 }
 
-// Trying to consume key packages that don't exist should fail
+// Trying to fetch key packages that don't exist should return nil
 func TestFetchKeyPackagesFail(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
@@ -229,8 +229,8 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	consumeRes, err := svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{test.RandomBytes(32)},
 	})
-	require.Error(t, err)
-	require.Nil(t, consumeRes)
+	require.Nil(t, err)
+	require.Equal(t, []*proto.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
 func TestPublishToGroup(t *testing.T) {

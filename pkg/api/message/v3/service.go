@@ -77,7 +77,7 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPacka
 		keyPackageMap[string(id)] = idx
 	}
 
-	resPackages := make([]*proto.FetchKeyPackagesResponse_KeyPackage, len(installations))
+	resPackages := make([]*proto.FetchKeyPackagesResponse_KeyPackage, len(ids))
 	for _, installation := range installations {
 
 		idx, ok := keyPackageMap[string(installation.ID)]
