@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	proto "github.com/xmtp/proto/v3/go/message_api/v3"
+	messageContents "github.com/xmtp/proto/v3/go/mls/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
@@ -230,35 +233,34 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	require.Equal(t, []*proto.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
-// TODO(snormore): fix this
-// func TestPublishToGroup(t *testing.T) {
-// 	ctx := context.Background()
-// 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
-// 	defer cleanup()
+func TestPublishToGroup(t *testing.T) {
+	ctx := context.Background()
+	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
 
-// 	groupId := test.RandomString(32)
+	groupId := test.RandomString(32)
 
-// 	mlsValidationService.mockValidateGroupMessages(groupId)
+	mlsValidationService.mockValidateGroupMessages(groupId)
 
-// 	_, err := svc.PublishToGroup(ctx, &proto.PublishToGroupRequest{
-// 		Messages: []*messageContents.GroupMessage{{
-// 			Version: &messageContents.GroupMessage_V1_{
-// 				V1: &messageContents.GroupMessage_V1{
-// 					MlsMessageTlsSerialized: []byte("test"),
-// 				},
-// 			},
-// 		}},
-// 	})
-// 	require.NoError(t, err)
+	_, err := svc.PublishToGroup(ctx, &proto.PublishToGroupRequest{
+		Messages: []*messageContents.GroupMessage{{
+			Version: &messageContents.GroupMessage_V1_{
+				V1: &messageContents.GroupMessage_V1{
+					MlsMessageTlsSerialized: []byte("test"),
+				},
+			},
+		}},
+	})
+	require.NoError(t, err)
 
-// 	results, err := svc.store.QueryMessages(&v1.QueryRequest{
-// 		ContentTopics: []string{fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)},
-// 	})
-// 	require.NoError(t, err)
-// 	require.Len(t, results.Envelopes, 1)
-// 	require.Equal(t, results.Envelopes[0].Message, []byte("test"))
-// 	require.NotNil(t, results.Envelopes[0].TimestampNs)
-// }
+	results, err := svc.store.QueryMessages(ctx, &v1.QueryRequest{
+		ContentTopics: []string{fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)},
+	})
+	require.NoError(t, err)
+	require.Len(t, results.Envelopes, 1)
+	require.Equal(t, results.Envelopes[0].Message, []byte("test"))
+	require.NotNil(t, results.Envelopes[0].TimestampNs)
+}
 
 func TestGetIdentityUpdates(t *testing.T) {
 	ctx := context.Background()

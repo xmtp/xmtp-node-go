@@ -15,3 +15,12 @@ type Installation struct {
 	KeyPackage []byte `bun:"key_package,notnull,type:bytea"`
 	Expiration uint64 `bun:"expiration,notnull"`
 }
+
+type Message struct {
+	bun.BaseModel `bun:"table:messages"`
+
+	TID       string `bun:",pk,notnull"`
+	Topic     string `bun:"topic,notnull"`
+	CreatedAt int64  `bun:"created_at,notnull"`
+	Content   []byte `bun:"content,notnull,type:bytea"`
+}

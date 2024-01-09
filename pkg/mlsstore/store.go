@@ -27,7 +27,7 @@ type MlsStore interface {
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error)
-	QueryMessages(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error)
+	QueryMessages(ctx context.Context, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -162,12 +162,62 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 	return err
 }
 
-func (s *Store) InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error) {
-	return nil, errors.New("not implemented")
+func (s *Store) InsertMessage(ctx context.Context, topic string, content []byte) (*messagev1.Envelope, error) {
+	createdAt := nowNs()
+
+	message := Message{
+		TID:       topic + "",
+		Topic:     topic,
+		CreatedAt: createdAt,
+		Content:   content,
+	}
+
+	_, err := s.db.NewInsert().
+		Model(&message).
+		Ignore().
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &messagev1.Envelope{
+		ContentTopic: topic,
+		TimestampNs:  uint64(createdAt),
+		Message:      content,
+	}, nil
 }
 
-func (s *Store) QueryMessages(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error) {
-	return nil, errors.New("not implemented")
+func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+	messages := make([]*Message, 0)
+
+	err := s.db.NewSelect().
+		Model(&messages).
+		Where("topic IN (?)", bun.In(query.ContentTopics)).
+		// WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+		// 	return q.Where("created_at > ?", startTimeNs).WhereOr("revoked_at > ?", startTimeNs)
+		// }).
+		Order("created_at ASC").
+		Scan(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: move api to api/mls/v1
+	// TODO: update db schema to support querying by multiple topics, so tid should not have topic in it, I guess
+	// TODO: finish implementing all of this (query request variations, pagination, etc)
+
+	envs := make([]*messagev1.Envelope, 0, len(messages))
+	for _, msg := range messages {
+		envs = append(envs, &messagev1.Envelope{
+			ContentTopic: msg.Topic,
+			TimestampNs:  uint64(msg.CreatedAt),
+			Message:      msg.Content,
+		})
+	}
+	return &messagev1.QueryResponse{
+		Envelopes: envs,
+	}, nil
 }
 
 func (s *Store) migrate(ctx context.Context) error {

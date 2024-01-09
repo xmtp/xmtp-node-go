@@ -252,7 +252,7 @@ func (s *Service) QueryMessages(ctx context.Context, req *messagev1.QueryRequest
 		}
 	}
 
-	return s.store.QueryMessages(req)
+	return s.store.QueryMessages(ctx, req)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {

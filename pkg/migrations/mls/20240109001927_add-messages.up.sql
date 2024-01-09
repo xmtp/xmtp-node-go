@@ -12,3 +12,4 @@ CREATE TABLE messages (
 --bun:split
 
 CREATE INDEX idx_messages_tid ON messages(tid);
+CREATE INDEX idx_messages_topic_tid ON messages(topic, tid);
