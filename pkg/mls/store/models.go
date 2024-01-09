@@ -1,6 +1,10 @@
 package store
 
-import "github.com/uptrace/bun"
+import (
+	"time"
+
+	"github.com/uptrace/bun"
+)
 
 type Installation struct {
 	bun.BaseModel `bun:"table:installations"`
@@ -14,4 +18,22 @@ type Installation struct {
 
 	KeyPackage []byte `bun:"key_package,notnull,type:bytea"`
 	Expiration uint64 `bun:"expiration,notnull"`
+}
+
+type GroupMessage struct {
+	bun.BaseModel `bun:"table:group_messages"`
+
+	Id        uint64    `bun:",pk,notnull"`
+	CreatedAt time.Time `bun:",notnull"`
+	GroupId   string    `bun:",notnull"`
+	Data      []byte    `bun:",notnull,type:bytea"`
+}
+
+type WelcomeMessage struct {
+	bun.BaseModel `bun:"table:welcome_messages"`
+
+	Id             uint64    `bun:",pk,notnull"`
+	CreatedAt      time.Time `bun:",notnull"`
+	InstallationId string    `bun:",notnull"`
+	Data           []byte    `bun:",notnull,type:bytea"`
 }

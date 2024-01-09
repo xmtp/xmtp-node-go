@@ -6,10 +6,8 @@ import (
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
-	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -22,17 +20,15 @@ type Service struct {
 
 	log               *zap.Logger
 	waku              *wakunode.WakuNode
-	messageStore      *store.Store
-	mlsStore          mlsstore.MlsStore
+	store             mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
 		log:               logger.Named("mls/v1"),
 		waku:              node,
-		messageStore:      messageStore,
-		mlsStore:          mlsStore,
+		store:             store,
 		validationService: validationService,
 	}
 
@@ -57,7 +53,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	accountAddress := results[0].AccountAddress
 	credentialIdentity := results[0].CredentialIdentity
 
-	if err = s.mlsStore.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
+	if err = s.store.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +64,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 
 func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPackagesRequest) (*proto.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationIds
-	installations, err := s.mlsStore.FetchKeyPackages(ctx, ids)
+	installations, err := s.store.FetchKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to fetch key packages: %s", err)
 	}
@@ -95,77 +91,6 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPacka
 	}, nil
 }
 
-func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupRequest) (res *emptypb.Empty, err error) {
-	if err = validatePublishToGroupRequest(req); err != nil {
-		return nil, err
-	}
-
-	messages := make([][]byte, len(req.Messages))
-	for i, message := range req.Messages {
-		v1 := message.GetV1()
-		if v1 == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "message must be v1")
-		}
-		messages[i] = v1.MlsMessageTlsSerialized
-	}
-
-	validationResults, err := s.validationService.ValidateGroupMessages(ctx, messages)
-	if err != nil {
-		// TODO: Separate validation errors from internal errors
-		return nil, status.Errorf(codes.InvalidArgument, "invalid group message: %s", err)
-	}
-
-	for i, result := range validationResults {
-		message := messages[i]
-
-		if err = requireReadyToSend(result.GroupId, message); err != nil {
-			return nil, err
-		}
-
-		// TODO: Wrap this in a transaction so publishing is all or nothing
-		if err = s.publishMessage(ctx, topic.BuildGroupTopic(result.GroupId), message); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
-		}
-	}
-
-	return &emptypb.Empty{}, nil
-}
-
-func (s *Service) publishMessage(ctx context.Context, contentTopic string, message []byte) error {
-	log := s.log.Named("publish-mls").With(zap.String("content_topic", contentTopic))
-	env, err := s.messageStore.InsertMLSMessage(ctx, contentTopic, message)
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-	}
-
-	if _, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
-		ContentTopic: contentTopic,
-		Timestamp:    int64(env.TimestampNs),
-		Payload:      message,
-	}); err != nil {
-		return status.Errorf(codes.Internal, "failed to publish message: %s", err)
-	}
-
-	metrics.EmitPublishedEnvelope(ctx, log, env)
-
-	return nil
-}
-
-func (s *Service) PublishWelcomes(ctx context.Context, req *proto.PublishWelcomesRequest) (res *emptypb.Empty, err error) {
-	if err = validatePublishWelcomesRequest(req); err != nil {
-		return nil, err
-	}
-
-	// TODO: Wrap this in a transaction so publishing is all or nothing
-	for _, welcome := range req.WelcomeMessages {
-		contentTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
-		if err = s.publishMessage(ctx, contentTopic, welcome.WelcomeMessage.GetV1().WelcomeMessageTlsSerialized); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to publish welcome message: %s", err)
-		}
-	}
-	return &emptypb.Empty{}, nil
-}
-
 func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPackageRequest) (res *emptypb.Empty, err error) {
 	if err = validateUploadKeyPackageRequest(req); err != nil {
 		return nil, err
@@ -181,7 +106,7 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPack
 	installationId := validationResults[0].InstallationId
 	expiration := validationResults[0].Expiration
 
-	if err = s.mlsStore.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
+	if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -198,7 +123,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	}
 
 	accountAddresses := req.AccountAddresses
-	updates, err := s.mlsStore.GetIdentityUpdates(ctx, req.AccountAddresses, int64(req.StartTimeNs))
+	updates, err := s.store.GetIdentityUpdates(ctx, req.AccountAddresses, int64(req.StartTimeNs))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get identity updates: %s", err)
 	}
@@ -219,6 +144,88 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	return &proto.GetIdentityUpdatesResponse{
 		Updates: resUpdates,
 	}, nil
+}
+
+func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
+	if err = validateSendGroupMessagesRequest(req); err != nil {
+		return nil, err
+	}
+
+	messages := make([][]byte, len(req.Messages))
+	for i, message := range req.Messages {
+		v1 := message.GetV1()
+		if v1 == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "message must be v1")
+		}
+		messages[i] = v1.Data
+	}
+
+	validationResults, err := s.validationService.ValidateGroupMessages(ctx, messages)
+	if err != nil {
+		// TODO: Separate validation errors from internal errors
+		return nil, status.Errorf(codes.InvalidArgument, "invalid group message: %s", err)
+	}
+
+	for i, result := range validationResults {
+		data := messages[i]
+
+		if err = requireReadyToSend(result.GroupId, data); err != nil {
+			return nil, err
+		}
+
+		// TODO: Wrap this in a transaction so publishing is all or nothing
+		wakuTopic := topic.BuildGroupTopic(result.GroupId)
+		msg, err := s.store.InsertGroupMessage(ctx, result.GroupId, data)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
+		}
+
+		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+			ContentTopic: wakuTopic,
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      data,
+		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
+		}
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
+	if err = validateSendWelcomeMessagesRequest(req); err != nil {
+		return nil, err
+	}
+
+	// TODO: Wrap this in a transaction so publishing is all or nothing
+	for _, welcome := range req.WelcomeMessages {
+		wakuTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
+		data := welcome.WelcomeMessage.GetV1().Data
+
+		msg, err := s.store.InsertWelcomeMessage(ctx, string(welcome.InstallationId), data)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
+		}
+
+		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+			ContentTopic: wakuTopic,
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      data,
+		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
+		}
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Service) QueryGroupMessages(ctx context.Context, req *proto.QueryGroupMessagesRequest) (*proto.QueryGroupMessagesResponse, error) {
+	return s.store.QueryGroupMessagesV1(ctx, req)
+}
+
+func (s *Service) QueryWelcomeMessages(ctx context.Context, req *proto.QueryWelcomeMessagesRequest) (*proto.QueryWelcomeMessagesResponse, error) {
+	return s.store.QueryWelcomeMessagesV1(ctx, req)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {
@@ -244,14 +251,14 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	return &base
 }
 
-func validatePublishToGroupRequest(req *proto.PublishToGroupRequest) error {
+func validateSendGroupMessagesRequest(req *proto.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no messages to publish")
 	}
 	return nil
 }
 
-func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
+func validateSendWelcomeMessagesRequest(req *proto.SendWelcomeMessagesRequest) error {
 	if req == nil || len(req.WelcomeMessages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to publish")
 	}
@@ -261,7 +268,7 @@ func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
 		}
 
 		v1 := welcome.WelcomeMessage.GetV1()
-		if v1 == nil || len(v1.WelcomeMessageTlsSerialized) == 0 {
+		if v1 == nil {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
 	}

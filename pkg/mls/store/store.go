@@ -8,9 +8,13 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
-	mlsMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
+	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
+	"github.com/xmtp/proto/v3/go/mls/message_contents"
+	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	"go.uber.org/zap"
 )
+
+const maxPageSize = 100
 
 type Store struct {
 	config Config
@@ -23,9 +27,18 @@ type MlsStore interface {
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
+	InsertGroupMessage(ctx context.Context, groupId string, data []byte) (*GroupMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error)
+	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
+	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
+	if config.now == nil {
+		config.now = func() time.Time {
+			return time.Now().UTC()
+		}
+	}
 	s := &Store{
 		log:    config.Log.Named("mlsstore"),
 		db:     config.DB,
@@ -157,8 +170,183 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 	return err
 }
 
+func (s *Store) InsertGroupMessage(ctx context.Context, groupId string, data []byte) (*GroupMessage, error) {
+	message := GroupMessage{
+		Data: data,
+	}
+
+	var id uint64
+	err := s.db.QueryRow("INSERT INTO group_messages (group_id, data) VALUES (?, ?) RETURNING id", groupId, data).Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.NewSelect().Model(&message).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &message, nil
+}
+
+func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error) {
+	message := WelcomeMessage{
+		Data: data,
+	}
+
+	var id uint64
+	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_id, data) VALUES (?, ?) RETURNING id", installationId, data).Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.NewSelect().Model(&message).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &message, nil
+}
+
+func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
+	msgs := make([]*GroupMessage, 0)
+
+	if req.GroupId == "" {
+		return nil, errors.New("group is required")
+	}
+
+	q := s.db.NewSelect().
+		Model(&msgs).
+		Where("group_id = ?", req.GroupId)
+
+	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
+	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = req.PagingInfo.Direction
+	}
+	switch direction {
+	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
+		q = q.Order("id DESC")
+	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
+		q = q.Order("id ASC")
+	}
+
+	pageSize := maxPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+		pageSize = int(req.PagingInfo.Limit)
+	}
+	q = q.Limit(pageSize)
+
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+			q = q.Where("id > ?", req.PagingInfo.Cursor)
+		} else {
+			q = q.Where("id < ?", req.PagingInfo.Cursor)
+		}
+	}
+
+	err := q.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	messages := make([]*message_contents.GroupMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		messages = append(messages, &message_contents.GroupMessage{
+			Version: &message_contents.GroupMessage_V1_{
+				V1: &message_contents.GroupMessage_V1{
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					GroupId:   msg.GroupId,
+					Data:      msg.Data,
+				},
+			},
+		})
+	}
+
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	if len(messages) >= pageSize {
+		if len(messages) > 0 {
+			lastMsg := msgs[len(messages)-1]
+			pagingInfo.Cursor = lastMsg.Id
+		}
+	}
+
+	return &mlsv1.QueryGroupMessagesResponse{
+		Messages:   messages,
+		PagingInfo: pagingInfo,
+	}, nil
+}
+
+func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
+	msgs := make([]*WelcomeMessage, 0)
+
+	if req.InstallationId == "" {
+		return nil, errors.New("installation is required")
+	}
+
+	q := s.db.NewSelect().
+		Model(&msgs).
+		Where("installation_id = ?", req.InstallationId)
+
+	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
+	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = req.PagingInfo.Direction
+	}
+	switch direction {
+	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
+		q = q.Order("id DESC")
+	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
+		q = q.Order("id ASC")
+	}
+
+	pageSize := maxPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+		pageSize = int(req.PagingInfo.Limit)
+	}
+	q = q.Limit(pageSize)
+
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+			q = q.Where("id > ?", req.PagingInfo.Cursor)
+		} else {
+			q = q.Where("id < ?", req.PagingInfo.Cursor)
+		}
+	}
+
+	err := q.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	messages := make([]*message_contents.WelcomeMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		messages = append(messages, &message_contents.WelcomeMessage{
+			Version: &message_contents.WelcomeMessage_V1_{
+				V1: &message_contents.WelcomeMessage_V1{
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					Data:      msg.Data,
+				},
+			},
+		})
+	}
+
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	if len(messages) >= pageSize {
+		if len(messages) > 0 {
+			lastMsg := msgs[len(messages)-1]
+			pagingInfo.Cursor = lastMsg.Id
+		}
+	}
+
+	return &mlsv1.QueryWelcomeMessagesResponse{
+		Messages:   messages,
+		PagingInfo: pagingInfo,
+	}, nil
+}
+
 func (s *Store) migrate(ctx context.Context) error {
-	migrator := migrate.NewMigrator(s.db, mlsMigrations.Migrations)
+	migrator := migrate.NewMigrator(s.db, migrations.Migrations)
 	err := migrator.Init(ctx)
 	if err != nil {
 		return err

@@ -4,8 +4,10 @@ import (
 	"context"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -170,4 +172,392 @@ func TestIdentityUpdateSort(t *testing.T) {
 	require.Equal(t, updates[0].TimestampNs, uint64(1))
 	require.Equal(t, updates[1].TimestampNs, uint64(2))
 	require.Equal(t, updates[2].TimestampNs, uint64(3))
+}
+
+func TestInsertGroupMessage_Single(t *testing.T) {
+	started := time.Now().UTC()
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	msg, err := store.InsertGroupMessage(ctx, "installation", []byte("data"))
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	require.Equal(t, uint64(1), msg.Id)
+	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
+	require.Equal(t, "installation", msg.GroupId)
+	require.Equal(t, []byte("data"), msg.Data)
+
+	msgs := make([]*GroupMessage, 0)
+	err = store.db.NewSelect().Model(&msgs).Scan(ctx)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	require.Equal(t, msg, msgs[0])
+}
+
+func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertGroupMessage(ctx, "group", []byte("data1"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group", []byte("data2"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group", []byte("data3"))
+	require.NoError(t, err)
+
+	msgs := make([]*GroupMessage, 0)
+	err = store.db.NewSelect().Model(&msgs).Order("created_at DESC").Scan(ctx)
+	require.NoError(t, err)
+	require.Len(t, msgs, 3)
+	require.Equal(t, []byte("data3"), msgs[0].Data)
+	require.Equal(t, []byte("data2"), msgs[1].Data)
+	require.Equal(t, []byte("data1"), msgs[2].Data)
+}
+
+func TestInsertWelcomeMessage_Single(t *testing.T) {
+	started := time.Now().UTC()
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	msg, err := store.InsertWelcomeMessage(ctx, "group", []byte("data"))
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	require.Equal(t, uint64(1), msg.Id)
+	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
+	require.Equal(t, "group", msg.InstallationId)
+	require.Equal(t, []byte("data"), msg.Data)
+
+	msgs := make([]*WelcomeMessage, 0)
+	err = store.db.NewSelect().Model(&msgs).Scan(ctx)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	require.Equal(t, msg, msgs[0])
+}
+
+func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertWelcomeMessage(ctx, "installation", []byte("data1"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation", []byte("data2"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation", []byte("data3"))
+	require.NoError(t, err)
+
+	msgs := make([]*WelcomeMessage, 0)
+	err = store.db.NewSelect().Model(&msgs).Order("created_at DESC").Scan(ctx)
+	require.NoError(t, err)
+	require.Len(t, msgs, 3)
+	require.Equal(t, []byte("data3"), msgs[0].Data)
+	require.Equal(t, []byte("data2"), msgs[1].Data)
+	require.Equal(t, []byte("data1"), msgs[2].Data)
+}
+
+func TestQueryGroupMessagesV1_MissingGroup(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{})
+	require.EqualError(t, err, "group is required")
+	require.Nil(t, resp)
+}
+
+func TestQueryWelcomeMessagesV1_MissingInstallation(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{})
+	require.EqualError(t, err, "installation is required")
+	require.Nil(t, resp)
+}
+
+func TestQueryGroupMessagesV1_Filter(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertGroupMessage(ctx, "group1", []byte("data1"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group2", []byte("data2"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("data3"))
+	require.NoError(t, err)
+
+	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "unknown",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 0)
+
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("data3"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
+
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group2",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, []byte("data2"), resp.Messages[0].GetV1().Data)
+
+	// Sort ascending
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("data1"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("data3"), resp.Messages[1].GetV1().Data)
+}
+
+func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertWelcomeMessage(ctx, "installation1", []byte("data1"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("data2"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("data3"))
+	require.NoError(t, err)
+
+	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "unknown",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 0)
+
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("data3"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
+
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation2",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, []byte("data2"), resp.Messages[0].GetV1().Data)
+
+	// Sort ascending
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("data1"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("data3"), resp.Messages[1].GetV1().Data)
+}
+
+func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertGroupMessage(ctx, "group1", []byte("content1"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group2", []byte("content2"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content3"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group2", []byte("content4"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content5"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content6"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content7"))
+	require.NoError(t, err)
+	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content8"))
+	require.NoError(t, err)
+
+	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 6)
+	require.Equal(t, []byte("content8"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content7"), resp.Messages[1].GetV1().Data)
+	require.Equal(t, []byte("content6"), resp.Messages[2].GetV1().Data)
+	require.Equal(t, []byte("content5"), resp.Messages[3].GetV1().Data)
+	require.Equal(t, []byte("content3"), resp.Messages[4].GetV1().Data)
+	require.Equal(t, []byte("content1"), resp.Messages[5].GetV1().Data)
+
+	thirdMsg := resp.Messages[2]
+	fifthMsg := resp.Messages[4]
+
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit: 2,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content8"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content7"), resp.Messages[1].GetV1().Data)
+
+	// Order descending by default
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit:  2,
+			Cursor: thirdMsg.GetV1().Id,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content5"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content3"), resp.Messages[1].GetV1().Data)
+
+	// Next page from previous response
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId:    "group1",
+		PagingInfo: resp.PagingInfo,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, []byte("content1"), resp.Messages[0].GetV1().Data)
+
+	// Order ascending
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: "group1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit:     2,
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+			Cursor:    fifthMsg.GetV1().Id,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content5"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content6"), resp.Messages[1].GetV1().Data)
+
+	// Next page from previous response
+	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId:    "group1",
+		PagingInfo: resp.PagingInfo,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content7"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content8"), resp.Messages[1].GetV1().Data)
+}
+
+func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_, err := store.InsertWelcomeMessage(ctx, "installation1", []byte("content1"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("content2"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content3"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("content4"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content5"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content6"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content7"))
+	require.NoError(t, err)
+	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content8"))
+	require.NoError(t, err)
+
+	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 6)
+	require.Equal(t, []byte("content8"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content7"), resp.Messages[1].GetV1().Data)
+	require.Equal(t, []byte("content6"), resp.Messages[2].GetV1().Data)
+	require.Equal(t, []byte("content5"), resp.Messages[3].GetV1().Data)
+	require.Equal(t, []byte("content3"), resp.Messages[4].GetV1().Data)
+	require.Equal(t, []byte("content1"), resp.Messages[5].GetV1().Data)
+
+	thirdMsg := resp.Messages[2]
+	fifthMsg := resp.Messages[4]
+
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit: 2,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content8"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content7"), resp.Messages[1].GetV1().Data)
+
+	// Order descending by default
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit:  2,
+			Cursor: thirdMsg.GetV1().Id,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content5"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content3"), resp.Messages[1].GetV1().Data)
+
+	// Next page from previous response
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo:     resp.PagingInfo,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, []byte("content1"), resp.Messages[0].GetV1().Data)
+
+	// Order ascending
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo: &mlsv1.PagingInfo{
+			Limit:     2,
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+			Cursor:    fifthMsg.GetV1().Id,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content5"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content6"), resp.Messages[1].GetV1().Data)
+
+	// Next page from previous response
+	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: "installation1",
+		PagingInfo:     resp.PagingInfo,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+	require.Equal(t, []byte("content7"), resp.Messages[0].GetV1().Data)
+	require.Equal(t, []byte("content8"), resp.Messages[1].GetV1().Data)
 }

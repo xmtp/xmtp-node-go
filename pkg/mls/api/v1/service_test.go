@@ -3,18 +3,15 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
-	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
-	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
-	messageContents "github.com/xmtp/proto/v3/go/mls/message_contents"
+	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
+	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
@@ -64,30 +61,20 @@ func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId string) *
 
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mockedMLSValidationService, func()) {
 	log := test.NewLog(t)
-	mlsDb, _, mlsDbCleanup := test.NewMLSDB(t)
-	mlsStore, err := mlsstore.New(ctx, mlsstore.Config{
+	db, _, mlsDbCleanup := test.NewMLSDB(t)
+	store, err := mlsstore.New(ctx, mlsstore.Config{
 		Log: log,
-		DB:  mlsDb,
-	})
-	require.NoError(t, err)
-	messageDb, _, messageDbCleanup := test.NewDB(t)
-	messageStore, err := store.New(&store.Config{
-		Log:       log,
-		DB:        messageDb,
-		ReaderDB:  messageDb,
-		CleanerDB: messageDb,
+		DB:  db,
 	})
 	require.NoError(t, err)
 	node, nodeCleanup := test.NewNode(t)
 	mlsValidationService := newMockedValidationService()
 
-	svc, err := NewService(node, log, messageStore, mlsStore, mlsValidationService)
+	svc, err := NewService(node, log, store, mlsValidationService)
 	require.NoError(t, err)
 
-	return svc, mlsDb, mlsValidationService, func() {
-		messageStore.Close()
+	return svc, db, mlsValidationService, func() {
 		mlsDbCleanup()
-		messageDbCleanup()
 		nodeCleanup()
 	}
 }
@@ -102,8 +89,8 @@ func TestRegisterInstallation(t *testing.T) {
 
 	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
-	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -126,8 +113,8 @@ func TestRegisterInstallationError(t *testing.T) {
 
 	mlsValidationService.On("ValidateKeyPackages", ctx, mock.Anything).Return(nil, errors.New("error validating"))
 
-	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -145,16 +132,16 @@ func TestUploadKeyPackage(t *testing.T) {
 
 	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
-	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	uploadRes, err := svc.UploadKeyPackage(ctx, &proto.UploadKeyPackageRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	uploadRes, err := svc.UploadKeyPackage(ctx, &mlsv1.UploadKeyPackageRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
 	})
@@ -176,8 +163,8 @@ func TestFetchKeyPackages(t *testing.T) {
 
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, accountAddress1)
 
-	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -191,15 +178,15 @@ func TestFetchKeyPackages(t *testing.T) {
 	mockCall.Unset()
 	mlsValidationService.mockValidateKeyPackages(installationId2, accountAddress2)
 
-	res, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	res, err = svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	consumeRes, err := svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
+	consumeRes, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{installationId1, installationId2},
 	})
 	require.NoError(t, err)
@@ -209,7 +196,7 @@ func TestFetchKeyPackages(t *testing.T) {
 	require.Equal(t, []byte("test2"), consumeRes.KeyPackages[1].KeyPackageTlsSerialized)
 
 	// Now do it with the installationIds reversed
-	consumeRes, err = svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
+	consumeRes, err = svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{installationId2, installationId1},
 	})
 
@@ -226,14 +213,14 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	consumeRes, err := svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
+	consumeRes, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{test.RandomBytes(32)},
 	})
 	require.Nil(t, err)
-	require.Equal(t, []*proto.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
+	require.Equal(t, []*mlsv1.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
-func TestPublishToGroup(t *testing.T) {
+func TestSendGroupMessages(t *testing.T) {
 	ctx := context.Background()
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -242,24 +229,61 @@ func TestPublishToGroup(t *testing.T) {
 
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
-	_, err := svc.PublishToGroup(ctx, &proto.PublishToGroupRequest{
-		Messages: []*messageContents.GroupMessage{{
-			Version: &messageContents.GroupMessage_V1_{
-				V1: &messageContents.GroupMessage_V1{
-					MlsMessageTlsSerialized: []byte("test"),
+	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
+		Messages: []*message_contents.GroupMessage{{
+			Version: &message_contents.GroupMessage_V1_{
+				V1: &message_contents.GroupMessage_V1{
+					Id:        1,
+					CreatedNs: 1,
+					GroupId:   "group",
+					Data:      []byte("test"),
 				},
 			},
 		}},
 	})
 	require.NoError(t, err)
 
-	results, err := svc.messageStore.Query(&v1.QueryRequest{
-		ContentTopics: []string{fmt.Sprintf("/xmtp/mls/1/g-%s/proto", groupId)},
+	resp, err := svc.store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: groupId,
 	})
 	require.NoError(t, err)
-	require.Len(t, results.Envelopes, 1)
-	require.Equal(t, results.Envelopes[0].Message, []byte("test"))
-	require.NotNil(t, results.Envelopes[0].TimestampNs)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
+	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
+}
+
+func TestSendWelcomeMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := test.RandomString(32)
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		WelcomeMessages: []*mlsv1.SendWelcomeMessagesRequest_WelcomeMessageRequest{
+			{
+				InstallationId: []byte(installationId),
+				WelcomeMessage: &message_contents.WelcomeMessage{
+					Version: &message_contents.WelcomeMessage_V1_{
+						V1: &message_contents.WelcomeMessage_V1{
+							Id:        1,
+							CreatedNs: 1,
+							Data:      []byte("test"),
+						},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: installationId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
+	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
 func TestGetIdentityUpdates(t *testing.T) {
@@ -272,14 +296,14 @@ func TestGetIdentityUpdates(t *testing.T) {
 
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
-	_, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	_, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
 	require.NoError(t, err)
 
-	identityUpdates, err := svc.GetIdentityUpdates(ctx, &proto.GetIdentityUpdatesRequest{
+	identityUpdates, err := svc.GetIdentityUpdates(ctx, &mlsv1.GetIdentityUpdatesRequest{
 		AccountAddresses: []string{accountAddress},
 	})
 	require.NoError(t, err)
@@ -296,14 +320,14 @@ func TestGetIdentityUpdates(t *testing.T) {
 
 	mockCall.Unset()
 	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), accountAddress)
-	_, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		KeyPackage: &proto.KeyPackageUpload{
+	_, err = svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
 	require.NoError(t, err)
 
-	identityUpdates, err = svc.GetIdentityUpdates(ctx, &proto.GetIdentityUpdatesRequest{
+	identityUpdates, err = svc.GetIdentityUpdates(ctx, &mlsv1.GetIdentityUpdatesRequest{
 		AccountAddresses: []string{accountAddress},
 	})
 	require.NoError(t, err)
