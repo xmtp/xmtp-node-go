@@ -3,13 +3,9 @@ SET statement_timeout = 0;
 --bun:split
 
 CREATE TABLE messages (
-    tid VARCHAR(300) PRIMARY KEY,
-    topic VARCHAR(200) NOT NULL,
+    topic VARCHAR(300) NOT NULL,
+    tid VARCHAR(300) NOT NULL,
     created_at BIGINT NOT NULL,
-    content BYTEA
+    content BYTEA,
+    CONSTRAINT idx_messages_topic_tid PRIMARY KEY (topic, tid)
 );
-
---bun:split
-
-CREATE INDEX idx_messages_tid ON messages(tid);
-CREATE INDEX idx_messages_topic_tid ON messages(topic, tid);

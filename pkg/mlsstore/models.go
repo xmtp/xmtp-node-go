@@ -19,8 +19,8 @@ type Installation struct {
 type Message struct {
 	bun.BaseModel `bun:"table:messages"`
 
-	TID       string `bun:",pk,notnull"`
-	Topic     string `bun:"topic,notnull"`
+	Topic     string `bun:"topic,pk,notnull"`
+	TID       string `bun:"tid,pk,notnull"`
 	CreatedAt int64  `bun:"created_at,notnull"`
 	Content   []byte `bun:"content,notnull,type:bytea"`
 }

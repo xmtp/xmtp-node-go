@@ -204,7 +204,6 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 	}
 
 	// TODO: move api to api/mls/v1
-	// TODO: update db schema to support querying by multiple topics, so tid should not have topic in it, I guess
 	// TODO: finish implementing all of this (query request variations, pagination, etc)
 
 	envs := make([]*messagev1.Envelope, 0, len(messages))
