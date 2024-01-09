@@ -30,7 +30,7 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.1.16
 	github.com/waku-org/go-waku v0.8.0
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
-	github.com/xmtp/proto/v3 v3.36.1-0.20231219054634-2ff03b7d5090
+	github.com/xmtp/proto/v3 v3.36.1
 	github.com/yoheimuta/protolint v0.39.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
@@ -187,5 +187,3 @@ require (
 
 // From node-go
 replace github.com/ethereum/go-ethereum v1.10.17 => github.com/status-im/go-ethereum v1.10.4-status.2
-
-replace github.com/xmtp/proto/v3 v3.36.1-0.20231219054634-2ff03b7d5090 => github.com/Bren2010/proto/v3 v3.0.0-20240104022019-f50c3c99cd1d
