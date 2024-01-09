@@ -9,3 +9,7 @@ CREATE TABLE messages (
     content BYTEA,
     CONSTRAINT idx_messages_topic_tid PRIMARY KEY (topic, tid)
 );
+
+--bun:split
+
+CREATE INDEX idx_messages_topic_created_at ON messages(topic, created_at);

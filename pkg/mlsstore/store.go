@@ -32,6 +32,7 @@ type MlsStore interface {
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error)
 	QueryMessages(ctx context.Context, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error)
+	NewKeyPackage(installationId []byte, data []byte, isLastResort bool) *KeyPackage
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -50,7 +51,7 @@ func New(ctx context.Context, config Config) (*Store, error) {
 
 // Creates the installation and last resort key package
 func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error {
-	createdAt := nowNs()
+	createdAt := s.nowNs()
 
 	installation := Installation{
 		ID:                 installationId,
@@ -158,7 +159,7 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) error {
 	_, err := s.db.NewUpdate().
 		Model(&Installation{}).
-		Set("revoked_at = ?", nowNs()).
+		Set("revoked_at = ?", s.nowNs()).
 		Where("id = ?", installationId).
 		Where("revoked_at IS NULL").
 		Exec(ctx)
@@ -167,7 +168,7 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 }
 
 func (s *Store) InsertMessage(ctx context.Context, topic string, content []byte) (*messagev1.Envelope, error) {
-	createdAt := time.Now().UTC()
+	createdAt := s.config.now()
 
 	message := Message{
 		Topic:     topic,
@@ -214,7 +215,7 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
 		q = q.Order("tid DESC")
 	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
-		q = q.Order("tid DESC")
+		q = q.Order("tid ASC")
 	}
 
 	pageSize := maxPageSize
@@ -228,16 +229,18 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 		if index.SenderTimeNs == 0 || len(index.Digest) == 0 {
 			return nil, errors.New("invalid cursor")
 		}
-		cursorTID := buildMessageTID(time.Unix(0, int64(index.SenderTimeNs)), index.Digest)
-		q = q.Where("tid > ?", cursorTID)
+		cursorTID := buildMessageTIDFromCursor(index)
+		if direction == messagev1.SortDirection_SORT_DIRECTION_ASCENDING {
+			q = q.Where("tid > ?", cursorTID)
+		} else {
+			q = q.Where("tid < ?", cursorTID)
+		}
 	} else {
 		if query.StartTimeNs > 0 {
-			startTID := buildMessageTIDPrefix(time.Unix(0, int64(query.StartTimeNs)))
-			q = q.Where("tid > ?", startTID)
+			q = q.Where("created_at >= ?", query.StartTimeNs)
 		}
 		if query.EndTimeNs > 0 {
-			endTID := buildMessageTIDPrefix(time.Unix(0, int64(query.EndTimeNs)))
-			q = q.Where("tid < ?", endTID)
+			q = q.Where("created_at <= ?", query.EndTimeNs)
 		}
 	}
 
@@ -259,7 +262,7 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 	if len(envs) >= pageSize {
 		if len(envs) > 0 {
 			lastEnv := envs[len(envs)-1]
-			digest := sha256.Sum256(lastEnv.Message)
+			digest := buildMessageContentDigest(lastEnv.Message)
 			pagingInfo.Cursor = &messagev1.Cursor{
 				Cursor: &messagev1.Cursor_Index{
 					Index: &messagev1.IndexCursor{
@@ -278,11 +281,20 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 }
 
 func buildMessageTID(createdAt time.Time, content []byte) string {
-	return fmt.Sprintf("%s_%x", buildMessageTIDPrefix(createdAt), sha256.Sum256(content))
+	return fmt.Sprintf("%s%x", buildMessageTIDPrefix(createdAt), buildMessageContentDigest(content))
+}
+
+func buildMessageTIDFromCursor(index *messagev1.IndexCursor) string {
+	return fmt.Sprintf("%s%x", buildMessageTIDPrefix(time.Unix(0, int64(index.SenderTimeNs)).UTC()), index.Digest)
 }
 
 func buildMessageTIDPrefix(createdAt time.Time) string {
 	return fmt.Sprintf("%s.%09d_", createdAt.Format(time.RFC3339), createdAt.Nanosecond())
+}
+
+func buildMessageContentDigest(content []byte) []byte {
+	digest := sha256.Sum256(content)
+	return digest[:]
 }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -304,8 +316,8 @@ func (s *Store) migrate(ctx context.Context) error {
 	return nil
 }
 
-func nowNs() int64 {
-	return time.Now().UTC().UnixNano()
+func (s *Store) nowNs() int64 {
+	return s.config.now().UnixNano()
 }
 
 type IdentityUpdateKind int
