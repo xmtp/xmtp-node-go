@@ -5,11 +5,13 @@ import (
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	proto "github.com/xmtp/proto/v3/go/message_api/v3"
+	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
+	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -22,17 +24,15 @@ type Service struct {
 
 	log               *zap.Logger
 	waku              *wakunode.WakuNode
-	messageStore      *store.Store
-	mlsStore          mlsstore.MlsStore
+	store             mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
 		log:               logger.Named("message/v3"),
 		waku:              node,
-		messageStore:      messageStore,
-		mlsStore:          mlsStore,
+		store:             store,
 		validationService: validationService,
 	}
 
@@ -57,7 +57,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	accountAddress := results[0].AccountAddress
 	credentialIdentity := results[0].CredentialIdentity
 
-	if err = s.mlsStore.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
+	if err = s.store.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +68,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 
 func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPackagesRequest) (*proto.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationIds
-	installations, err := s.mlsStore.FetchKeyPackages(ctx, ids)
+	installations, err := s.store.FetchKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to fetch key packages: %s", err)
 	}
@@ -133,7 +133,7 @@ func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupR
 
 func (s *Service) publishMessage(ctx context.Context, contentTopic string, message []byte) error {
 	log := s.log.Named("publish-mls").With(zap.String("content_topic", contentTopic))
-	env, err := s.messageStore.InsertMLSMessage(ctx, contentTopic, message)
+	env, err := s.store.InsertMessage(ctx, contentTopic, message)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 	}
@@ -181,7 +181,7 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPack
 	installationId := validationResults[0].InstallationId
 	expiration := validationResults[0].Expiration
 
-	if err = s.mlsStore.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
+	if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -198,7 +198,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	}
 
 	accountAddresses := req.AccountAddresses
-	updates, err := s.mlsStore.GetIdentityUpdates(ctx, req.AccountAddresses, int64(req.StartTimeNs))
+	updates, err := s.store.GetIdentityUpdates(ctx, req.AccountAddresses, int64(req.StartTimeNs))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get identity updates: %s", err)
 	}
@@ -219,6 +219,40 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	return &proto.GetIdentityUpdatesResponse{
 		Updates: resUpdates,
 	}, nil
+}
+
+func (s *Service) QueryMessages(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
+	log.Debug("received request")
+
+	if len(req.ContentTopics) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
+	}
+
+	if len(req.ContentTopics) > 1 {
+		ri := apicontext.NewRequesterInfo(ctx)
+		log.Info("query with multiple topics", ri.ZapFields()...)
+	} else {
+		log = log.With(zap.String("topic_type", topic.Category(req.ContentTopics[0])))
+	}
+	log = log.With(logging.QueryParameters(req))
+	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
+		ri := apicontext.NewRequesterInfo(ctx)
+		log.Info("query with time filters", append(
+			ri.ZapFields(),
+			zap.Uint64("start_time", req.StartTimeNs),
+			zap.Uint64("end_time", req.EndTimeNs),
+		)...)
+	}
+
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != nil {
+		cursor := req.PagingInfo.Cursor.GetIndex()
+		if cursor != nil && cursor.SenderTimeNs == 0 && cursor.Digest == nil {
+			log.Info("query with partial cursor", zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)), zap.Any("cursor_digest", cursor.Digest))
+		}
+	}
+
+	return s.store.QueryMessages(req)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {

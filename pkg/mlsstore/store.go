@@ -8,6 +8,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
+	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	mlsMigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	"go.uber.org/zap"
 )
@@ -23,6 +24,8 @@ type MlsStore interface {
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
+	InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error)
+	QueryMessages(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -155,6 +158,14 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 		Exec(ctx)
 
 	return err
+}
+
+func (s *Store) InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *Store) QueryMessages(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error) {
+	return nil, errors.New("not implemented")
 }
 
 func (s *Store) migrate(ctx context.Context) error {

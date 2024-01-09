@@ -171,3 +171,34 @@ func TestIdentityUpdateSort(t *testing.T) {
 	require.Equal(t, updates[1].TimestampNs, uint64(2))
 	require.Equal(t, updates[2].TimestampNs, uint64(3))
 }
+
+// TODO: implemented this
+// func TestMessagePublish(t *testing.T) {
+// 	store, cleanup, _ := createAndFillDb(t)
+// 	defer cleanup()
+
+// 	message := []byte{1, 2, 3}
+// 	contentTopic := "foo"
+// 	ctx := context.Background()
+
+// 	env, err := store.InsertMLSMessage(ctx, contentTopic, message)
+// 	require.NoError(t, err)
+
+// 	require.Equal(t, env.ContentTopic, contentTopic)
+// 	require.Equal(t, env.Message, message)
+
+// 	response, err := store.Query(&messagev1.QueryRequest{
+// 		ContentTopics: []string{contentTopic},
+// 	})
+// 	require.NoError(t, err)
+// 	require.Len(t, response.Envelopes, 1)
+// 	require.Equal(t, response.Envelopes[0].Message, message)
+// 	require.Equal(t, response.Envelopes[0].ContentTopic, contentTopic)
+// 	require.NotNil(t, response.Envelopes[0].TimestampNs)
+
+// 	parsedTime := time.Unix(0, int64(response.Envelopes[0].TimestampNs))
+// 	// Sanity check to ensure that the timestamps are reasonable
+// 	require.True(t, time.Since(parsedTime) < 10*time.Second || time.Since(parsedTime) > -10*time.Second)
+
+// 	require.Equal(t, env.TimestampNs, response.Envelopes[0].TimestampNs)
+// }
