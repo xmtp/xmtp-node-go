@@ -2,6 +2,7 @@ package mlsstore
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -70,12 +71,22 @@ func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage
 		Expiration: expiration,
 	}
 
-	_, err := s.db.NewUpdate().
+	res, err := s.db.NewUpdate().
 		Model(&installation).
 		OmitZero().
 		WherePK().
 		Exec(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("installation id unknown")
+	}
+	return nil
 }
 
 func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error) {
