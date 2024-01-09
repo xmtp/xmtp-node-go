@@ -2,7 +2,9 @@ package mlsstore
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 )
 
 // TODO(snormore): implements metrics + cleaner
+
+const maxPageSize = 100
 
 type Store struct {
 	config Config
@@ -163,12 +167,12 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 }
 
 func (s *Store) InsertMessage(ctx context.Context, topic string, content []byte) (*messagev1.Envelope, error) {
-	createdAt := nowNs()
+	createdAt := time.Now().UTC()
 
 	message := Message{
-		TID:       topic + "",
 		Topic:     topic,
-		CreatedAt: createdAt,
+		TID:       buildMessageTID(createdAt, content),
+		CreatedAt: createdAt.UnixNano(),
 		Content:   content,
 	}
 
@@ -182,7 +186,7 @@ func (s *Store) InsertMessage(ctx context.Context, topic string, content []byte)
 
 	return &messagev1.Envelope{
 		ContentTopic: topic,
-		TimestampNs:  uint64(createdAt),
+		TimestampNs:  uint64(message.CreatedAt),
 		Message:      content,
 	}, nil
 }
@@ -190,21 +194,57 @@ func (s *Store) InsertMessage(ctx context.Context, topic string, content []byte)
 func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
 	messages := make([]*Message, 0)
 
-	err := s.db.NewSelect().
-		Model(&messages).
-		Where("topic IN (?)", bun.In(query.ContentTopics)).
-		// WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
-		// 	return q.Where("created_at > ?", startTimeNs).WhereOr("revoked_at > ?", startTimeNs)
-		// }).
-		Order("created_at ASC").
-		Scan(ctx)
+	if len(query.ContentTopics) == 0 {
+		return nil, errors.New("topic is required")
+	}
 
+	if len(query.ContentTopics) > 1 {
+		return nil, errors.New("multiple topics not supported")
+	}
+
+	q := s.db.NewSelect().
+		Model(&messages).
+		Where("topic = ?", query.ContentTopics[0])
+
+	direction := messagev1.SortDirection_SORT_DIRECTION_DESCENDING
+	if query.PagingInfo != nil && query.PagingInfo.Direction != messagev1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = query.PagingInfo.Direction
+	}
+	switch direction {
+	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
+		q = q.Order("tid DESC")
+	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
+		q = q.Order("tid DESC")
+	}
+
+	pageSize := maxPageSize
+	if query.PagingInfo != nil && query.PagingInfo.Limit > 0 && query.PagingInfo.Limit <= maxPageSize {
+		pageSize = int(query.PagingInfo.Limit)
+	}
+	q = q.Limit(pageSize)
+
+	if query.PagingInfo != nil && query.PagingInfo.GetCursor() != nil && query.PagingInfo.GetCursor().GetIndex() != nil {
+		index := query.PagingInfo.GetCursor().GetIndex()
+		if index.SenderTimeNs == 0 || len(index.Digest) == 0 {
+			return nil, errors.New("invalid cursor")
+		}
+		cursorTID := buildMessageTID(time.Unix(0, int64(index.SenderTimeNs)), index.Digest)
+		q = q.Where("tid > ?", cursorTID)
+	} else {
+		if query.StartTimeNs > 0 {
+			startTID := buildMessageTIDPrefix(time.Unix(0, int64(query.StartTimeNs)))
+			q = q.Where("tid > ?", startTID)
+		}
+		if query.EndTimeNs > 0 {
+			endTID := buildMessageTIDPrefix(time.Unix(0, int64(query.EndTimeNs)))
+			q = q.Where("tid < ?", endTID)
+		}
+	}
+
+	err := q.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: move api to api/mls/v1
-	// TODO: finish implementing all of this (query request variations, pagination, etc)
 
 	envs := make([]*messagev1.Envelope, 0, len(messages))
 	for _, msg := range messages {
@@ -214,9 +254,35 @@ func (s *Store) QueryMessages(ctx context.Context, query *messagev1.QueryRequest
 			Message:      msg.Content,
 		})
 	}
+
+	pagingInfo := &messagev1.PagingInfo{Limit: 0, Cursor: nil, Direction: direction}
+	if len(envs) >= pageSize {
+		if len(envs) > 0 {
+			lastEnv := envs[len(envs)-1]
+			digest := sha256.Sum256(lastEnv.Message)
+			pagingInfo.Cursor = &messagev1.Cursor{
+				Cursor: &messagev1.Cursor_Index{
+					Index: &messagev1.IndexCursor{
+						Digest:       digest[:],
+						SenderTimeNs: lastEnv.TimestampNs,
+					},
+				},
+			}
+		}
+	}
+
 	return &messagev1.QueryResponse{
-		Envelopes: envs,
+		Envelopes:  envs,
+		PagingInfo: pagingInfo,
 	}, nil
+}
+
+func buildMessageTID(createdAt time.Time, content []byte) string {
+	return fmt.Sprintf("%s_%x", buildMessageTIDPrefix(createdAt), sha256.Sum256(content))
+}
+
+func buildMessageTIDPrefix(createdAt time.Time) string {
+	return fmt.Sprintf("%s.%09d_", createdAt.Format(time.RFC3339), createdAt.Nanosecond())
 }
 
 func (s *Store) migrate(ctx context.Context) error {
