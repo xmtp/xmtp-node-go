@@ -172,7 +172,7 @@ func TestIdentityUpdateSort(t *testing.T) {
 	require.Equal(t, updates[2].TimestampNs, uint64(3))
 }
 
-// TODO: implemented this
+// TODO(snormore): implemented this
 // func TestMessagePublish(t *testing.T) {
 // 	store, cleanup, _ := createAndFillDb(t)
 // 	defer cleanup()

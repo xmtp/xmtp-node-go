@@ -230,7 +230,7 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	require.Equal(t, []*proto.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
-// TODO: fix this
+// TODO(snormore): fix this
 // func TestPublishToGroup(t *testing.T) {
 // 	ctx := context.Background()
 // 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)

@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO(snormore): implements metrics + cleaner
+
 type Store struct {
 	config Config
 	log    *zap.Logger
