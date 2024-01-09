@@ -3,6 +3,3 @@ SET
 
 --bun:split
 DROP TABLE IF EXISTS installations;
-
---bun:split
-DROP TABLE IF EXISTS key_packages;

@@ -49,6 +49,7 @@ func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []by
 			InstallationId:     installationId,
 			AccountAddress:     accountAddress,
 			CredentialIdentity: []byte("test"),
+			Expiration:         0,
 		},
 	}, nil)
 }
@@ -102,7 +103,7 @@ func TestRegisterInstallation(t *testing.T) {
 	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -126,7 +127,7 @@ func TestRegisterInstallationError(t *testing.T) {
 	mlsValidationService.On("ValidateKeyPackages", ctx, mock.Anything).Return(nil, errors.New("error validating"))
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -134,7 +135,7 @@ func TestRegisterInstallationError(t *testing.T) {
 	require.Nil(t, res)
 }
 
-func TestUploadKeyPackages(t *testing.T) {
+func TestUploadKeyPackage(t *testing.T) {
 	ctx := context.Background()
 	svc, mlsDb, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -145,28 +146,27 @@ func TestUploadKeyPackages(t *testing.T) {
 	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	uploadRes, err := svc.UploadKeyPackages(ctx, &proto.UploadKeyPackagesRequest{
-		KeyPackages: []*proto.KeyPackageUpload{
-			{KeyPackageTlsSerialized: []byte("test2")},
+	uploadRes, err := svc.UploadKeyPackage(ctx, &proto.UploadKeyPackageRequest{
+		KeyPackage: &proto.KeyPackageUpload{
+			KeyPackageTlsSerialized: []byte("test2"),
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, uploadRes)
 
-	keyPackages := []mlsstore.KeyPackage{}
-	err = mlsDb.NewSelect().Model(&keyPackages).Where("installation_id = ?", installationId).Scan(ctx)
+	installation := &mlsstore.Installation{}
+	err = mlsDb.NewSelect().Model(installation).Where("id = ?", installationId).Scan(ctx)
 	require.NoError(t, err)
-	require.Len(t, keyPackages, 2)
 }
 
-func TestConsumeKeyPackages(t *testing.T) {
+func TestFetchKeyPackages(t *testing.T) {
 	ctx := context.Background()
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -177,7 +177,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, accountAddress1)
 
 	res, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -192,14 +192,14 @@ func TestConsumeKeyPackages(t *testing.T) {
 	mlsValidationService.mockValidateKeyPackages(installationId2, accountAddress2)
 
 	res, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	consumeRes, err := svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
+	consumeRes, err := svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{installationId1, installationId2},
 	})
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestConsumeKeyPackages(t *testing.T) {
 	require.Equal(t, []byte("test2"), consumeRes.KeyPackages[1].KeyPackageTlsSerialized)
 
 	// Now do it with the installationIds reversed
-	consumeRes, err = svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
+	consumeRes, err = svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{installationId2, installationId1},
 	})
 
@@ -220,17 +220,17 @@ func TestConsumeKeyPackages(t *testing.T) {
 	require.Equal(t, []byte("test"), consumeRes.KeyPackages[1].KeyPackageTlsSerialized)
 }
 
-// Trying to consume key packages that don't exist should fail
-func TestConsumeKeyPackagesFail(t *testing.T) {
+// Trying to fetch key packages that don't exist should return nil
+func TestFetchKeyPackagesFail(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	consumeRes, err := svc.ConsumeKeyPackages(ctx, &proto.ConsumeKeyPackagesRequest{
+	consumeRes, err := svc.FetchKeyPackages(ctx, &proto.FetchKeyPackagesRequest{
 		InstallationIds: [][]byte{test.RandomBytes(32)},
 	})
-	require.Error(t, err)
-	require.Nil(t, consumeRes)
+	require.Nil(t, err)
+	require.Equal(t, []*proto.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
 func TestPublishToGroup(t *testing.T) {
@@ -273,7 +273,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
 
 	_, err := svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})
@@ -297,7 +297,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	mockCall.Unset()
 	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), accountAddress)
 	_, err = svc.RegisterInstallation(ctx, &proto.RegisterInstallationRequest{
-		LastResortKeyPackage: &proto.KeyPackageUpload{
+		KeyPackage: &proto.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
 	})

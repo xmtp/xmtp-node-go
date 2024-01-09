@@ -2,9 +2,6 @@ package mlsstore
 
 import (
 	"context"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/hex"
 	"errors"
 	"sort"
 	"time"
@@ -22,9 +19,9 @@ type Store struct {
 }
 
 type MlsStore interface {
-	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error
-	InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage) error
-	ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error)
+	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error
+	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
+	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 }
 
@@ -43,83 +40,67 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, lastResortKeyPackage []byte, credentialIdentity []byte) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error {
 	createdAt := nowNs()
 
 	installation := Installation{
 		ID:                 installationId,
 		WalletAddress:      walletAddress,
 		CreatedAt:          createdAt,
+		UpdatedAt:          createdAt,
 		CredentialIdentity: credentialIdentity,
+
+		KeyPackage: keyPackage,
+		Expiration: expiration,
 	}
 
-	keyPackage := NewKeyPackage(installationId, lastResortKeyPackage, true)
-
-	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		_, err := tx.NewInsert().
-			Model(&installation).
-			Ignore().
-			Exec(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.NewInsert().
-			Model(keyPackage).
-			Ignore().
-			Exec(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-// Insert a batch of key packages, ignoring any that may already exist
-func (s *Store) InsertKeyPackages(ctx context.Context, keyPackages []*KeyPackage) error {
-	_, err := s.db.NewInsert().Model(&keyPackages).Ignore().Exec(ctx)
+	_, err := s.db.NewInsert().
+		Model(&installation).
+		Ignore().
+		Exec(ctx)
 	return err
 }
 
-func (s *Store) ConsumeKeyPackages(ctx context.Context, installationIds [][]byte) ([]*KeyPackage, error) {
-	keyPackages := make([]*KeyPackage, 0)
-	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
-		err := tx.NewRaw(`
-			SELECT DISTINCT ON(installation_id) * FROM key_packages
-			WHERE "installation_id" IN (?)
-			AND not_consumed = TRUE
-			ORDER BY installation_id ASC, is_last_resort ASC, created_at ASC
-			`,
-			bun.In(installationIds)).
-			Scan(ctx, &keyPackages)
+// Insert a new key package, ignoring any that may already exist
+func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error {
+	installation := Installation{
+		ID:        installationId,
+		UpdatedAt: nowNs(),
 
-		if err != nil {
-			return err
-		}
+		KeyPackage: keyPackage,
+		Expiration: expiration,
+	}
 
-		if len(keyPackages) < len(installationIds) {
-			return errors.New("key packages not found")
-		}
-
-		_, err = tx.NewUpdate().
-			Table("key_packages").
-			Set("consumed_at = ?", nowNs()).
-			Set("not_consumed = FALSE").
-			Where("is_last_resort = FALSE").
-			Where("id IN (?)", bun.In(extractIds(keyPackages))).
-			Exec(ctx)
-
+	res, err := s.db.NewUpdate().
+		Model(&installation).
+		OmitZero().
+		WherePK().
+		Exec(ctx)
+	if err != nil {
 		return err
-	})
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("installation id unknown")
+	}
+	return nil
+}
 
+func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error) {
+	installations := make([]*Installation, 0)
+
+	err := s.db.NewSelect().
+		Model(&installations).
+		Where("ID IN (?)", bun.In(installationIds)).
+		Scan(ctx, &installations)
 	if err != nil {
 		return nil, err
 	}
 
-	return keyPackages, nil
+	return installations, nil
 }
 
 func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
@@ -176,25 +157,6 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 	return err
 }
 
-func NewKeyPackage(installationId []byte, data []byte, isLastResort bool) *KeyPackage {
-	return &KeyPackage{
-		ID:             buildKeyPackageId(data),
-		InstallationId: installationId,
-		CreatedAt:      nowNs(),
-		IsLastResort:   isLastResort,
-		NotConsumed:    true,
-		Data:           data,
-	}
-}
-
-func extractIds(keyPackages []*KeyPackage) []string {
-	out := make([]string, len(keyPackages))
-	for i, keyPackage := range keyPackages {
-		out[i] = keyPackage.ID
-	}
-	return out
-}
-
 func (s *Store) migrate(ctx context.Context) error {
 	migrator := migrate.NewMigrator(s.db, mlsMigrations.Migrations)
 	err := migrator.Init(ctx)
@@ -216,11 +178,6 @@ func (s *Store) migrate(ctx context.Context) error {
 
 func nowNs() int64 {
 	return time.Now().UTC().UnixNano()
-}
-
-func buildKeyPackageId(keyPackageData []byte) string {
-	digest := sha256.Sum256(keyPackageData)
-	return hex.EncodeToString(digest[:])
 }
 
 type IdentityUpdateKind int
