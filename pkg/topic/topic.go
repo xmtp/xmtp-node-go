@@ -39,6 +39,10 @@ func Category(contentTopic string) string {
 	return "invalid"
 }
 
+func IsV3(topic string) bool {
+	return strings.HasPrefix(topic, "/xmtp/3/")
+}
+
 func BuildGroupTopic(groupId string) string {
 	return fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)
 }

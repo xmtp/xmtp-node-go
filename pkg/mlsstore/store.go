@@ -15,8 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// TODO(snormore): implements metrics + cleaner
-
 const maxPageSize = 100
 
 type Store struct {
@@ -36,6 +34,11 @@ type MlsStore interface {
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
+	if config.now == nil {
+		config.now = func() time.Time {
+			return time.Now().UTC()
+		}
+	}
 	s := &Store{
 		log:    config.Log.Named("mlsstore"),
 		db:     config.DB,

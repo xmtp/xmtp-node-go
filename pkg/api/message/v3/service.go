@@ -5,10 +5,7 @@ import (
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	proto "github.com/xmtp/proto/v3/go/message_api/v3"
-	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
-	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -219,40 +216,6 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	return &proto.GetIdentityUpdatesResponse{
 		Updates: resUpdates,
 	}, nil
-}
-
-func (s *Service) QueryMessages(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
-	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
-	log.Debug("received request")
-
-	if len(req.ContentTopics) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
-	}
-
-	if len(req.ContentTopics) > 1 {
-		ri := apicontext.NewRequesterInfo(ctx)
-		log.Info("query with multiple topics", ri.ZapFields()...)
-	} else {
-		log = log.With(zap.String("topic_type", topic.Category(req.ContentTopics[0])))
-	}
-	log = log.With(logging.QueryParameters(req))
-	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
-		ri := apicontext.NewRequesterInfo(ctx)
-		log.Info("query with time filters", append(
-			ri.ZapFields(),
-			zap.Uint64("start_time", req.StartTimeNs),
-			zap.Uint64("end_time", req.EndTimeNs),
-		)...)
-	}
-
-	if req.PagingInfo != nil && req.PagingInfo.Cursor != nil {
-		cursor := req.PagingInfo.Cursor.GetIndex()
-		if cursor != nil && cursor.SenderTimeNs == 0 && cursor.Digest == nil {
-			log.Info("query with partial cursor", zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)), zap.Any("cursor_digest", cursor.Digest))
-		}
-	}
-
-	return s.store.QueryMessages(ctx, req)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {

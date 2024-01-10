@@ -20,6 +20,7 @@ import (
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -44,9 +45,10 @@ type Service struct {
 	proto.UnimplementedMessageApiServer
 
 	// Configured as constructor options.
-	log   *zap.Logger
-	waku  *wakunode.WakuNode
-	store *store.Store
+	log      *zap.Logger
+	waku     *wakunode.WakuNode
+	store    *store.Store
+	mlsStore mlsstore.MlsStore
 
 	// Configured internally.
 	ctx       context.Context
@@ -58,11 +60,12 @@ type Service struct {
 	nc *nats.Conn
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store) (s *Service, err error) {
+func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store, mlsStore mlsstore.MlsStore) (s *Service, err error) {
 	s = &Service{
-		waku:  node,
-		log:   logger.Named("message/v1"),
-		store: store,
+		waku:     node,
+		log:      logger.Named("message/v1"),
+		store:    store,
+		mlsStore: mlsStore,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -367,6 +370,24 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
+	var hasV3Topic, hasNonV3Topic bool
+	for _, contentTopic := range req.ContentTopics {
+		if topic.IsV3(contentTopic) {
+			hasV3Topic = true
+		} else {
+			hasNonV3Topic = true
+		}
+	}
+	if hasV3Topic && hasNonV3Topic {
+		return nil, errors.New("cannot query v3 topics with non-v3 topics")
+	}
+	if hasV3Topic {
+		if s.mlsStore == nil {
+			return nil, errors.New("mls store not configured")
+		}
+		return s.mlsStore.QueryMessages(ctx, req)
+	}
+
 	return s.store.Query(req)
 }
 
@@ -385,6 +406,29 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	responses := make([]*proto.QueryResponse, 0)
 	for _, query := range req.Requests {
 		// We execute the query using the existing Query API
+
+		var hasV3Topic, hasNonV3Topic bool
+		for _, contentTopic := range query.ContentTopics {
+			if topic.IsV3(contentTopic) {
+				hasV3Topic = true
+			} else {
+				hasNonV3Topic = true
+			}
+		}
+		if hasV3Topic && hasNonV3Topic {
+			return nil, errors.New("cannot query v3 topics with non-v3 topics")
+		}
+		if hasV3Topic {
+			if s.mlsStore == nil {
+				return nil, errors.New("mls store not configured")
+			}
+			resp, err := s.mlsStore.QueryMessages(ctx, query)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
+			responses = append(responses, resp)
+		}
+
 		resp, err := s.Query(ctx, query)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())

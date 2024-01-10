@@ -15,8 +15,6 @@ go run cmd/xmtpd/main.go \
     --store.reader-db-connection-string "${MESSAGE_DB_DSN}" \
     --store.metrics-period 5s \
     --mls-store.db-connection-string "${MESSAGE_DB_DSN}" \
-    # --mls-store.reader-db-connection-string "${MESSAGE_DB_DSN}" \
-    # --mls-store.metrics-period 5s \
     --authz-db-connection-string "${AUTHZ_DB_DSN}" \
     --go-profiling \
     "$@"
