@@ -30,7 +30,6 @@ type MlsStore interface {
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertMessage(ctx context.Context, contentTopic string, data []byte) (*messagev1.Envelope, error)
 	QueryMessages(ctx context.Context, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error)
-	NewKeyPackage(installationId []byte, data []byte, isLastResort bool) *KeyPackage
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -78,7 +77,7 @@ func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, w
 func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error {
 	installation := Installation{
 		ID:        installationId,
-		UpdatedAt: nowNs(),
+		UpdatedAt: s.nowNs(),
 
 		KeyPackage: keyPackage,
 		Expiration: expiration,
