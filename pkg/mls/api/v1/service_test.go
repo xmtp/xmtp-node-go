@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
-	proto "github.com/xmtp/proto/v3/go/message_api/v3"
+	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
 	messageContents "github.com/xmtp/proto/v3/go/mls/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -254,7 +254,7 @@ func TestPublishToGroup(t *testing.T) {
 	require.NoError(t, err)
 
 	results, err := svc.messageStore.Query(&v1.QueryRequest{
-		ContentTopics: []string{fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)},
+		ContentTopics: []string{fmt.Sprintf("/xmtp/mls/1/g-%s/proto", groupId)},
 	})
 	require.NoError(t, err)
 	require.Len(t, results.Envelopes, 1)

@@ -5,7 +5,7 @@ import (
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	proto "github.com/xmtp/proto/v3/go/message_api/v3"
+	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -29,7 +29,7 @@ type Service struct {
 
 func NewService(node *wakunode.WakuNode, logger *zap.Logger, messageStore *store.Store, mlsStore mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
-		log:               logger.Named("message/v3"),
+		log:               logger.Named("mls/v1"),
 		waku:              node,
 		messageStore:      messageStore,
 		mlsStore:          mlsStore,
