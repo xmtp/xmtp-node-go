@@ -174,8 +174,8 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 		}
 
 		// TODO: Wrap this in a transaction so publishing is all or nothing
-		wakuTopic := topic.BuildGroupTopic(result.GroupId)
-		msg, err := s.store.InsertGroupMessage(ctx, result.GroupId, data)
+		wakuTopic := topic.BuildGroupTopic([]byte(result.GroupId))
+		msg, err := s.store.InsertGroupMessage(ctx, []byte(result.GroupId), data)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
@@ -203,7 +203,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 		wakuTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
 		data := welcome.WelcomeMessage.GetV1().Data
 
-		msg, err := s.store.InsertWelcomeMessage(ctx, string(welcome.InstallationId), data)
+		msg, err := s.store.InsertWelcomeMessage(ctx, welcome.InstallationId, data)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
@@ -297,7 +297,7 @@ func validateGetIdentityUpdatesRequest(req *proto.GetIdentityUpdatesRequest) err
 }
 
 func requireReadyToSend(groupId string, message []byte) error {
-	if groupId == "" {
+	if len(groupId) == 0 {
 		return status.Errorf(codes.InvalidArgument, "group id is empty")
 	}
 	if len(message) == 0 {

@@ -39,7 +39,7 @@ func Category(contentTopic string) string {
 	return "invalid"
 }
 
-func BuildGroupTopic(groupId string) string {
+func BuildGroupTopic(groupId []byte) string {
 	return fmt.Sprintf("/xmtp/mls/1/g-%s/proto", groupId)
 }
 

@@ -5,7 +5,7 @@ SET statement_timeout = 0;
 CREATE TABLE group_messages (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    group_id VARCHAR(200) NOT NULL,
+    group_id BYTEA NOT NULL,
     data BYTEA
 );
 
@@ -18,7 +18,7 @@ CREATE INDEX idx_group_messages_group_id_created_at ON group_messages(group_id, 
 CREATE TABLE welcome_messages (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    installation_id VARCHAR(200) NOT NULL,
+    installation_id BYTEA NOT NULL,
     data BYTEA
 );
 

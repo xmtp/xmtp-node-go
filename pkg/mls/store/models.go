@@ -25,7 +25,7 @@ type GroupMessage struct {
 
 	Id        uint64    `bun:",pk,notnull"`
 	CreatedAt time.Time `bun:",notnull"`
-	GroupId   string    `bun:",notnull"`
+	GroupId   []byte    `bun:",notnull,type:bytea"`
 	Data      []byte    `bun:",notnull,type:bytea"`
 }
 
@@ -34,6 +34,6 @@ type WelcomeMessage struct {
 
 	Id             uint64    `bun:",pk,notnull"`
 	CreatedAt      time.Time `bun:",notnull"`
-	InstallationId string    `bun:",notnull"`
+	InstallationId []byte    `bun:",notnull,type:bytea"`
 	Data           []byte    `bun:",notnull,type:bytea"`
 }

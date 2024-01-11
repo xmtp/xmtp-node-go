@@ -51,10 +51,10 @@ func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []by
 	}, nil)
 }
 
-func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId string) *mock.Call {
+func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId []byte) *mock.Call {
 	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
 		{
-			GroupId: groupId,
+			GroupId: string(groupId),
 		},
 	}, nil)
 }
@@ -225,7 +225,7 @@ func TestSendGroupMessages(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	groupId := test.RandomString(32)
+	groupId := []byte(test.RandomString(32))
 
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
@@ -235,7 +235,7 @@ func TestSendGroupMessages(t *testing.T) {
 				V1: &message_contents.GroupMessage_V1{
 					Id:        1,
 					CreatedNs: 1,
-					GroupId:   "group",
+					GroupId:   groupId,
 					Data:      []byte("test"),
 				},
 			},
@@ -257,7 +257,7 @@ func TestSendWelcomeMessages(t *testing.T) {
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	installationId := test.RandomString(32)
+	installationId := []byte(test.RandomString(32))
 
 	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
 		WelcomeMessages: []*mlsv1.SendWelcomeMessagesRequest_WelcomeMessageRequest{

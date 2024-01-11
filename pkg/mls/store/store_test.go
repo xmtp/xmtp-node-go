@@ -175,17 +175,17 @@ func TestIdentityUpdateSort(t *testing.T) {
 }
 
 func TestInsertGroupMessage_Single(t *testing.T) {
-	started := time.Now().UTC()
+	started := time.Now().UTC().Add(-time.Second)
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertGroupMessage(ctx, "installation", []byte("data"))
+	msg, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, uint64(1), msg.Id)
 	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
-	require.Equal(t, "installation", msg.GroupId)
+	require.Equal(t, []byte("group"), msg.GroupId)
 	require.Equal(t, []byte("data"), msg.Data)
 
 	msgs := make([]*GroupMessage, 0)
@@ -200,11 +200,11 @@ func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, "group", []byte("data1"))
+	_, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data1"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group", []byte("data2"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data2"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group", []byte("data3"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data3"))
 	require.NoError(t, err)
 
 	msgs := make([]*GroupMessage, 0)
@@ -217,17 +217,17 @@ func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 }
 
 func TestInsertWelcomeMessage_Single(t *testing.T) {
-	started := time.Now().UTC()
+	started := time.Now().UTC().Add(-time.Second)
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, "group", []byte("data"))
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, uint64(1), msg.Id)
 	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
-	require.Equal(t, "group", msg.InstallationId)
+	require.Equal(t, []byte("installation"), msg.InstallationId)
 	require.Equal(t, []byte("data"), msg.Data)
 
 	msgs := make([]*WelcomeMessage, 0)
@@ -242,11 +242,11 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, "installation", []byte("data1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation", []byte("data2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation", []byte("data3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"))
 	require.NoError(t, err)
 
 	msgs := make([]*WelcomeMessage, 0)
@@ -285,21 +285,21 @@ func TestQueryGroupMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, "group1", []byte("data1"))
+	_, err := store.InsertGroupMessage(ctx, []byte("group1"), []byte("data1"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group2", []byte("data2"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("data2"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("data3"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("data3"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "unknown",
+		GroupId: []byte("unknown"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 0)
 
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 2)
@@ -307,7 +307,7 @@ func TestQueryGroupMessagesV1_Filter(t *testing.T) {
 	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
 
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group2",
+		GroupId: []byte("group2"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
@@ -315,7 +315,7 @@ func TestQueryGroupMessagesV1_Filter(t *testing.T) {
 
 	// Sort ascending
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
 		},
@@ -331,21 +331,21 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, "installation1", []byte("data1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("data2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("data3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "unknown",
+		InstallationId: []byte("unknown"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 0)
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 2)
@@ -353,7 +353,7 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation2",
+		InstallationId: []byte("installation2"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
@@ -361,7 +361,7 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 
 	// Sort ascending
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
 		},
@@ -377,25 +377,25 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, "group1", []byte("content1"))
+	_, err := store.InsertGroupMessage(ctx, []byte("group1"), []byte("content1"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group2", []byte("content2"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("content2"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content3"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content3"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group2", []byte("content4"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("content4"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content5"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content5"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content6"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content6"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content7"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content7"))
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, "group1", []byte("content8"))
+	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content8"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 6)
@@ -410,7 +410,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 	fifthMsg := resp.Messages[4]
 
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit: 2,
 		},
@@ -422,7 +422,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 
 	// Order descending by default
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:  2,
 			Cursor: thirdMsg.GetV1().Id,
@@ -435,7 +435,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId:    "group1",
+		GroupId:    []byte("group1"),
 		PagingInfo: resp.PagingInfo,
 	})
 	require.NoError(t, err)
@@ -444,7 +444,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 
 	// Order ascending
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId: "group1",
+		GroupId: []byte("group1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:     2,
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
@@ -458,7 +458,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
-		GroupId:    "group1",
+		GroupId:    []byte("group1"),
 		PagingInfo: resp.PagingInfo,
 	})
 	require.NoError(t, err)
@@ -472,25 +472,25 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, "installation1", []byte("content1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("content2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation2", []byte("content4"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content5"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content6"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content7"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, "installation1", []byte("content8"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 6)
@@ -505,7 +505,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	fifthMsg := resp.Messages[4]
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit: 2,
 		},
@@ -517,7 +517,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Order descending by default
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:  2,
 			Cursor: thirdMsg.GetV1().Id,
@@ -530,7 +530,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo:     resp.PagingInfo,
 	})
 	require.NoError(t, err)
@@ -539,7 +539,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Order ascending
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:     2,
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
@@ -553,7 +553,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: "installation1",
+		InstallationId: []byte("installation1"),
 		PagingInfo:     resp.PagingInfo,
 	})
 	require.NoError(t, err)

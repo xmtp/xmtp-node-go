@@ -27,8 +27,8 @@ type MlsStore interface {
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
-	InsertGroupMessage(ctx context.Context, groupId string, data []byte) (*GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error)
+	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -170,7 +170,7 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 	return err
 }
 
-func (s *Store) InsertGroupMessage(ctx context.Context, groupId string, data []byte) (*GroupMessage, error) {
+func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error) {
 	message := GroupMessage{
 		Data: data,
 	}
@@ -189,7 +189,7 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId string, data []b
 	return &message, nil
 }
 
-func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error) {
+func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error) {
 	message := WelcomeMessage{
 		Data: data,
 	}
@@ -211,7 +211,7 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId string,
 func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
 	msgs := make([]*GroupMessage, 0)
 
-	if req.GroupId == "" {
+	if len(req.GroupId) == 0 {
 		return nil, errors.New("group is required")
 	}
 
@@ -280,7 +280,7 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	msgs := make([]*WelcomeMessage, 0)
 
-	if req.InstallationId == "" {
+	if len(req.InstallationId) == 0 {
 		return nil, errors.New("installation is required")
 	}
 
