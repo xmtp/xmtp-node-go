@@ -233,7 +233,10 @@ func TestPublishGroupMessages(t *testing.T) {
 		Messages: []*messageContents.GroupMessage{{
 			Version: &messageContents.GroupMessage_V1_{
 				V1: &messageContents.GroupMessage_V1{
-					MlsMessageTlsSerialized: []byte("test"),
+					Id:        1,
+					CreatedNs: 1,
+					GroupId:   "group",
+					Data:      []byte("test"),
 				},
 			},
 		}},

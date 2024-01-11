@@ -23,7 +23,7 @@ type Installation struct {
 type GroupMessage struct {
 	bun.BaseModel `bun:"table:group_messages"`
 
-	Id        string    `bun:",pk,notnull"`
+	Id        uint64    `bun:",pk,notnull"`
 	CreatedAt time.Time `bun:",notnull"`
 	GroupId   string    `bun:",notnull"`
 	Data      []byte    `bun:",notnull,type:bytea"`
@@ -32,7 +32,7 @@ type GroupMessage struct {
 type WelcomeMessage struct {
 	bun.BaseModel `bun:"table:welcome_messages"`
 
-	Id             string    `bun:",pk,notnull"`
+	Id             uint64    `bun:",pk,notnull"`
 	CreatedAt      time.Time `bun:",notnull"`
 	InstallationId string    `bun:",notnull"`
 	Data           []byte    `bun:",notnull,type:bytea"`
