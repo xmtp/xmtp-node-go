@@ -50,8 +50,7 @@ type AuthnOptions struct {
 		Authenticated requests will be permitted according to the rules of the request type,
 		(i.e. you can't publish into other wallets' contact and private topics).
 	*/
-	Enable   bool `long:"enable" description:"require client authentication via wallet tokens"`
-	EnableV3 bool `long:"enable-v3" description:"require client authentication for V3"`
+	Enable bool `long:"enable" description:"require client authentication via wallet tokens"`
 	/*
 		Ratelimits enables request rate limiting.
 

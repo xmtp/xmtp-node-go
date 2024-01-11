@@ -87,23 +87,9 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 	}
 }
 
-func (wa *WalletAuthorizer) isProtocolVersionMLS(request *messagev1.PublishRequest) bool {
-	envelopes := request.Envelopes
-	if len(envelopes) == 0 {
-		return false
-	}
-	// If any of the envelopes are not for a mls topic, then we treat the request as non-mls
-	for _, envelope := range envelopes {
-		if !strings.HasPrefix(envelope.ContentTopic, "/xmtp/mls/") {
-			return false
-		}
-	}
-	return true
-}
-
 func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
-	publishRequest, isPublish := req.(*messagev1.PublishRequest)
-	return isPublish && (!wa.isProtocolVersionMLS(publishRequest) || wa.AuthnConfig.EnableV3)
+	_, isPublish := req.(*messagev1.PublishRequest)
+	return isPublish
 }
 
 func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, error) {

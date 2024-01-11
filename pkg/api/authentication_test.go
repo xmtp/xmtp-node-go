@@ -19,7 +19,7 @@ func Test_AuthnNoToken(t *testing.T) {
 	})
 }
 
-func Test_AuthnNoTokenNonV3(t *testing.T) {
+func Test_AuthnNoTokenNonV0(t *testing.T) {
 	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{
@@ -36,23 +36,7 @@ func Test_AuthnNoTokenNonV3(t *testing.T) {
 	})
 }
 
-func Test_AuthnNoTokenMLS(t *testing.T) {
-	ctx := context.Background()
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
-		_, err := client.Publish(ctx, &messageV1.PublishRequest{
-			Envelopes: []*messageV1.Envelope{
-				{
-					ContentTopic: "/xmtp/mls/1/m-0x1234/proto",
-					TimestampNs:  0,
-					Message:      []byte{},
-				},
-			},
-		})
-		require.NoError(t, err)
-	})
-}
-
-func Test_AuthnNoTokenMixedV0V3(t *testing.T) {
+func Test_AuthnNoTokenMixedV0MLS(t *testing.T) {
 	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{
