@@ -1,4 +1,4 @@
-package mlsstore
+package store
 
 import (
 	"context"

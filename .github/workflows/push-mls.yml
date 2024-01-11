@@ -1,4 +1,4 @@
-name: Deploy Nodes
+name: Push MLS Container
 on:
   push:
     branches:
