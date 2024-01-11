@@ -38,7 +38,7 @@ import (
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 	messagemigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
 	mlsmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"

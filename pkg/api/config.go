@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
@@ -50,8 +50,8 @@ type AuthnOptions struct {
 		Authenticated requests will be permitted according to the rules of the request type,
 		(i.e. you can't publish into other wallets' contact and private topics).
 	*/
-	Enable   bool `long:"enable" description:"require client authentication via wallet tokens"`
-	EnableV3 bool `long:"enable-v3" description:"require client authentication for V3"`
+	Enable    bool `long:"enable" description:"require client authentication via wallet tokens"`
+	EnableMLS bool `long:"enable-mls" description:"require client authentication for MLS"`
 	/*
 		Ratelimits enables request rate limiting.
 
