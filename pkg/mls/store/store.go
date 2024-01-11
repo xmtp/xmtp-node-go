@@ -9,6 +9,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
+	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	"go.uber.org/zap"
 )
@@ -27,9 +28,9 @@ type MlsStore interface {
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId string, data []byte) (*GroupMessage, error)
-	QueryGroupMessages(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) ([]*GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error)
-	QueryWelcomeMessages(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) ([]*WelcomeMessage, error)
+	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
+	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -188,107 +189,6 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId string, data []b
 	return &message, nil
 }
 
-func (s *Store) QueryGroupMessages(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) ([]*GroupMessage, error) {
-	msgs := make([]*GroupMessage, 0)
-
-	err := s.db.NewSelect().
-		Model(&msgs).
-		Where("group_id = ?", req.GroupId).
-		Order("created_at DESC").
-		Scan(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return msgs, nil
-
-	// messages := make([]*GroupMessage, 0)
-
-	// if len(query.ContentTopics) == 0 {
-	// 	return nil, errors.New("topic is required")
-	// }
-
-	// if len(query.ContentTopics) > 1 {
-	// 	return nil, errors.New("multiple topics not supported")
-	// }
-
-	// q := s.db.NewSelect().
-	// 	Model(&messages).
-	// 	Where("topic = ?", query.ContentTopics[0])
-
-	// direction := messagev1.SortDirection_SORT_DIRECTION_DESCENDING
-	// if query.PagingInfo != nil && query.PagingInfo.Direction != messagev1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
-	// 	direction = query.PagingInfo.Direction
-	// }
-	// switch direction {
-	// case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
-	// 	q = q.Order("tid DESC")
-	// case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
-	// 	q = q.Order("tid ASC")
-	// }
-
-	// pageSize := maxPageSize
-	// if query.PagingInfo != nil && query.PagingInfo.Limit > 0 && query.PagingInfo.Limit <= maxPageSize {
-	// 	pageSize = int(query.PagingInfo.Limit)
-	// }
-	// q = q.Limit(pageSize)
-
-	// if query.PagingInfo != nil && query.PagingInfo.GetCursor() != nil && query.PagingInfo.GetCursor().GetIndex() != nil {
-	// 	index := query.PagingInfo.GetCursor().GetIndex()
-	// 	if index.SenderTimeNs == 0 || len(index.Digest) == 0 {
-	// 		return nil, errors.New("invalid cursor")
-	// 	}
-	// 	cursorTID := buildMessageTIDFromCursor(index)
-	// 	if direction == messagev1.SortDirection_SORT_DIRECTION_ASCENDING {
-	// 		q = q.Where("tid > ?", cursorTID)
-	// 	} else {
-	// 		q = q.Where("tid < ?", cursorTID)
-	// 	}
-	// } else {
-	// 	if query.StartTimeNs > 0 {
-	// 		q = q.Where("created_at >= ?", query.StartTimeNs)
-	// 	}
-	// 	if query.EndTimeNs > 0 {
-	// 		q = q.Where("created_at <= ?", query.EndTimeNs)
-	// 	}
-	// }
-
-	// err := q.Scan(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// envs := make([]*messagev1.Envelope, 0, len(messages))
-	// for _, msg := range messages {
-	// 	envs = append(envs, &messagev1.Envelope{
-	// 		ContentTopic: msg.Topic,
-	// 		TimestampNs:  uint64(msg.CreatedAt),
-	// 		Message:      msg.Content,
-	// 	})
-	// }
-
-	// pagingInfo := &messagev1.PagingInfo{Limit: 0, Cursor: nil, Direction: direction}
-	// if len(envs) >= pageSize {
-	// 	if len(envs) > 0 {
-	// 		lastEnv := envs[len(envs)-1]
-	// 		digest := buildMessageContentDigest(lastEnv.Message)
-	// 		pagingInfo.Cursor = &messagev1.Cursor{
-	// 			Cursor: &messagev1.Cursor_Index{
-	// 				Index: &messagev1.IndexCursor{
-	// 					Digest:       digest[:],
-	// 					SenderTimeNs: lastEnv.TimestampNs,
-	// 				},
-	// 			},
-	// 		}
-	// 	}
-	// }
-
-	// return &messagev1.QueryResponse{
-	// 	Envelopes:  envs,
-	// 	PagingInfo: pagingInfo,
-	// }, nil
-}
-
 func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId string, data []byte) (*WelcomeMessage, error) {
 	message := WelcomeMessage{
 		Data: data,
@@ -308,19 +208,141 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId string,
 	return &message, nil
 }
 
-func (s *Store) QueryWelcomeMessages(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) ([]*WelcomeMessage, error) {
-	msgs := make([]*WelcomeMessage, 0)
+func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
+	msgs := make([]*GroupMessage, 0)
 
-	err := s.db.NewSelect().
+	if req.GroupId == "" {
+		return nil, errors.New("group is required")
+	}
+
+	q := s.db.NewSelect().
 		Model(&msgs).
-		Where("installation_id = ?", req.InstallationId).
-		Order("created_at DESC").
-		Scan(ctx)
+		Where("group_id = ?", req.GroupId)
+
+	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
+	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = req.PagingInfo.Direction
+	}
+	switch direction {
+	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
+		q = q.Order("id DESC")
+	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
+		q = q.Order("id ASC")
+	}
+
+	pageSize := maxPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+		pageSize = int(req.PagingInfo.Limit)
+	}
+	q = q.Limit(pageSize)
+
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+			q = q.Where("id > ?", req.PagingInfo.Cursor)
+		} else {
+			q = q.Where("id < ?", req.PagingInfo.Cursor)
+		}
+	}
+
+	err := q.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return msgs, nil
+	messages := make([]*message_contents.GroupMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		messages = append(messages, &message_contents.GroupMessage{
+			Version: &message_contents.GroupMessage_V1_{
+				V1: &message_contents.GroupMessage_V1{
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					GroupId:   msg.GroupId,
+					Data:      msg.Data,
+				},
+			},
+		})
+	}
+
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	if len(messages) >= pageSize {
+		if len(messages) > 0 {
+			lastMsg := msgs[len(messages)-1]
+			pagingInfo.Cursor = lastMsg.Id
+		}
+	}
+
+	return &mlsv1.QueryGroupMessagesResponse{
+		Messages:   messages,
+		PagingInfo: pagingInfo,
+	}, nil
+}
+
+func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
+	msgs := make([]*WelcomeMessage, 0)
+
+	if req.InstallationId == "" {
+		return nil, errors.New("installation is required")
+	}
+
+	q := s.db.NewSelect().
+		Model(&msgs).
+		Where("installation_id = ?", req.InstallationId)
+
+	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
+	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+		direction = req.PagingInfo.Direction
+	}
+	switch direction {
+	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
+		q = q.Order("id DESC")
+	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
+		q = q.Order("id ASC")
+	}
+
+	pageSize := maxPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+		pageSize = int(req.PagingInfo.Limit)
+	}
+	q = q.Limit(pageSize)
+
+	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+			q = q.Where("id > ?", req.PagingInfo.Cursor)
+		} else {
+			q = q.Where("id < ?", req.PagingInfo.Cursor)
+		}
+	}
+
+	err := q.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	messages := make([]*message_contents.WelcomeMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		messages = append(messages, &message_contents.WelcomeMessage{
+			Version: &message_contents.WelcomeMessage_V1_{
+				V1: &message_contents.WelcomeMessage_V1{
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					Data:      msg.Data,
+				},
+			},
+		})
+	}
+
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	if len(messages) >= pageSize {
+		if len(messages) > 0 {
+			lastMsg := msgs[len(messages)-1]
+			pagingInfo.Cursor = lastMsg.Id
+		}
+	}
+
+	return &mlsv1.QueryWelcomeMessagesResponse{
+		Messages:   messages,
+		PagingInfo: pagingInfo,
+	}, nil
 }
 
 func (s *Store) migrate(ctx context.Context) error {

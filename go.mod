@@ -30,7 +30,7 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.1.16
 	github.com/waku-org/go-waku v0.8.0
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
-	github.com/xmtp/proto/v3 v3.36.3-0.20240111115707-f2e60758fa55
+	github.com/xmtp/proto/v3 v3.36.3-0.20240111120253-eacdbc385fcb
 	github.com/yoheimuta/protolint v0.39.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0

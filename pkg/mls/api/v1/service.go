@@ -6,7 +6,6 @@ import (
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
-	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
@@ -222,58 +221,11 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 }
 
 func (s *Service) QueryGroupMessages(ctx context.Context, req *proto.QueryGroupMessagesRequest) (*proto.QueryGroupMessagesResponse, error) {
-	msgs, err := s.store.QueryGroupMessages(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	messages := make([]*message_contents.GroupMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &message_contents.GroupMessage{
-			Version: &message_contents.GroupMessage_V1_{
-				V1: &message_contents.GroupMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupId,
-					Data:      msg.Data,
-				},
-			},
-		})
-	}
-
-	// TODO(snormore): build and return paging info
-
-	return &proto.QueryGroupMessagesResponse{
-		Messages:   messages,
-		PagingInfo: nil,
-	}, nil
+	return s.store.QueryGroupMessagesV1(ctx, req)
 }
 
 func (s *Service) QueryWelcomeMessages(ctx context.Context, req *proto.QueryWelcomeMessagesRequest) (*proto.QueryWelcomeMessagesResponse, error) {
-	msgs, err := s.store.QueryWelcomeMessages(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	messages := make([]*message_contents.WelcomeMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &message_contents.WelcomeMessage{
-			Version: &message_contents.WelcomeMessage_V1_{
-				V1: &message_contents.WelcomeMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					Data:      msg.Data,
-				},
-			},
-		})
-	}
-
-	// TODO(snormore): build and return paging info
-
-	return &proto.QueryWelcomeMessagesResponse{
-		Messages:   messages,
-		PagingInfo: nil,
-	}, nil
+	return s.store.QueryWelcomeMessagesV1(ctx, req)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {

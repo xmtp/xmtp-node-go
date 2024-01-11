@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
-	messageContents "github.com/xmtp/proto/v3/go/mls/message_contents"
+	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
@@ -230,9 +230,9 @@ func TestSendGroupMessages(t *testing.T) {
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
 	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
-		Messages: []*messageContents.GroupMessage{{
-			Version: &messageContents.GroupMessage_V1_{
-				V1: &messageContents.GroupMessage_V1{
+		Messages: []*message_contents.GroupMessage{{
+			Version: &message_contents.GroupMessage_V1_{
+				V1: &message_contents.GroupMessage_V1{
 					Id:        1,
 					CreatedNs: 1,
 					GroupId:   "group",
@@ -243,13 +243,47 @@ func TestSendGroupMessages(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	msgs, err := svc.store.QueryGroupMessages(ctx, &mlsv1.QueryGroupMessagesRequest{
+	resp, err := svc.store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
 		GroupId: groupId,
 	})
 	require.NoError(t, err)
-	require.Len(t, msgs, 1)
-	require.Equal(t, msgs[0].Data, []byte("test"))
-	require.NotNil(t, msgs[0].CreatedAt)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
+	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
+}
+
+func TestSendWelcomeMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := test.RandomString(32)
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		WelcomeMessages: []*mlsv1.SendWelcomeMessagesRequest_WelcomeMessageRequest{
+			{
+				InstallationId: []byte(installationId),
+				WelcomeMessage: &message_contents.WelcomeMessage{
+					Version: &message_contents.WelcomeMessage_V1_{
+						V1: &message_contents.WelcomeMessage_V1{
+							Id:        1,
+							CreatedNs: 1,
+							Data:      []byte("test"),
+						},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationId: installationId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
+	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
 func TestGetIdentityUpdates(t *testing.T) {
