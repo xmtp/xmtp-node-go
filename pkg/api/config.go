@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/store"

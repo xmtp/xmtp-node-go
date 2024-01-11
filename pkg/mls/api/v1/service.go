@@ -7,7 +7,7 @@ import (
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"

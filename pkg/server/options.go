@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 )

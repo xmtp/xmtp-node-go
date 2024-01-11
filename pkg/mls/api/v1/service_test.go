@@ -12,7 +12,7 @@ import (
 	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
 	messageContents "github.com/xmtp/proto/v3/go/mls/message_contents"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
