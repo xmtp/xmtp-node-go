@@ -260,10 +260,9 @@ func (s *Service) QueryWelcomeMessages(ctx context.Context, req *proto.QueryWelc
 		messages = append(messages, &message_contents.WelcomeMessage{
 			Version: &message_contents.WelcomeMessage_V1_{
 				V1: &message_contents.WelcomeMessage_V1{
-					Id:             msg.Id,
-					CreatedNs:      uint64(msg.CreatedAt.UnixNano()),
-					InstallationId: msg.InstallationId,
-					Data:           msg.Data,
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					Data:      msg.Data,
 				},
 			},
 		})
