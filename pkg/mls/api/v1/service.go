@@ -147,8 +147,8 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 	}, nil
 }
 
-func (s *Service) PublishGroupMessages(ctx context.Context, req *proto.PublishGroupMessagesRequest) (res *emptypb.Empty, err error) {
-	if err = validatePublishGroupMessagesRequest(req); err != nil {
+func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
+	if err = validateSendGroupMessagesRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -194,8 +194,8 @@ func (s *Service) PublishGroupMessages(ctx context.Context, req *proto.PublishGr
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) PublishWelcomeMessages(ctx context.Context, req *proto.PublishWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
-	if err = validatePublishWelcomeMessagesRequest(req); err != nil {
+func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
+	if err = validateSendWelcomeMessagesRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -300,14 +300,14 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	return &base
 }
 
-func validatePublishGroupMessagesRequest(req *proto.PublishGroupMessagesRequest) error {
+func validateSendGroupMessagesRequest(req *proto.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no messages to publish")
 	}
 	return nil
 }
 
-func validatePublishWelcomeMessagesRequest(req *proto.PublishWelcomeMessagesRequest) error {
+func validateSendWelcomeMessagesRequest(req *proto.SendWelcomeMessagesRequest) error {
 	if req == nil || len(req.WelcomeMessages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to publish")
 	}

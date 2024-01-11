@@ -220,7 +220,7 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	require.Equal(t, []*mlsv1.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
 }
 
-func TestPublishGroupMessages(t *testing.T) {
+func TestSendGroupMessages(t *testing.T) {
 	ctx := context.Background()
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -229,7 +229,7 @@ func TestPublishGroupMessages(t *testing.T) {
 
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
-	_, err := svc.PublishGroupMessages(ctx, &mlsv1.PublishGroupMessagesRequest{
+	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
 		Messages: []*messageContents.GroupMessage{{
 			Version: &messageContents.GroupMessage_V1_{
 				V1: &messageContents.GroupMessage_V1{
