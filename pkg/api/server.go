@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	swgui "github.com/swaggest/swgui/v3"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
-	v3Proto "github.com/xmtp/proto/v3/go/message_api/v3"
+	mlsv1pb "github.com/xmtp/proto/v3/go/mls/api/v1"
 	messagev1openapi "github.com/xmtp/proto/v3/openapi/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -28,7 +28,7 @@ import (
 
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
-	messagev3 "github.com/xmtp/xmtp-node-go/pkg/api/message/v3"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/mls/api/v1"
 )
 
 const (
@@ -45,7 +45,7 @@ type Server struct {
 	grpcListener net.Listener
 	httpListener net.Listener
 	messagev1    *messagev1.Service
-	messagev3    *messagev3.Service
+	mlsv1        *mlsv1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
 
@@ -123,7 +123,7 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.Store, s.MLSStore)
+	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.Store)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}
@@ -131,11 +131,11 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS server if a store is provided
 	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
-		s.messagev3, err = messagev3.NewService(s.Waku, s.Log, s.Config.MLSStore, s.Config.MLSValidator)
+		s.mlsv1, err = mlsv1.NewService(s.Waku, s.Log, s.Config.MLSStore, s.Config.MLSValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
-		v3Proto.RegisterMlsApiServer(grpcServer, s.messagev3)
+		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
 	}
 	prometheus.Register(grpcServer)
 
@@ -184,7 +184,7 @@ func (s *Server) startHTTP() error {
 	}
 
 	if s.Config.MLSStore != nil && s.Config.EnableMls {
-		err = v3Proto.RegisterMlsApiHandler(s.ctx, gwmux, conn)
+		err = mlsv1pb.RegisterMlsApiHandler(s.ctx, gwmux, conn)
 		if err != nil {
 			return errors.Wrap(err, "registering mls handler")
 		}

@@ -5,9 +5,8 @@ import (
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	proto "github.com/xmtp/proto/v3/go/message_api/v3"
-	"github.com/xmtp/xmtp-node-go/pkg/metrics"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
@@ -27,7 +26,7 @@ type Service struct {
 
 func NewService(node *wakunode.WakuNode, logger *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
-		log:               logger.Named("message/v3"),
+		log:               logger.Named("mls/v1"),
 		waku:              node,
 		store:             store,
 		validationService: validationService,
@@ -92,7 +91,7 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPacka
 	}, nil
 }
 
-func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupRequest) (res *emptypb.Empty, err error) {
+func (s *Service) PublishGroupMessages(ctx context.Context, req *proto.PublishGroupMessagesRequest) (res *emptypb.Empty, err error) {
 	if err = validatePublishToGroupRequest(req); err != nil {
 		return nil, err
 	}
@@ -113,14 +112,25 @@ func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupR
 	}
 
 	for i, result := range validationResults {
-		message := messages[i]
+		data := messages[i]
 
-		if err = requireReadyToSend(result.GroupId, message); err != nil {
+		if err = requireReadyToSend(result.GroupId, data); err != nil {
 			return nil, err
 		}
 
 		// TODO: Wrap this in a transaction so publishing is all or nothing
-		if err = s.publishMessage(ctx, topic.BuildGroupTopic(result.GroupId), message); err != nil {
+		wakuTopic := topic.BuildGroupTopic(result.GroupId)
+		msg, err := s.store.InsertGroupMessage(ctx, result.GroupId, data)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
+		}
+
+		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+			ContentTopic: wakuTopic,
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      data,
+		})
+		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
 		}
 	}
@@ -128,36 +138,28 @@ func (s *Service) PublishToGroup(ctx context.Context, req *proto.PublishToGroupR
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) publishMessage(ctx context.Context, contentTopic string, message []byte) error {
-	log := s.log.Named("publish-mls").With(zap.String("content_topic", contentTopic))
-	env, err := s.store.InsertMessage(ctx, contentTopic, message)
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-	}
-
-	if _, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
-		ContentTopic: contentTopic,
-		Timestamp:    int64(env.TimestampNs),
-		Payload:      message,
-	}); err != nil {
-		return status.Errorf(codes.Internal, "failed to publish message: %s", err)
-	}
-
-	metrics.EmitPublishedEnvelope(ctx, log, env)
-
-	return nil
-}
-
-func (s *Service) PublishWelcomes(ctx context.Context, req *proto.PublishWelcomesRequest) (res *emptypb.Empty, err error) {
+func (s *Service) PublishWelcomeMessages(ctx context.Context, req *proto.PublishWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
 	if err = validatePublishWelcomesRequest(req); err != nil {
 		return nil, err
 	}
 
 	// TODO: Wrap this in a transaction so publishing is all or nothing
 	for _, welcome := range req.WelcomeMessages {
-		contentTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
-		if err = s.publishMessage(ctx, contentTopic, welcome.WelcomeMessage.GetV1().WelcomeMessageTlsSerialized); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to publish welcome message: %s", err)
+		wakuTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
+		data := welcome.WelcomeMessage.GetV1().WelcomeMessageTlsSerialized
+
+		msg, err := s.store.InsertWelcomeMessage(ctx, string(welcome.InstallationId), data)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
+		}
+
+		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+			ContentTopic: wakuTopic,
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      data,
+		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
 		}
 	}
 	return &emptypb.Empty{}, nil
@@ -241,14 +243,14 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	return &base
 }
 
-func validatePublishToGroupRequest(req *proto.PublishToGroupRequest) error {
+func validatePublishToGroupRequest(req *proto.PublishGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no messages to publish")
 	}
 	return nil
 }
 
-func validatePublishWelcomesRequest(req *proto.PublishWelcomesRequest) error {
+func validatePublishWelcomesRequest(req *proto.PublishWelcomeMessagesRequest) error {
 	if req == nil || len(req.WelcomeMessages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to publish")
 	}

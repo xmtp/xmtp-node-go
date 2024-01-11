@@ -40,13 +40,13 @@ func Category(contentTopic string) string {
 }
 
 func IsV3(topic string) bool {
-	return strings.HasPrefix(topic, "/xmtp/3/")
+	return strings.HasPrefix(topic, "/xmtp/mls/1/")
 }
 
 func BuildGroupTopic(groupId string) string {
-	return fmt.Sprintf("/xmtp/3/g-%s/proto", groupId)
+	return fmt.Sprintf("/xmtp/mls/1/g-%s/proto", groupId)
 }
 
 func BuildWelcomeTopic(installationId []byte) string {
-	return fmt.Sprintf("/xmtp/3/w-%x/proto", installationId)
+	return fmt.Sprintf("/xmtp/mls/1/w-%x/proto", installationId)
 }
