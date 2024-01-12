@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -176,8 +178,11 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []b
 	}
 
 	var id uint64
-	err := s.db.QueryRow("INSERT INTO group_messages (group_id, data) VALUES (?, ?) RETURNING id", groupId, data).Scan(&id)
+	err := s.db.QueryRow("INSERT INTO group_messages (group_id, data, group_id_data_hash) VALUES (?, ?, ?) RETURNING id", groupId, data, sha256.Sum256(append(groupId, data...))).Scan(&id)
 	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return nil, NewAlreadyExistsError(err)
+		}
 		return nil, err
 	}
 
@@ -195,8 +200,11 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 	}
 
 	var id uint64
-	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_id, data) VALUES (?, ?) RETURNING id", installationId, data).Scan(&id)
+	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_id, data, installation_id_data_hash) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...))).Scan(&id)
 	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return nil, NewAlreadyExistsError(err)
+		}
 		return nil, err
 	}
 
@@ -395,4 +403,21 @@ func (a IdentityUpdateList) Swap(i, j int) {
 
 func (a IdentityUpdateList) Less(i, j int) bool {
 	return a[i].TimestampNs < a[j].TimestampNs
+}
+
+type AlreadyExistsError struct {
+	Err error
+}
+
+func (e *AlreadyExistsError) Error() string {
+	return e.Err.Error()
+}
+
+func NewAlreadyExistsError(err error) *AlreadyExistsError {
+	return &AlreadyExistsError{err}
+}
+
+func IsAlreadyExistsError(err error) bool {
+	_, ok := err.(*AlreadyExistsError)
+	return ok
 }

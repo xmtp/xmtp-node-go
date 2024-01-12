@@ -195,6 +195,21 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	require.Equal(t, msg, msgs[0])
 }
 
+func TestInsertGroupMessage_Duplicate(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	msg, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data"))
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+
+	msg, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data"))
+	require.Nil(t, msg)
+	require.IsType(t, &AlreadyExistsError{}, err)
+	require.True(t, IsAlreadyExistsError(err))
+}
+
 func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
@@ -235,6 +250,21 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	require.Equal(t, msg, msgs[0])
+}
+
+func TestInsertWelcomeMessage_Duplicate(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+
+	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
+	require.Nil(t, msg)
+	require.IsType(t, &AlreadyExistsError{}, err)
+	require.True(t, IsAlreadyExistsError(err))
 }
 
 func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {

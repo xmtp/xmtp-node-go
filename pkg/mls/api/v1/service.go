@@ -6,6 +6,7 @@ import (
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
@@ -177,6 +178,9 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 		wakuTopic := topic.BuildGroupTopic([]byte(result.GroupId))
 		msg, err := s.store.InsertGroupMessage(ctx, []byte(result.GroupId), data)
 		if err != nil {
+			if store.IsAlreadyExistsError(err) {
+				continue
+			}
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
@@ -205,6 +209,9 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 
 		msg, err := s.store.InsertWelcomeMessage(ctx, welcome.InstallationId, data)
 		if err != nil {
+			if store.IsAlreadyExistsError(err) {
+				continue
+			}
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
