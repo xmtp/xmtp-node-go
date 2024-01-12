@@ -454,8 +454,8 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 	resp, err = store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
 		GroupId: []byte("group1"),
 		PagingInfo: &mlsv1.PagingInfo{
-			Limit:  2,
-			Cursor: thirdMsg.GetV1().Id,
+			Limit:    2,
+			IdCursor: thirdMsg.GetV1().Id,
 		},
 	})
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:     2,
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
-			Cursor:    fifthMsg.GetV1().Id,
+			IdCursor:  fifthMsg.GetV1().Id,
 		},
 	})
 	require.NoError(t, err)
@@ -549,8 +549,8 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
 		InstallationId: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
-			Limit:  2,
-			Cursor: thirdMsg.GetV1().Id,
+			Limit:    2,
+			IdCursor: thirdMsg.GetV1().Id,
 		},
 	})
 	require.NoError(t, err)
@@ -573,7 +573,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:     2,
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
-			Cursor:    fifthMsg.GetV1().Id,
+			IdCursor:  fifthMsg.GetV1().Id,
 		},
 	})
 	require.NoError(t, err)

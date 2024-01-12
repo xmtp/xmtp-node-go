@@ -244,11 +244,11 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 	}
 	q = q.Limit(pageSize)
 
-	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+	if req.PagingInfo != nil && req.PagingInfo.IdCursor != 0 {
 		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
-			q = q.Where("id > ?", req.PagingInfo.Cursor)
+			q = q.Where("id > ?", req.PagingInfo.IdCursor)
 		} else {
-			q = q.Where("id < ?", req.PagingInfo.Cursor)
+			q = q.Where("id < ?", req.PagingInfo.IdCursor)
 		}
 	}
 
@@ -271,11 +271,11 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		})
 	}
 
-	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, IdCursor: 0, Direction: direction}
 	if len(messages) >= pageSize {
 		if len(messages) > 0 {
 			lastMsg := msgs[len(messages)-1]
-			pagingInfo.Cursor = lastMsg.Id
+			pagingInfo.IdCursor = lastMsg.Id
 		}
 	}
 
@@ -313,11 +313,11 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 	}
 	q = q.Limit(pageSize)
 
-	if req.PagingInfo != nil && req.PagingInfo.Cursor != 0 {
+	if req.PagingInfo != nil && req.PagingInfo.IdCursor != 0 {
 		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
-			q = q.Where("id > ?", req.PagingInfo.Cursor)
+			q = q.Where("id > ?", req.PagingInfo.IdCursor)
 		} else {
-			q = q.Where("id < ?", req.PagingInfo.Cursor)
+			q = q.Where("id < ?", req.PagingInfo.IdCursor)
 		}
 	}
 
@@ -339,11 +339,11 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		})
 	}
 
-	pagingInfo := &mlsv1.PagingInfo{Limit: 0, Cursor: 0, Direction: direction}
+	pagingInfo := &mlsv1.PagingInfo{Limit: 0, IdCursor: 0, Direction: direction}
 	if len(messages) >= pageSize {
 		if len(messages) > 0 {
 			lastMsg := msgs[len(messages)-1]
-			pagingInfo.Cursor = lastMsg.Id
+			pagingInfo.IdCursor = lastMsg.Id
 		}
 	}
 
