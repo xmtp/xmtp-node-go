@@ -139,16 +139,16 @@ func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string
 		if installation.CreatedAt > startTimeNs {
 			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
 				Kind:               Create,
-				InstallationId:     installation.ID,
+				InstallationKey:    installation.ID,
 				CredentialIdentity: installation.CredentialIdentity,
 				TimestampNs:        uint64(installation.CreatedAt),
 			})
 		}
 		if installation.RevokedAt != nil && *installation.RevokedAt > startTimeNs {
 			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:           Revoke,
-				InstallationId: installation.ID,
-				TimestampNs:    uint64(*installation.RevokedAt),
+				Kind:            Revoke,
+				InstallationKey: installation.ID,
+				TimestampNs:     uint64(*installation.RevokedAt),
 			})
 		}
 	}
@@ -199,7 +199,7 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 	}
 
 	var id uint64
-	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_id, data, installation_id_data_hash) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...))).Scan(&id)
+	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...))).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
@@ -287,13 +287,13 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	msgs := make([]*WelcomeMessage, 0)
 
-	if len(req.InstallationId) == 0 {
+	if len(req.InstallationKey) == 0 {
 		return nil, errors.New("installation is required")
 	}
 
 	q := s.db.NewSelect().
 		Model(&msgs).
-		Where("installation_id = ?", req.InstallationId)
+		Where("installation_key = ?", req.InstallationKey)
 
 	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
 	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
@@ -384,7 +384,7 @@ const (
 
 type IdentityUpdate struct {
 	Kind               IdentityUpdateKind
-	InstallationId     []byte
+	InstallationKey    []byte
 	CredentialIdentity []byte
 	TimestampNs        uint64
 }

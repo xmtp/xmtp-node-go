@@ -56,7 +56,7 @@ func TestValidateKeyPackages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res))
 	assert.Equal(t, "0x123", res[0].AccountAddress)
-	assert.Equal(t, []byte("123"), res[0].InstallationId)
+	assert.Equal(t, []byte("123"), res[0].InstallationKey)
 	assert.Equal(t, []byte("456"), res[0].CredentialIdentity)
 }
 

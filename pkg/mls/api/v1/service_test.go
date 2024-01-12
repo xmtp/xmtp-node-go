@@ -43,7 +43,7 @@ func newMockedValidationService() *mockedMLSValidationService {
 func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
 	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
 		{
-			InstallationId:     installationId,
+			InstallationKey:    installationId,
 			AccountAddress:     accountAddress,
 			CredentialIdentity: []byte("test"),
 			Expiration:         0,
@@ -96,7 +96,7 @@ func TestRegisterInstallation(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, installationId, res.InstallationId)
+	require.Equal(t, installationId, res.InstallationKey)
 
 	installations := []mlsstore.Installation{}
 	err = mlsDb.NewSelect().Model(&installations).Where("id = ?", installationId).Scan(ctx)
@@ -187,7 +187,7 @@ func TestFetchKeyPackages(t *testing.T) {
 	require.NotNil(t, res)
 
 	consumeRes, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
-		InstallationIds: [][]byte{installationId1, installationId2},
+		InstallationKeys: [][]byte{installationId1, installationId2},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, consumeRes)
@@ -197,7 +197,7 @@ func TestFetchKeyPackages(t *testing.T) {
 
 	// Now do it with the installationIds reversed
 	consumeRes, err = svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
-		InstallationIds: [][]byte{installationId2, installationId1},
+		InstallationKeys: [][]byte{installationId2, installationId1},
 	})
 
 	require.NoError(t, err)
@@ -214,7 +214,7 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	defer cleanup()
 
 	consumeRes, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
-		InstallationIds: [][]byte{test.RandomBytes(32)},
+		InstallationKeys: [][]byte{test.RandomBytes(32)},
 	})
 	require.Nil(t, err)
 	require.Equal(t, []*mlsv1.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
@@ -263,8 +263,8 @@ func TestSendWelcomeMessages(t *testing.T) {
 			{
 				Version: &mlsv1.WelcomeMessageInput_V1_{
 					V1: &mlsv1.WelcomeMessageInput_V1{
-						InstallationId: []byte(installationId),
-						Data:           []byte("test"),
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test"),
 					},
 				},
 			},
@@ -273,7 +273,7 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: installationId,
+		InstallationKey: installationId,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
@@ -304,12 +304,12 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, identityUpdates)
 	require.Len(t, identityUpdates.Updates, 1)
-	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().InstallationId, installationId)
+	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().InstallationKey, installationId)
 	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().CredentialIdentity, []byte("test"))
 
 	for _, walletUpdate := range identityUpdates.Updates {
 		for _, update := range walletUpdate.Updates {
-			require.Equal(t, installationId, update.GetNewInstallation().InstallationId)
+			require.Equal(t, installationId, update.GetNewInstallation().InstallationKey)
 		}
 	}
 

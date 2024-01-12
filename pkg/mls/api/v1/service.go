@@ -51,7 +51,7 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
 	}
 
-	installationId := results[0].InstallationId
+	installationId := results[0].InstallationKey
 	accountAddress := results[0].AccountAddress
 	credentialIdentity := results[0].CredentialIdentity
 
@@ -60,12 +60,12 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 	}
 
 	return &proto.RegisterInstallationResponse{
-		InstallationId: installationId,
+		InstallationKey: installationId,
 	}, nil
 }
 
 func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPackagesRequest) (*proto.FetchKeyPackagesResponse, error) {
-	ids := req.InstallationIds
+	ids := req.InstallationKeys
 	installations, err := s.store.FetchKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to fetch key packages: %s", err)
@@ -105,7 +105,7 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPack
 		// TODO: Differentiate between validation errors and internal errors
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
-	installationId := validationResults[0].InstallationId
+	installationId := validationResults[0].InstallationKey
 	expiration := validationResults[0].Expiration
 
 	if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
@@ -200,7 +200,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 
 	// TODO: Wrap this in a transaction so publishing is all or nothing
 	for _, input := range req.Messages {
-		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationId, input.GetV1().Data)
+		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationKey, input.GetV1().Data)
 		if err != nil {
 			if store.IsAlreadyExistsError(err) {
 				continue
@@ -208,7 +208,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		wakuTopic := topic.BuildWelcomeTopic(input.GetV1().InstallationId)
+		wakuTopic := topic.BuildWelcomeTopic(input.GetV1().InstallationKey)
 		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
 			ContentTopic: wakuTopic,
 			Timestamp:    msg.CreatedAt.UnixNano(),
@@ -237,14 +237,14 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	case mlsstore.Create:
 		base.Kind = &proto.GetIdentityUpdatesResponse_Update_NewInstallation{
 			NewInstallation: &proto.GetIdentityUpdatesResponse_NewInstallationUpdate{
-				InstallationId:     update.InstallationId,
+				InstallationKey:    update.InstallationKey,
 				CredentialIdentity: update.CredentialIdentity,
 			},
 		}
 	case mlsstore.Revoke:
 		base.Kind = &proto.GetIdentityUpdatesResponse_Update_RevokedInstallation{
 			RevokedInstallation: &proto.GetIdentityUpdatesResponse_RevokedInstallationUpdate{
-				InstallationId: update.InstallationId,
+				InstallationKey: update.InstallationKey,
 			},
 		}
 	}

@@ -106,9 +106,9 @@ func TestGetIdentityUpdates(t *testing.T) {
 	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
 	require.NoError(t, err)
 	require.Len(t, identityUpdates[walletAddress], 2)
-	require.Equal(t, identityUpdates[walletAddress][0].InstallationId, installationId1)
+	require.Equal(t, identityUpdates[walletAddress][0].InstallationKey, installationId1)
 	require.Equal(t, identityUpdates[walletAddress][0].Kind, Create)
-	require.Equal(t, identityUpdates[walletAddress][1].InstallationId, installationId2)
+	require.Equal(t, identityUpdates[walletAddress][1].InstallationKey, installationId2)
 
 	// Make sure that date filtering works
 	identityUpdates, err = store.GetIdentityUpdates(ctx, []string{walletAddress}, nowNs()+1000000)
@@ -175,7 +175,7 @@ func TestIdentityUpdateSort(t *testing.T) {
 }
 
 func TestInsertGroupMessage_Single(t *testing.T) {
-	started := time.Now().UTC().Add(-time.Second)
+	started := time.Now().UTC().Add(-time.Minute)
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
@@ -232,7 +232,7 @@ func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 }
 
 func TestInsertWelcomeMessage_Single(t *testing.T) {
-	started := time.Now().UTC().Add(-time.Second)
+	started := time.Now().UTC().Add(-time.Minute)
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
@@ -242,7 +242,7 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	require.NotNil(t, msg)
 	require.Equal(t, uint64(1), msg.Id)
 	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
-	require.Equal(t, []byte("installation"), msg.InstallationId)
+	require.Equal(t, []byte("installation"), msg.InstallationKey)
 	require.Equal(t, []byte("data"), msg.Data)
 
 	msgs := make([]*WelcomeMessage, 0)
@@ -369,13 +369,13 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("unknown"),
+		InstallationKey: []byte("unknown"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 0)
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 2)
@@ -383,7 +383,7 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation2"),
+		InstallationKey: []byte("installation2"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
@@ -391,7 +391,7 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 
 	// Sort ascending
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
 		},
@@ -520,7 +520,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 6)
@@ -535,7 +535,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	fifthMsg := resp.Messages[4]
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit: 2,
 		},
@@ -547,7 +547,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Order descending by default
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:    2,
 			IdCursor: thirdMsg.GetV1().Id,
@@ -560,8 +560,8 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
-		PagingInfo:     resp.PagingInfo,
+		InstallationKey: []byte("installation1"),
+		PagingInfo:      resp.PagingInfo,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
@@ -569,7 +569,7 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Order ascending
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
+		InstallationKey: []byte("installation1"),
 		PagingInfo: &mlsv1.PagingInfo{
 			Limit:     2,
 			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
@@ -583,8 +583,8 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 	// Next page from previous response
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
-		InstallationId: []byte("installation1"),
-		PagingInfo:     resp.PagingInfo,
+		InstallationKey: []byte("installation1"),
+		PagingInfo:      resp.PagingInfo,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 2)

@@ -12,7 +12,7 @@ import (
 
 type IdentityValidationResult struct {
 	AccountAddress     string
-	InstallationId     []byte
+	InstallationKey    []byte
 	CredentialIdentity []byte
 	Expiration         uint64
 }
@@ -58,7 +58,7 @@ func (s *MLSValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyP
 		}
 		out[i] = IdentityValidationResult{
 			AccountAddress:     response.AccountAddress,
-			InstallationId:     response.InstallationId,
+			InstallationKey:    response.InstallationId,
 			CredentialIdentity: response.CredentialIdentityBytes,
 			Expiration:         response.Expiration,
 		}

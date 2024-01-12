@@ -32,8 +32,8 @@ type GroupMessage struct {
 type WelcomeMessage struct {
 	bun.BaseModel `bun:"table:welcome_messages"`
 
-	Id             uint64    `bun:",pk,notnull"`
-	CreatedAt      time.Time `bun:",notnull"`
-	InstallationId []byte    `bun:",notnull,type:bytea"`
-	Data           []byte    `bun:",notnull,type:bytea"`
+	Id              uint64    `bun:",pk,notnull"`
+	CreatedAt       time.Time `bun:",notnull"`
+	InstallationKey []byte    `bun:",notnull,type:bytea"`
+	Data            []byte    `bun:",notnull,type:bytea"`
 }
