@@ -160,9 +160,9 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 	}
 
 	for i, result := range validationResults {
-		data := req.Messages[i]
+		input := req.Messages[i]
 
-		if err = requireReadyToSend(result.GroupId, data); err != nil {
+		if err = requireReadyToSend(result.GroupId, input.GetV1().Data); err != nil {
 			return nil, err
 		}
 
@@ -171,8 +171,7 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 		if err != nil {
 			return nil, err
 		}
-		wakuTopic := topic.BuildGroupTopic(decodedGroupId)
-		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, data)
+		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, input.GetV1().Data)
 		if err != nil {
 			if store.IsAlreadyExistsError(err) {
 				continue
@@ -180,10 +179,11 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
+		wakuTopic := topic.BuildGroupTopic(decodedGroupId)
 		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
 			ContentTopic: wakuTopic,
 			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      data,
+			Payload:      msg.Data,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
@@ -199,11 +199,8 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 	}
 
 	// TODO: Wrap this in a transaction so publishing is all or nothing
-	for _, welcome := range req.WelcomeMessages {
-		wakuTopic := topic.BuildWelcomeTopic(welcome.InstallationId)
-		data := welcome.WelcomeMessage.GetV1().Data
-
-		msg, err := s.store.InsertWelcomeMessage(ctx, welcome.InstallationId, data)
+	for _, input := range req.Messages {
+		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationId, input.GetV1().Data)
 		if err != nil {
 			if store.IsAlreadyExistsError(err) {
 				continue
@@ -211,10 +208,11 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
+		wakuTopic := topic.BuildWelcomeTopic(input.GetV1().InstallationId)
 		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
 			ContentTopic: wakuTopic,
 			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      data,
+			Payload:      msg.Data,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
@@ -256,22 +254,22 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 
 func validateSendGroupMessagesRequest(req *proto.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no messages to publish")
+		return status.Errorf(codes.InvalidArgument, "no group messages to send")
+	}
+	for _, input := range req.Messages {
+		if input == nil || input.GetV1() == nil {
+			return status.Errorf(codes.InvalidArgument, "invalid group message")
+		}
 	}
 	return nil
 }
 
 func validateSendWelcomeMessagesRequest(req *proto.SendWelcomeMessagesRequest) error {
-	if req == nil || len(req.WelcomeMessages) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no welcome messages to publish")
+	if req == nil || len(req.Messages) == 0 {
+		return status.Errorf(codes.InvalidArgument, "no welcome messages to send")
 	}
-	for _, welcome := range req.WelcomeMessages {
-		if welcome == nil || welcome.WelcomeMessage == nil {
-			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
-		}
-
-		v1 := welcome.WelcomeMessage.GetV1()
-		if v1 == nil {
+	for _, input := range req.Messages {
+		if input == nil || input.GetV1() == nil {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
 	}

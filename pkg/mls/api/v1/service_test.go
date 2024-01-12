@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
-	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
@@ -31,7 +30,7 @@ func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, ke
 	return response.([]mlsvalidate.IdentityValidationResult), args.Error(1)
 }
 
-func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]mlsvalidate.GroupMessageValidationResult, error) {
+func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
 	args := m.Called(ctx, groupMessages)
 
 	return args.Get(0).([]mlsvalidate.GroupMessageValidationResult), args.Error(1)
@@ -231,8 +230,14 @@ func TestSendGroupMessages(t *testing.T) {
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
 	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
-		Messages: [][]byte{
-			[]byte("test"),
+		Messages: []*mlsv1.GroupMessageInput{
+			{
+				Version: &mlsv1.GroupMessageInput_V1_{
+					V1: &mlsv1.GroupMessageInput_V1{
+						Data: []byte("test"),
+					},
+				},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -254,16 +259,12 @@ func TestSendWelcomeMessages(t *testing.T) {
 	installationId := []byte(test.RandomString(32))
 
 	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
-		WelcomeMessages: []*mlsv1.SendWelcomeMessagesRequest_WelcomeMessageRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{
 			{
-				InstallationId: []byte(installationId),
-				WelcomeMessage: &message_contents.WelcomeMessage{
-					Version: &message_contents.WelcomeMessage_V1_{
-						V1: &message_contents.WelcomeMessage_V1{
-							Id:        1,
-							CreatedNs: 1,
-							Data:      []byte("test"),
-						},
+				Version: &mlsv1.WelcomeMessageInput_V1_{
+					V1: &mlsv1.WelcomeMessageInput_V1{
+						InstallationId: []byte(installationId),
+						Data:           []byte("test"),
 					},
 				},
 			},

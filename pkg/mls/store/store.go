@@ -11,7 +11,6 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
-	"github.com/xmtp/proto/v3/go/mls/message_contents"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	"go.uber.org/zap"
 )
@@ -257,11 +256,11 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		return nil, err
 	}
 
-	messages := make([]*message_contents.GroupMessage, 0, len(msgs))
+	messages := make([]*mlsv1.GroupMessage, 0, len(msgs))
 	for _, msg := range msgs {
-		messages = append(messages, &message_contents.GroupMessage{
-			Version: &message_contents.GroupMessage_V1_{
-				V1: &message_contents.GroupMessage_V1{
+		messages = append(messages, &mlsv1.GroupMessage{
+			Version: &mlsv1.GroupMessage_V1_{
+				V1: &mlsv1.GroupMessage_V1{
 					Id:        msg.Id,
 					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
 					GroupId:   msg.GroupId,
@@ -326,11 +325,11 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		return nil, err
 	}
 
-	messages := make([]*message_contents.WelcomeMessage, 0, len(msgs))
+	messages := make([]*mlsv1.WelcomeMessage, 0, len(msgs))
 	for _, msg := range msgs {
-		messages = append(messages, &message_contents.WelcomeMessage{
-			Version: &message_contents.WelcomeMessage_V1_{
-				V1: &message_contents.WelcomeMessage_V1{
+		messages = append(messages, &mlsv1.WelcomeMessage{
+			Version: &mlsv1.WelcomeMessage_V1_{
+				V1: &mlsv1.WelcomeMessage_V1{
 					Id:        msg.Id,
 					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
 					Data:      msg.Data,
