@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
@@ -175,8 +176,12 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 		}
 
 		// TODO: Wrap this in a transaction so publishing is all or nothing
-		wakuTopic := topic.BuildGroupTopic([]byte(result.GroupId))
-		msg, err := s.store.InsertGroupMessage(ctx, []byte(result.GroupId), data)
+		decodedGroupId, err := hex.DecodeString(result.GroupId)
+		if err != nil {
+			return nil, err
+		}
+		wakuTopic := topic.BuildGroupTopic(decodedGroupId)
+		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, data)
 		if err != nil {
 			if store.IsAlreadyExistsError(err) {
 				continue

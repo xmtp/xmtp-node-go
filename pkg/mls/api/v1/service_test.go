@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -54,7 +55,7 @@ func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []by
 func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId []byte) *mock.Call {
 	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
 		{
-			GroupId: string(groupId),
+			GroupId: fmt.Sprintf("%x", groupId),
 		},
 	}, nil)
 }
