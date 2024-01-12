@@ -270,12 +270,10 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		})
 	}
 
-	pagingInfo := &mlsv1.PagingInfo{Limit: 0, IdCursor: 0, Direction: direction}
+	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
 	if len(messages) >= pageSize {
-		if len(messages) > 0 {
-			lastMsg := msgs[len(messages)-1]
-			pagingInfo.IdCursor = lastMsg.Id
-		}
+		lastMsg := msgs[len(messages)-1]
+		pagingInfo.IdCursor = lastMsg.Id
 	}
 
 	return &mlsv1.QueryGroupMessagesResponse{
@@ -338,12 +336,10 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		})
 	}
 
-	pagingInfo := &mlsv1.PagingInfo{Limit: 0, IdCursor: 0, Direction: direction}
+	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
 	if len(messages) >= pageSize {
-		if len(messages) > 0 {
-			lastMsg := msgs[len(messages)-1]
-			pagingInfo.IdCursor = lastMsg.Id
-		}
+		lastMsg := msgs[len(messages)-1]
+		pagingInfo.IdCursor = lastMsg.Id
 	}
 
 	return &mlsv1.QueryWelcomeMessagesResponse{
