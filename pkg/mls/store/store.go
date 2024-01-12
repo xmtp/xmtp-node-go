@@ -30,6 +30,8 @@ type MlsStore interface {
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error)
+	GetGroupMessage(ctx context.Context, id uint64) (*mlsv1.GroupMessage, error)
+	GetWelcomeMessage(ctx context.Context, id uint64) (*mlsv1.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -213,6 +215,26 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 	}
 
 	return &message, nil
+}
+
+func (s *Store) GetGroupMessage(ctx context.Context, id uint64) (*mlsv1.GroupMessage, error) {
+	msg := &mlsv1.GroupMessage{}
+	err := s.db.NewSelect().Model(&msg).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(snormore): return NotFoundError if not found
+	return msg, nil
+}
+
+func (s *Store) GetWelcomeMessage(ctx context.Context, id uint64) (*mlsv1.WelcomeMessage, error) {
+	msg := &mlsv1.WelcomeMessage{}
+	err := s.db.NewSelect().Model(&msg).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(snormore): return NotFoundError if not found
+	return msg, nil
 }
 
 func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {

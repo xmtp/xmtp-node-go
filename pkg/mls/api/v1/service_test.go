@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -67,16 +68,14 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		DB:  db,
 	})
 	require.NoError(t, err)
-	node, nodeCleanup := test.NewNode(t)
 	mlsValidationService := newMockedValidationService()
 
-	svc, err := NewService(node, log, store, mlsValidationService)
+	svc, err := NewService(log, store, mlsValidationService, func(ctx context.Context, wm *wakupb.WakuMessage) error {
+		return nil
+	})
 	require.NoError(t, err)
 
-	return svc, db, mlsValidationService, func() {
-		mlsDbCleanup()
-		nodeCleanup()
-	}
+	return svc, db, mlsValidationService, mlsDbCleanup
 }
 
 func TestRegisterInstallation(t *testing.T) {
@@ -328,4 +327,35 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, identityUpdates.Updates, 1)
 	require.Len(t, identityUpdates.Updates[0].Updates, 2)
+}
+
+func TestSubscribeGroupMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+
+	mlsValidationService.mockValidateGroupMessages(groupId)
+
+	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
+		Messages: []*mlsv1.GroupMessageInput{
+			{
+				Version: &mlsv1.GroupMessageInput_V1_{
+					V1: &mlsv1.GroupMessageInput_V1{
+						Data: []byte("data"),
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+		GroupId: groupId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("data"))
+	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
