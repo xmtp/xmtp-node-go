@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/ethereum/go-ethereum v1.10.26
-	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
@@ -30,8 +29,9 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.1.16
 	github.com/waku-org/go-waku v0.8.0
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
-	github.com/xmtp/proto/v3 v3.37.1-0.20240112031043-fd75b4bf81f8
+	github.com/xmtp/proto/v3 v3.37.1-0.20240112125235-f02fe8d0f1a0
 	github.com/yoheimuta/protolint v0.39.0
+	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.53.0
@@ -75,6 +75,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gopacket v1.1.19 // indirect

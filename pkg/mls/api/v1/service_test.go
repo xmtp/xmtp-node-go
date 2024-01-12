@@ -5,14 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 )
 
 type mockedMLSValidationService struct {
@@ -67,15 +72,16 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		DB:  db,
 	})
 	require.NoError(t, err)
-	node, nodeCleanup := test.NewNode(t)
 	mlsValidationService := newMockedValidationService()
 
-	svc, err := NewService(node, log, store, mlsValidationService)
+	svc, err := NewService(log, store, mlsValidationService, func(ctx context.Context, wm *wakupb.WakuMessage) error {
+		return nil
+	})
 	require.NoError(t, err)
 
 	return svc, db, mlsValidationService, func() {
+		svc.Close()
 		mlsDbCleanup()
-		nodeCleanup()
 	}
 }
 
@@ -328,4 +334,148 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, identityUpdates.Updates, 1)
 	require.Len(t, identityUpdates.Updates[0].Updates, 2)
+}
+
+func TestSubscribeGroupMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+
+	msgs := make([]*mlsv1.GroupMessage, 10)
+	for i := 0; i < 10; i++ {
+		msgs[i] = &mlsv1.GroupMessage{
+			Version: &mlsv1.GroupMessage_V1_{
+				V1: &mlsv1.GroupMessage_V1{
+					Id:        uint64(i + 1),
+					CreatedNs: uint64(i + 1),
+					GroupId:   groupId,
+					Data:      []byte(fmt.Sprintf("data%d", i+1)),
+				},
+			},
+		}
+	}
+
+	ctrl := gomock.NewController(t)
+	stream := NewMockMlsApi_SubscribeGroupMessagesServer(ctrl)
+	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	for _, msg := range msgs {
+		stream.EXPECT().Send(newGroupMessageEqualsMatcher(msg)).Return(nil).Times(1)
+	}
+	stream.EXPECT().Context().Return(ctx)
+
+	go func() {
+		err := svc.SubscribeGroupMessages(&mlsv1.SubscribeGroupMessagesRequest{
+			Filters: []*mlsv1.SubscribeGroupMessagesRequest_Filter{
+				{
+					GroupId: groupId,
+				},
+			},
+		}, stream)
+		require.NoError(t, err)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	for _, msg := range msgs {
+		msgB, err := proto.Marshal(msg)
+		require.NoError(t, err)
+
+		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
+			Timestamp:    int64(msg.GetV1().CreatedNs),
+			Payload:      msgB,
+		})
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+}
+
+func TestSubscribeWelcomeMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationKey := []byte(test.RandomString(32))
+
+	msgs := make([]*mlsv1.WelcomeMessage, 10)
+	for i := 0; i < 10; i++ {
+		msgs[i] = &mlsv1.WelcomeMessage{
+			Version: &mlsv1.WelcomeMessage_V1_{
+				V1: &mlsv1.WelcomeMessage_V1{
+					Id:              uint64(i + 1),
+					CreatedNs:       uint64(i + 1),
+					InstallationKey: installationKey,
+					Data:            []byte(fmt.Sprintf("data%d", i+1)),
+				},
+			},
+		}
+	}
+
+	ctrl := gomock.NewController(t)
+	stream := NewMockMlsApi_SubscribeWelcomeMessagesServer(ctrl)
+	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	for _, msg := range msgs {
+		stream.EXPECT().Send(newWelcomeMessageEqualsMatcher(msg)).Return(nil).Times(1)
+	}
+	stream.EXPECT().Context().Return(ctx)
+
+	go func() {
+		err := svc.SubscribeWelcomeMessages(&mlsv1.SubscribeWelcomeMessagesRequest{
+			Filters: []*mlsv1.SubscribeWelcomeMessagesRequest_Filter{
+				{
+					InstallationKey: installationKey,
+				},
+			},
+		}, stream)
+		require.NoError(t, err)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	for _, msg := range msgs {
+		msgB, err := proto.Marshal(msg)
+		require.NoError(t, err)
+
+		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
+			Timestamp:    int64(msg.GetV1().CreatedNs),
+			Payload:      msgB,
+		})
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+}
+
+type groupMessageEqualsMatcher struct {
+	obj *mlsv1.GroupMessage
+}
+
+func newGroupMessageEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessageEqualsMatcher {
+	return &groupMessageEqualsMatcher{obj}
+}
+
+func (m *groupMessageEqualsMatcher) Matches(obj interface{}) bool {
+	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage))
+}
+
+func (m *groupMessageEqualsMatcher) String() string {
+	return m.obj.String()
+}
+
+type welcomeMessageEqualsMatcher struct {
+	obj *mlsv1.WelcomeMessage
+}
+
+func newWelcomeMessageEqualsMatcher(obj *mlsv1.WelcomeMessage) *welcomeMessageEqualsMatcher {
+	return &welcomeMessageEqualsMatcher{obj}
+}
+
+func (m *welcomeMessageEqualsMatcher) Matches(obj interface{}) bool {
+	return proto.Equal(m.obj, obj.(*mlsv1.WelcomeMessage))
+}
+
+func (m *welcomeMessageEqualsMatcher) String() string {
+	return m.obj.String()
 }

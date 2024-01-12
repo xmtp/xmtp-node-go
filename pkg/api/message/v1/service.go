@@ -13,16 +13,13 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	wakurelay "github.com/waku-org/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -45,24 +42,24 @@ type Service struct {
 
 	// Configured as constructor options.
 	log   *zap.Logger
-	waku  *wakunode.WakuNode
 	store *store.Store
+
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
 
 	// Configured internally.
 	ctx       context.Context
 	ctxCancel func()
 	wg        sync.WaitGroup
-	relaySub  *wakurelay.Subscription
 
 	ns *server.Server
 	nc *nats.Conn
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store) (s *Service, err error) {
+func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
-		waku:  node,
-		log:   logger.Named("message/v1"),
-		store: store,
+		log:                log.Named("message/v1"),
+		store:              store,
+		publishToWakuRelay: publishToWakuRelay,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -82,44 +79,11 @@ func NewService(node *wakunode.WakuNode, logger *zap.Logger, store *store.Store)
 		return nil, err
 	}
 
-	// Initialize waku relay subscription.
-	s.relaySub, err = s.waku.Relay().Subscribe(s.ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "subscribing to relay")
-	}
-	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case wakuEnv := <-s.relaySub.Ch:
-				if wakuEnv == nil {
-					continue
-				}
-				env := buildEnvelope(wakuEnv.Message())
-
-				envB, err := pb.Marshal(env)
-				if err != nil {
-					s.log.Error("marshalling envelope", zap.Error(err))
-					continue
-				}
-				err = s.nc.Publish(buildNatsSubject(env.ContentTopic), envB)
-				if err != nil {
-					s.log.Error("publishing envelope to local nats", zap.Error(err))
-					continue
-				}
-			}
-		}
-	})
-
 	return s, nil
 }
 
 func (s *Service) Close() {
 	s.log.Info("closing")
-	if s.relaySub != nil {
-		s.relaySub.Unsubscribe()
-	}
 
 	if s.ctxCancel != nil {
 		s.ctxCancel()
@@ -134,6 +98,22 @@ func (s *Service) Close() {
 
 	s.wg.Wait()
 	s.log.Info("closed")
+}
+
+func (s *Service) HandleIncomingWakuRelayMessage(msg *wakupb.WakuMessage) error {
+	env := buildEnvelope(msg)
+
+	envB, err := pb.Marshal(env)
+	if err != nil {
+		return err
+	}
+
+	err = s.nc.Publish(buildNatsSubject(env.ContentTopic), envB)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
@@ -156,7 +136,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			}
 		}
 
-		_, err := s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
+		err := s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
 			ContentTopic: env.ContentTopic,
 			Timestamp:    int64(env.TimestampNs),
 			Payload:      env.Message,
@@ -164,6 +144,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
+
 		metrics.EmitPublishedEnvelope(ctx, log, env)
 	}
 	return &proto.PublishResponse{}, nil

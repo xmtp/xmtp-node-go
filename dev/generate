@@ -2,3 +2,5 @@
 set -e
 
 go generate ./...
+
+mockgen -package api github.com/xmtp/proto/v3/go/mls/api/v1 MlsApi_SubscribeGroupMessagesServer,MlsApi_SubscribeWelcomeMessagesServer > pkg/mls/api/v1/mock.gen.go

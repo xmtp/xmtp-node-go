@@ -3,42 +3,125 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"hash/fnv"
+	"sync"
+	"time"
 
-	wakunode "github.com/waku-org/go-waku/waku/v2/node"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	proto "github.com/xmtp/proto/v3/go/mls/api/v1"
+	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	pb "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 type Service struct {
-	proto.UnimplementedMlsApiServer
+	mlsv1.UnimplementedMlsApiServer
 
 	log               *zap.Logger
-	waku              *wakunode.WakuNode
 	store             mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
+
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
+
+	ns *server.Server
+	nc *nats.Conn
+
+	ctx       context.Context
+	ctxCancel func()
 }
 
-func NewService(node *wakunode.WakuNode, logger *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
-		log:               logger.Named("mls/v1"),
-		waku:              node,
-		store:             store,
-		validationService: validationService,
+		log:                log.Named("mls/v1"),
+		store:              store,
+		validationService:  validationService,
+		publishToWakuRelay: publishToWakuRelay,
+	}
+	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+
+	// Initialize nats for subscriptions.
+	s.ns, err = server.NewServer(&server.Options{
+		Port: server.RANDOM_PORT,
+	})
+	if err != nil {
+		return nil, err
+	}
+	go s.ns.Start()
+	if !s.ns.ReadyForConnections(4 * time.Second) {
+		return nil, errors.New("nats not ready")
+	}
+	s.nc, err = nats.Connect(s.ns.ClientURL())
+	if err != nil {
+		return nil, err
 	}
 
 	s.log.Info("Starting MLS service")
 	return s, nil
 }
 
-func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterInstallationRequest) (*proto.RegisterInstallationResponse, error) {
+func (s *Service) Close() {
+	s.log.Info("closing")
+
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+	}
+
+	if s.nc != nil {
+		s.nc.Close()
+	}
+	if s.ns != nil {
+		s.ns.Shutdown()
+	}
+
+	s.log.Info("closed")
+}
+
+func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
+	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
+		var msg mlsv1.GroupMessage
+		err := pb.Unmarshal(wakuMsg.Payload, &msg)
+		if err != nil {
+			return err
+		}
+		if msg.GetV1() == nil {
+			return nil
+		}
+		err = s.nc.Publish(buildNatsSubjectForGroupMessages(msg.GetV1().GroupId), wakuMsg.Payload)
+		if err != nil {
+			return err
+		}
+	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
+		var msg mlsv1.WelcomeMessage
+		err := pb.Unmarshal(wakuMsg.Payload, &msg)
+		if err != nil {
+			return err
+		}
+		if msg.GetV1() == nil {
+			return nil
+		}
+		err = s.nc.Publish(buildNatsSubjectForWelcomeMessages(msg.GetV1().InstallationKey), wakuMsg.Payload)
+		if err != nil {
+			return err
+		}
+	} else {
+		s.log.Info("received unknown mls message type from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+	}
+
+	return nil
+}
+
+func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterInstallationRequest) (*mlsv1.RegisterInstallationResponse, error) {
 	if err := validateRegisterInstallationRequest(req); err != nil {
 		return nil, err
 	}
@@ -59,12 +142,12 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *proto.RegisterI
 		return nil, err
 	}
 
-	return &proto.RegisterInstallationResponse{
+	return &mlsv1.RegisterInstallationResponse{
 		InstallationKey: installationId,
 	}, nil
 }
 
-func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPackagesRequest) (*proto.FetchKeyPackagesResponse, error) {
+func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPackagesRequest) (*mlsv1.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationKeys
 	installations, err := s.store.FetchKeyPackages(ctx, ids)
 	if err != nil {
@@ -75,7 +158,7 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPacka
 		keyPackageMap[string(id)] = idx
 	}
 
-	resPackages := make([]*proto.FetchKeyPackagesResponse_KeyPackage, len(ids))
+	resPackages := make([]*mlsv1.FetchKeyPackagesResponse_KeyPackage, len(ids))
 	for _, installation := range installations {
 
 		idx, ok := keyPackageMap[string(installation.ID)]
@@ -83,17 +166,17 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *proto.FetchKeyPacka
 			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
 		}
 
-		resPackages[idx] = &proto.FetchKeyPackagesResponse_KeyPackage{
+		resPackages[idx] = &mlsv1.FetchKeyPackagesResponse_KeyPackage{
 			KeyPackageTlsSerialized: installation.KeyPackage,
 		}
 	}
 
-	return &proto.FetchKeyPackagesResponse{
+	return &mlsv1.FetchKeyPackagesResponse{
 		KeyPackages: resPackages,
 	}, nil
 }
 
-func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPackageRequest) (res *emptypb.Empty, err error) {
+func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPackageRequest) (res *emptypb.Empty, err error) {
 	if err = validateUploadKeyPackageRequest(req); err != nil {
 		return nil, err
 	}
@@ -115,11 +198,11 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *proto.UploadKeyPack
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) RevokeInstallation(ctx context.Context, req *proto.RevokeInstallationRequest) (*emptypb.Empty, error) {
+func (s *Service) RevokeInstallation(ctx context.Context, req *mlsv1.RevokeInstallationRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
 }
 
-func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentityUpdatesRequest) (res *proto.GetIdentityUpdatesResponse, err error) {
+func (s *Service) GetIdentityUpdates(ctx context.Context, req *mlsv1.GetIdentityUpdatesRequest) (res *mlsv1.GetIdentityUpdatesResponse, err error) {
 	if err = validateGetIdentityUpdatesRequest(req); err != nil {
 		return nil, err
 	}
@@ -130,12 +213,12 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 		return nil, status.Errorf(codes.Internal, "failed to get identity updates: %s", err)
 	}
 
-	resUpdates := make([]*proto.GetIdentityUpdatesResponse_WalletUpdates, len(accountAddresses))
+	resUpdates := make([]*mlsv1.GetIdentityUpdatesResponse_WalletUpdates, len(accountAddresses))
 	for i, accountAddress := range accountAddresses {
 		walletUpdates := updates[accountAddress]
 
-		resUpdates[i] = &proto.GetIdentityUpdatesResponse_WalletUpdates{
-			Updates: []*proto.GetIdentityUpdatesResponse_Update{},
+		resUpdates[i] = &mlsv1.GetIdentityUpdatesResponse_WalletUpdates{
+			Updates: []*mlsv1.GetIdentityUpdatesResponse_Update{},
 		}
 
 		for _, walletUpdate := range walletUpdates {
@@ -143,12 +226,12 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *proto.GetIdentity
 		}
 	}
 
-	return &proto.GetIdentityUpdatesResponse{
+	return &mlsv1.GetIdentityUpdatesResponse{
 		Updates: resUpdates,
 	}, nil
 }
 
-func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
+func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
 	if err = validateSendGroupMessagesRequest(req); err != nil {
 		return nil, err
 	}
@@ -179,21 +262,34 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		wakuTopic := topic.BuildGroupTopic(decodedGroupId)
-		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
-			ContentTopic: wakuTopic,
-			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msg.Data,
+		msgB, err := pb.Marshal(&mlsv1.GroupMessage{
+			Version: &mlsv1.GroupMessage_V1_{
+				V1: &mlsv1.GroupMessage_V1{
+					Id:        msg.Id,
+					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
+					GroupId:   msg.GroupId,
+					Data:      msg.Data,
+				},
+			},
 		})
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
+			return nil, err
+		}
+
+		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1GroupTopic(decodedGroupId),
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      msgB,
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
+func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
 	if err = validateSendWelcomeMessagesRequest(req); err != nil {
 		return nil, err
 	}
@@ -208,42 +304,153 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *proto.SendWelcom
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		wakuTopic := topic.BuildWelcomeTopic(input.GetV1().InstallationKey)
-		_, err = s.waku.Relay().Publish(ctx, &wakupb.WakuMessage{
-			ContentTopic: wakuTopic,
-			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msg.Data,
+		msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
+			Version: &mlsv1.WelcomeMessage_V1_{
+				V1: &mlsv1.WelcomeMessage_V1{
+					Id:              msg.Id,
+					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+					InstallationKey: msg.InstallationKey,
+					Data:            msg.Data,
+				},
+			},
 		})
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to publish message: %s", err)
+			return nil, err
+		}
+
+		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
+			Timestamp:    msg.CreatedAt.UnixNano(),
+			Payload:      msgB,
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) QueryGroupMessages(ctx context.Context, req *proto.QueryGroupMessagesRequest) (*proto.QueryGroupMessagesResponse, error) {
+func (s *Service) QueryGroupMessages(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
 	return s.store.QueryGroupMessagesV1(ctx, req)
 }
 
-func (s *Service) QueryWelcomeMessages(ctx context.Context, req *proto.QueryWelcomeMessagesRequest) (*proto.QueryWelcomeMessagesResponse, error) {
+func (s *Service) QueryWelcomeMessages(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	return s.store.QueryWelcomeMessagesV1(ctx, req)
 }
 
-func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdatesResponse_Update {
-	base := proto.GetIdentityUpdatesResponse_Update{
+func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesRequest, stream mlsv1.MlsApi_SubscribeGroupMessagesServer) error {
+	log := s.log.Named("subscribe-group-messages").With(zap.Int("filters", len(req.Filters)))
+
+	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
+	// See: https://github.com/xmtp/libxmtp/pull/58
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
+
+	var streamLock sync.Mutex
+	for _, filter := range req.Filters {
+		natsSubject := buildNatsSubjectForGroupMessages(filter.GroupId)
+		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
+			var msg mlsv1.GroupMessage
+			err := pb.Unmarshal(natsMsg.Data, &msg)
+			if err != nil {
+				log.Error("parsing group message from bytes", zap.Error(err))
+				return
+			}
+			func() {
+				streamLock.Lock()
+				defer streamLock.Unlock()
+				err := stream.Send(&msg)
+				if err != nil {
+					log.Error("sending group message to subscribe", zap.Error(err))
+				}
+			}()
+		})
+		if err != nil {
+			log.Error("error subscribing to group messages", zap.Error(err))
+			return err
+		}
+		defer func() {
+			_ = sub.Unsubscribe()
+		}()
+	}
+
+	select {
+	case <-stream.Context().Done():
+		return nil
+	case <-s.ctx.Done():
+		return nil
+	}
+}
+
+func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRequest, stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer) error {
+	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
+
+	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
+	// See: https://github.com/xmtp/libxmtp/pull/58
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
+
+	var streamLock sync.Mutex
+	for _, filter := range req.Filters {
+		natsSubject := buildNatsSubjectForWelcomeMessages(filter.InstallationKey)
+		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
+			var msg mlsv1.WelcomeMessage
+			err := pb.Unmarshal(natsMsg.Data, &msg)
+			if err != nil {
+				log.Error("parsing welcome message from bytes", zap.Error(err))
+				return
+			}
+			func() {
+				streamLock.Lock()
+				defer streamLock.Unlock()
+				err := stream.Send(&msg)
+				if err != nil {
+					log.Error("sending welcome message to subscribe", zap.Error(err))
+				}
+			}()
+		})
+		if err != nil {
+			log.Error("error subscribing to welcome messages", zap.Error(err))
+			return err
+		}
+		defer func() {
+			_ = sub.Unsubscribe()
+		}()
+	}
+
+	select {
+	case <-stream.Context().Done():
+		return nil
+	case <-s.ctx.Done():
+		return nil
+	}
+}
+
+func buildNatsSubjectForGroupMessages(groupId []byte) string {
+	hasher := fnv.New64a()
+	hasher.Write(groupId)
+	return fmt.Sprintf("gm-%x", hasher.Sum64())
+}
+
+func buildNatsSubjectForWelcomeMessages(installationId []byte) string {
+	hasher := fnv.New64a()
+	hasher.Write(installationId)
+	return fmt.Sprintf("wm-%x", hasher.Sum64())
+}
+
+func buildIdentityUpdate(update mlsstore.IdentityUpdate) *mlsv1.GetIdentityUpdatesResponse_Update {
+	base := mlsv1.GetIdentityUpdatesResponse_Update{
 		TimestampNs: update.TimestampNs,
 	}
 	switch update.Kind {
 	case mlsstore.Create:
-		base.Kind = &proto.GetIdentityUpdatesResponse_Update_NewInstallation{
-			NewInstallation: &proto.GetIdentityUpdatesResponse_NewInstallationUpdate{
+		base.Kind = &mlsv1.GetIdentityUpdatesResponse_Update_NewInstallation{
+			NewInstallation: &mlsv1.GetIdentityUpdatesResponse_NewInstallationUpdate{
 				InstallationKey:    update.InstallationKey,
 				CredentialIdentity: update.CredentialIdentity,
 			},
 		}
 	case mlsstore.Revoke:
-		base.Kind = &proto.GetIdentityUpdatesResponse_Update_RevokedInstallation{
-			RevokedInstallation: &proto.GetIdentityUpdatesResponse_RevokedInstallationUpdate{
+		base.Kind = &mlsv1.GetIdentityUpdatesResponse_Update_RevokedInstallation{
+			RevokedInstallation: &mlsv1.GetIdentityUpdatesResponse_RevokedInstallationUpdate{
 				InstallationKey: update.InstallationKey,
 			},
 		}
@@ -252,7 +459,7 @@ func buildIdentityUpdate(update mlsstore.IdentityUpdate) *proto.GetIdentityUpdat
 	return &base
 }
 
-func validateSendGroupMessagesRequest(req *proto.SendGroupMessagesRequest) error {
+func validateSendGroupMessagesRequest(req *mlsv1.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no group messages to send")
 	}
@@ -264,7 +471,7 @@ func validateSendGroupMessagesRequest(req *proto.SendGroupMessagesRequest) error
 	return nil
 }
 
-func validateSendWelcomeMessagesRequest(req *proto.SendWelcomeMessagesRequest) error {
+func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to send")
 	}
@@ -276,21 +483,21 @@ func validateSendWelcomeMessagesRequest(req *proto.SendWelcomeMessagesRequest) e
 	return nil
 }
 
-func validateRegisterInstallationRequest(req *proto.RegisterInstallationRequest) error {
+func validateRegisterInstallationRequest(req *mlsv1.RegisterInstallationRequest) error {
 	if req == nil || req.KeyPackage == nil {
 		return status.Errorf(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
 
-func validateUploadKeyPackageRequest(req *proto.UploadKeyPackageRequest) error {
+func validateUploadKeyPackageRequest(req *mlsv1.UploadKeyPackageRequest) error {
 	if req == nil || req.KeyPackage == nil {
 		return status.Errorf(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
 
-func validateGetIdentityUpdatesRequest(req *proto.GetIdentityUpdatesRequest) error {
+func validateGetIdentityUpdatesRequest(req *mlsv1.GetIdentityUpdatesRequest) error {
 	if req == nil || len(req.AccountAddresses) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no wallet addresses to get updates for")
 	}
