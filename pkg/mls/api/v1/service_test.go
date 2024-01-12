@@ -231,16 +231,9 @@ func TestSendGroupMessages(t *testing.T) {
 	mlsValidationService.mockValidateGroupMessages(groupId)
 
 	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
-		Messages: []*message_contents.GroupMessage{{
-			Version: &message_contents.GroupMessage_V1_{
-				V1: &message_contents.GroupMessage_V1{
-					Id:        1,
-					CreatedNs: 1,
-					GroupId:   groupId,
-					Data:      []byte("test"),
-				},
-			},
-		}},
+		Messages: [][]byte{
+			[]byte("test"),
+		},
 	})
 	require.NoError(t, err)
 

@@ -153,23 +153,14 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *proto.SendGroupMes
 		return nil, err
 	}
 
-	messages := make([][]byte, len(req.Messages))
-	for i, message := range req.Messages {
-		v1 := message.GetV1()
-		if v1 == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "message must be v1")
-		}
-		messages[i] = v1.Data
-	}
-
-	validationResults, err := s.validationService.ValidateGroupMessages(ctx, messages)
+	validationResults, err := s.validationService.ValidateGroupMessages(ctx, req.Messages)
 	if err != nil {
 		// TODO: Separate validation errors from internal errors
 		return nil, status.Errorf(codes.InvalidArgument, "invalid group message: %s", err)
 	}
 
 	for i, result := range validationResults {
-		data := messages[i]
+		data := req.Messages[i]
 
 		if err = requireReadyToSend(result.GroupId, data); err != nil {
 			return nil, err
