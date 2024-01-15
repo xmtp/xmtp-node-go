@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const maxPageSize = 100
+const MaxQueryPageSize = 100
 
 type Store struct {
 	config Config
@@ -30,8 +30,10 @@ type MlsStore interface {
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error)
-	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
-	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
+	GetLatestGroupMessage(ctx context.Context, groupId []byte) (*GroupMessage, error)
+	GetLatestWelcomeMessage(ctx context.Context, installationKey []byte) (*WelcomeMessage, error)
+	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) ([]*GroupMessage, error)
+	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) ([]*WelcomeMessage, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -215,7 +217,31 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 	return &message, nil
 }
 
-func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
+func (s *Store) GetLatestGroupMessage(ctx context.Context, groupId []byte) (*GroupMessage, error) {
+	var msg GroupMessage
+	err := s.db.NewSelect().Model(&msg).Where("group_id = ?", groupId).Order("id DESC").Limit(1).Scan(ctx)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, NewNotFoundError(err)
+		}
+		return nil, err
+	}
+	return &msg, nil
+}
+
+func (s *Store) GetLatestWelcomeMessage(ctx context.Context, installationKey []byte) (*WelcomeMessage, error) {
+	var msg WelcomeMessage
+	err := s.db.NewSelect().Model(&msg).Where("installation_key = ?", installationKey).Order("id DESC").Limit(1).Scan(ctx)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, NewNotFoundError(err)
+		}
+		return nil, err
+	}
+	return &msg, nil
+}
+
+func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) ([]*GroupMessage, error) {
 	msgs := make([]*GroupMessage, 0)
 
 	if len(req.GroupId) == 0 {
@@ -237,8 +263,8 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		q = q.Order("id ASC")
 	}
 
-	pageSize := maxPageSize
-	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+	pageSize := MaxQueryPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= MaxQueryPageSize {
 		pageSize = int(req.PagingInfo.Limit)
 	}
 	q = q.Limit(pageSize)
@@ -256,33 +282,10 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		return nil, err
 	}
 
-	messages := make([]*mlsv1.GroupMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &mlsv1.GroupMessage{
-			Version: &mlsv1.GroupMessage_V1_{
-				V1: &mlsv1.GroupMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupId,
-					Data:      msg.Data,
-				},
-			},
-		})
-	}
-
-	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
-	if len(messages) >= pageSize {
-		lastMsg := msgs[len(messages)-1]
-		pagingInfo.IdCursor = lastMsg.Id
-	}
-
-	return &mlsv1.QueryGroupMessagesResponse{
-		Messages:   messages,
-		PagingInfo: pagingInfo,
-	}, nil
+	return msgs, nil
 }
 
-func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
+func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) ([]*WelcomeMessage, error) {
 	msgs := make([]*WelcomeMessage, 0)
 
 	if len(req.InstallationKey) == 0 {
@@ -304,8 +307,8 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		q = q.Order("id ASC")
 	}
 
-	pageSize := maxPageSize
-	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
+	pageSize := MaxQueryPageSize
+	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= MaxQueryPageSize {
 		pageSize = int(req.PagingInfo.Limit)
 	}
 	q = q.Limit(pageSize)
@@ -323,29 +326,7 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		return nil, err
 	}
 
-	messages := make([]*mlsv1.WelcomeMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &mlsv1.WelcomeMessage{
-			Version: &mlsv1.WelcomeMessage_V1_{
-				V1: &mlsv1.WelcomeMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					Data:      msg.Data,
-				},
-			},
-		})
-	}
-
-	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
-	if len(messages) >= pageSize {
-		lastMsg := msgs[len(messages)-1]
-		pagingInfo.IdCursor = lastMsg.Id
-	}
-
-	return &mlsv1.QueryWelcomeMessagesResponse{
-		Messages:   messages,
-		PagingInfo: pagingInfo,
-	}, nil
+	return msgs, nil
 }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -414,5 +395,22 @@ func NewAlreadyExistsError(err error) *AlreadyExistsError {
 
 func IsAlreadyExistsError(err error) bool {
 	_, ok := err.(*AlreadyExistsError)
+	return ok
+}
+
+type NotFoundError struct {
+	Err error
+}
+
+func (e *NotFoundError) Error() string {
+	return e.Err.Error()
+}
+
+func NewNotFoundError(err error) *NotFoundError {
+	return &NotFoundError{err}
+}
+
+func IsNotFoundError(err error) bool {
+	_, ok := err.(*NotFoundError)
 	return ok
 }
