@@ -20,7 +20,7 @@ func IsMLSV1Welcome(topic string) bool {
 }
 
 func BuildMLSV1GroupTopic(groupId []byte) string {
-	return fmt.Sprintf("%sg-%s/proto", mlsv1Prefix, groupId)
+	return fmt.Sprintf("%sg-%x/proto", mlsv1Prefix, groupId)
 }
 
 func BuildMLSV1WelcomeTopic(installationId []byte) string {
