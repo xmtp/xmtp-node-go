@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	svc "github.com/xmtp/proto/v3/go/mls_validation/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -11,7 +12,7 @@ import (
 
 type IdentityValidationResult struct {
 	AccountAddress     string
-	InstallationId     []byte
+	InstallationKey    []byte
 	CredentialIdentity []byte
 	Expiration         uint64
 }
@@ -27,7 +28,7 @@ type IdentityInput struct {
 
 type MLSValidationService interface {
 	ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
-	ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]GroupMessageValidationResult, error)
+	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
 }
 
 type MLSValidationServiceImpl struct {
@@ -57,7 +58,7 @@ func (s *MLSValidationServiceImpl) ValidateKeyPackages(ctx context.Context, keyP
 		}
 		out[i] = IdentityValidationResult{
 			AccountAddress:     response.AccountAddress,
-			InstallationId:     response.InstallationId,
+			InstallationKey:    response.InstallationId,
 			CredentialIdentity: response.CredentialIdentityBytes,
 			Expiration:         response.Expiration,
 		}
@@ -77,7 +78,7 @@ func makeValidateKeyPackageRequest(keyPackageBytes [][]byte) *svc.ValidateKeyPac
 	}
 }
 
-func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, groupMessages [][]byte) ([]GroupMessageValidationResult, error) {
+func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error) {
 	req := makeValidateGroupMessagesRequest(groupMessages)
 
 	response, err := s.grpcClient.ValidateGroupMessages(ctx, req)
@@ -98,11 +99,11 @@ func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, gr
 	return out, nil
 }
 
-func makeValidateGroupMessagesRequest(groupMessages [][]byte) *svc.ValidateGroupMessagesRequest {
+func makeValidateGroupMessagesRequest(groupMessages []*mlsv1.GroupMessageInput) *svc.ValidateGroupMessagesRequest {
 	groupMessageRequests := make([]*svc.ValidateGroupMessagesRequest_GroupMessage, len(groupMessages))
 	for i, groupMessage := range groupMessages {
 		groupMessageRequests[i] = &svc.ValidateGroupMessagesRequest_GroupMessage{
-			GroupMessageBytesTlsSerialized: groupMessage,
+			GroupMessageBytesTlsSerialized: groupMessage.GetV1().Data,
 		}
 	}
 	return &svc.ValidateGroupMessagesRequest{

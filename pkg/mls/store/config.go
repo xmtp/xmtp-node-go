@@ -17,4 +17,6 @@ type StoreOptions struct {
 type Config struct {
 	Log *zap.Logger
 	DB  *bun.DB
+
+	now func() time.Time
 }

@@ -14,10 +14,13 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
 	swgui "github.com/swaggest/swgui/v3"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
+	wakurelay "github.com/waku-org/go-waku/waku/v2/protocol/relay"
 	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	mlsv1pb "github.com/xmtp/proto/v3/go/mls/api/v1"
 	messagev1openapi "github.com/xmtp/proto/v3/openapi/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -48,6 +51,8 @@ type Server struct {
 	mlsv1        *mlsv1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
+	ctxCancel    func()
+	wakuRelaySub *wakurelay.Subscription
 
 	authorizer *WalletAuthorizer
 }
@@ -61,7 +66,7 @@ func New(config *Config) (*Server, error) {
 		Config: config,
 	}
 
-	s.ctx = context.Background()
+	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
 	// Start gRPC services.
 	err := s.startGRPC()
@@ -123,7 +128,12 @@ func (s *Server) startGRPC() error {
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
 
-	s.messagev1, err = messagev1.NewService(s.Waku, s.Log, s.Store)
+	publishToWakuRelay := func(ctx context.Context, msg *wakupb.WakuMessage) error {
+		_, err := s.Waku.Relay().Publish(ctx, msg)
+		return err
+	}
+
+	s.messagev1, err = messagev1.NewService(s.Log, s.Store, publishToWakuRelay)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}
@@ -131,12 +141,49 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS server if a store is provided
 	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
-		s.mlsv1, err = mlsv1.NewService(s.Waku, s.Log, s.Store, s.Config.MLSStore, s.Config.MLSValidator)
+		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator, publishToWakuRelay)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
 		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
 	}
+
+	// Initialize waku relay subscription.
+	s.wakuRelaySub, err = s.Waku.Relay().Subscribe(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "subscribing to relay")
+	}
+	tracing.GoPanicWrap(s.ctx, &s.wg, "broadcast", func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case wakuEnv := <-s.wakuRelaySub.Ch:
+				if wakuEnv == nil || wakuEnv.Message() == nil {
+					continue
+				}
+				wakuMsg := wakuEnv.Message()
+
+				if topic.IsMLSV1(wakuMsg.ContentTopic) {
+					if s.mlsv1 != nil {
+						err := s.mlsv1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
+						if err != nil {
+							s.Log.Error("error handling waku relay message by mlsv1 service", zap.Error(err))
+						}
+					}
+				} else {
+					if s.messagev1 != nil {
+						err := s.messagev1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
+						if err != nil {
+							s.Log.Error("error handling waku relay message by messagev1 service", zap.Error(err))
+						}
+					}
+				}
+
+			}
+		}
+	})
+
 	prometheus.Register(grpcServer)
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "grpc", func(ctx context.Context) {
@@ -215,8 +262,20 @@ func (s *Server) startHTTP() error {
 
 func (s *Server) Close() {
 	s.Log.Info("closing")
+
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+	}
+
+	if s.wakuRelaySub != nil {
+		s.wakuRelaySub.Unsubscribe()
+	}
+
 	if s.messagev1 != nil {
 		s.messagev1.Close()
+	}
+	if s.mlsv1 != nil {
+		s.mlsv1.Close()
 	}
 
 	if s.httpListener != nil {
