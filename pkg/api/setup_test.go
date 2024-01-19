@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	v1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	v1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"go.uber.org/zap"
