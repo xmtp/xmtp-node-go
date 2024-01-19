@@ -20,7 +20,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	pb "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -88,28 +87,18 @@ func (s *Service) Close() {
 
 func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
 	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
-		var msg mlsv1.GroupMessage
-		err := pb.Unmarshal(wakuMsg.Payload, &msg)
-		if err != nil {
-			return err
-		}
-		if msg.GetV1() == nil {
-			return nil
-		}
-		err = s.nc.Publish(buildNatsSubjectForGroupMessages(msg.GetV1().GroupId), wakuMsg.Payload)
+		// The waku message payload is just the group ID as bytes since we only
+		// need to use it as a signal that a new message was published, without
+		// any other content.
+		err := s.nc.Publish(buildNatsSubjectForGroupMessages(wakuMsg.Payload), wakuMsg.Payload)
 		if err != nil {
 			return err
 		}
 	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
-		var msg mlsv1.WelcomeMessage
-		err := pb.Unmarshal(wakuMsg.Payload, &msg)
-		if err != nil {
-			return err
-		}
-		if msg.GetV1() == nil {
-			return nil
-		}
-		err = s.nc.Publish(buildNatsSubjectForWelcomeMessages(msg.GetV1().InstallationKey), wakuMsg.Payload)
+		// The waku message payload is just the installation key as bytes since
+		// we only need to use it as a signal that a new message was published,
+		// without any other content.
+		err := s.nc.Publish(buildNatsSubjectForWelcomeMessages(wakuMsg.Payload), wakuMsg.Payload)
 		if err != nil {
 			return err
 		}
@@ -261,24 +250,13 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		msgB, err := pb.Marshal(&mlsv1.GroupMessage{
-			Version: &mlsv1.GroupMessage_V1_{
-				V1: &mlsv1.GroupMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupId,
-					Data:      msg.Data,
-				},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-
 		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
 			ContentTopic: topic.BuildMLSV1GroupTopic(decodedGroupId),
 			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msgB,
+			// The waku message payload is just the group ID as bytes since we
+			// only need to use it as a signal that a new message was
+			// published, without any other content.
+			Payload: msg.GroupId,
 		})
 		if err != nil {
 			return nil, err
@@ -303,24 +281,13 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
-			Version: &mlsv1.WelcomeMessage_V1_{
-				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              msg.Id,
-					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-					InstallationKey: msg.InstallationKey,
-					Data:            msg.Data,
-				},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-
 		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
-			ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
+			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.InstallationKey),
 			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msgB,
+			// The waku message payload is just the installation key as bytes
+			// since we only need to use it as a signal that a new message was
+			// published, without any other content.
+			Payload: msg.InstallationKey,
 		})
 		if err != nil {
 			return nil, err

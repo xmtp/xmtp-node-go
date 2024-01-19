@@ -18,7 +18,6 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/proto"
 )
 
 type mockedMLSValidationService struct {
@@ -409,12 +408,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		msgB, err := proto.Marshal(msg)
-		require.NoError(t, err)
 		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
 			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
 			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			Payload:      msg.GetV1().GroupId,
 		})
 		require.NoError(t, err)
 
@@ -524,12 +521,10 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		msgB, err := proto.Marshal(msg)
-		require.NoError(t, err)
 		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
 			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
 			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			Payload:      msg.GetV1().GroupId,
 		})
 		require.NoError(t, err)
 
@@ -614,12 +609,10 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		msgB, err := proto.Marshal(msg)
-		require.NoError(t, err)
 		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
 			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
 			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			Payload:      msg.GetV1().InstallationKey,
 		})
 		require.NoError(t, err)
 
@@ -731,12 +724,10 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		msgB, err := proto.Marshal(msg)
-		require.NoError(t, err)
 		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
 			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
 			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			Payload:      msg.GetV1().InstallationKey,
 		})
 		require.NoError(t, err)
 
