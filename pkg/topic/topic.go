@@ -1,7 +1,6 @@
 package topic
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -37,12 +36,4 @@ func Category(contentTopic string) string {
 		}
 	}
 	return "invalid"
-}
-
-func BuildGroupTopic(groupId string) string {
-	return fmt.Sprintf("/xmtp/mls/1/g-%s/proto", groupId)
-}
-
-func BuildWelcomeTopic(installationId []byte) string {
-	return fmt.Sprintf("/xmtp/mls/1/w-%x/proto", installationId)
 }
