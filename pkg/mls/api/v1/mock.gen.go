@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	apiv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	gomock "go.uber.org/mock/gomock"
 	metadata "google.golang.org/grpc/metadata"
 )
@@ -70,7 +70,7 @@ func (mr *MockMlsApi_SubscribeGroupMessagesServerMockRecorder) RecvMsg(arg0 any)
 }
 
 // Send mocks base method.
-func (m *MockMlsApi_SubscribeGroupMessagesServer) Send(arg0 *v1.GroupMessage) error {
+func (m *MockMlsApi_SubscribeGroupMessagesServer) Send(arg0 *apiv1.GroupMessage) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", arg0)
 	ret0, _ := ret[0].(error)
@@ -189,7 +189,7 @@ func (mr *MockMlsApi_SubscribeWelcomeMessagesServerMockRecorder) RecvMsg(arg0 an
 }
 
 // Send mocks base method.
-func (m *MockMlsApi_SubscribeWelcomeMessagesServer) Send(arg0 *v1.WelcomeMessage) error {
+func (m *MockMlsApi_SubscribeWelcomeMessagesServer) Send(arg0 *apiv1.WelcomeMessage) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", arg0)
 	ret0, _ := ret[0].(error)
