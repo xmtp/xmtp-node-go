@@ -251,7 +251,7 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 		// TODO: Wrap this in a transaction so publishing is all or nothing
 		decodedGroupId, err := hex.DecodeString(result.GroupId)
 		if err != nil {
-			return nil, err
+			return nil, status.Error(codes.InvalidArgument, "invalid group id")
 		}
 		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, input.GetV1().Data)
 		if err != nil {
