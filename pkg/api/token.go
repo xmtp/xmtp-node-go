@@ -6,9 +6,9 @@ import (
 	"time"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
-	envelope "github.com/xmtp/proto/v3/go/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
+	envelope "github.com/xmtp/xmtp-node-go/pkg/proto/message_contents"
 	"google.golang.org/protobuf/proto"
 )
 

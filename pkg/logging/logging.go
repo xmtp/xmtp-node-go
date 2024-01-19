@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/waku-org/go-waku/logging"
-	proto "github.com/xmtp/proto/v3/go/message_api/v1"
+	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

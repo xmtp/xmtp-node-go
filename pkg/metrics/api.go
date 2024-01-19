@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	proto "github.com/xmtp/proto/v3/go/message_api/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

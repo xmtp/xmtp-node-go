@@ -1,0 +1,137 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "mls_validation/v1/service.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ValidationApi"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {},
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1ValidateGroupMessagesRequestGroupMessage": {
+      "type": "object",
+      "properties": {
+        "groupMessageBytesTlsSerialized": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "Wrapper for each message"
+    },
+    "v1ValidateGroupMessagesResponse": {
+      "type": "object",
+      "properties": {
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ValidateGroupMessagesResponseValidationResponse"
+          }
+        }
+      },
+      "title": "Response to ValidateGroupMessagesRequest"
+    },
+    "v1ValidateGroupMessagesResponseValidationResponse": {
+      "type": "object",
+      "properties": {
+        "isOk": {
+          "type": "boolean"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        }
+      },
+      "title": "An individual response to one message"
+    },
+    "v1ValidateKeyPackagesRequestKeyPackage": {
+      "type": "object",
+      "properties": {
+        "keyPackageBytesTlsSerialized": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "Wrapper for each key package"
+    },
+    "v1ValidateKeyPackagesResponse": {
+      "type": "object",
+      "properties": {
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ValidateKeyPackagesResponseValidationResponse"
+          }
+        }
+      },
+      "title": "Response to ValidateKeyPackagesRequest"
+    },
+    "v1ValidateKeyPackagesResponseValidationResponse": {
+      "type": "object",
+      "properties": {
+        "isOk": {
+          "type": "boolean"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "installationId": {
+          "type": "string",
+          "format": "byte"
+        },
+        "accountAddress": {
+          "type": "string"
+        },
+        "credentialIdentityBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "expiration": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "title": "An individual response to one key package"
+    }
+  }
+}

@@ -11,8 +11,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )

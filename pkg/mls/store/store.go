@@ -10,8 +10,8 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
-	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"go.uber.org/zap"
 )
 
