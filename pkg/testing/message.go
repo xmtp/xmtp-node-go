@@ -1,7 +1,7 @@
 package testing
 
 import (
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 )
 
 func NewEnvelope(contentTopic string, timestamp uint64, content string) *messagev1.Envelope {

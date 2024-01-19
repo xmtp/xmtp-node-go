@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	svc "github.com/xmtp/proto/v3/go/mls_validation/v1"
+	svc "github.com/xmtp/xmtp-node-go/pkg/proto/mls_validation/v1"
 	"google.golang.org/grpc"
 )
 

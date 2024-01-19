@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
-	svc "github.com/xmtp/proto/v3/go/mls_validation/v1"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	svc "github.com/xmtp/xmtp-node-go/pkg/proto/mls_validation/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

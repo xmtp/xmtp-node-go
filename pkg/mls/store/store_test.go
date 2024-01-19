@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	mlsv1 "github.com/xmtp/proto/v3/go/mls/api/v1"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
