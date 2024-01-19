@@ -3,4 +3,4 @@ set -e
 
 go generate ./...
 
-mockgen -package api github.com/xmtp/proto/v3/go/mls/api/v1 MlsApi_SubscribeGroupMessagesServer,MlsApi_SubscribeWelcomeMessagesServer > pkg/mls/api/v1/mock.gen.go
+mockgen -package api github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1 MlsApi_SubscribeGroupMessagesServer,MlsApi_SubscribeWelcomeMessagesServer > pkg/mls/api/v1/mock.gen.go
