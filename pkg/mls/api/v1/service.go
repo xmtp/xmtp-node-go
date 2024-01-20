@@ -412,19 +412,15 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 				}
 			}
 
-			activeTicker := time.NewTicker(100 * time.Millisecond)
-			defer activeTicker.Stop()
-			passiveTicker := time.NewTicker(5 * time.Second)
-			defer passiveTicker.Stop()
+			ticker := time.NewTicker(200 * time.Millisecond)
+			defer ticker.Stop()
 			for {
 				select {
 				case <-stream.Context().Done():
 					return
 				case <-s.ctx.Done():
 					return
-				case <-passiveTicker.C:
-					setHasMessages()
-				case <-activeTicker.C:
+				case <-ticker.C:
 					var skip bool
 					func() {
 						hasMessagesLock.Lock()
@@ -545,19 +541,15 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 				}
 			}
 
-			activeTicker := time.NewTicker(200 * time.Millisecond)
-			defer activeTicker.Stop()
-			passiveTicker := time.NewTicker(5 * time.Second)
-			defer passiveTicker.Stop()
+			ticker := time.NewTicker(200 * time.Millisecond)
+			defer ticker.Stop()
 			for {
 				select {
 				case <-stream.Context().Done():
 					return
 				case <-s.ctx.Done():
 					return
-				case <-passiveTicker.C:
-					setHasMessages()
-				case <-activeTicker.C:
+				case <-ticker.C:
 					var skip bool
 					func() {
 						hasMessagesLock.Lock()
