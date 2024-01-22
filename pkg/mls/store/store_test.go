@@ -237,13 +237,14 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, uint64(1), msg.Id)
 	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
 	require.Equal(t, []byte("installation"), msg.InstallationKey)
 	require.Equal(t, []byte("data"), msg.Data)
+	require.Equal(t, []byte("hpke"), msg.HpkePublicKey)
 
 	msgs := make([]*WelcomeMessage, 0)
 	err = store.db.NewSelect().Model(&msgs).Scan(ctx)
@@ -257,11 +258,11 @@ func TestInsertWelcomeMessage_Duplicate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 
-	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"))
+	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
 	require.Nil(t, msg)
 	require.IsType(t, &AlreadyExistsError{}, err)
 	require.True(t, IsAlreadyExistsError(err))
@@ -272,11 +273,11 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"), []byte("hpke"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"), []byte("hpke"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"), []byte("hpke"))
 	require.NoError(t, err)
 
 	msgs := make([]*WelcomeMessage, 0)
@@ -361,11 +362,11 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"), []byte("hpke1"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"), []byte("hpke2"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"), []byte("hpke3"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
@@ -381,6 +382,7 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	require.Len(t, resp.Messages, 2)
 	require.Equal(t, []byte("data3"), resp.Messages[0].GetV1().Data)
 	require.Equal(t, []byte("data1"), resp.Messages[1].GetV1().Data)
+	require.Equal(t, []byte("hpke3"), resp.Messages[0].GetV1().HpkePublicKey)
 
 	resp, err = store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
 		InstallationKey: []byte("installation2"),
@@ -502,21 +504,21 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"), []byte("hpke1"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"), []byte("hpke2"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"), []byte("hpke3"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"), []byte("hpke4"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"), []byte("hpke5"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"), []byte("hpke6"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"), []byte("hpke7"))
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"), []byte("hpke8"))
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
