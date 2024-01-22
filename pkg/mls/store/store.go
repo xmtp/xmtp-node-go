@@ -199,7 +199,7 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 	}
 
 	var id uint64
-	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash, hpkePublicKey) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...)), hpkePublicKey).Scan(&id)
+	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash, hpke_public_key) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...)), hpkePublicKey).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
