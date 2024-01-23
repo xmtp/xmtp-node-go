@@ -206,7 +206,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			}()
 		})
 		if err != nil {
-			log.Error("error subscribing", zap.Error(err))
+			log.Error("error subscribing", zap.Error(err), zap.Int("topics", len(req.ContentTopics)))
 			return err
 		}
 		defer func() {
@@ -310,7 +310,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 						}()
 					})
 					if err != nil {
-						log.Error("error subscribing", zap.Error(err))
+						log.Error("error subscribing", zap.Error(err), zap.Int("topics", len(req.ContentTopics)))
 						return err
 					}
 					subs[topic] = sub
