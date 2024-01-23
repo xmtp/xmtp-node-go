@@ -211,6 +211,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 		}
 		defer func() {
 			_ = sub.Unsubscribe()
+			metrics.EmitUnsubscribeTopics(stream.Context(), log, 1)
 		}()
 	}
 
@@ -222,8 +223,6 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 		log.Info("service closed")
 		break
 	}
-
-	metrics.EmitUnsubscribeTopics(stream.Context(), log, len(req.ContentTopics))
 
 	return nil
 }
