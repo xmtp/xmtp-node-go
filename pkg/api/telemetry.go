@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"strings"
+	"time"
 
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
@@ -30,8 +31,9 @@ func (ti *TelemetryInterceptor) Unary() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		start := time.Now().UTC()
 		res, err := handler(ctx, req)
-		ti.record(ctx, info.FullMethod, err)
+		ti.record(ctx, info.FullMethod, time.Since(start), err)
 		return res, err
 	}
 }
@@ -43,13 +45,14 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
+		start := time.Now().UTC()
 		err := handler(srv, stream)
-		ti.record(stream.Context(), info.FullMethod, err)
+		ti.record(stream.Context(), info.FullMethod, time.Since(start), err)
 		return err
 	}
 }
 
-func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, err error) {
+func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, duration time.Duration, err error) {
 	serviceName, methodName := splitMethodName(fullMethod)
 	ri := apicontext.NewRequesterInfo(ctx)
 	fields := append(
@@ -85,7 +88,7 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, e
 	}
 
 	logFn("api request", fields...)
-	metrics.EmitAPIRequest(ctx, ti.log, fields)
+	metrics.EmitAPIRequest(ctx, ti.log, fields, duration)
 }
 
 func splitMethodName(fullMethodName string) (serviceName string, methodName string) {
