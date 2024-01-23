@@ -57,6 +57,7 @@ func registerCollectors(reg prometheus.Registerer) {
 		BootstrapPeers,
 		StoredMessages,
 		apiRequests,
+		apiRequestsDuration,
 		subscribeTopicsLength,
 		publishedEnvelopeSize,
 		publishedEnvelopeCount,

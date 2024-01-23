@@ -41,7 +41,16 @@ var apiRequests = prometheus.NewCounterVec(
 	apiRequestTagKeys,
 )
 
-func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field) {
+var apiRequestsDuration = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "xmtp_api_request_duration_ms",
+		Help:    "Duration of api request (ms)",
+		Buckets: []float64{1, 10, 100, 500, 1000, 5000, 10000, 50000, 100000},
+	},
+	apiRequestTagKeys,
+)
+
+func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field, duration time.Duration) {
 	labels := prometheus.Labels{}
 	for _, field := range fields {
 		if !apiRequestTagKeysByName[field.Key] {
@@ -55,6 +64,7 @@ func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field
 		}
 	}
 	apiRequests.With(labels).Inc()
+	apiRequestsDuration.With(labels).Observe(float64(duration / time.Millisecond))
 }
 
 var subscribeTopicsLength = prometheus.NewHistogramVec(
