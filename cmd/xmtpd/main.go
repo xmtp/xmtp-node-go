@@ -36,6 +36,10 @@ func addEnvVars() {
 		options.Store.DbReaderConnectionString = connStr
 	}
 
+	if connStr, hasConnstr := os.LookupEnv("MLS_DB_CONNECTION_STRING"); hasConnstr {
+		options.MLSStore.DbConnectionString = connStr
+	}
+
 	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
 		options.Authz.DbConnectionString = connStr
 	}
