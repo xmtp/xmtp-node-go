@@ -37,7 +37,9 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	authzmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/authz"
 	messagemigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/messages"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsstore"
+	mlsmigrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
+	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	xmtpstore "github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
@@ -59,6 +61,7 @@ type Server struct {
 	allowLister   authz.WalletAllowLister
 	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
+	mlsDB         *bun.DB
 }
 
 // Create a new Server
@@ -226,32 +229,40 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
-	var mlsStore mlsstore.MlsStore
-
-	if options.MlsStore.DbConnectionString != "" {
-		mlsDb, err := createBunDB(options.MlsStore.DbConnectionString, options.WaitForDB, options.MlsStore.ReadTimeout, options.MlsStore.WriteTimeout, options.MlsStore.MaxOpenConns)
-		if err != nil {
+	var MLSStore *mlsstore.Store
+	if options.MLSStore.DbConnectionString != "" {
+		if s.mlsDB, err = createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns); err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
-		mlsStore, err = mlsstore.New(mlsstore.Config{
+		s.log.Info("creating mls store")
+		if MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
 			Log: s.log,
-			DB:  mlsDb,
-		})
-		if err != nil {
+			DB:  s.mlsDB,
+		}); err != nil {
 			return nil, errors.Wrap(err, "creating mls store")
 		}
+	}
+
+	var MLSValidator mlsvalidate.MLSValidationService
+	if options.MLSValidation.GRPCAddress != "" {
+		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MLSValidation)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating mls validation service")
+		}
+
 	}
 
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
 		&api.Config{
-			Options:     options.API,
-			Log:         s.log.Named("api"),
-			Waku:        s.wakuNode,
-			Store:       s.store,
-			MlsStore:    mlsStore,
-			AllowLister: s.allowLister,
+			Options:      options.API,
+			Log:          s.log.Named("`api"),
+			Waku:         s.wakuNode,
+			Store:        s.store,
+			MLSStore:     MLSStore,
+			AllowLister:  s.allowLister,
+			MLSValidator: MLSValidator,
 		},
 	)
 	if err != nil {
@@ -291,6 +302,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.store != nil {
 		s.store.Close()
+	}
+	if s.mlsDB != nil {
+		s.mlsDB.Close()
 	}
 
 	// Close metrics server.
@@ -502,6 +516,20 @@ func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, r
 		return err
 	}
 	migrator := migrate.NewMigrator(db, authzmigrations.Migrations)
+	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
+	for _, mf := range files {
+		fmt.Printf("created authz migration %s (%s)\n", mf.Name, mf.Path)
+	}
+
+	return err
+}
+
+func CreateMlsMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
+	if err != nil {
+		return err
+	}
+	migrator := migrate.NewMigrator(db, mlsmigrations.Migrations)
 	files, err := migrator.CreateSQLMigrations(context.Background(), migrationName)
 	for _, mf := range files {
 		fmt.Printf("created authz migration %s (%s)\n", mf.Name, mf.Path)

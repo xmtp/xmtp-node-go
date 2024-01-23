@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	messageV1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
+	messageV1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 )
 
 func Test_AuthnNoToken(t *testing.T) {
@@ -19,7 +19,7 @@ func Test_AuthnNoToken(t *testing.T) {
 	})
 }
 
-func Test_AuthnNoTokenNonV3(t *testing.T) {
+func Test_AuthnNoTokenNonV0(t *testing.T) {
 	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{
@@ -36,23 +36,7 @@ func Test_AuthnNoTokenNonV3(t *testing.T) {
 	})
 }
 
-func Test_AuthnNoTokenV3(t *testing.T) {
-	ctx := context.Background()
-	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
-		_, err := client.Publish(ctx, &messageV1.PublishRequest{
-			Envelopes: []*messageV1.Envelope{
-				{
-					ContentTopic: "/xmtp/3/m-0x1234/proto",
-					TimestampNs:  0,
-					Message:      []byte{},
-				},
-			},
-		})
-		require.NoError(t, err)
-	})
-}
-
-func Test_AuthnNoTokenMixedV0V3(t *testing.T) {
+func Test_AuthnNoTokenMixedV0MLS(t *testing.T) {
 	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		_, err := client.Publish(ctx, &messageV1.PublishRequest{
@@ -63,7 +47,7 @@ func Test_AuthnNoTokenMixedV0V3(t *testing.T) {
 					Message:      []byte{},
 				},
 				{
-					ContentTopic: "/xmtp/3/m-0x1234/proto",
+					ContentTopic: "/xmtp/mls/1/m-0x1234/proto",
 					TimestampNs:  0,
 					Message:      []byte{},
 				},

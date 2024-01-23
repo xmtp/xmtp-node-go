@@ -1,6 +1,8 @@
 package topic
 
-import "strings"
+import (
+	"strings"
+)
 
 var topicCategoryByPrefix = map[string]string{
 	"test":         "test",

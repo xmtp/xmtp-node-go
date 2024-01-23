@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
@@ -87,23 +87,9 @@ func (wa *WalletAuthorizer) Stream() grpc.StreamServerInterceptor {
 	}
 }
 
-func (wa *WalletAuthorizer) isProtocolVersion3(request *messagev1.PublishRequest) bool {
-	envelopes := request.Envelopes
-	if len(envelopes) == 0 {
-		return false
-	}
-	// If any of the envelopes are not for a v3 topic, then we treat the request as non-v3
-	for _, envelope := range envelopes {
-		if !strings.HasPrefix(envelope.ContentTopic, "/xmtp/3/") {
-			return false
-		}
-	}
-	return true
-}
-
 func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
-	publishRequest, isPublish := req.(*messagev1.PublishRequest)
-	return isPublish && (!wa.isProtocolVersion3(publishRequest) || wa.AuthnConfig.EnableV3)
+	_, isPublish := req.(*messagev1.PublishRequest)
+	return isPublish
 }
 
 func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, error) {

@@ -36,6 +36,10 @@ func addEnvVars() {
 		options.Store.DbReaderConnectionString = connStr
 	}
 
+	if connStr, hasConnstr := os.LookupEnv("MLS_DB_CONNECTION_STRING"); hasConnstr {
+		options.MLSStore.DbConnectionString = connStr
+	}
+
 	if connStr, hasConnstr := os.LookupEnv("AUTHZ_DB_CONNECTION_STRING"); hasConnstr {
 		options.Authz.DbConnectionString = connStr
 	}
@@ -87,6 +91,13 @@ func main() {
 
 	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
 		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns); err != nil {
+			log.Fatal("creating authz db migration", zap.Error(err))
+		}
+		return
+	}
+
+	if options.CreateMlsMigration != "" && options.MLSStore.DbConnectionString != "" {
+		if err := server.CreateMlsMigration(options.CreateMlsMigration, options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.Store.MaxOpenConns); err != nil {
 			log.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
-	messagev1 "github.com/xmtp/proto/v3/go/message_api/v1"
+	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 )
 
 func (s *Store) Query(query *messagev1.QueryRequest) (res *messagev1.QueryResponse, err error) {
