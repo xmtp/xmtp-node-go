@@ -474,7 +474,6 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to send")
 	}
-
 	for _, input := range req.Messages {
 		if input == nil || input.GetV1() == nil {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
