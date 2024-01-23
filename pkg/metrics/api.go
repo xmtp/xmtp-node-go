@@ -67,20 +67,6 @@ func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field
 	apiRequestsDuration.With(labels).Observe(float64(duration / time.Millisecond))
 }
 
-var subscribeTopicsLength = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Name:    "xmtp_subscribe_topics_length",
-		Help:    "Number of subscribed topics per request",
-		Buckets: []float64{1, 2, 4, 8, 16, 50, 100, 10000, 100000},
-	},
-	appClientVersionTagKeys,
-)
-
-func EmitSubscribeTopicsLength(ctx context.Context, log *zap.Logger, topics int) {
-	labels := contextLabels(ctx)
-	subscribeTopicsLength.With(labels).Observe(float64(topics))
-}
-
 var publishedEnvelopeSize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "xmtp_published_envelope",
