@@ -2,7 +2,8 @@ name: Push MLS Container
 on:
   push:
     branches:
-      - mls
+      # - mls
+      - nm/add-hpke-public-key
 jobs:
   deploy:
     concurrency: main
@@ -28,7 +29,7 @@ jobs:
       - name: Push
         id: push
         run: |
-          export DOCKER_IMAGE_TAG=mls
+          export DOCKER_IMAGE_TAG=mls-dev
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
