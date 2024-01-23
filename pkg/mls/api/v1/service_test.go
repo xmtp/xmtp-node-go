@@ -271,6 +271,7 @@ func TestSendWelcomeMessages(t *testing.T) {
 					V1: &mlsv1.WelcomeMessageInput_V1{
 						InstallationKey: []byte(installationId),
 						Data:            []byte("test"),
+						HpkePublicKey:   []byte("test"),
 					},
 				},
 			},

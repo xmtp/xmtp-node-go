@@ -36,4 +36,5 @@ type WelcomeMessage struct {
 	CreatedAt       time.Time `bun:",notnull"`
 	InstallationKey []byte    `bun:",notnull,type:bytea"`
 	Data            []byte    `bun:",notnull,type:bytea"`
+	HpkePublicKey   []byte    `bun:"hpke_public_key,notnull,type:bytea"`
 }

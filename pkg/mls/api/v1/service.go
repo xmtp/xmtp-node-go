@@ -295,7 +295,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 
 	// TODO: Wrap this in a transaction so publishing is all or nothing
 	for _, input := range req.Messages {
-		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationKey, input.GetV1().Data)
+		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey)
 		if err != nil {
 			if mlsstore.IsAlreadyExistsError(err) {
 				continue
@@ -476,6 +476,11 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 	}
 	for _, input := range req.Messages {
 		if input == nil || input.GetV1() == nil {
+			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
+		}
+
+		v1 := input.GetV1()
+		if len(v1.Data) == 0 || len(v1.InstallationKey) == 0 || len(v1.HpkePublicKey) == 0 {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
 	}

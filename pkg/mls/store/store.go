@@ -29,7 +29,7 @@ type MlsStore interface {
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -193,13 +193,13 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []b
 	return &message, nil
 }
 
-func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte) (*WelcomeMessage, error) {
+func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*WelcomeMessage, error) {
 	message := WelcomeMessage{
 		Data: data,
 	}
 
 	var id uint64
-	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash) VALUES (?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...))).Scan(&id)
+	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash, hpke_public_key) VALUES (?, ?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...)), hpkePublicKey).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
@@ -328,9 +328,10 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		messages = append(messages, &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:        msg.Id,
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					Data:      msg.Data,
+					Id:            msg.Id,
+					CreatedNs:     uint64(msg.CreatedAt.UnixNano()),
+					Data:          msg.Data,
+					HpkePublicKey: msg.HpkePublicKey,
 				},
 			},
 		})
