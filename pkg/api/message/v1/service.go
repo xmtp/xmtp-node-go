@@ -36,6 +36,8 @@ const (
 
 	MaxContentTopicNameSize = 300
 
+	TopicsWildcardThreshold = 5000
+
 	// 1048576 - 300 - 62 = 1048214
 	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
 )
@@ -181,37 +183,57 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
 
 	var streamLock sync.Mutex
-	for _, topic := range req.ContentTopics {
-		subject := topic
-		if subject != natsWildcardTopic {
-			subject = buildNatsSubject(topic)
+
+	streamMessage := func(msg *nats.Msg) {
+		var env proto.Envelope
+		err := pb.Unmarshal(msg.Data, &env)
+		if err != nil {
+			log.Info("unmarshaling envelope", zap.Error(err))
+			return
 		}
-		sub, err := s.nc.Subscribe(subject, func(msg *nats.Msg) {
-			var env proto.Envelope
-			err := pb.Unmarshal(msg.Data, &env)
+		func() {
+			streamLock.Lock()
+			defer streamLock.Unlock()
+
+			err = stream.Send(&env)
 			if err != nil {
-				log.Error("parsing envelope from bytes", zap.Error(err))
+				log.Error("sending envelope to subscriber", zap.Error(err))
+			}
+		}()
+	}
+
+	if len(req.ContentTopics) > TopicsWildcardThreshold {
+		subscribedSubjects := map[string]bool{}
+		for _, topic := range req.ContentTopics {
+			subscribedSubjects[buildNatsSubject(topic)] = true
+		}
+		sub, err := s.nc.Subscribe(natsWildcardTopic, func(msg *nats.Msg) {
+			if !subscribedSubjects[msg.Subject] {
 				return
 			}
-			if topic == natsWildcardTopic && !isValidSubscribeAllTopic(env.ContentTopic) {
-				return
-			}
-			func() {
-				streamLock.Lock()
-				defer streamLock.Unlock()
-				err := stream.Send(&env)
-				if err != nil {
-					log.Error("sending envelope to subscribe", zap.Error(err))
-				}
-			}()
+			streamMessage(msg)
 		})
 		if err != nil {
-			log.Error("error subscribing", zap.Error(err))
 			return err
 		}
 		defer func() {
 			_ = sub.Unsubscribe()
 		}()
+	} else {
+		for _, topic := range req.ContentTopics {
+			subject := topic
+			if subject != natsWildcardTopic {
+				subject = buildNatsSubject(topic)
+			}
+			sub, err := s.nc.Subscribe(subject, streamMessage)
+			if err != nil {
+				log.Error("error subscribing", zap.Error(err))
+				return err
+			}
+			defer func() {
+				_ = sub.Unsubscribe()
+			}()
+		}
 	}
 
 	select {
@@ -266,6 +288,25 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 		}
 	}()
 	var streamLock sync.Mutex
+
+	streamMessage := func(msg *nats.Msg) {
+		var env proto.Envelope
+		err := pb.Unmarshal(msg.Data, &env)
+		if err != nil {
+			log.Info("unmarshaling envelope", zap.Error(err))
+			return
+		}
+		func() {
+			streamLock.Lock()
+			defer streamLock.Unlock()
+
+			err = stream.Send(&env)
+			if err != nil {
+				log.Error("sending envelope to subscriber", zap.Error(err))
+			}
+		}()
+	}
+
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -282,43 +323,46 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 			metrics.EmitSubscribeTopicsLength(stream.Context(), log, len(req.ContentTopics))
 
-			topics := map[string]bool{}
-			for _, topic := range req.ContentTopics {
-				topics[topic] = true
-
-				// If topic not in existing subscriptions, then subscribe.
-				if _, ok := subs[topic]; !ok {
-					sub, err := s.nc.Subscribe(buildNatsSubject(topic), func(msg *nats.Msg) {
-						var env proto.Envelope
-						err := pb.Unmarshal(msg.Data, &env)
-						if err != nil {
-							log.Info("unmarshaling envelope", zap.Error(err))
-							return
-						}
-						func() {
-							streamLock.Lock()
-							defer streamLock.Unlock()
-
-							err = stream.Send(&env)
-							if err != nil {
-								log.Error("sending envelope to subscriber", zap.Error(err))
-							}
-						}()
-					})
-					if err != nil {
-						return err
+			if len(req.ContentTopics) > TopicsWildcardThreshold {
+				subscribedSubjects := map[string]bool{}
+				for _, topic := range req.ContentTopics {
+					subscribedSubjects[buildNatsSubject(topic)] = true
+				}
+				sub, err := s.nc.Subscribe(natsWildcardTopic, func(msg *nats.Msg) {
+					if !subscribedSubjects[msg.Subject] {
+						return
 					}
-					subs[topic] = sub
+					streamMessage(msg)
+				})
+				if err != nil {
+					return err
 				}
-			}
+				defer func() {
+					_ = sub.Unsubscribe()
+				}()
+			} else {
+				topics := map[string]bool{}
+				for _, topic := range req.ContentTopics {
+					topics[topic] = true
 
-			// If subscription not in topic, then unsubscribe.
-			for topic, sub := range subs {
-				if topics[topic] {
-					continue
+					// If topic not in existing subscriptions, then subscribe.
+					if _, ok := subs[topic]; !ok {
+						sub, err := s.nc.Subscribe(buildNatsSubject(topic), streamMessage)
+						if err != nil {
+							return err
+						}
+						subs[topic] = sub
+					}
 				}
-				_ = sub.Unsubscribe()
-				delete(subs, topic)
+
+				// If subscription not in topic, then unsubscribe.
+				for topic, sub := range subs {
+					if topics[topic] {
+						continue
+					}
+					_ = sub.Unsubscribe()
+					delete(subs, topic)
+				}
 			}
 		}
 	}
