@@ -310,6 +310,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 						}()
 					})
 					if err != nil {
+						log.Error("error subscribing", zap.Error(err))
 						return err
 					}
 					subs[topic] = sub
