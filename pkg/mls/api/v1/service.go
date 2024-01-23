@@ -481,9 +481,6 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 		}
 
 		v1 := input.GetV1()
-		if v1.Data == nil || v1.InstallationKey == nil || v1.HpkePublicKey == nil {
-			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
-		}
 		if len(v1.Data) == 0 || len(v1.InstallationKey) == 0 || len(v1.HpkePublicKey) == 0 {
 			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
 		}
