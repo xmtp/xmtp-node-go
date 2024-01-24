@@ -308,7 +308,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				delete(subs, topic)
 				numUnsubscribes++
 			}
-			metrics.EmitUnsubscribeTopics(stream.Context(), log, numSubscribes-numUnsubscribes)
+			metrics.EmitSubscriptionChange(stream.Context(), log, numSubscribes-numUnsubscribes)
 		}
 	}
 }
