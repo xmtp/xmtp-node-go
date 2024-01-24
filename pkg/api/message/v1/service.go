@@ -265,9 +265,8 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 			}
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
 
-			metrics.EmitSubscribeTopics(stream.Context(), log, len(req.ContentTopics))
-
 			topics := map[string]bool{}
+			numSubscribes := 0
 			for _, topic := range req.ContentTopics {
 				topics[topic] = true
 
@@ -295,20 +294,21 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 						return err
 					}
 					subs[topic] = sub
+					numSubscribes++
 				}
 			}
 
 			// If subscription not in topic, then unsubscribe.
-			var count int
+			var numUnsubscribes int
 			for topic, sub := range subs {
 				if topics[topic] {
 					continue
 				}
 				_ = sub.Unsubscribe()
 				delete(subs, topic)
-				count++
+				numUnsubscribes++
 			}
-			metrics.EmitUnsubscribeTopics(stream.Context(), log, count)
+			metrics.EmitSubscriptionChange(stream.Context(), log, numSubscribes-numUnsubscribes)
 		}
 	}
 }

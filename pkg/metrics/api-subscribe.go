@@ -24,6 +24,11 @@ var subscribeTopicsLength = prometheus.NewHistogramVec(
 	appClientVersionTagKeys,
 )
 
+func EmitSubscriptionChange(ctx context.Context, log *zap.Logger, delta int) {
+	labels := contextLabels(ctx)
+	subscribedTopics.With(labels).Add(float64(delta))
+}
+
 func EmitSubscribeTopics(ctx context.Context, log *zap.Logger, topics int) {
 	labels := contextLabels(ctx)
 	subscribeTopicsLength.With(labels).Observe(float64(topics))
