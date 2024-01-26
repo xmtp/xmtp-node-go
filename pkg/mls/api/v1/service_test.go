@@ -409,6 +409,7 @@ func TestSubscribeWelcomeMessages(t *testing.T) {
 					CreatedNs:       uint64(i + 1),
 					InstallationKey: installationKey,
 					Data:            []byte(fmt.Sprintf("data%d", i+1)),
+					HpkePublicKey:   []byte(fmt.Sprintf("hpke%d", i+1)),
 				},
 			},
 		}

@@ -310,6 +310,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
 					InstallationKey: msg.InstallationKey,
 					Data:            msg.Data,
+					HpkePublicKey:   msg.HpkePublicKey,
 				},
 			},
 		})
