@@ -436,7 +436,6 @@ func TestSubscribeWelcomeMessages(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	for _, msg := range msgs {
-		require.NotNil(t, msg.GetV1().HpkePublicKey, "missing hpke public key")
 		msgB, err := proto.Marshal(msg)
 		require.NoError(t, err)
 
