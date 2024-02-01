@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,6 +71,7 @@ func NewDatabaseWalletAllowLister(db *bun.DB, log *zap.Logger) *DatabaseWalletAl
 
 // Get the permissions for a wallet address
 func (d *DatabaseWalletAllowLister) GetPermissions(walletAddress string) Permission {
+	walletAddress = strings.ToLower(walletAddress)
 	d.permissionsLock.RLock()
 	defer d.permissionsLock.RUnlock()
 
@@ -101,6 +103,7 @@ func (d *DatabaseWalletAllowLister) Allow(ctx context.Context, walletAddress str
 }
 
 func (d *DatabaseWalletAllowLister) Apply(ctx context.Context, walletAddress string, permission Permission) error {
+	walletAddress = strings.ToLower(walletAddress)
 	d.permissionsLock.Lock()
 	defer d.permissionsLock.Unlock()
 
@@ -149,7 +152,7 @@ func (d *DatabaseWalletAllowLister) loadPermissions() error {
 	}
 	newPermissionMap := make(map[string]Permission)
 	for _, wallet := range wallets {
-		newPermissionMap[wallet.WalletAddress] = mapPermission(wallet.Permission)
+		newPermissionMap[strings.ToLower(wallet.WalletAddress)] = mapPermission(wallet.Permission)
 	}
 	d.permissions = newPermissionMap
 
