@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -337,7 +338,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 	require.Len(t, identityUpdates.Updates[0].Updates, 2)
 }
 
-func TestSubscribeGroupMessages(t *testing.T) {
+func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -393,7 +394,108 @@ func TestSubscribeGroupMessages(t *testing.T) {
 	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
 }
 
-func TestSubscribeWelcomeMessages(t *testing.T) {
+func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
+	ctx := context.Background()
+	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+
+	// Initial message before stream starts.
+	mlsValidationService.mockValidateGroupMessages(groupId)
+	initialMsgs := []*mlsv1.GroupMessageInput{
+		{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
+					Data: []byte("data1"),
+				},
+			},
+		},
+		{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
+					Data: []byte("data2"),
+				},
+			},
+		},
+		{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
+					Data: []byte("data3"),
+				},
+			},
+		},
+	}
+	for _, msg := range initialMsgs {
+		_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
+			Messages: []*mlsv1.GroupMessageInput{msg},
+		})
+		require.NoError(t, err)
+	}
+
+	// Set of 10 messages that are included in the stream.
+	msgs := make([]*mlsv1.GroupMessage, 10)
+	for i := 0; i < 10; i++ {
+		msgs[i] = &mlsv1.GroupMessage{
+			Version: &mlsv1.GroupMessage_V1_{
+				V1: &mlsv1.GroupMessage_V1{
+					Id:        uint64(i + 4),
+					CreatedNs: uint64(i + 4),
+					GroupId:   groupId,
+					Data:      []byte(fmt.Sprintf("data%d", i+4)),
+				},
+			},
+		}
+	}
+
+	// Set up expectations of streaming the 11 messages from cursor.
+	ctrl := gomock.NewController(t)
+	stream := NewMockMlsApi_SubscribeGroupMessagesServer(ctrl)
+	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	stream.EXPECT().Send(newGroupMessageIdAndDataEqualsMatcher(&mlsv1.GroupMessage{
+		Version: &mlsv1.GroupMessage_V1_{
+			V1: &mlsv1.GroupMessage_V1{
+				Id:   3,
+				Data: []byte("data3"),
+			},
+		},
+	})).Return(nil).Times(1)
+	for _, msg := range msgs {
+		stream.EXPECT().Send(newGroupMessageEqualsMatcher(msg)).Return(nil).Times(1)
+	}
+	stream.EXPECT().Context().Return(ctx).AnyTimes()
+
+	go func() {
+		err := svc.SubscribeGroupMessages(&mlsv1.SubscribeGroupMessagesRequest{
+			Filters: []*mlsv1.SubscribeGroupMessagesRequest_Filter{
+				{
+					GroupId:  groupId,
+					IdCursor: 2,
+				},
+			},
+		}, stream)
+		require.NoError(t, err)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// Send the 10 real-time messages.
+	for _, msg := range msgs {
+		msgB, err := proto.Marshal(msg)
+		require.NoError(t, err)
+
+		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
+			Timestamp:    int64(msg.GetV1().CreatedNs),
+			Payload:      msgB,
+		})
+		require.NoError(t, err)
+	}
+
+	// Expectations should eventually be satisfied.
+	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+}
+
+func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
@@ -450,6 +552,116 @@ func TestSubscribeWelcomeMessages(t *testing.T) {
 	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
 }
 
+func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationKey := []byte(test.RandomString(32))
+	hpkePublicKey := []byte(test.RandomString(32))
+
+	// Initial message before stream starts.
+	initialMsgs := []*mlsv1.WelcomeMessageInput{
+		{
+			Version: &mlsv1.WelcomeMessageInput_V1_{
+				V1: &mlsv1.WelcomeMessageInput_V1{
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte("data1"),
+				},
+			},
+		},
+		{
+			Version: &mlsv1.WelcomeMessageInput_V1_{
+				V1: &mlsv1.WelcomeMessageInput_V1{
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte("data2"),
+				},
+			},
+		},
+		{
+			Version: &mlsv1.WelcomeMessageInput_V1_{
+				V1: &mlsv1.WelcomeMessageInput_V1{
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte("data3"),
+				},
+			},
+		},
+	}
+	for _, msg := range initialMsgs {
+		_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+			Messages: []*mlsv1.WelcomeMessageInput{msg},
+		})
+		require.NoError(t, err)
+	}
+
+	// Set of 10 messages that are included in the stream.
+	msgs := make([]*mlsv1.WelcomeMessage, 10)
+	for i := 0; i < 10; i++ {
+		msgs[i] = &mlsv1.WelcomeMessage{
+			Version: &mlsv1.WelcomeMessage_V1_{
+				V1: &mlsv1.WelcomeMessage_V1{
+					Id:              uint64(i + 4),
+					CreatedNs:       uint64(i + 4),
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte(fmt.Sprintf("data%d", i+4)),
+				},
+			},
+		}
+	}
+
+	// Set up expectations of streaming the 11 messages from cursor.
+	ctrl := gomock.NewController(t)
+	stream := NewMockMlsApi_SubscribeWelcomeMessagesServer(ctrl)
+	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	stream.EXPECT().Send(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
+		Version: &mlsv1.WelcomeMessage_V1_{
+			V1: &mlsv1.WelcomeMessage_V1{
+				Id:              3,
+				InstallationKey: installationKey,
+				HpkePublicKey:   hpkePublicKey,
+				Data:            []byte("data3"),
+			},
+		},
+	})).Return(nil).Times(1)
+	for _, msg := range msgs {
+		stream.EXPECT().Send(newWelcomeMessageEqualsMatcher(msg)).Return(nil).Times(1)
+	}
+	stream.EXPECT().Context().Return(ctx).AnyTimes()
+
+	go func() {
+		err := svc.SubscribeWelcomeMessages(&mlsv1.SubscribeWelcomeMessagesRequest{
+			Filters: []*mlsv1.SubscribeWelcomeMessagesRequest_Filter{
+				{
+					InstallationKey: installationKey,
+					IdCursor:        2,
+				},
+			},
+		}, stream)
+		require.NoError(t, err)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// Send the 10 real-time messages.
+	for _, msg := range msgs {
+		msgB, err := proto.Marshal(msg)
+		require.NoError(t, err)
+
+		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
+			Timestamp:    int64(msg.GetV1().CreatedNs),
+			Payload:      msgB,
+		})
+		require.NoError(t, err)
+	}
+
+	// Expectations should eventually be satisfied.
+	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+}
+
 type groupMessageEqualsMatcher struct {
 	obj *mlsv1.GroupMessage
 }
@@ -466,6 +678,23 @@ func (m *groupMessageEqualsMatcher) String() string {
 	return m.obj.String()
 }
 
+type groupMessageIdAndDataEqualsMatcher struct {
+	obj *mlsv1.GroupMessage
+}
+
+func newGroupMessageIdAndDataEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessageIdAndDataEqualsMatcher {
+	return &groupMessageIdAndDataEqualsMatcher{obj}
+}
+
+func (m *groupMessageIdAndDataEqualsMatcher) Matches(obj interface{}) bool {
+	return m.obj.GetV1().Id == obj.(*mlsv1.GroupMessage).GetV1().Id &&
+		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data)
+}
+
+func (m *groupMessageIdAndDataEqualsMatcher) String() string {
+	return m.obj.String()
+}
+
 type welcomeMessageEqualsMatcher struct {
 	obj *mlsv1.WelcomeMessage
 }
@@ -479,5 +708,24 @@ func (m *welcomeMessageEqualsMatcher) Matches(obj interface{}) bool {
 }
 
 func (m *welcomeMessageEqualsMatcher) String() string {
+	return m.obj.String()
+}
+
+type welcomeMessageEqualsMatcherWithoutTimestamp struct {
+	obj *mlsv1.WelcomeMessage
+}
+
+func newWelcomeMessageEqualsMatcherWithoutTimestamp(obj *mlsv1.WelcomeMessage) *welcomeMessageEqualsMatcherWithoutTimestamp {
+	return &welcomeMessageEqualsMatcherWithoutTimestamp{obj}
+}
+
+func (m *welcomeMessageEqualsMatcherWithoutTimestamp) Matches(obj interface{}) bool {
+	return m.obj.GetV1().Id == obj.(*mlsv1.WelcomeMessage).GetV1().Id &&
+		bytes.Equal(m.obj.GetV1().InstallationKey, obj.(*mlsv1.WelcomeMessage).GetV1().InstallationKey) &&
+		bytes.Equal(m.obj.GetV1().HpkePublicKey, obj.(*mlsv1.WelcomeMessage).GetV1().HpkePublicKey) &&
+		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.WelcomeMessage).GetV1().Data)
+}
+
+func (m *welcomeMessageEqualsMatcherWithoutTimestamp) String() string {
 	return m.obj.String()
 }
