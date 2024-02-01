@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,15 +68,21 @@ func TestPermissionCheck(t *testing.T) {
 	for _, wallet := range wallets {
 		expectedValue := wallet.Permission
 		isAllowed := allowLister.IsAllowListed(wallet.WalletAddress)
+		isAllowedLower := allowLister.IsAllowListed(strings.ToLower(wallet.WalletAddress))
 		isDenied := allowLister.IsDenyListed(wallet.WalletAddress)
+		isDeniedLower := allowLister.IsDenyListed(strings.ToLower(wallet.WalletAddress))
 		permission := allowLister.GetPermissions(wallet.WalletAddress)
 		if expectedValue == "allow" {
 			require.Equal(t, isAllowed, true)
+			require.Equal(t, isAllowedLower, true)
 			require.Equal(t, isDenied, false)
+			require.Equal(t, isDeniedLower, false)
 			require.Equal(t, permission, Allowed)
 		} else {
 			require.Equal(t, isAllowed, false)
+			require.Equal(t, isAllowedLower, false)
 			require.Equal(t, isDenied, true)
+			require.Equal(t, isDeniedLower, true)
 			require.Equal(t, permission, Denied)
 		}
 	}
