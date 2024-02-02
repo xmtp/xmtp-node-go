@@ -280,6 +280,7 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			Timestamp:    msg.CreatedAt.UnixNano(),
 			Payload:      msgB,
 		})
+
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +341,7 @@ func (s *Service) QueryWelcomeMessages(ctx context.Context, req *mlsv1.QueryWelc
 
 func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesRequest, stream mlsv1.MlsApi_SubscribeGroupMessagesServer) error {
 	log := s.log.Named("subscribe-group-messages").With(zap.Int("filters", len(req.Filters)))
-
+	log.Info("subscription started")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
@@ -383,7 +384,7 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 
 func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRequest, stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer) error {
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
-
+	log.Info("subscription started")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
