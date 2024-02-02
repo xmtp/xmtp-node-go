@@ -350,6 +350,7 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 	for _, filter := range req.Filters {
 		natsSubject := buildNatsSubjectForGroupMessages(filter.GroupId)
 		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
+			log.Info("received message from nats")
 			var msg mlsv1.GroupMessage
 			err := pb.Unmarshal(natsMsg.Data, &msg)
 			if err != nil {
@@ -393,6 +394,7 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 	for _, filter := range req.Filters {
 		natsSubject := buildNatsSubjectForWelcomeMessages(filter.InstallationKey)
 		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
+			log.Info("received message from nats")
 			var msg mlsv1.WelcomeMessage
 			err := pb.Unmarshal(natsMsg.Data, &msg)
 			if err != nil {
