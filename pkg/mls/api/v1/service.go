@@ -97,7 +97,7 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 		if msg.GetV1() == nil {
 			return nil
 		}
-		natsSubject := buildNatsSubjectForWelcomeMessages(msg.GetV1().GroupId)
+		natsSubject := buildNatsSubjectForGroupMessages(msg.GetV1().GroupId)
 		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
 		err = s.nc.Publish(natsSubject, wakuMsg.Payload)
 		if err != nil {
