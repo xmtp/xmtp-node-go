@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -35,6 +36,24 @@ const (
 
 	// 1048576 - 300 - 62 = 1048214
 	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
+
+	// maxRequestLimitPerBatch defines the maximum number of request we can support per batch.
+	maxRequestLimitPerBatch = 50
+
+	// maxTopicsPerRequest defines the maximum number of topics that can be queried in a single request.
+	maxTopicsPerRequest = 1024
+
+	// maxTopicsPerBatch defines the maximum number of topics that can be queried in a batch query. This
+	// limit is imposed in additional to the per-query limit maxTopicsPerRequest.
+	maxTopicsPerBatch = 4096
+
+	// maxConcurrentSubscribedTopics is the total number of subscribed topics currently being registered by our node.
+	// request to surpass that limit would be rejected, as the server would not be able to scale to that limit.
+	maxConcurrentSubscribedTopics = 1024 * 1024
+
+	// maxSubscribedTopicsPerConnection is the total number of subscribed topics currently being registered by a
+	// single subscriber ( rpc session ). A subscriber could bypass that limit by using multiple rpc sessions.
+	maxSubscribedTopicsPerConnection = 4096
 )
 
 type Service struct {
@@ -53,13 +72,19 @@ type Service struct {
 
 	ns *server.Server
 	nc *nats.Conn
+
+	// totalSubscribedTopics is the total number of subscribed entries, across all the connections.
+	// this variable should be access via atomic calls only. It's a pointer variable to ensure
+	// that it would be 64-bit aligned on 32-bit platforms.
+	totalSubscribedTopics *uint64
 }
 
 func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
-		log:                log.Named("message/v1"),
-		store:              store,
-		publishToWakuRelay: publishToWakuRelay,
+		log:                   log.Named("message/v1"),
+		store:                 store,
+		publishToWakuRelay:    publishToWakuRelay,
+		totalSubscribedTopics: new(uint64),
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -155,6 +180,17 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	log.Debug("started")
 	defer log.Debug("stopped")
 
+	if len(req.ContentTopics) > maxSubscribedTopicsPerConnection {
+		log.Info("subscribe request exceeded topics count threshold", zap.Int("topics_count", len(req.ContentTopics)))
+		return status.Errorf(codes.InvalidArgument, "content topic count exceeded maximum topics per subscribe threshold of %d", maxSubscribedTopicsPerConnection)
+	}
+
+	// check the server limits
+	if len(req.ContentTopics)+int(atomic.LoadUint64(s.totalSubscribedTopics)) > maxConcurrentSubscribedTopics {
+		log.Info("subscribe request would exceeded concurrent topics count threshold", zap.Int("topics_count", len(req.ContentTopics)))
+		return status.Errorf(codes.InvalidArgument, "content topic count exceeded concurrent server maximum topics threshold of %d", maxConcurrentSubscribedTopics)
+	}
+
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
@@ -190,9 +226,11 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 			log.Error("error subscribing", zap.Error(err), zap.Int("topics", len(req.ContentTopics)))
 			return err
 		}
+		atomic.AddUint64(s.totalSubscribedTopics, 1)
 		defer func() {
 			_ = sub.Unsubscribe()
 			metrics.EmitUnsubscribeTopics(stream.Context(), log, 1)
+			atomic.AddUint64(s.totalSubscribedTopics, ^uint64(0))
 		}()
 	}
 
@@ -245,6 +283,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 	subs := map[string]*nats.Subscription{}
 	defer func() {
+		atomic.AddUint64(s.totalSubscribedTopics, ^uint64(len(subs)-1))
 		for _, sub := range subs {
 			_ = sub.Unsubscribe()
 		}
@@ -263,41 +302,21 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 			if req == nil {
 				continue
 			}
+
+			if len(req.ContentTopics) > maxSubscribedTopicsPerConnection {
+				log.Info("subscribe2 request exceeded topics count threshold", zap.Int("topics_count", len(req.ContentTopics)))
+				return status.Errorf(codes.InvalidArgument, "content topic count exceeded maximum topics per subscribe threshold of %d", maxSubscribedTopicsPerConnection)
+			}
+
 			log.Info("updating subscription", zap.Int("num_content_topics", len(req.ContentTopics)))
 
 			topics := map[string]bool{}
 			numSubscribes := 0
 			for _, topic := range req.ContentTopics {
 				topics[topic] = true
-
-				// If topic not in existing subscriptions, then subscribe.
-				if _, ok := subs[topic]; !ok {
-					sub, err := s.nc.Subscribe(buildNatsSubject(topic), func(msg *nats.Msg) {
-						var env proto.Envelope
-						err := pb.Unmarshal(msg.Data, &env)
-						if err != nil {
-							log.Info("unmarshaling envelope", zap.Error(err))
-							return
-						}
-						func() {
-							streamLock.Lock()
-							defer streamLock.Unlock()
-
-							err = stream.Send(&env)
-							if err != nil {
-								log.Error("sending envelope to subscriber", zap.Error(err))
-							}
-						}()
-					})
-					if err != nil {
-						log.Error("error subscribing", zap.Error(err), zap.Int("topics", len(req.ContentTopics)))
-						return err
-					}
-					subs[topic] = sub
-					numSubscribes++
-				}
 			}
 
+			// unsubscribe from all the topics we're no longer intereseted in.
 			// If subscription not in topic, then unsubscribe.
 			var numUnsubscribes int
 			for topic, sub := range subs {
@@ -308,6 +327,48 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				delete(subs, topic)
 				numUnsubscribes++
 			}
+			atomic.AddUint64(s.totalSubscribedTopics, ^uint64(numUnsubscribes-1))
+
+			// check the server limits
+			if int(atomic.LoadUint64(s.totalSubscribedTopics))+len(req.ContentTopics)-numUnsubscribes > maxConcurrentSubscribedTopics {
+				log.Info("subscribe2 request would exceeded concurrent topics count threshold", zap.Int("topics_count", len(req.ContentTopics)))
+				return status.Errorf(codes.InvalidArgument, "content topic count exceeded concurrent server maximum topics threshold of %d", maxConcurrentSubscribedTopics)
+			}
+
+			// subscribe to the remainder ones.
+			for _, topic := range req.ContentTopics {
+				// If topic is already an existing subscription, we can end here.
+				if _, ok := subs[topic]; ok {
+					continue
+				}
+
+				// The topic isn't an existing subscription
+				sub, err := s.nc.Subscribe(buildNatsSubject(topic), func(msg *nats.Msg) {
+					var env proto.Envelope
+					err := pb.Unmarshal(msg.Data, &env)
+					if err != nil {
+						log.Info("unmarshaling envelope", zap.Error(err))
+						return
+					}
+					// the func call here ensures that we call streamUnlock in all the cases.
+					func() {
+						streamLock.Lock()
+						defer streamLock.Unlock()
+
+						err = stream.Send(&env)
+						if err != nil {
+							log.Error("sending envelope to subscriber", zap.Error(err))
+						}
+					}()
+				})
+				if err != nil {
+					log.Error("error subscribing", zap.Error(err), zap.Int("topics", len(req.ContentTopics)))
+					return err
+				}
+				subs[topic] = sub
+				numSubscribes++
+			}
+			atomic.AddUint64(s.totalSubscribedTopics, uint64(numSubscribes))
 			metrics.EmitSubscriptionChange(stream.Context(), log, numSubscribes-numUnsubscribes)
 		}
 	}
@@ -334,6 +395,10 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}
 
 	if len(req.ContentTopics) > 1 {
+		if len(req.ContentTopics) > maxTopicsPerRequest {
+			log.Info("query exceeded topics count threshold", zap.Int("topics_count", len(req.ContentTopics)))
+			return nil, status.Errorf(codes.InvalidArgument, "content topic count exceeded maximum topics per request threshold of %d", maxTopicsPerRequest)
+		}
 		ri := apicontext.NewRequesterInfo(ctx)
 		log.Info("query with multiple topics", ri.ZapFields()...)
 	} else {
@@ -366,13 +431,35 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 		logFunc = log.Info
 	}
 	logFunc("large batch query", zap.Int("num_queries", len(req.Requests)))
-	// NOTE: in our implementation, we implicitly limit batch size to 50 requests
-	if len(req.Requests) > 50 {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed 50 requests in single batch")
+
+	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxRequestLimitPerBatch = 50)
+	if len(req.Requests) > maxRequestLimitPerBatch {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxRequestLimitPerBatch)
 	}
+
+	// calculate the total number of topics being requested in this batch request.
+	totalRequestedTopicsCount := 0
+	for _, query := range req.Requests {
+		totalRequestedTopicsCount += len(query.ContentTopics)
+	}
+
+	if totalRequestedTopicsCount == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
+	}
+
+	// are we still within limits ?
+	if totalRequestedTopicsCount > maxRequestLimitPerBatch {
+		log.Info("batch query exceeded topics count threshold", zap.Int("topics_count", totalRequestedTopicsCount))
+		return nil, status.Errorf(codes.InvalidArgument, "batch content topics count exceeded maximum topics per batch threshold of %d", maxRequestLimitPerBatch)
+	}
+
 	// Naive implementation, perform all sub query requests sequentially
 	responses := make([]*proto.QueryResponse, 0)
 	for _, query := range req.Requests {
+		if len(query.ContentTopics) > maxTopicsPerRequest {
+			log.Info("query exceeded topics count threshold", zap.Int("topics_count", len(query.ContentTopics)))
+			return nil, status.Errorf(codes.InvalidArgument, "content topic count exceeded maximum topics per request threshold of %d", maxTopicsPerRequest)
+		}
 		// We execute the query using the existing Query API
 		resp, err := s.Query(ctx, query)
 		if err != nil {
