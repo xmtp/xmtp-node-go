@@ -37,8 +37,8 @@ const (
 	// 1048576 - 300 - 62 = 1048214
 	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
 
-	// maxRequestLimitPerBatch defines the maximum number of request we can support per batch.
-	maxRequestLimitPerBatch = 50
+	// maxSubscribeRequestLimitPerBatch defines the maximum number of request we can support per batch.
+	maxSubscribeRequestLimitPerBatch = 50
 
 	// maxTopicsPerRequest defines the maximum number of topics that can be queried in a single request.
 	maxTopicsPerRequest = 1024
@@ -432,9 +432,9 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}
 	logFunc("large batch query", zap.Int("num_queries", len(req.Requests)))
 
-	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxRequestLimitPerBatch = 50)
-	if len(req.Requests) > maxRequestLimitPerBatch {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxRequestLimitPerBatch)
+	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxSubscribeRequestLimitPerBatch = 50)
+	if len(req.Requests) > maxSubscribeRequestLimitPerBatch {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxSubscribeRequestLimitPerBatch)
 	}
 
 	// calculate the total number of topics being requested in this batch request.
@@ -448,9 +448,9 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}
 
 	// are we still within limits ?
-	if totalRequestedTopicsCount > maxRequestLimitPerBatch {
+	if totalRequestedTopicsCount > maxTopicsPerBatch {
 		log.Info("batch query exceeded topics count threshold", zap.Int("topics_count", totalRequestedTopicsCount))
-		return nil, status.Errorf(codes.InvalidArgument, "batch content topics count exceeded maximum topics per batch threshold of %d", maxRequestLimitPerBatch)
+		return nil, status.Errorf(codes.InvalidArgument, "batch content topics count exceeded maximum topics per batch threshold of %d", maxTopicsPerBatch)
 	}
 
 	// Naive implementation, perform all sub query requests sequentially
