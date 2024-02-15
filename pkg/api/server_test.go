@@ -841,3 +841,34 @@ func requireErrorEqual(t *testing.T, err error, code codes.Code, msg string, det
 		require.ElementsMatch(t, details, httpErr["details"])
 	}
 }
+
+func Benchmark_SubscribePublishQuery(b *testing.B) {
+	ctx := withAuth(b, context.Background())
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	server, cleanup := newTestServer(b)
+	defer cleanup()
+
+	client, err := messageclient.NewGRPCClient(ctx, server.dialGRPC)
+	require.NoError(b, err)
+
+	// start subscribe stream
+	stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
+		ContentTopics: []string{"topic"},
+	})
+	require.NoError(b, err)
+	defer stream.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	// publish 10 messages
+	envs := makeEnvelopes(10)
+	publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+	require.NoError(b, err)
+	require.NotNil(b, publishRes)
+
+	// read subscription
+	subscribeExpect(b, stream, envs)
+
+	// query for messages
+	requireEventuallyStored(b, ctx, client, envs)
+}
