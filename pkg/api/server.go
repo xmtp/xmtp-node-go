@@ -284,6 +284,7 @@ func (s *Server) Close() {
 		if err != nil {
 			s.Log.Error("closing http listener", zap.Error(err))
 		}
+		s.httpListener = nil
 	}
 
 	if s.grpcListener != nil {
@@ -291,6 +292,7 @@ func (s *Server) Close() {
 		if err != nil {
 			s.Log.Error("closing grpc listener", zap.Error(err))
 		}
+		s.grpcListener = nil
 	}
 
 	s.wg.Wait()
