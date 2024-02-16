@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	messageV1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -65,7 +67,7 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
-			ContentTopics: []string{"topic"},
+			ContentTopics: []string{"/xmtp/0/topic"},
 		})
 		require.NoError(t, err)
 		defer stream.Close()
@@ -843,32 +845,66 @@ func requireErrorEqual(t *testing.T, err error, code codes.Code, msg string, det
 }
 
 func Benchmark_SubscribePublishQuery(b *testing.B) {
+	server, cleanup := newTestServerWithLog(b, zap.NewNop())
+	defer cleanup()
+
 	ctx := withAuth(b, context.Background())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	server, cleanup := newTestServer(b)
-	defer cleanup()
 
 	client, err := messageclient.NewGRPCClient(ctx, server.dialGRPC)
 	require.NoError(b, err)
 
-	// start subscribe stream
-	stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
-		ContentTopics: []string{"topic"},
-	})
-	require.NoError(b, err)
-	defer stream.Close()
-	time.Sleep(50 * time.Millisecond)
+	// create topics large topics for 10 streams. Topic should be interleaved.
+	const chunkSize = 1000
+	const streamsCount = 10
+	topics := [streamsCount][]string{}
 
-	// publish 10 messages
-	envs := makeEnvelopes(10)
-	publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-	require.NoError(b, err)
-	require.NotNil(b, publishRes)
+	maxTopic := (len(topics)-1)*chunkSize*3/4 + chunkSize
+	// create a random order of topics.
+	topicsOrder := rand.Perm(maxTopic)
+	envs := make([]*messageV1.Envelope, len(topicsOrder))
+	for i, topicID := range topicsOrder {
+		envs[i] = &messageV1.Envelope{
+			ContentTopic: fmt.Sprintf("/xmtp/0/topic/%d", topicID),
+			Message:      []byte{1, 2, 3},
+			TimestampNs:  uint64(time.Second),
+		}
+	}
 
-	// read subscription
-	subscribeExpect(b, stream, envs)
+	for j := range topics {
+		topics[j] = make([]string, chunkSize)
+		for k := range topics[j] {
+			topics[j][k] = fmt.Sprintf("/xmtp/0/topic/%d", (j*chunkSize*3/4 + k))
+		}
+	}
 
-	// query for messages
-	requireEventuallyStored(b, ctx, client, envs)
+	streams := [10]messageclient.Stream{}
+	b.ResetTimer()
+	for i := range streams {
+		// start subscribe streams
+		var err error
+		streams[i], err = client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: topics[i],
+		})
+		require.NoError(b, err)
+		defer streams[i].Close()
+	}
+
+	for n := 0; n < b.N; n++ {
+		// publish messages
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(b, err)
+		require.NotNil(b, publishRes)
+
+		readCtx, readCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer readCancel()
+		// read subscription
+		for _, stream := range streams {
+			for k := 0; k < chunkSize; k++ {
+				_, err := stream.Next(readCtx)
+				require.NoError(b, err)
+			}
+		}
+	}
 }

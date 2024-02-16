@@ -82,19 +82,20 @@ func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(con
 	if err != nil {
 		return nil, err
 	}
-	s.subDispatcher, err = newSubscriptionDispatcher(s.nc, s.log)
-	if err != nil {
-		return nil, err
-	}
 	go s.ns.Start()
 	if !s.ns.ReadyForConnections(4 * time.Second) {
 		return nil, errors.New("nats not ready")
 	}
+
 	s.nc, err = nats.Connect(s.ns.ClientURL())
 	if err != nil {
 		return nil, err
 	}
 
+	s.subDispatcher, err = newSubscriptionDispatcher(s.nc, s.log)
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 

@@ -19,9 +19,8 @@ const (
 	testMaxMsgSize = 2 * 1024 * 1024
 )
 
-func newTestServer(t testing.TB) (*Server, func()) {
-	log := test.NewLog(t)
-	waku, wakuCleanup := test.NewNode(t)
+func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
+	waku, wakuCleanup := test.NewNode(t, log)
 	store, storeCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
@@ -38,7 +37,7 @@ func newTestServer(t testing.TB) (*Server, func()) {
 			MaxMsgSize: testMaxMsgSize,
 		},
 		Waku:        waku,
-		Log:         test.NewLog(t),
+		Log:         log,
 		Store:       store,
 		AllowLister: allowLister,
 	})
@@ -49,6 +48,11 @@ func newTestServer(t testing.TB) (*Server, func()) {
 		authzDBCleanup()
 		storeCleanup()
 	}
+}
+
+func newTestServer(t testing.TB) (*Server, func()) {
+	log := test.NewLog(t)
+	return newTestServerWithLog(t, log)
 }
 
 func newTestStore(t testing.TB, log *zap.Logger) (*store.Store, func()) {
