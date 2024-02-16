@@ -67,7 +67,7 @@ func Test_SubscribePublishQuery(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// start subscribe stream
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
-			ContentTopics: []string{"/xmtp/0/topic"},
+			ContentTopics: []string{"topic"},
 		})
 		require.NoError(t, err)
 		defer stream.Close()
