@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -426,10 +425,6 @@ func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
 		TimestampNs:  fromWakuTimestamp(msg.Timestamp),
 		Message:      msg.Payload,
 	}
-}
-
-func isValidSubscribeAllTopic(topic string) bool {
-	return strings.HasPrefix(topic, validXMTPTopicPrefix)
 }
 
 func fromWakuTimestamp(ts int64) uint64 {

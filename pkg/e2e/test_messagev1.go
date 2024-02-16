@@ -136,9 +136,8 @@ syncLoop:
 
 	// Expect them to be relayed to each subscription.
 	for i := 0; i < clientCount; i++ {
-		stream := streams[i]
 		envC := make(chan *messagev1.Envelope, 100)
-		go func() {
+		go func(stream messageclient.Stream, envC chan *messagev1.Envelope) {
 			for {
 				env, err := stream.Next(ctx)
 				if err != nil {
@@ -153,7 +152,7 @@ syncLoop:
 				}
 				envC <- env
 			}
-		}()
+		}(streams[i], envC)
 		err = subscribeExpect(envC, envs)
 		if err != nil {
 			return err

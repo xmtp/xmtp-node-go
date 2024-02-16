@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"                                  // NATS messaging system
@@ -139,4 +140,8 @@ func (sub *subscription) Unsubscribe() {
 	sub.dispatcher.mu.Lock()
 	defer sub.dispatcher.mu.Unlock()
 	delete(sub.dispatcher.subscriptions, sub)
+}
+
+func isValidSubscribeAllTopic(topic string) bool {
+	return strings.HasPrefix(topic, validXMTPTopicPrefix)
 }
