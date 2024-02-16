@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,12 +76,21 @@ func Test_SubscribePublishQuery(t *testing.T) {
 
 		// publish 10 messages
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		var publishRes *messageV1.PublishResponse
+		var publishErr error
+		var publishComplete sync.WaitGroup
+		publishComplete.Add(1)
+		go func() {
+			defer publishComplete.Done()
+			publishRes, publishErr = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		}()
 
 		// read subscription
 		subscribeExpect(t, stream, envs)
+
+		publishComplete.Wait()
+		require.NoError(t, publishErr)
+		require.NotNil(t, publishRes)
 
 		// query for messages
 		requireEventuallyStored(t, ctx, client, envs)
