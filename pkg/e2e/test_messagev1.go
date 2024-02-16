@@ -137,6 +137,9 @@ syncLoop:
 		streamsCh[i] = envC
 	}
 
+	// wait until all the listeners are up and ready.
+	time.Sleep(100 * time.Millisecond)
+
 	// Publish messages.
 	envs := []*messagev1.Envelope{}
 	for i, client := range clients {
