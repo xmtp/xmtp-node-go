@@ -58,14 +58,15 @@ func (d *subscriptionDispatcher) MessageHandler(msg *nats.Msg) {
 		d.log.Info("unmarshaling envelope", zap.Error(err))
 		return
 	}
-	// ensure valid topic.
-	if !isValidSubscribeAllTopic(env.ContentTopic) {
-		return
-	}
+
+	xmtpTopic := isValidSubscribeAllTopic(env.ContentTopic)
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for subscription := range d.subscriptions {
+		if subscription.all && !xmtpTopic {
+			continue
+		}
 		if subscription.all || subscription.topics[env.ContentTopic] {
 			select {
 			case subscription.messagesCh <- &env:
