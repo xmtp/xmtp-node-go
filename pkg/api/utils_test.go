@@ -16,7 +16,7 @@ import (
 func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
 	for i := 0; i < count; i++ {
 		envs = append(envs, &messageV1.Envelope{
-			ContentTopic: "/xmtp/0/topic",
+			ContentTopic: "topic",
 			Message:      []byte(fmt.Sprintf("msg %d", i)),
 			TimestampNs:  uint64(i * 1000000000), // i seconds
 		})
