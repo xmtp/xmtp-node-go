@@ -10,8 +10,13 @@ import (
 	pb "google.golang.org/protobuf/proto"                         // Protocol Buffers for serialization
 )
 
-// allTopicsBacklogLength defines the buffer size for subscriptions that listen to all topics.
-const allTopicsBacklogLength = 1024
+const (
+	// allTopicsBacklogLength defines the buffer size for subscriptions that listen to all topics.
+	allTopicsBacklogLength = 1024
+
+	// minBacklogBufferLength defines the minimal length used for backlog buffer.
+	minBacklogBufferLength
+)
 
 // subscriptionDispatcher manages subscriptions and message dispatching.
 type subscriptionDispatcher struct {
@@ -124,7 +129,11 @@ func (d *subscriptionDispatcher) Subscribe(topics map[string]bool) *subscription
 	if !sub.all {
 		sub.topics = topics
 		// use a log2(length) as a backbuffer
-		sub.messagesCh = make(chan *proto.Envelope, log2(uint(len(topics)))+1)
+		backlogBufferSize := log2(uint(len(topics))) + 1
+		if backlogBufferSize < minBacklogBufferLength {
+			backlogBufferSize = minBacklogBufferLength
+		}
+		sub.messagesCh = make(chan *proto.Envelope, backlogBufferSize)
 	} else {
 		sub.messagesCh = make(chan *proto.Envelope, allTopicsBacklogLength)
 	}
