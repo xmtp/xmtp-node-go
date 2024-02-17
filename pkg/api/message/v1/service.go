@@ -35,8 +35,8 @@ const (
 	// 1048576 - 300 - 62 = 1048214
 	MaxMessageSize = pubsub.DefaultMaxMessageSize - MaxContentTopicNameSize - 62
 
-	// maxSubscribeRequestLimitPerBatch defines the maximum number of request we can support per batch.
-	maxSubscribeRequestLimitPerBatch = 50
+	// maxQueriesPerBatch defines the maximum number of queries we can support per batch.
+	maxQueriesPerBatch = 50
 
 	// maxTopicsPerRequest defines the maximum number of topics that can be queried in a single request.
 	// the number is likely to be more than we want it to be, but would be a safe place to put it -
@@ -382,9 +382,9 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}
 	logFunc("large batch query", zap.Int("num_queries", len(req.Requests)))
 
-	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxSubscribeRequestLimitPerBatch = 50)
-	if len(req.Requests) > maxSubscribeRequestLimitPerBatch {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxSubscribeRequestLimitPerBatch)
+	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxQueriesPerBatch = 50)
+	if len(req.Requests) > maxQueriesPerBatch {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxQueriesPerBatch)
 	}
 
 	// calculate the total number of topics being requested in this batch request.
