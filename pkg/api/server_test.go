@@ -913,3 +913,44 @@ func Benchmark_SubscribePublishQuery(b *testing.B) {
 		}
 	}
 }
+
+func Test_LargeQueryTesting(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// Store 10 envelopes with increasing SenderTimestamp
+		envs := makeEnvelopes(10)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
+		time.Sleep(50 * time.Millisecond)
+		requireEventuallyStored(t, ctx, client, envs)
+
+		// create a large set of query topics.
+		topics := make([]string, 512*1024)
+		for i := range topics {
+			topics[i] = fmt.Sprintf("topic/%d", i)
+		}
+		size := 16
+		step := 16
+		prevSize := 16
+		for {
+			query := &messageV1.QueryRequest{
+				ContentTopics: topics[:size],
+			}
+			_, err := client.Query(ctx, query)
+			if err != nil {
+				// go back, and cut the step by half.
+				size = prevSize
+				step /= 2
+				size += step
+				if step == 0 {
+					break
+				}
+				continue
+			}
+			prevSize = size
+			step *= 2
+			size += step
+		}
+		t.Logf("max number of topics without any error was %d", size)
+	})
+}

@@ -39,11 +39,15 @@ const (
 	maxSubscribeRequestLimitPerBatch = 50
 
 	// maxTopicsPerRequest defines the maximum number of topics that can be queried in a single request.
-	maxTopicsPerRequest = 1024
+	// the number is likely to be more than we want it to be, but would be a safe place to put it -
+	// per Test_LargeQueryTesting, the request decoding already failing before it reaches th handler.
+	maxTopicsPerRequest = 157733
 
 	// maxTopicsPerBatch defines the maximum number of topics that can be queried in a batch query. This
 	// limit is imposed in additional to the per-query limit maxTopicsPerRequest.
-	maxTopicsPerBatch = 4096
+	// as a starting value, we've using the same value as above, since the entire request would be tossed
+	// away before this is reached.
+	maxTopicsPerBatch = maxTopicsPerRequest
 )
 
 type Service struct {
