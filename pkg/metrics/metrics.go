@@ -66,6 +66,10 @@ func registerCollectors(reg prometheus.Registerer) {
 		queryResultLength,
 		ratelimiterBuckets,
 		ratelimiterBucketsDeleted,
+		mlsSentGroupMessageSize,
+		mlsSentGroupMessageCount,
+		mlsSentWelcomeMessageSize,
+		mlsSentWelcomeMessageCount,
 	}
 	for _, col := range cols {
 		reg.MustRegister(col)

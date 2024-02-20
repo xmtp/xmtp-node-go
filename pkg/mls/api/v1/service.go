@@ -12,6 +12,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -299,12 +300,15 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			return nil, err
 		}
 		log.Info("published to waku relay", zap.String("contentTopic", contentTopic))
+
+		metrics.EmitMLSSentGroupMessage(ctx, log, msg)
 	}
 
 	return &emptypb.Empty{}, nil
 }
 
 func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
+	log := s.log.Named("send-welcome-messages")
 	if err = validateSendWelcomeMessagesRequest(req); err != nil {
 		return nil, err
 	}
@@ -342,6 +346,8 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		if err != nil {
 			return nil, err
 		}
+
+		metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
 	}
 	return &emptypb.Empty{}, nil
 }
