@@ -196,7 +196,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 	}()
 
 	var streamLock sync.Mutex
-	for exit := false; exit == false; {
+	for exit := false; !exit; {
 		select {
 		case msg, open := <-sub.messagesCh:
 			if open {
