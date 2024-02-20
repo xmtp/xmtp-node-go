@@ -20,8 +20,8 @@ const (
 
 // subscriptionDispatcher manages subscriptions and message dispatching.
 type subscriptionDispatcher struct {
-	conn          *nats.Conn                    // Connection to NATS server
-	subscription  *nats.Subscription            // Subscription to NATS topics
+	natsConn      *nats.Conn                    // Connection to NATS server
+	natsSub       *nats.Subscription            // Subscription to NATS topics
 	log           *zap.Logger                   // Logger instance
 	subscriptions map[*subscription]interface{} // Active subscriptions
 	mu            sync.Mutex                    // Mutex for concurrency control
@@ -30,14 +30,14 @@ type subscriptionDispatcher struct {
 // newSubscriptionDispatcher creates a new dispatcher for managing subscriptions.
 func newSubscriptionDispatcher(conn *nats.Conn, log *zap.Logger) (*subscriptionDispatcher, error) {
 	dispatcher := &subscriptionDispatcher{
-		conn:          conn,
+		natsConn:      conn,
 		log:           log,
 		subscriptions: make(map[*subscription]interface{}),
 	}
 
 	// Subscribe to NATS wildcard topic and assign message handler
 	var err error
-	dispatcher.subscription, err = conn.Subscribe(natsWildcardTopic, dispatcher.MessageHandler)
+	dispatcher.natsSub, err = conn.Subscribe(natsWildcardTopic, dispatcher.messageHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -46,18 +46,18 @@ func newSubscriptionDispatcher(conn *nats.Conn, log *zap.Logger) (*subscriptionD
 
 // Shutdown gracefully shuts down the dispatcher, unsubscribing from all topics.
 func (d *subscriptionDispatcher) Shutdown() {
-	_ = d.subscription.Unsubscribe()
+	_ = d.natsSub.Unsubscribe()
 	// the lock/unlock ensures that there is no in-process dispatching.
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.subscription = nil
-	d.conn = nil
+	d.natsSub = nil
+	d.natsConn = nil
 	d.subscriptions = nil
 
 }
 
-// MessageHandler processes incoming messages, dispatching them to the correct subscription.
-func (d *subscriptionDispatcher) MessageHandler(msg *nats.Msg) {
+// messageHandler processes incoming messages, dispatching them to the correct subscription.
+func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
 	var env proto.Envelope
 	err := pb.Unmarshal(msg.Data, &env)
 	if err != nil {
@@ -84,7 +84,6 @@ func (d *subscriptionDispatcher) MessageHandler(msg *nats.Msg) {
 				close(subscription.messagesCh)
 				delete(d.subscriptions, subscription)
 			}
-			continue
 		}
 	}
 }
