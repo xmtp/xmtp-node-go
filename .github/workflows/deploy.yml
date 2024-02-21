@@ -2,11 +2,13 @@ name: Deploy Nodes
 on:
   push:
     branches:
-      - main
+      # - main
+      - tsachi/topics-count-limit
 jobs:
   deploy:
     concurrency: main
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Set up Docker Buildx
         id: buildx
@@ -28,14 +30,13 @@ jobs:
       - name: Push
         id: push
         run: |
-          export DOCKER_IMAGE_TAG=latest
+          export DOCKER_IMAGE_TAG=dev
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
 
       - name: Deploy (dev)
         uses: xmtp-labs/terraform-deployer@v1
-        timeout-minutes: 60
         with:
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
           terraform-org: xmtp
@@ -44,13 +45,12 @@ jobs:
           variable-value: ${{ steps.push.outputs.docker_image }}
           variable-value-required-prefix: "xmtp/node-go@sha256:"
 
-      - name: Deploy (production)
-        uses: xmtp-labs/terraform-deployer@v1
-        timeout-minutes: 60
-        with:
-          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
-          terraform-org: xmtp
-          terraform-workspace: production
-          variable-name: xmtp_node_image
-          variable-value: ${{ steps.push.outputs.docker_image }}
-          variable-value-required-prefix: "xmtp/node-go@sha256:"
+      # - name: Deploy (production)
+      #   uses: xmtp-labs/terraform-deployer@v1
+      #   with:
+      #     terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+      #     terraform-org: xmtp
+      #     terraform-workspace: production
+      #     variable-name: xmtp_node_image
+      #     variable-value: ${{ steps.push.outputs.docker_image }}
+      #     variable-value-required-prefix: "xmtp/node-go@sha256:"
