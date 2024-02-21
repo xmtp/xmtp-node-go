@@ -328,10 +328,11 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		messages = append(messages, &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:            msg.Id,
-					CreatedNs:     uint64(msg.CreatedAt.UnixNano()),
-					Data:          msg.Data,
-					HpkePublicKey: msg.HpkePublicKey,
+					Id:              msg.Id,
+					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+					Data:            msg.Data,
+					InstallationKey: msg.InstallationKey,
+					HpkePublicKey:   msg.HpkePublicKey,
 				},
 			},
 		})
