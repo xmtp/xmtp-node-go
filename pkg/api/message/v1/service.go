@@ -394,8 +394,8 @@ func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
 	}
 }
 
-func isValidSubscribeAllTopic(topic string) bool {
-	return strings.HasPrefix(topic, validXMTPTopicPrefix)
+func isValidSubscribeAllTopic(contentTopic string) bool {
+	return strings.HasPrefix(contentTopic, validXMTPTopicPrefix) || topic.IsMLSV1(contentTopic)
 }
 
 func fromWakuTimestamp(ts int64) uint64 {
