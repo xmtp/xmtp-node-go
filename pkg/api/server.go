@@ -165,7 +165,6 @@ func (s *Server) startGRPC() error {
 				wakuMsg := wakuEnv.Message()
 
 				if topic.IsMLSV1(wakuMsg.ContentTopic) {
-					s.Log.Info("handling waku relay message in mlsv1 service", zap.String("topic", wakuMsg.ContentTopic))
 					if s.mlsv1 != nil {
 						err := s.mlsv1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
 						if err != nil {
