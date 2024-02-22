@@ -91,9 +91,9 @@ func TestNodes_Deployment(t *testing.T) {
 			n2PrivKey := test.NewPrivateKey(t)
 
 			// Spin up initial instances of the nodes.
-			n1, cleanup := test.NewNode(t, wakunode.WithPrivateKey(n1PrivKey))
+			n1, cleanup := test.NewNode(t, test.NewLog(t), wakunode.WithPrivateKey(n1PrivKey))
 			defer cleanup()
-			n2, cleanup := test.NewNode(t, wakunode.WithPrivateKey(n2PrivKey))
+			n2, cleanup := test.NewNode(t, test.NewLog(t), wakunode.WithPrivateKey(n2PrivKey))
 			defer cleanup()
 
 			// Connect the nodes.
@@ -101,9 +101,9 @@ func TestNodes_Deployment(t *testing.T) {
 			test.Connect(t, n2, n1)
 
 			// Spin up new instances of the nodes.
-			newN1, cleanup := test.NewNode(t, wakunode.WithPrivateKey(n1PrivKey))
+			newN1, cleanup := test.NewNode(t, test.NewLog(t), wakunode.WithPrivateKey(n1PrivKey))
 			defer cleanup()
-			newN2, cleanup := test.NewNode(t, wakunode.WithPrivateKey(n2PrivKey))
+			newN2, cleanup := test.NewNode(t, test.NewLog(t), wakunode.WithPrivateKey(n2PrivKey))
 			defer cleanup()
 
 			// Expect matching peer IDs for new and old instances.

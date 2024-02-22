@@ -18,6 +18,7 @@ import (
 	"github.com/waku-org/go-waku/tests"
 	wakunode "github.com/waku-org/go-waku/waku/v2/node"
 	"github.com/waku-org/go-waku/waku/v2/peerstore"
+	"go.uber.org/zap"
 )
 
 func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protocols ...protocol.ID) {
@@ -65,11 +66,10 @@ func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
-func NewNode(t *testing.T, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func NewNode(t testing.TB, log *zap.Logger, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 	prvKey := NewPrivateKey(t)
 	ctx := context.Background()
-	log := NewLog(t)
 	opts = append([]wakunode.WakuNodeOption{
 		wakunode.WithLogger(log),
 		wakunode.WithPrivateKey(prvKey),
@@ -94,7 +94,7 @@ func NewPeer(t *testing.T) host.Host {
 	return host
 }
 
-func NewPrivateKey(t *testing.T) *ecdsa.PrivateKey {
+func NewPrivateKey(t testing.TB) *ecdsa.PrivateKey {
 	key, err := tests.RandomHex(32)
 	require.NoError(t, err)
 	prvKey, err := crypto.HexToECDSA(key)
