@@ -192,7 +192,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 		if sub != nil {
 			sub.Unsubscribe()
 		}
-		metrics.EmitUnsubscribeTopics(stream.Context(), log, 1)
+		metrics.EmitUnsubscribeTopics(stream.Context(), log, len(req.ContentTopics))
 	}()
 
 	var streamLock sync.Mutex
