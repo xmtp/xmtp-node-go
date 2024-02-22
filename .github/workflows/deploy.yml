@@ -35,8 +35,9 @@ jobs:
 
       - name: Deploy (dev)
         uses: xmtp-labs/terraform-deployer@v1
-        timeout-minutes: 60
+        timeout-minutes: 45
         with:
+          timeout: 45m
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
           terraform-org: xmtp
           terraform-workspace: dev
@@ -46,8 +47,9 @@ jobs:
 
       - name: Deploy (production)
         uses: xmtp-labs/terraform-deployer@v1
-        timeout-minutes: 60
+        timeout-minutes: 45
         with:
+          timeout: 45m
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
           terraform-org: xmtp
           terraform-workspace: production
