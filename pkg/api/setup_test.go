@@ -19,9 +19,8 @@ const (
 	testMaxMsgSize = 2 * 1024 * 1024
 )
 
-func newTestServer(t *testing.T) (*Server, func()) {
-	log := test.NewLog(t)
-	waku, wakuCleanup := test.NewNode(t)
+func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
+	waku, wakuCleanup := test.NewNode(t, log)
 	store, storeCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
 	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
@@ -38,7 +37,7 @@ func newTestServer(t *testing.T) (*Server, func()) {
 			MaxMsgSize: testMaxMsgSize,
 		},
 		Waku:        waku,
-		Log:         test.NewLog(t),
+		Log:         log,
 		Store:       store,
 		AllowLister: allowLister,
 	})
@@ -51,7 +50,12 @@ func newTestServer(t *testing.T) (*Server, func()) {
 	}
 }
 
-func newTestStore(t *testing.T, log *zap.Logger) (*store.Store, func()) {
+func newTestServer(t testing.TB) (*Server, func()) {
+	log := test.NewLog(t)
+	return newTestServerWithLog(t, log)
+}
+
+func newTestStore(t testing.TB, log *zap.Logger) (*store.Store, func()) {
 	db, _, dbCleanup := test.NewDB(t)
 	store, err := store.New(&store.Config{
 		Log:       log,
@@ -109,7 +113,7 @@ func testGRPC(t *testing.T, ctx context.Context, f func(*testing.T, messageclien
 	f(t, c, server)
 }
 
-func withAuth(t *testing.T, ctx context.Context) context.Context {
+func withAuth(t testing.TB, ctx context.Context) context.Context {
 	ctx, _ = withAuthWithDetails(t, ctx, time.Now())
 	return ctx
 }
@@ -139,7 +143,7 @@ func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
 }
 
-func withAuthWithDetails(t *testing.T, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
+func withAuthWithDetails(t testing.TB, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
 	token, data, err := generateV2AuthToken(when)
 	require.NoError(t, err)
 	et, err := EncodeAuthToken(token)
