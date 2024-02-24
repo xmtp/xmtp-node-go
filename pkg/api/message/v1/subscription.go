@@ -6,8 +6,9 @@ import (
 
 	"github.com/nats-io/nats.go"                                  // NATS messaging system
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1" // Custom XMTP Protocol Buffers definition
-	"go.uber.org/zap"                                             // Logging library
-	pb "google.golang.org/protobuf/proto"                         // Protocol Buffers for serialization
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"go.uber.org/zap"                     // Logging library
+	pb "google.golang.org/protobuf/proto" // Protocol Buffers for serialization
 )
 
 const (
@@ -150,6 +151,6 @@ func (sub *subscription) Unsubscribe() {
 	delete(sub.dispatcher.subscriptions, sub)
 }
 
-func isValidSubscribeAllTopic(topic string) bool {
-	return strings.HasPrefix(topic, validXMTPTopicPrefix)
+func isValidSubscribeAllTopic(contentTopic string) bool {
+	return strings.HasPrefix(contentTopic, validXMTPTopicPrefix) || topic.IsMLSV1(contentTopic)
 }
