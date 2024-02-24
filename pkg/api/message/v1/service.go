@@ -210,7 +210,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 				}()
 			} else {
 				// channel got closed; likely due to backpressure of the sending channel.
-				log.Debug("stream closed due to backpressure")
+				log.Info("stream closed due to backpressure")
 				exit = true
 			}
 		case <-stream.Context().Done():
@@ -326,7 +326,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
 	log := s.log.Named("subscribeAll")
-	log.Debug("started")
+	log.Info("started")
 	defer log.Debug("stopped")
 
 	// Subscribe to all nats subjects via wildcard
