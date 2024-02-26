@@ -24,7 +24,7 @@ func makeEnvelopes(count int) (envs []*messageV1.Envelope) {
 	return envs
 }
 
-func subscribeExpect(t testing.TB, stream messageclient.Stream, expected []*messageV1.Envelope) {
+func subscribeExpect(t *testing.T, stream messageclient.Stream, expected []*messageV1.Envelope) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	received := []*messageV1.Envelope{}
@@ -38,7 +38,7 @@ func subscribeExpect(t testing.TB, stream messageclient.Stream, expected []*mess
 	requireEnvelopesEqual(t, expected, received)
 }
 
-func requireEventuallyStored(t testing.TB, ctx context.Context, client messageclient.Client, expected []*messageV1.Envelope) {
+func requireEventuallyStored(t *testing.T, ctx context.Context, client messageclient.Client, expected []*messageV1.Envelope) {
 	var queryRes *messageV1.QueryResponse
 	require.Eventually(t, func() bool {
 		var err error
@@ -54,14 +54,14 @@ func requireEventuallyStored(t testing.TB, ctx context.Context, client messagecl
 	requireEnvelopesEqual(t, expected, queryRes.Envelopes)
 }
 
-func requireEnvelopesEqual(t testing.TB, expected, received []*messageV1.Envelope) {
+func requireEnvelopesEqual(t *testing.T, expected, received []*messageV1.Envelope) {
 	require.Equal(t, len(expected), len(received), "length mismatch")
 	for i, env := range received {
 		requireEnvelopeEqual(t, expected[i], env, "mismatched message[%d]", i)
 	}
 }
 
-func requireEnvelopeEqual(t testing.TB, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
+func requireEnvelopeEqual(t *testing.T, expected, actual *messageV1.Envelope, msgAndArgs ...interface{}) {
 	require.Equal(t, expected.ContentTopic, actual.ContentTopic, msgAndArgs...)
 	require.Equal(t, expected.Message, actual.Message, msgAndArgs...)
 	if expected.TimestampNs != 0 {
