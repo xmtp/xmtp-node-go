@@ -114,11 +114,31 @@ syncLoop:
 		}
 	}
 
-	// start listeners
-	streamsCh := make([]chan *messagev1.Envelope, len(clients))
+	// Publish messages.
+	envs := []*messagev1.Envelope{}
+	for i, client := range clients {
+		clientEnvs := make([]*messagev1.Envelope, msgsPerClientCount)
+		for j := 0; j < msgsPerClientCount; j++ {
+			clientEnvs[j] = &messagev1.Envelope{
+				ContentTopic: contentTopic,
+				TimestampNs:  uint64(j + 1),
+				Message:      []byte(fmt.Sprintf("msg%d-%d", i+1, j+1)),
+			}
+		}
+		envs = append(envs, clientEnvs...)
+		_, err = client.Publish(ctx, &messagev1.PublishRequest{
+			Envelopes: clientEnvs,
+		})
+		if err != nil {
+			return errors.Wrap(err, "publishing")
+		}
+	}
+
+	// Expect them to be relayed to each subscription.
 	for i := 0; i < clientCount; i++ {
+		stream := streams[i]
 		envC := make(chan *messagev1.Envelope, 100)
-		go func(stream messageclient.Stream, envC chan *messagev1.Envelope) {
+		go func() {
 			for {
 				env, err := stream.Next(ctx)
 				if err != nil {
@@ -133,37 +153,8 @@ syncLoop:
 				}
 				envC <- env
 			}
-		}(streams[i], envC)
-		streamsCh[i] = envC
-	}
-
-	// wait until all the listeners are up and ready.
-	time.Sleep(100 * time.Millisecond)
-
-	// Publish messages.
-	envs := []*messagev1.Envelope{}
-	for i, client := range clients {
-		clientEnvs := make([]*messagev1.Envelope, msgsPerClientCount)
-		for j := 0; j < msgsPerClientCount; j++ {
-			clientEnvs[j] = &messagev1.Envelope{
-				ContentTopic: contentTopic,
-				TimestampNs:  uint64(j + 1),
-				Message:      []byte(fmt.Sprintf("msg%d-%d", i+1, j+1)),
-			}
-		}
-		envs = append(envs, clientEnvs...)
-
-		_, err = client.Publish(ctx, &messagev1.PublishRequest{
-			Envelopes: clientEnvs,
-		})
-		if err != nil {
-			return errors.Wrap(err, "publishing")
-		}
-	}
-
-	// Expect them to be relayed to each subscription.
-	for i := 0; i < clientCount; i++ {
-		err = subscribeExpect(streamsCh[i], envs)
+		}()
+		err = subscribeExpect(envC, envs)
 		if err != nil {
 			return err
 		}
