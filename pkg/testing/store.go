@@ -19,7 +19,7 @@ const (
 	localTestDBDSNSuffix = "?sslmode=disable"
 )
 
-func NewDB(t *testing.T) (*sql.DB, string, func()) {
+func NewDB(t testing.TB) (*sql.DB, string, func()) {
 	dsn := localTestDBDSNPrefix + localTestDBDSNSuffix
 	ctlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	dbName := "test_" + RandomStringLower(12)
@@ -36,7 +36,7 @@ func NewDB(t *testing.T) (*sql.DB, string, func()) {
 	}
 }
 
-func NewAuthzDB(t *testing.T) (*bun.DB, string, func()) {
+func NewAuthzDB(t testing.TB) (*bun.DB, string, func()) {
 	db, dsn, cleanup := NewDB(t)
 	bunDB := bun.NewDB(db, pgdialect.New())
 
