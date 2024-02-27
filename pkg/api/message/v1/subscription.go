@@ -16,7 +16,7 @@ const (
 	allTopicsBacklogLength = 4096
 
 	// minBacklogBufferLength defines the minimal length used for backlog buffer.
-	minBacklogBufferLength
+	minBacklogBufferLength = 100
 )
 
 // subscriptionDispatcher manages subscriptions and message dispatching.
