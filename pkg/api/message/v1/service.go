@@ -41,13 +41,13 @@ const (
 	// maxTopicsPerQueryRequest defines the maximum number of topics that can be queried in a single request.
 	// the number is likely to be more than we want it to be, but would be a safe place to put it -
 	// per Test_LargeQueryTesting, the request decoding already failing before it reaches th handler.
-	maxTopicsPerQueryRequest = 157733
+	// maxTopicsPerQueryRequest = 157733
 
 	// maxTopicsPerBatchQueryRequest defines the maximum number of topics that can be queried in a batch query. This
 	// limit is imposed in additional to the per-query limit maxTopicsPerRequest.
 	// as a starting value, we've using the same value as above, since the entire request would be tossed
 	// away before this is reached.
-	maxTopicsPerBatchQueryRequest = maxTopicsPerQueryRequest
+	// maxTopicsPerBatchQueryRequest = maxTopicsPerQueryRequest
 )
 
 type Service struct {
@@ -345,9 +345,9 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	}
 
 	if len(req.ContentTopics) > 1 {
-		if len(req.ContentTopics) > maxTopicsPerQueryRequest {
-			return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(req.ContentTopics), maxTopicsPerQueryRequest)
-		}
+		// if len(req.ContentTopics) > maxTopicsPerQueryRequest {
+		// 	return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(req.ContentTopics), maxTopicsPerQueryRequest)
+		// }
 		ri := apicontext.NewRequesterInfo(ctx)
 		log.Info("query with multiple topics", ri.ZapFields()...)
 	} else {
@@ -387,26 +387,26 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}
 
 	// calculate the total number of topics being requested in this batch request.
-	totalRequestedTopicsCount := 0
-	for _, query := range req.Requests {
-		totalRequestedTopicsCount += len(query.ContentTopics)
-	}
+	// totalRequestedTopicsCount := 0
+	// for _, query := range req.Requests {
+	// 	totalRequestedTopicsCount += len(query.ContentTopics)
+	// }
 
-	if totalRequestedTopicsCount == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
-	}
+	// if totalRequestedTopicsCount == 0 {
+	// 	return nil, status.Errorf(codes.InvalidArgument, "content topics required")
+	// }
 
-	// are we still within limits ?
-	if totalRequestedTopicsCount > maxTopicsPerBatchQueryRequest {
-		return nil, status.Errorf(codes.InvalidArgument, "the total number of content topics(%d) exceed the maximum topics per batch query request(%d)", totalRequestedTopicsCount, maxTopicsPerBatchQueryRequest)
-	}
+	// // are we still within limits ?
+	// if totalRequestedTopicsCount > maxTopicsPerBatchQueryRequest {
+	// 	return nil, status.Errorf(codes.InvalidArgument, "the total number of content topics(%d) exceed the maximum topics per batch query request(%d)", totalRequestedTopicsCount, maxTopicsPerBatchQueryRequest)
+	// }
 
 	// Naive implementation, perform all sub query requests sequentially
 	responses := make([]*proto.QueryResponse, 0)
 	for _, query := range req.Requests {
-		if len(query.ContentTopics) > maxTopicsPerQueryRequest {
-			return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(query.ContentTopics), maxTopicsPerQueryRequest)
-		}
+		// if len(query.ContentTopics) > maxTopicsPerQueryRequest {
+		// 	return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(query.ContentTopics), maxTopicsPerQueryRequest)
+		// }
 		// We execute the query using the existing Query API
 		resp, err := s.Query(ctx, query)
 		if err != nil {
