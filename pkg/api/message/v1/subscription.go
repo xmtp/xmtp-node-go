@@ -13,7 +13,7 @@ import (
 
 const (
 	// allTopicsBacklogLength defines the buffer size for subscriptions that listen to all topics.
-	allTopicsBacklogLength = 1024
+	allTopicsBacklogLength = 4096
 
 	// minBacklogBufferLength defines the minimal length used for backlog buffer.
 	minBacklogBufferLength
