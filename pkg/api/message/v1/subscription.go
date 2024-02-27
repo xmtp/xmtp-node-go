@@ -78,12 +78,13 @@ func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
 			select {
 			case subscription.messagesCh <- &env:
 			default:
+				d.log.Info(fmt.Sprintf("Subscription message channel is full, is subscribeAll: %t, numTopics: %d", subscription.all, len(subscription.topics)))
 				// we got here since the message channel was full. This happens when the client cannot
 				// consume the data fast enough. In that case, we don't want to block further since it migth
 				// slow down other users. Instead, we're going to close the channel and let the
 				// consumer re-establish the connection if needed.
-				close(subscription.messagesCh)
-				delete(d.subscriptions, subscription)
+				// close(subscription.messagesCh)
+				// delete(d.subscriptions, subscription)
 			}
 		}
 	}
