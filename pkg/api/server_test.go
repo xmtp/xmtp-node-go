@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	messageV1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -60,6 +63,24 @@ func Test_HTTPRootPath(t *testing.T) {
 	require.NotEmpty(t, body)
 }
 
+type deferedPublishResponseFunc func(tb testing.TB)
+
+func publishTestEnvelopes(ctx context.Context, client messageclient.Client, msgs *messageV1.PublishRequest) deferedPublishResponseFunc {
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	var publishErr error
+	var publishRes *messageV1.PublishResponse
+	go func() {
+		defer waitGroup.Done()
+		publishRes, publishErr = client.Publish(ctx, msgs)
+	}()
+	return func(tb testing.TB) {
+		waitGroup.Wait()
+		require.NoError(tb, publishErr)
+		require.NotNil(tb, publishRes)
+	}
+}
+
 func Test_SubscribePublishQuery(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
@@ -73,9 +94,8 @@ func Test_SubscribePublishQuery(t *testing.T) {
 
 		// publish 10 messages
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 
 		// read subscription
 		subscribeExpect(t, stream, envs)
@@ -247,9 +267,8 @@ func Test_GRPCMaxMessageSize(t *testing.T) {
 				TimestampNs:  3,
 			},
 		}
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 		subscribeExpect(t, stream, envs)
 		requireEventuallyStored(t, ctx, client, envs)
 
@@ -324,9 +343,8 @@ func Test_SubscribeClientClose(t *testing.T) {
 
 		// publish 5 messages
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		defer deferedPublishResult(t)
 
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
@@ -334,9 +352,9 @@ func Test_SubscribeClientClose(t *testing.T) {
 		require.NoError(t, err)
 
 		// publish another 5
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult = publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		defer deferedPublishResult(t)
+
 		time.Sleep(50 * time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
@@ -359,9 +377,8 @@ func Test_Subscribe2ClientClose(t *testing.T) {
 
 		// publish 5 messages
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		defer deferedPublishResult(t)
 
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
@@ -369,9 +386,8 @@ func Test_Subscribe2ClientClose(t *testing.T) {
 		require.NoError(t, err)
 
 		// publish another 5
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult = publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		defer deferedPublishResult(t)
 		time.Sleep(50 * time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
@@ -394,9 +410,9 @@ func Test_Subscribe2UpdateTopics(t *testing.T) {
 
 		// publish 5 messages
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		defer deferedPublishResult(t)
+
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
 
@@ -443,9 +459,8 @@ func Test_SubscribeAllClientClose(t *testing.T) {
 		for i, env := range envs {
 			envs[i].ContentTopic = "/xmtp/0/" + env.ContentTopic
 		}
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		defer deferedPublishResult(t)
 
 		// receive 5 and close the stream
 		subscribeExpect(t, stream, envs[:5])
@@ -453,9 +468,8 @@ func Test_SubscribeAllClientClose(t *testing.T) {
 		require.NoError(t, err)
 
 		// publish another 5
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult = publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		defer deferedPublishResult(t)
 		time.Sleep(50 * time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
@@ -478,12 +492,11 @@ func Test_SubscribeServerClose(t *testing.T) {
 
 		// Publish 5 messages.
 		envs := makeEnvelopes(5)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 
 		// Receive 5
-		subscribeExpect(t, stream, envs[:5])
+		subscribeExpect(t, stream, envs)
 
 		// stop Server
 		server.Close()
@@ -509,9 +522,8 @@ func Test_SubscribeAllServerClose(t *testing.T) {
 		for i, env := range envs {
 			envs[i].ContentTopic = "/xmtp/0/" + env.ContentTopic
 		}
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 
 		// Receive 5
 		subscribeExpect(t, stream, envs[:5])
@@ -581,9 +593,8 @@ func Test_MultipleSubscriptions(t *testing.T) {
 
 		// publish 5 envelopes
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[:5]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[:5]})
+		defer deferedPublishResult(t)
 
 		// receive 5 envelopes on both streams
 		subscribeExpect(t, stream1, envs[:5])
@@ -600,9 +611,8 @@ func Test_MultipleSubscriptions(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		// publish another 5 envelopes
-		publishRes, err = client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs[5:]})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult = publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs[5:]})
+		defer deferedPublishResult(t)
 
 		// receive 5 on stream 2 and 3
 		subscribeExpect(t, stream2, envs[5:])
@@ -615,9 +625,8 @@ func Test_QueryPaging(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// Store 10 envelopes with increasing SenderTimestamp
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 		time.Sleep(50 * time.Millisecond)
 		requireEventuallyStored(t, ctx, client, envs)
 
@@ -664,9 +673,8 @@ func Test_BatchQuery(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// Store 10 envelopes with increasing SenderTimestamp
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 		requireEventuallyStored(t, ctx, client, envs)
 
 		batchSize := 50
@@ -714,9 +722,8 @@ func Test_BatchQueryOverLimitError(t *testing.T) {
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		// Store 10 envelopes with increasing SenderTimestamp
 		envs := makeEnvelopes(10)
-		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
-		require.NoError(t, err)
-		require.NotNil(t, publishRes)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
 		requireEventuallyStored(t, ctx, client, envs)
 
 		// Limit is 50 queries implicitly so 100 should result in an error
@@ -731,7 +738,7 @@ func Test_BatchQueryOverLimitError(t *testing.T) {
 			}
 			repeatedQueries = append(repeatedQueries, query)
 		}
-		_, err = client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
+		_, err := client.BatchQuery(ctx, &messageV1.BatchQueryRequest{
 			Requests: repeatedQueries,
 		})
 		grpcErr, ok := status.FromError(err)
@@ -840,4 +847,110 @@ func requireErrorEqual(t *testing.T, err error, code codes.Code, msg string, det
 		require.Contains(t, msg, httpErr["message"])
 		require.ElementsMatch(t, details, httpErr["details"])
 	}
+}
+
+func Benchmark_SubscribePublishQuery(b *testing.B) {
+	server, cleanup := newTestServerWithLog(b, zap.NewNop())
+	defer cleanup()
+
+	ctx := withAuth(b, context.Background())
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	client, err := messageclient.NewGRPCClient(ctx, server.dialGRPC)
+	require.NoError(b, err)
+
+	// create topics large topics for 10 streams. Topic should be interleaved.
+	const chunkSize = 1000
+	const streamsCount = 10
+	topics := [streamsCount][]string{}
+
+	maxTopic := (len(topics)-1)*chunkSize*3/4 + chunkSize
+	// create a random order of topics.
+	topicsOrder := rand.Perm(maxTopic)
+	envs := make([]*messageV1.Envelope, len(topicsOrder))
+	for i, topicID := range topicsOrder {
+		envs[i] = &messageV1.Envelope{
+			ContentTopic: fmt.Sprintf("/xmtp/0/topic/%d", topicID),
+			Message:      []byte{1, 2, 3},
+			TimestampNs:  uint64(time.Second),
+		}
+	}
+
+	for j := range topics {
+		topics[j] = make([]string, chunkSize)
+		for k := range topics[j] {
+			topics[j][k] = fmt.Sprintf("/xmtp/0/topic/%d", (j*chunkSize*3/4 + k))
+		}
+	}
+
+	streams := [10]messageclient.Stream{}
+	b.ResetTimer()
+	for i := range streams {
+		// start subscribe streams
+		var err error
+		streams[i], err = client.Subscribe(ctx, &messageV1.SubscribeRequest{
+			ContentTopics: topics[i],
+		})
+		require.NoError(b, err)
+		defer streams[i].Close()
+	}
+
+	for n := 0; n < b.N; n++ {
+		// publish messages
+		publishRes, err := client.Publish(ctx, &messageV1.PublishRequest{Envelopes: envs})
+		require.NoError(b, err)
+		require.NotNil(b, publishRes)
+
+		readCtx, readCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer readCancel()
+		// read subscription
+		for _, stream := range streams {
+			for k := 0; k < chunkSize; k++ {
+				_, err := stream.Next(readCtx)
+				require.NoError(b, err)
+			}
+		}
+	}
+}
+
+func Test_LargeQueryTesting(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		// Store 10 envelopes with increasing SenderTimestamp
+		envs := makeEnvelopes(10)
+		deferedPublishResult := publishTestEnvelopes(ctx, client, &messageV1.PublishRequest{Envelopes: envs})
+		defer deferedPublishResult(t)
+		time.Sleep(50 * time.Millisecond)
+		requireEventuallyStored(t, ctx, client, envs)
+
+		// create a large set of query topics.
+		topics := make([]string, 512*1024)
+		for i := range topics {
+			topics[i] = fmt.Sprintf("topic/%d", i)
+		}
+		size := 16
+		step := 16
+		prevSize := 16
+		for {
+			query := &messageV1.QueryRequest{
+				ContentTopics: topics[:size],
+			}
+			_, err := client.Query(ctx, query)
+			if err != nil {
+				// go back, and cut the step by half.
+				size = prevSize
+				step /= 2
+				size += step
+				if step == 0 {
+					break
+				}
+				continue
+			}
+			prevSize = size
+			step *= 2
+			size += step
+		}
+		t.Logf("max number of topics without any error was %d", size)
+	})
 }

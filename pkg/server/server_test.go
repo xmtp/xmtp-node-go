@@ -21,11 +21,11 @@ func TestServer_NewShutdown(t *testing.T) {
 func TestServer_StaticNodesReconnect(t *testing.T) {
 	t.Parallel()
 
-	n1, cleanup := test.NewNode(t)
+	n1, cleanup := test.NewNode(t, test.NewLog(t))
 	defer cleanup()
 	n1ID := n1.Host().ID()
 
-	n2, cleanup := test.NewNode(t)
+	n2, cleanup := test.NewNode(t, test.NewLog(t))
 	defer cleanup()
 	n2ID := n2.Host().ID()
 
