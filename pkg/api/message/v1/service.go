@@ -210,7 +210,7 @@ func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi
 				}()
 			} else {
 				// channel got closed; likely due to backpressure of the sending channel.
-				log.Debug("stream closed due to backpressure")
+				log.Info("stream closed due to backpressure")
 				exit = true
 			}
 		case <-stream.Context().Done():
