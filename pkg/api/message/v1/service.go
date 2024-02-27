@@ -354,14 +354,6 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		log = log.With(zap.String("topic_type", topic.Category(req.ContentTopics[0])))
 	}
 	log = log.With(logging.QueryParameters(req))
-	if req.StartTimeNs != 0 || req.EndTimeNs != 0 {
-		ri := apicontext.NewRequesterInfo(ctx)
-		log.Info("query with time filters", append(
-			ri.ZapFields(),
-			zap.Uint64("start_time", req.StartTimeNs),
-			zap.Uint64("end_time", req.EndTimeNs),
-		)...)
-	}
 
 	if req.PagingInfo != nil && req.PagingInfo.Cursor != nil {
 		cursor := req.PagingInfo.Cursor.GetIndex()
