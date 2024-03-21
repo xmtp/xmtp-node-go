@@ -145,12 +145,13 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
 	_, method := splitMethodName(fullMethod)
 
-	ip := wa.clientIPFromContext(ctx)
+	ip := clientIPFromContext(ctx)
 	if len(ip) == 0 {
 		// requests without an IP address are bucketed together as "ip_unknown"
 		ip = "ip_unknown"
 		wa.Log.Warn("no ip found", logging.String("method", fullMethod))
 	}
+	wa.Log.Info("got client ip", logging.String("client_ip", ip), logging.String("method", fullMethod))
 
 	// with no wallet apply regular limits
 	var isPriority bool
@@ -236,15 +237,13 @@ func allowedToPublish(topic string, wallet types.WalletAddr) bool {
 	return true
 }
 
-func (wa *WalletAuthorizer) clientIPFromContext(ctx context.Context) string {
+func clientIPFromContext(ctx context.Context) string {
 	md, _ := metadata.FromIncomingContext(ctx)
 	vals := md.Get("x-forwarded-for")
 	if len(vals) == 0 {
 		p, ok := peer.FromContext(ctx)
 		if ok {
-			ip := p.Addr.String()
-			wa.Log.Info("got client IP without x-forwarded-for", logging.String("client_ip", ip))
-			return ip
+			return p.Addr.String()
 		} else {
 			return ""
 		}
