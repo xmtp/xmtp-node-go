@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -149,7 +150,7 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 		// requests without an IP address are bucketed together as "ip_unknown"
 		ip = "ip_unknown"
 	}
-	// TODO: Remove this noisy log line
+	// TODO: Remove this noisy log
 	wa.Log.Info("got peer address", logging.String("client_ip", ip))
 
 	// with no wallet apply regular limits
@@ -240,7 +241,12 @@ func clientIPFromContext(ctx context.Context) string {
 	md, _ := metadata.FromIncomingContext(ctx)
 	vals := md.Get("x-forwarded-for")
 	if len(vals) == 0 {
-		return ""
+		p, ok := peer.FromContext(ctx)
+		if ok {
+			return p.Addr.String()
+		} else {
+			return ""
+		}
 	}
 	// There are potentially multiple comma separated IPs bundled in that first value
 	ips := strings.Split(vals[0], ",")
