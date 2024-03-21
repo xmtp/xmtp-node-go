@@ -151,7 +151,7 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 		ip = "ip_unknown"
 	}
 	// TODO: Remove this noisy log
-	wa.Log.Info("got peer address", logging.String("client_ip", ip))
+	wa.Log.Info("got client IP", logging.String("client_ip", ip), logging.String("method", fullMethod))
 
 	// with no wallet apply regular limits
 	var isPriority bool
