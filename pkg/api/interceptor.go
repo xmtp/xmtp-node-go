@@ -151,7 +151,6 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 		ip = "ip_unknown"
 		wa.Log.Warn("no ip found", logging.String("method", fullMethod))
 	}
-	wa.Log.Info("got client ip", logging.String("client_ip", ip), logging.String("method", fullMethod))
 
 	// with no wallet apply regular limits
 	var isPriority bool
