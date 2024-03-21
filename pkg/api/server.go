@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/pires/go-proxyproto"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/mls/api/v1"
@@ -86,7 +87,8 @@ func New(config *Config) (*Server, error) {
 func (s *Server) startGRPC() error {
 	var err error
 
-	s.grpcListener, err = net.Listen("tcp", addrString(s.GRPCAddress, s.GRPCPort))
+	grpcListener, err := net.Listen("tcp", addrString(s.GRPCAddress, s.GRPCPort))
+	s.grpcListener = &proxyproto.Listener{Listener: grpcListener, ReadHeaderTimeout: 10 * time.Second}
 	if err != nil {
 		return errors.Wrap(err, "creating grpc listener")
 	}
