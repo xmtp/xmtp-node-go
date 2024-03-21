@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -24,9 +25,9 @@ func NewMetricsServer(ctx context.Context, address string, port int, log *zap.Lo
 		log: log.Named("metrics"),
 	}
 
-	var err error
 	addr := fmt.Sprintf("%s:%d", address, port)
-	s.http, err = net.Listen("tcp", addr)
+	httpListener, err := net.Listen("tcp", addr)
+	s.http = &proxyproto.Listener{Listener: httpListener}
 	if err != nil {
 		return nil, err
 	}
