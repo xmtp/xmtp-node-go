@@ -243,7 +243,8 @@ func clientIPFromContext(ctx context.Context) string {
 	if len(vals) == 0 {
 		p, ok := peer.FromContext(ctx)
 		if ok {
-			return p.Addr.String()
+			ipAndPort := strings.Split(p.Addr.String(), ":")
+			return ipAndPort[0]
 		} else {
 			return ""
 		}
