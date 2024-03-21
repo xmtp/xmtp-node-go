@@ -88,7 +88,7 @@ func (s *Server) startGRPC() error {
 	var err error
 
 	grpcListener, err := net.Listen("tcp", addrString(s.GRPCAddress, s.GRPCPort))
-	s.grpcListener = &proxyproto.Listener{Listener: grpcListener}
+	s.grpcListener = &proxyproto.Listener{Listener: grpcListener, ReadHeaderTimeout: 10 * time.Second}
 	if err != nil {
 		return errors.Wrap(err, "creating grpc listener")
 	}
