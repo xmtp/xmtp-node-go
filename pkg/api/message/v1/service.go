@@ -6,12 +6,10 @@ import (
 	"hash/fnv"
 	"io"
 	"sync"
-	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"github.com/pkg/errors"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -64,13 +62,12 @@ type Service struct {
 	ctxCancel func()
 	wg        sync.WaitGroup
 
-	ns *server.Server
 	nc *nats.Conn
 
 	subDispatcher *subscriptionDispatcher
 }
 
-func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(log *zap.Logger, store *store.Store, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("message/v1"),
 		store:              store,
@@ -78,19 +75,7 @@ func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(con
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
-	// Initialize nats for API subscribers.
-	s.ns, err = server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go s.ns.Start()
-	if !s.ns.ReadyForConnections(4 * time.Second) {
-		return nil, errors.New("nats not ready")
-	}
-
-	s.nc, err = nats.Connect(s.ns.ClientURL())
+	s.nc, err = nats.Connect(natsServer.ClientURL())
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +97,6 @@ func (s *Service) Close() {
 
 	if s.nc != nil {
 		s.nc.Close()
-	}
-	if s.ns != nil {
-		s.ns.Shutdown()
 	}
 
 	s.wg.Wait()

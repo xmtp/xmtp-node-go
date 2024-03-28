@@ -12,6 +12,7 @@ import (
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/pkg/errors"
 	swgui "github.com/swaggest/swgui/v3"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
@@ -53,6 +54,7 @@ type Server struct {
 	wg           sync.WaitGroup
 	ctx          context.Context
 	ctxCancel    func()
+	natsServer   *server.Server
 	wakuRelaySub *wakurelay.Subscription
 
 	authorizer *WalletAuthorizer
@@ -103,6 +105,18 @@ func (s *Server) startGRPC() error {
 	unary = append(unary, telemetryInterceptor.Unary())
 	stream = append(stream, telemetryInterceptor.Stream())
 
+	// Initialize nats for API subscribers.
+	s.natsServer, err = server.NewServer(&server.Options{
+		Port: server.RANDOM_PORT,
+	})
+	if err != nil {
+		return err
+	}
+	go s.natsServer.Start()
+	if !s.natsServer.ReadyForConnections(4 * time.Second) {
+		return errors.New("nats not ready")
+	}
+
 	if s.Config.Authn.Enable {
 		limiter := ratelimiter.NewTokenBucketRateLimiter(s.ctx, s.Log)
 		// Expire buckets after 1 hour of inactivity,
@@ -135,7 +149,7 @@ func (s *Server) startGRPC() error {
 		return err
 	}
 
-	s.messagev1, err = messagev1.NewService(s.Log, s.Store, publishToWakuRelay)
+	s.messagev1, err = messagev1.NewService(s.Log, s.Store, s.natsServer, publishToWakuRelay)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}
@@ -143,7 +157,7 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS server if a store is provided
 	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
-		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator, publishToWakuRelay)
+		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator, s.natsServer, publishToWakuRelay)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
@@ -278,6 +292,10 @@ func (s *Server) Close() {
 	}
 	if s.mlsv1 != nil {
 		s.mlsv1.Close()
+	}
+
+	if s.natsServer != nil {
+		s.natsServer.Shutdown()
 	}
 
 	if s.httpListener != nil {

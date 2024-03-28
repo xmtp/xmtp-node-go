@@ -3,11 +3,9 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -34,14 +32,13 @@ type Service struct {
 
 	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
 
-	ns *server.Server
 	nc *nats.Conn
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("mls/v1"),
 		store:              store,
@@ -51,17 +48,7 @@ func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsv
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
 	// Initialize nats for subscriptions.
-	s.ns, err = server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go s.ns.Start()
-	if !s.ns.ReadyForConnections(4 * time.Second) {
-		return nil, errors.New("nats not ready")
-	}
-	s.nc, err = nats.Connect(s.ns.ClientURL())
+	s.nc, err = nats.Connect(natsServer.ClientURL())
 	if err != nil {
 		return nil, err
 	}
@@ -79,9 +66,6 @@ func (s *Service) Close() {
 
 	if s.nc != nil {
 		s.nc.Close()
-	}
-	if s.ns != nil {
-		s.ns.Shutdown()
 	}
 
 	s.log.Info("closed")
@@ -102,6 +86,7 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
 		err = s.nc.Publish(natsSubject, wakuMsg.Payload)
 		if err != nil {
+			s.log.Error("error publishing to nats", zap.Error(err))
 			return err
 		}
 	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
