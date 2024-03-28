@@ -65,7 +65,6 @@ func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
 		d.log.Info("unmarshaling envelope", zap.Error(err))
 		return
 	}
-	d.log.Info("sending message to topic", zap.String("content_topic", env.ContentTopic))
 
 	xmtpTopic := isValidSubscribeAllTopic(env.ContentTopic)
 
