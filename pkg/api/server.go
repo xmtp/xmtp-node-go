@@ -267,6 +267,9 @@ func (s *Server) startHTTP() error {
 
 	tracing.GoPanicWrap(s.ctx, &s.wg, "http", func(ctx context.Context) {
 		s.Log.Info("serving http", zap.String("address", s.httpListener.Addr().String()))
+		if s.httpListener == nil {
+			s.Log.Fatal("no http listener")
+		}
 		err = server.Serve(s.httpListener)
 		if err != nil && err != http.ErrServerClosed && !isErrUseOfClosedConnection(err) {
 			s.Log.Error("serving http", zap.Error(err))
