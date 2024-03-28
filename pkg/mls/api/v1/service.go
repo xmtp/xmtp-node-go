@@ -638,7 +638,7 @@ func getGroupMessageFromNats(natsMsg *nats.Msg) (*mlsv1.GroupMessage, error) {
 	}
 
 	var msg mlsv1.GroupMessage
-	err = pb.Unmarshal(natsMsg.Data, &msg)
+	err = pb.Unmarshal(env.Message, &msg)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +654,7 @@ func getWelcomeMessageFromNats(natsMsg *nats.Msg) (*mlsv1.WelcomeMessage, error)
 	}
 
 	var msg mlsv1.WelcomeMessage
-	err = pb.Unmarshal(natsMsg.Data, &msg)
+	err = pb.Unmarshal(env.Message, &msg)
 	if err != nil {
 		return nil, err
 	}
