@@ -55,7 +55,6 @@ func (d *subscriptionDispatcher) Shutdown() {
 	d.natsSub = nil
 	d.natsConn = nil
 	d.subscriptions = nil
-
 }
 
 // messageHandler processes incoming messages, dispatching them to the correct subscription.

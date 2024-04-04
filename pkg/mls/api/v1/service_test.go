@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
@@ -74,14 +75,23 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 	})
 	require.NoError(t, err)
 	mlsValidationService := newMockedValidationService()
+	natsServer, err := server.NewServer(&server.Options{
+		Port: server.RANDOM_PORT,
+	})
+	require.NoError(t, err)
+	go natsServer.Start()
+	if !natsServer.ReadyForConnections(4 * time.Second) {
+		t.Fail()
+	}
 
-	svc, err := NewService(log, store, mlsValidationService, func(ctx context.Context, wm *wakupb.WakuMessage) error {
+	svc, err := NewService(log, store, mlsValidationService, natsServer, func(ctx context.Context, wm *wakupb.WakuMessage) error {
 		return nil
 	})
 	require.NoError(t, err)
 
 	return svc, db, mlsValidationService, func() {
 		svc.Close()
+		natsServer.Shutdown()
 		mlsDbCleanup()
 	}
 }

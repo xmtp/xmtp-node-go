@@ -3,18 +3,17 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"hash/fnv"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
+	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
+	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
@@ -34,14 +33,13 @@ type Service struct {
 
 	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
 
-	ns *server.Server
 	nc *nats.Conn
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("mls/v1"),
 		store:              store,
@@ -51,17 +49,7 @@ func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsv
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
 	// Initialize nats for subscriptions.
-	s.ns, err = server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go s.ns.Start()
-	if !s.ns.ReadyForConnections(4 * time.Second) {
-		return nil, errors.New("nats not ready")
-	}
-	s.nc, err = nats.Connect(s.ns.ClientURL())
+	s.nc, err = nats.Connect(natsServer.ClientURL())
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +68,6 @@ func (s *Service) Close() {
 	if s.nc != nil {
 		s.nc.Close()
 	}
-	if s.ns != nil {
-		s.ns.Shutdown()
-	}
 
 	s.log.Info("closed")
 }
@@ -90,34 +75,35 @@ func (s *Service) Close() {
 func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
 	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
 		s.log.Info("received group message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-		var msg mlsv1.GroupMessage
-		err := pb.Unmarshal(wakuMsg.Payload, &msg)
+
+		// Build the nats subject from the topic
+		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
+		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
+		env := envelopes.BuildEnvelope(wakuMsg)
+		envB, err := pb.Marshal(env)
 		if err != nil {
 			return err
 		}
-		if msg.GetV1() == nil {
-			return nil
-		}
-		natsSubject := buildNatsSubjectForGroupMessages(msg.GetV1().GroupId)
-		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
-		err = s.nc.Publish(natsSubject, wakuMsg.Payload)
+
+		err = s.nc.Publish(natsSubject, envB)
 		if err != nil {
+			s.log.Error("error publishing to nats", zap.Error(err))
 			return err
 		}
 	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
 		s.log.Info("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-		var msg mlsv1.WelcomeMessage
-		err := pb.Unmarshal(wakuMsg.Payload, &msg)
+
+		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
+		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
+		env := envelopes.BuildEnvelope(wakuMsg)
+		envB, err := pb.Marshal(env)
 		if err != nil {
 			return err
 		}
-		if msg.GetV1() == nil {
-			return nil
-		}
-		natsSubject := buildNatsSubjectForWelcomeMessages(msg.GetV1().InstallationKey)
-		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
-		err = s.nc.Publish(natsSubject, wakuMsg.Payload)
+
+		err = s.nc.Publish(natsSubject, envB)
 		if err != nil {
+			s.log.Error("error publishing to nats", zap.Error(err))
 			return err
 		}
 	} else {
@@ -395,13 +381,11 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 
 		natsSubject := buildNatsSubjectForGroupMessages(filter.GroupId)
 		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
-			var msg mlsv1.GroupMessage
-			err := pb.Unmarshal(natsMsg.Data, &msg)
+			msg, err := getGroupMessageFromNats(natsMsg)
 			if err != nil {
-				log.Error("parsing group message from bytes", zap.Error(err))
-				return
+				log.Error("error parsing message", zap.Error(err))
 			}
-			streamMessages([]*mlsv1.GroupMessage{&msg})
+			streamMessages([]*mlsv1.GroupMessage{msg})
 		})
 		if err != nil {
 			log.Error("error subscribing to group messages", zap.Error(err))
@@ -493,13 +477,11 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 
 		natsSubject := buildNatsSubjectForWelcomeMessages(filter.InstallationKey)
 		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
-			var msg mlsv1.WelcomeMessage
-			err := pb.Unmarshal(natsMsg.Data, &msg)
+			msg, err := getWelcomeMessageFromNats(natsMsg)
 			if err != nil {
-				log.Error("parsing welcome message from bytes", zap.Error(err))
-				return
+				log.Error("error parsing message", zap.Error(err))
 			}
-			streamMessages([]*mlsv1.WelcomeMessage{&msg})
+			streamMessages([]*mlsv1.WelcomeMessage{msg})
 		})
 		if err != nil {
 			log.Error("error subscribing to welcome messages", zap.Error(err))
@@ -556,15 +538,13 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 }
 
 func buildNatsSubjectForGroupMessages(groupId []byte) string {
-	hasher := fnv.New64a()
-	hasher.Write(groupId)
-	return fmt.Sprintf("gm-%x", hasher.Sum64())
+	contentTopic := topic.BuildMLSV1GroupTopic(groupId)
+	return envelopes.BuildNatsSubject(contentTopic)
 }
 
 func buildNatsSubjectForWelcomeMessages(installationId []byte) string {
-	hasher := fnv.New64a()
-	hasher.Write(installationId)
-	return fmt.Sprintf("wm-%x", hasher.Sum64())
+	contentTopic := topic.BuildMLSV1WelcomeTopic(installationId)
+	return envelopes.BuildNatsSubject(contentTopic)
 }
 
 func buildIdentityUpdate(update mlsstore.IdentityUpdate) *mlsv1.GetIdentityUpdatesResponse_Update {
@@ -648,4 +628,36 @@ func requireReadyToSend(groupId string, message []byte) error {
 		return status.Errorf(codes.InvalidArgument, "message is empty")
 	}
 	return nil
+}
+
+func getGroupMessageFromNats(natsMsg *nats.Msg) (*mlsv1.GroupMessage, error) {
+	var env v1proto.Envelope
+	err := pb.Unmarshal(natsMsg.Data, &env)
+	if err != nil {
+		return nil, err
+	}
+
+	var msg mlsv1.GroupMessage
+	err = pb.Unmarshal(env.Message, &msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &msg, nil
+}
+
+func getWelcomeMessageFromNats(natsMsg *nats.Msg) (*mlsv1.WelcomeMessage, error) {
+	var env v1proto.Envelope
+	err := pb.Unmarshal(natsMsg.Data, &env)
+	if err != nil {
+		return nil, err
+	}
+
+	var msg mlsv1.WelcomeMessage
+	err = pb.Unmarshal(env.Message, &msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &msg, nil
 }

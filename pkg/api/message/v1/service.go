@@ -2,18 +2,15 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"hash/fnv"
 	"io"
 	"sync"
-	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"github.com/pkg/errors"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
+	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
@@ -64,13 +61,12 @@ type Service struct {
 	ctxCancel func()
 	wg        sync.WaitGroup
 
-	ns *server.Server
 	nc *nats.Conn
 
 	subDispatcher *subscriptionDispatcher
 }
 
-func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(log *zap.Logger, store *store.Store, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("message/v1"),
 		store:              store,
@@ -78,19 +74,7 @@ func NewService(log *zap.Logger, store *store.Store, publishToWakuRelay func(con
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
-	// Initialize nats for API subscribers.
-	s.ns, err = server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go s.ns.Start()
-	if !s.ns.ReadyForConnections(4 * time.Second) {
-		return nil, errors.New("nats not ready")
-	}
-
-	s.nc, err = nats.Connect(s.ns.ClientURL())
+	s.nc, err = nats.Connect(natsServer.ClientURL())
 	if err != nil {
 		return nil, err
 	}
@@ -113,23 +97,20 @@ func (s *Service) Close() {
 	if s.nc != nil {
 		s.nc.Close()
 	}
-	if s.ns != nil {
-		s.ns.Shutdown()
-	}
 
 	s.wg.Wait()
 	s.log.Info("closed")
 }
 
 func (s *Service) HandleIncomingWakuRelayMessage(msg *wakupb.WakuMessage) error {
-	env := buildEnvelope(msg)
+	env := envelopes.BuildEnvelope(msg)
 
 	envB, err := pb.Marshal(env)
 	if err != nil {
 		return err
 	}
 
-	err = s.nc.Publish(buildNatsSubject(env.ContentTopic), envB)
+	err = s.nc.Publish(envelopes.BuildNatsSubject(env.ContentTopic), envB)
 	if err != nil {
 		return err
 	}
@@ -406,25 +387,4 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	return &proto.BatchQueryResponse{
 		Responses: responses,
 	}, nil
-}
-
-func buildEnvelope(msg *wakupb.WakuMessage) *proto.Envelope {
-	return &proto.Envelope{
-		ContentTopic: msg.ContentTopic,
-		TimestampNs:  fromWakuTimestamp(msg.Timestamp),
-		Message:      msg.Payload,
-	}
-}
-
-func fromWakuTimestamp(ts int64) uint64 {
-	if ts < 0 {
-		return 0
-	}
-	return uint64(ts)
-}
-
-func buildNatsSubject(topic string) string {
-	hasher := fnv.New64a()
-	hasher.Write([]byte(topic))
-	return fmt.Sprintf("%x", hasher.Sum64())
 }
