@@ -17,6 +17,7 @@ import (
 	swgui "github.com/swaggest/swgui/v3"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	wakurelay "github.com/waku-org/go-waku/waku/v2/protocol/relay"
+	identityv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	messagev1openapi "github.com/xmtp/xmtp-node-go/pkg/proto/openapi"
@@ -33,6 +34,7 @@ import (
 	"github.com/pires/go-proxyproto"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
+	identityv1 "github.com/xmtp/xmtp-node-go/pkg/identity/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/mls/api/v1"
 )
 
@@ -51,6 +53,7 @@ type Server struct {
 	httpListener net.Listener
 	messagev1    *messagev1.Service
 	mlsv1        *mlsv1.Service
+	identityv1   *identityv1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
 	ctxCancel    func()
@@ -155,13 +158,19 @@ func (s *Server) startGRPC() error {
 	}
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
 
-	// Enable the MLS server if a store is provided
+	// Enable the MLS and identity servers if a store is provided
 	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
 		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator, s.natsServer, publishToWakuRelay)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
 		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
+
+		s.identityv1, err = identityv1.NewService(s.Log, s.Config.MLSStore)
+		if err != nil {
+			return errors.Wrap(err, "creating identity service")
+		}
+		identityv1pb.RegisterIdentityApiServer(grpcServer, s.identityv1)
 	}
 
 	// Initialize waku relay subscription.
@@ -250,6 +259,11 @@ func (s *Server) startHTTP() error {
 		err = mlsv1pb.RegisterMlsApiHandler(s.ctx, gwmux, conn)
 		if err != nil {
 			return errors.Wrap(err, "registering mls handler")
+		}
+
+		err = identityv1pb.RegisterIdentityApiHandler(s.ctx, gwmux, conn)
+		if err != nil {
+			return errors.Wrap(err, "registering identity handler")
 		}
 	}
 
