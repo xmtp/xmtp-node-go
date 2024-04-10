@@ -169,9 +169,6 @@
     "associationsAddAssociation": {
       "type": "object",
       "properties": {
-        "inboxId": {
-          "type": "string"
-        },
         "newMemberIdentifier": {
           "$ref": "#/definitions/associationsMemberIdentifier"
         },
@@ -187,9 +184,6 @@
     "associationsChangeRecoveryAddress": {
       "type": "object",
       "properties": {
-        "inboxId": {
-          "type": "string"
-        },
         "newRecoveryAddress": {
           "type": "string"
         },
@@ -267,6 +261,9 @@
         "clientTimestampNs": {
           "type": "string",
           "format": "uint64"
+        },
+        "inboxId": {
+          "type": "string"
         }
       },
       "description": "One or more identity actions that were signed together.\nExample: [CreateXid, AddAssociation, ChangeRecoveryAddress]\n1. The batched signature text is created by concatenating the signature text\n   of each association together with a separator, '\\n\\n\\n'.\n2. The user signs this concatenated result.\n3. The resulting signature is added to each association proto where relevant.\n   The same signature may be used for multiple associations in the array."
@@ -309,9 +306,6 @@
     "associationsRevokeAssociation": {
       "type": "object",
       "properties": {
-        "inboxId": {
-          "type": "string"
-        },
         "memberToRevoke": {
           "$ref": "#/definitions/associationsMemberIdentifier"
         },
@@ -480,11 +474,6 @@
     },
     "v1PublishIdentityUpdateResponse": {
       "type": "object",
-      "properties": {
-        "inboxId": {
-          "type": "string"
-        }
-      },
       "title": "The response when an identity update is published"
     },
     "xmtpidentityapiv1GetIdentityUpdatesRequest": {
