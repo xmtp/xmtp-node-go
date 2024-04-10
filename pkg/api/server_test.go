@@ -318,6 +318,26 @@ func Test_QueryNoTopics(t *testing.T) {
 	})
 }
 
+func Test_QueryTooManyRows(t *testing.T) {
+	ctx := withAuth(t, context.Background())
+	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
+		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
+			ContentTopics: []string{"foo"},
+			PagingInfo: &messageV1.PagingInfo{
+				Limit: 200,
+			},
+		})
+		grpcErr, ok := status.FromError(err)
+		if ok {
+			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
+			require.EqualError(t, err, `rpc error: code = InvalidArgument desc = cannot exceed 100 rows per query`)
+		} else {
+			require.Regexp(t, `400 Bad Request: {"code\":3,\s?"message":"cannot exceed 100 rows per query",\s?"details":\[\]}`, err.Error())
+		}
+		require.Nil(t, queryRes)
+	})
+}
+
 func Test_QueryNonExistentTopic(t *testing.T) {
 	ctx := withAuth(t, context.Background())
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
