@@ -33,6 +33,10 @@ You must have the _exact_ go version listed in `go.mod` - you can verify this by
 
 1. `dev/migrate-message $MIGRATION_NAME`
 
+### Create a migration for the MLS database
+
+1. `dev/migrate-mls $MIGRATION_NAME`
+
 ### Create a migration for the authz database
 
 1. `dev/migrate-authz $MIGRATION_NAME`
