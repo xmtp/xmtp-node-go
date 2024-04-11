@@ -400,6 +400,8 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}, nil
 }
 
+// Temporarily using this function to allow for flexible limits depending on topic.
+// See: https://github.com/xmtp/xmtp-node-go/pull/373
 func getMaxRows(contentTopics []string) int {
 	if len(contentTopics) == 1 && topic.IsUserPreferences(contentTopics[0]) {
 		return maxUserPreferencesRowsPerQuery
