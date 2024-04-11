@@ -35,6 +35,9 @@ const (
 	// maxQueriesPerBatch defines the maximum number of queries we can support per batch.
 	maxQueriesPerBatch = 50
 
+	// maxRowsPerQuery defines the maximum number of rows we can return in a single query
+	maxRowsPerQuery = 100
+
 	// maxTopicsPerQueryRequest defines the maximum number of topics that can be queried in a single request.
 	// the number is likely to be more than we want it to be, but would be a safe place to put it -
 	// per Test_LargeQueryTesting, the request decoding already failing before it reaches th handler.
@@ -341,6 +344,10 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		if cursor != nil && cursor.SenderTimeNs == 0 && cursor.Digest == nil {
 			log.Info("query with partial cursor", zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)), zap.Any("cursor_digest", cursor.Digest))
 		}
+	}
+
+	if req.PagingInfo != nil && req.PagingInfo.Limit > maxRowsPerQuery {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d rows per query", maxRowsPerQuery)
 	}
 
 	return s.store.Query(req)
