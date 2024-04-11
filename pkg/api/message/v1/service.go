@@ -38,6 +38,9 @@ const (
 	// maxRowsPerQuery defines the maximum number of rows we can return in a single query
 	maxRowsPerQuery = 100
 
+	// maxUserPreferencesRowsPerQuery sets a higher limit for querying the user preferences table
+	maxUserPreferencesRowsPerQuery = 500
+
 	// maxTopicsPerQueryRequest defines the maximum number of topics that can be queried in a single request.
 	// the number is likely to be more than we want it to be, but would be a safe place to put it -
 	// per Test_LargeQueryTesting, the request decoding already failing before it reaches th handler.
@@ -323,12 +326,13 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("received request")
+	numContentTopics := len(req.ContentTopics)
 
-	if len(req.ContentTopics) == 0 {
+	if numContentTopics == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
 	}
 
-	if len(req.ContentTopics) > 1 {
+	if numContentTopics > 1 {
 		// if len(req.ContentTopics) > maxTopicsPerQueryRequest {
 		// 	return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(req.ContentTopics), maxTopicsPerQueryRequest)
 		// }
@@ -346,7 +350,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
-	if req.PagingInfo != nil && req.PagingInfo.Limit > maxRowsPerQuery {
+	if req.PagingInfo != nil && int(req.PagingInfo.Limit) > getMaxRows(req.ContentTopics) {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d rows per query", maxRowsPerQuery)
 	}
 
@@ -394,4 +398,14 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	return &proto.BatchQueryResponse{
 		Responses: responses,
 	}, nil
+}
+
+// Temporarily using this function to allow for flexible limits depending on topic.
+// See: https://github.com/xmtp/xmtp-node-go/pull/373
+func getMaxRows(contentTopics []string) int {
+	if len(contentTopics) == 1 && topic.IsUserPreferences(contentTopics[0]) {
+		return maxUserPreferencesRowsPerQuery
+	}
+
+	return maxRowsPerQuery
 }
