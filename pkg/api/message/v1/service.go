@@ -38,6 +38,9 @@ const (
 	// maxRowsPerQuery defines the maximum number of rows we can return in a single query
 	maxRowsPerQuery = 100
 
+	// maxUserPreferencesRowsPerQuery sets a higher limit for querying the user preferences table
+	maxUserPreferencesRowsPerQuery = 500
+
 	// maxTopicsPerQueryRequest defines the maximum number of topics that can be queried in a single request.
 	// the number is likely to be more than we want it to be, but would be a safe place to put it -
 	// per Test_LargeQueryTesting, the request decoding already failing before it reaches th handler.
@@ -346,7 +349,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
-	if req.PagingInfo != nil && req.PagingInfo.Limit > maxRowsPerQuery {
+	if req.PagingInfo != nil && int(req.PagingInfo.Limit) > getMaxRows(req.ContentTopics[0]) {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d rows per query", maxRowsPerQuery)
 	}
 
@@ -394,4 +397,12 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	return &proto.BatchQueryResponse{
 		Responses: responses,
 	}, nil
+}
+
+func getMaxRows(contentTopic string) int {
+	if topic.IsUserPreferences(contentTopic) {
+		return maxUserPreferencesRowsPerQuery
+	}
+
+	return maxRowsPerQuery
 }

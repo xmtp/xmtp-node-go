@@ -5,20 +5,25 @@ import (
 )
 
 var topicCategoryByPrefix = map[string]string{
-	"test":         "test",
-	"contact":      "contact",
-	"intro":        "v1-intro",
-	"dm":           "v1-conversation",
-	"dmE":          "v1-conversation-ephemeral",
-	"invite":       "v2-invite",
-	"groupInvite":  "v2-group-invite",
-	"m":            "v2-conversation",
-	"mE":           "v2-conversation-ephemeral",
-	"privatestore": "private",
+	"test":            "test",
+	"contact":         "contact",
+	"intro":           "v1-intro",
+	"dm":              "v1-conversation",
+	"dmE":             "v1-conversation-ephemeral",
+	"invite":          "v2-invite",
+	"groupInvite":     "v2-group-invite",
+	"m":               "v2-conversation",
+	"mE":              "v2-conversation-ephemeral",
+	"privatestore":    "private",
+	"userpreferences": "userpreferences",
 }
 
 func IsEphemeral(contentTopic string) bool {
 	return Category(contentTopic) == "v2-conversation-ephemeral" || Category(contentTopic) == "v1-conversation-ephemeral"
+}
+
+func IsUserPreferences(contentTopic string) bool {
+	return Category(contentTopic) == "userpreferences"
 }
 
 func Category(contentTopic string) string {
