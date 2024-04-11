@@ -326,12 +326,13 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
 	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("received request")
+	numContentTopics := len(req.ContentTopics)
 
-	if len(req.ContentTopics) == 0 {
+	if numContentTopics == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
 	}
 
-	if len(req.ContentTopics) > 1 {
+	if numContentTopics > 1 {
 		// if len(req.ContentTopics) > maxTopicsPerQueryRequest {
 		// 	return nil, status.Errorf(codes.InvalidArgument, "the number of content topics(%d) exceed the maximum topics per query request (%d)", len(req.ContentTopics), maxTopicsPerQueryRequest)
 		// }
@@ -349,7 +350,7 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 		}
 	}
 
-	if req.PagingInfo != nil && int(req.PagingInfo.Limit) > getMaxRows(req.ContentTopics[0]) {
+	if req.PagingInfo != nil && int(req.PagingInfo.Limit) > getMaxRows(req.ContentTopics) {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d rows per query", maxRowsPerQuery)
 	}
 
@@ -399,8 +400,8 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 	}, nil
 }
 
-func getMaxRows(contentTopic string) int {
-	if topic.IsUserPreferences(contentTopic) {
+func getMaxRows(contentTopics []string) int {
+	if len(contentTopics) == 1 && topic.IsUserPreferences(contentTopics[0]) {
 		return maxUserPreferencesRowsPerQuery
 	}
 
