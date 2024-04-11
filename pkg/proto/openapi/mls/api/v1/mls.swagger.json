@@ -57,7 +57,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetIdentityUpdatesResponse"
+              "$ref": "#/definitions/xmtpmlsapiv1GetIdentityUpdatesResponse"
             }
           },
           "default": {
@@ -73,7 +73,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1GetIdentityUpdatesRequest"
+              "$ref": "#/definitions/xmtpmlsapiv1GetIdentityUpdatesRequest"
             }
           }
         ],
@@ -497,18 +497,6 @@
       },
       "title": "Full representation of a group message"
     },
-    "message_contentsSignature": {
-      "type": "object",
-      "properties": {
-        "ecdsaCompact": {
-          "$ref": "#/definitions/SignatureECDSACompact"
-        },
-        "walletEcdsaCompact": {
-          "$ref": "#/definitions/SignatureWalletECDSACompact"
-        }
-      },
-      "description": "Signature represents a generalized public key signature,\ndefined as a union to support cryptographic algorithm agility."
-    },
     "mlsapiv1PagingInfo": {
       "type": "object",
       "properties": {
@@ -601,36 +589,6 @@
         }
       },
       "title": "An individual key package"
-    },
-    "v1GetIdentityUpdatesRequest": {
-      "type": "object",
-      "properties": {
-        "accountAddresses": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "startTimeNs": {
-          "type": "string",
-          "format": "uint64"
-        }
-      },
-      "title": "Get all updates for an identity since the specified time"
-    },
-    "v1GetIdentityUpdatesResponse": {
-      "type": "object",
-      "properties": {
-        "updates": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/GetIdentityUpdatesResponseWalletUpdates"
-          },
-          "title": "A list of updates (or empty objects if no changes) in the original order\nof the request"
-        }
-      },
-      "title": "Used to get any new or revoked installations for a list of wallet addresses"
     },
     "v1GroupMessageInput": {
       "type": "object",
@@ -779,7 +737,7 @@
           "format": "byte"
         },
         "walletSignature": {
-          "$ref": "#/definitions/message_contentsSignature",
+          "$ref": "#/definitions/xmtpmessage_contentsSignature",
           "title": "All revocations must be validated with a wallet signature over the\ninstallation_id being revoked (and some sort of standard prologue)"
         }
       },
@@ -936,6 +894,48 @@
         }
       },
       "title": "Version 1 of the WelcomeMessage format"
+    },
+    "xmtpmessage_contentsSignature": {
+      "type": "object",
+      "properties": {
+        "ecdsaCompact": {
+          "$ref": "#/definitions/SignatureECDSACompact"
+        },
+        "walletEcdsaCompact": {
+          "$ref": "#/definitions/SignatureWalletECDSACompact"
+        }
+      },
+      "description": "Signature represents a generalized public key signature,\ndefined as a union to support cryptographic algorithm agility."
+    },
+    "xmtpmlsapiv1GetIdentityUpdatesRequest": {
+      "type": "object",
+      "properties": {
+        "accountAddresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startTimeNs": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "title": "Get all updates for an identity since the specified time"
+    },
+    "xmtpmlsapiv1GetIdentityUpdatesResponse": {
+      "type": "object",
+      "properties": {
+        "updates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/GetIdentityUpdatesResponseWalletUpdates"
+          },
+          "title": "A list of updates (or empty objects if no changes) in the original order\nof the request"
+        }
+      },
+      "title": "Used to get any new or revoked installations for a list of wallet addresses"
     }
   }
 }

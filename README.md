@@ -4,7 +4,7 @@ This repo provides software for the nodes that currently form the XMTP network. 
 
 At this time, all nodes in the XMTP network are run by XMTP Labs, whose mission is to promote and support the development and global adoption of XMTP.
 
-All new development is focused on [xmtpd](https://github.com/xmtp/xmtpd), an **experimental** version of XMTP node software. 
+All new development is focused on [xmtpd](https://github.com/xmtp/xmtpd), an **experimental** version of XMTP node software.
 
 After `xmtpd` meets specific functional requirements, the plan is for it to become the node software that powers the XMTP network. In the future, anyone will be able to run an `xmtpd` node that participates in the XMTP network.
 
@@ -14,6 +14,8 @@ After `xmtpd` meets specific functional requirements, the plan is for it to beco
 
 - [Go](https://go.dev/doc/install)
 - [Docker](https://www.docker.com/get-started/)
+
+You must have the _exact_ go version listed in `go.mod` - you can verify this by running `go version`.
 
 ### Install dependencies and start the DB
 
