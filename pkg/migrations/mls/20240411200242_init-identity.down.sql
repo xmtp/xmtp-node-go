@@ -7,7 +7,3 @@ DROP TABLE IF EXISTS inbox_log;
 --bun:split
 
 DROP TABLE IF EXISTS address_log;
-
---bun:split
-
-DROP TABLE IF EXISTS address_lookup_cache;
