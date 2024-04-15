@@ -51,13 +51,9 @@ Start transaction
  3. If the log has more than 256 entries, abort the transaction.
  3. Validate it sequentially. If failed, abort the transaction.
  4. For each affected address:
-    a. Insert the update into the address_log table
-    -- Note: There may be races across multiple inboxes. The address_log can use
-    -- inbox_log_sequence_ID to establish ordering.
-    b. Read the log for the address, ordering by *inbox_log_sequence_id*
-    c. If the log has more than 256 entries, abort the transaction.
-    c. Process the address log (without signature validation) and compute the final inbox ID
-    d. Update the inserted entry with the result.
+    a. Insert or update the record with (address, inbox_id) into
+    the address_log table. Update the sequence_id if it is
+    higher
 
 End transaction
 */
@@ -77,8 +73,8 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
 	/*
 		Algorithm for each request:
-		1. Query the address_log table for the latest sequence_id on the address
-			  -- Note: NOT inbox_log_sequence_id
+		1. Query the address_log table for the largest association_sequence_id
+		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
 	return nil, status.Errorf(codes.Unimplemented, "unimplemented")

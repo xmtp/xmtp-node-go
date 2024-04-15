@@ -16,13 +16,12 @@ CREATE INDEX idx_inbox_log_inbox_id ON inbox_log(inbox_id);
 --bun:split
 
 CREATE TABLE address_log (
-    sequence_id BIGSERIAL PRIMARY KEY,
-    inbox_log_sequence_id BIGINT,
     address TEXT NOT NULL,
-    inbox_id TEXT,
-    identity_update_proto BYTEA NOT NULL
+    inbox_id TEXT NOT NULL,
+    association_sequence_id BIGINT,
+    revocation_sequence_id BIGINT,
 );
 
 --bun:split
 
-CREATE INDEX idx_address_log_address ON address_log(address);
+CREATE INDEX idx_address_log_address_inbox_id ON address_log(address, inbox_id);
