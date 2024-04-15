@@ -324,9 +324,12 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 }
 
 func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
-	log := s.log.Named("query").With(zap.Strings("content_topics", req.ContentTopics))
-	log.Debug("received request")
+	log := s.log.Named("query")
 	numContentTopics := len(req.ContentTopics)
+	if numContentTopics < 200 {
+		log = log.With(zap.Strings("content_topics", req.ContentTopics))
+	}
+	log.Debug("received request")
 
 	if numContentTopics == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "content topics required")
