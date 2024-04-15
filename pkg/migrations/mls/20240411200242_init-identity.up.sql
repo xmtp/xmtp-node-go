@@ -19,7 +19,7 @@ CREATE TABLE address_log (
     address TEXT NOT NULL,
     inbox_id TEXT NOT NULL,
     association_sequence_id BIGINT,
-    revocation_sequence_id BIGINT,
+    revocation_sequence_id BIGINT
 );
 
 --bun:split
