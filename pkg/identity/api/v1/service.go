@@ -58,6 +58,7 @@ Start transaction
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
+	// How to run stuff in middle of transaction?
 	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
 }
 
@@ -67,7 +68,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 		1. Query the inbox_log table for the inbox_id, ordering by sequence_id
 		2. Return all of the entries
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxLogs(ctx, req)
 }
 
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {

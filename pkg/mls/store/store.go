@@ -11,8 +11,11 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 const maxPageSize = 100
@@ -23,7 +26,13 @@ type Store struct {
 	db     *bun.DB
 }
 
+type IdentityStore interface {
+	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
+}
+
 type MlsStore interface {
+	IdentityStore
+
 	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
@@ -51,6 +60,46 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error) {
+	reqs := batched_req.GetRequests()
+	resps := make([]*identity.GetIdentityUpdatesResponse_Response, len(reqs))
+
+	for i, req := range reqs {
+		inbox_log_entries := make([]*InboxLogEntry, 0)
+
+		err := s.db.NewSelect().
+			Model(&inbox_log_entries).
+			Where("sequence_id > ?", req.GetSequenceId()).
+			Where("inbox_id = ?", req.GetInboxId()).
+			Scan(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		updates := make([]*identity.GetIdentityUpdatesResponse_IdentityUpdateLog, len(inbox_log_entries))
+		for j, entry := range inbox_log_entries {
+			identity_update := &associations.IdentityUpdate{}
+			if err := proto.Unmarshal(entry.IdentityUpdateProto, identity_update); err != nil {
+				return nil, err
+			}
+			updates[j] = &identity.GetIdentityUpdatesResponse_IdentityUpdateLog{
+				SequenceId:        entry.SequenceId,
+				ServerTimestampNs: uint64(entry.ServerTimestampNs),
+				Update:            identity_update,
+			}
+		}
+
+		resps[i] = &identity.GetIdentityUpdatesResponse_Response{
+			InboxId: req.GetInboxId(),
+			Updates: updates,
+		}
+	}
+
+	return &identity.GetIdentityUpdatesResponse{
+		Responses: resps,
+	}, nil
 }
 
 // Creates the installation and last resort key package
