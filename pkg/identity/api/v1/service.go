@@ -67,11 +67,11 @@ Start transaction (SERIALIZABLE isolation level)
  2. If the log has 256 or more entries, abort the transaction.
  3. Concatenate the update in-memory and validate it sequentially. If
     failed, abort the transaction.
- 4. For each affected address:
+ 4. Insert the update into the inbox_log table
+ 5. For each affected address:
     a. Insert or update the record with (address, inbox_id) into
     the address_log table, updating the relevant sequence_id (it should
     always be higher)
- 5. Insert the update into the inbox_log table
 
 End transaction
 */
