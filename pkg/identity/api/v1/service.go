@@ -42,18 +42,36 @@ func (s *Service) Close() {
 }
 
 /*
-Algorithm:
+Properties we want on the inbox log:
+ 1. Updates come in and are assigned sequence numbers in some order
+ 2. Updates are not visible to API consumers until they have been
+    validated and the address_log table has been updated
+ 3. If you read once, and then read again:
+    a. The second read must have all of the updates from the first read
+    b. New updates from the second read *cannot* have a lower sequence
+    number than the latest sequence number from the first read
+    c. This only applies to reads *on a given inbox*. Ordering between
+    different inboxes does not matter.
 
-Start transaction
+For the address log, strict ordering/strong consistency is not required
+across inboxes. Resolving eventually to any non-revoked inbox_id is
+acceptable.
 
- 1. Insert the update into the inbox_log table
- 2. Read the log for the inbox_id, ordering by sequence_id
- 3. If the log has more than 256 entries, abort the transaction.
- 3. Validate it sequentially. If failed, abort the transaction.
+Algorithm for PublishIdentityUpdate:
+
+Start transaction (SERIALIZABLE isolation level)
+
+ 1. Read the log for the inbox_id, ordering by sequence_id
+    - Use FOR UPDATE to block other transactions on the same inbox_id
+    if the log is non-empty
+ 2. If the log has 256 or more entries, abort the transaction.
+ 3. Concatenate the update in-memory and validate it sequentially. If
+    failed, abort the transaction.
  4. For each affected address:
     a. Insert or update the record with (address, inbox_id) into
     the address_log table. Update the sequence_id if it is
     higher
+ 5. Insert the update into the inbox_log table
 
 End transaction
 */
