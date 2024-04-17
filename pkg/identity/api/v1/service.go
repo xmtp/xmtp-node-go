@@ -63,7 +63,6 @@ Start transaction (SERIALIZABLE isolation level)
 
  1. Read the log for the inbox_id, ordering by sequence_id
     - Use FOR UPDATE to block other transactions on the same inbox_id
-    if the log is non-empty
  2. If the log has 256 or more entries, abort the transaction.
  3. Concatenate the update in-memory and validate it sequentially. If
     failed, abort the transaction.
