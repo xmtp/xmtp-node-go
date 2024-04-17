@@ -69,8 +69,8 @@ Start transaction (SERIALIZABLE isolation level)
     failed, abort the transaction.
  4. For each affected address:
     a. Insert or update the record with (address, inbox_id) into
-    the address_log table. Update the sequence_id if it is
-    higher
+    the address_log table, updating the relevant sequence_id (it should
+    always be higher)
  5. Insert the update into the inbox_log table
 
 End transaction
