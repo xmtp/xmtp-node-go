@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"sort"
 	"strings"
@@ -27,6 +28,7 @@ type Store struct {
 }
 
 type IdentityStore interface {
+	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error)
 	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
 }
 
@@ -62,6 +64,67 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	return s, nil
 }
 
+func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error) {
+	new_update := req.GetIdentityUpdate()
+	if new_update == nil {
+		return nil, errors.New("IdentityUpdate is required")
+	}
+
+	if err := s.db.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(ctx context.Context, tx bun.Tx) error {
+		inbox_log_entries := make([]*InboxLogEntry, 0)
+
+		if err := s.db.NewSelect().
+			Model(&inbox_log_entries).
+			Where("inbox_id = ?", new_update.GetInboxId()).
+			Order("sequence_id ASC").
+			For("UPDATE").
+			Scan(ctx); err != nil {
+			return err
+		}
+
+		if len(inbox_log_entries) >= 256 {
+			return errors.New("inbox log is full")
+		}
+
+		updates := make([]*associations.IdentityUpdate, 0, len(inbox_log_entries)+1)
+		for _, log := range inbox_log_entries {
+			identity_update := &associations.IdentityUpdate{}
+			proto.Unmarshal(log.IdentityUpdateProto, identity_update)
+			updates = append(updates, identity_update)
+		}
+		_ = append(updates, new_update)
+
+		// TODO: Validate the updates, and abort transaction if failed
+
+		proto_bytes, err := proto.Marshal(new_update)
+		if err != nil {
+			return err
+		}
+
+		new_entry := InboxLogEntry{
+			InboxId:             new_update.GetInboxId(),
+			ServerTimestampNs:   nowNs(),
+			IdentityUpdateProto: proto_bytes,
+		}
+
+		_, err = s.db.NewInsert().
+			Model(&new_entry).
+			Returning("sequence_id").
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Insert or update the address_log table using sequence_id
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return &identity.PublishIdentityUpdateResponse{}, nil
+}
+
 func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error) {
 	reqs := batched_req.GetRequests()
 	resps := make([]*identity.GetIdentityUpdatesResponse_Response, len(reqs))
@@ -73,6 +136,7 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 			Model(&inbox_log_entries).
 			Where("sequence_id > ?", req.GetSequenceId()).
 			Where("inbox_id = ?", req.GetInboxId()).
+			Order("sequence_id ASC").
 			Scan(ctx)
 		if err != nil {
 			return nil, err

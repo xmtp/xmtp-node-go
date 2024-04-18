@@ -75,8 +75,7 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	// How to run stuff in middle of transaction?
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.PublishIdentityUpdate(ctx, req)
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
