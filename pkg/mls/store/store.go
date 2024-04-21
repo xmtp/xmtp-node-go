@@ -90,7 +90,9 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		updates := make([]*associations.IdentityUpdate, 0, len(inbox_log_entries)+1)
 		for _, log := range inbox_log_entries {
 			identity_update := &associations.IdentityUpdate{}
-			proto.Unmarshal(log.IdentityUpdateProto, identity_update)
+			if err := proto.Unmarshal(log.IdentityUpdateProto, identity_update); err != nil {
+				return err
+			}
 			updates = append(updates, identity_update)
 		}
 		_ = append(updates, new_update)
