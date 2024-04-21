@@ -109,16 +109,6 @@ func getIdentityUpdatesRequest(requests ...*identity.GetIdentityUpdatesRequest_R
 	}
 }
 
-/*
-*
-Tests:
-- Can't publish more than 256 updates
-- Publishes through one are read in the other(s)
-- Ordering is preserved
-- Concurrency?
-- Invalid updates are rejected
-*/
-
 func TestPublishedUpdatesCanBeRead(t *testing.T) {
 	ctx := context.Background()
 	svc, _, cleanup := newTestService(t, ctx)
@@ -138,6 +128,66 @@ func TestPublishedUpdatesCanBeRead(t *testing.T) {
 	require.Len(t, res.Responses[0].Updates, 1)
 	require.Len(t, res.Responses[0].Updates[0].Update.Actions, 1)
 	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, address)
+}
+
+func TestPublishedUpdatesAreInOrder(t *testing.T) {
+	ctx := context.Background()
+	svc, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	inbox_id := "test_inbox"
+	address := "test_address"
+
+	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))
+	require.NoError(t, err)
+	_, err = svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeAddAssociation(), makeChangeRecoveryAddress()))
+	require.NoError(t, err)
+	_, err = svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeRevokeAssociation()))
+	require.NoError(t, err)
+
+	res, err := svc.GetIdentityUpdates(ctx, getIdentityUpdatesRequest(makeUpdateRequest(inbox_id, 0)))
+	require.NoError(t, err)
+
+	require.Len(t, res.Responses, 1)
+	require.Equal(t, res.Responses[0].InboxId, inbox_id)
+	require.Len(t, res.Responses[0].Updates, 3)
+	require.NotNil(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox())
+	require.NotNil(t, res.Responses[0].Updates[1].Update.Actions[0].GetAdd())
+	require.NotNil(t, res.Responses[0].Updates[1].Update.Actions[1].GetChangeRecoveryAddress())
+	require.NotNil(t, res.Responses[0].Updates[2].Update.Actions[0].GetRevoke())
+
+	res, err = svc.GetIdentityUpdates(ctx, getIdentityUpdatesRequest(makeUpdateRequest(inbox_id, 1)))
+	require.NoError(t, err)
+
+	require.Len(t, res.Responses, 1)
+	require.Equal(t, res.Responses[0].InboxId, inbox_id)
+	require.Len(t, res.Responses[0].Updates, 2)
+	require.NotNil(t, res.Responses[0].Updates[0].Update.Actions[0].GetAdd())
+	require.NotNil(t, res.Responses[0].Updates[0].Update.Actions[1].GetChangeRecoveryAddress())
+	require.NotNil(t, res.Responses[0].Updates[1].Update.Actions[0].GetRevoke())
+}
+
+func TestQueryMultipleInboxes(t *testing.T) {
+	ctx := context.Background()
+	svc, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	first_inbox_id := "test_inbox"
+	second_inbox_id := "second_inbox"
+	first_address := "test_address"
+	second_address := "test_address"
+
+	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(first_inbox_id, makeCreateInbox(first_address)))
+	require.NoError(t, err)
+	_, err = svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(second_inbox_id, makeCreateInbox(second_address)))
+	require.NoError(t, err)
+
+	res, err := svc.GetIdentityUpdates(ctx, getIdentityUpdatesRequest(makeUpdateRequest(first_inbox_id, 0), makeUpdateRequest(second_inbox_id, 0)))
+	require.NoError(t, err)
+
+	require.Len(t, res.Responses, 2)
+	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, first_address)
+	require.Equal(t, res.Responses[1].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, second_address)
 }
 
 func TestInboxSizeLimit(t *testing.T) {
