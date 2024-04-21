@@ -9,7 +9,7 @@ import (
 type InboxLogEntry struct {
 	bun.BaseModel `bun:"table:inbox_log"`
 
-	SequenceId          uint64
+	SequenceId          uint64 `bun:",autoincrement"`
 	InboxId             string
 	ServerTimestampNs   int64
 	IdentityUpdateProto []byte

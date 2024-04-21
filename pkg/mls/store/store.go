@@ -70,7 +70,8 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		return nil, errors.New("IdentityUpdate is required")
 	}
 
-	if err := s.db.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(ctx context.Context, tx bun.Tx) error {
+	// TODO: Implement serializable isolation level once supported
+	if err := s.db.RunInTx(ctx, &sql.TxOptions{ /*Isolation: sql.LevelSerializable*/ }, func(ctx context.Context, tx bun.Tx) error {
 		inbox_log_entries := make([]*InboxLogEntry, 0)
 
 		if err := s.db.NewSelect().
