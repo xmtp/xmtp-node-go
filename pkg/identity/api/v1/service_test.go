@@ -140,35 +140,29 @@ func TestPublishedUpdatesCanBeRead(t *testing.T) {
 	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, address)
 }
 
-// func TestInboxSizeLimit(t *testing.T) {
-// 	ctx := context.Background()
-// 	svc, mlsDb, cleanup := newTestService(t, ctx)
-// 	defer cleanup()
-//
-// 	inbox_id := "test_inbox"
-// 	address := "test_address"
-//
-// 	request := makeIdentityUpdateRequest(inbox_id, makeCreateInbox(address))
-// 	svc.PublishIdentityUpdate(ctx, makeIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))
-//
-// 	installationId := test.RandomBytes(32)
-// 	accountAddress := test.RandomString(32)
-//
-// 	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
-//
-// 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
-// 		KeyPackage: &mlsv1.KeyPackageUpload{
-// 			KeyPackageTlsSerialized: []byte("test"),
-// 		},
-// 	})
-//
-// 	require.NoError(t, err)
-// 	require.Equal(t, installationId, res.InstallationKey)
-//
-// 	installations := []mlsstore.Installation{}
-// 	err = mlsDb.NewSelect().Model(&installations).Where("id = ?", installationId).Scan(ctx)
-// 	require.NoError(t, err)
-//
-// 	require.Len(t, installations, 1)
-// 	require.Equal(t, accountAddress, installations[0].WalletAddress)
-// }
+func TestInboxSizeLimit(t *testing.T) {
+	ctx := context.Background()
+	svc, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	inbox_id := "test_inbox"
+	address := "test_address"
+
+	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))
+	require.NoError(t, err)
+
+	for i := 0; i < 255; i++ {
+		_, err = svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeAddAssociation()))
+		require.NoError(t, err)
+	}
+
+	_, err = svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeAddAssociation()))
+	require.Error(t, err)
+
+	res, err := svc.GetIdentityUpdates(ctx, getIdentityUpdatesRequest(makeUpdateRequest(inbox_id, 0)))
+	require.NoError(t, err)
+
+	require.Len(t, res.Responses, 1)
+	require.Equal(t, res.Responses[0].InboxId, inbox_id)
+	require.Len(t, res.Responses[0].Updates, 256)
+}
