@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"sort"
 	"strings"
@@ -11,8 +12,11 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 const maxPageSize = 100
@@ -23,7 +27,14 @@ type Store struct {
 	db     *bun.DB
 }
 
+type IdentityStore interface {
+	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error)
+	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
+}
+
 type MlsStore interface {
+	IdentityStore
+
 	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]*Installation, error)
@@ -51,6 +62,111 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error) {
+	new_update := req.GetIdentityUpdate()
+	if new_update == nil {
+		return nil, errors.New("IdentityUpdate is required")
+	}
+
+	// TODO: Implement serializable isolation level once supported
+	if err := s.db.RunInTx(ctx, &sql.TxOptions{ /*Isolation: sql.LevelSerializable*/ }, func(ctx context.Context, tx bun.Tx) error {
+		inbox_log_entries := make([]*InboxLogEntry, 0)
+
+		if err := s.db.NewSelect().
+			Model(&inbox_log_entries).
+			Where("inbox_id = ?", new_update.GetInboxId()).
+			Order("sequence_id ASC").
+			For("UPDATE").
+			Scan(ctx); err != nil {
+			return err
+		}
+
+		if len(inbox_log_entries) >= 256 {
+			return errors.New("inbox log is full")
+		}
+
+		updates := make([]*associations.IdentityUpdate, 0, len(inbox_log_entries)+1)
+		for _, log := range inbox_log_entries {
+			identity_update := &associations.IdentityUpdate{}
+			if err := proto.Unmarshal(log.IdentityUpdateProto, identity_update); err != nil {
+				return err
+			}
+			updates = append(updates, identity_update)
+		}
+		_ = append(updates, new_update)
+
+		// TODO: Validate the updates, and abort transaction if failed
+
+		proto_bytes, err := proto.Marshal(new_update)
+		if err != nil {
+			return err
+		}
+
+		new_entry := InboxLogEntry{
+			InboxId:             new_update.GetInboxId(),
+			ServerTimestampNs:   nowNs(),
+			IdentityUpdateProto: proto_bytes,
+		}
+
+		_, err = s.db.NewInsert().
+			Model(&new_entry).
+			Returning("sequence_id").
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Insert or update the address_log table using sequence_id
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return &identity.PublishIdentityUpdateResponse{}, nil
+}
+
+func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error) {
+	reqs := batched_req.GetRequests()
+	resps := make([]*identity.GetIdentityUpdatesResponse_Response, len(reqs))
+
+	for i, req := range reqs {
+		inbox_log_entries := make([]*InboxLogEntry, 0)
+
+		err := s.db.NewSelect().
+			Model(&inbox_log_entries).
+			Where("sequence_id > ?", req.GetSequenceId()).
+			Where("inbox_id = ?", req.GetInboxId()).
+			Order("sequence_id ASC").
+			Scan(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		updates := make([]*identity.GetIdentityUpdatesResponse_IdentityUpdateLog, len(inbox_log_entries))
+		for j, entry := range inbox_log_entries {
+			identity_update := &associations.IdentityUpdate{}
+			if err := proto.Unmarshal(entry.IdentityUpdateProto, identity_update); err != nil {
+				return nil, err
+			}
+			updates[j] = &identity.GetIdentityUpdatesResponse_IdentityUpdateLog{
+				SequenceId:        entry.SequenceId,
+				ServerTimestampNs: uint64(entry.ServerTimestampNs),
+				Update:            identity_update,
+			}
+		}
+
+		resps[i] = &identity.GetIdentityUpdatesResponse_Response{
+			InboxId: req.GetInboxId(),
+			Updates: updates,
+		}
+	}
+
+	return &identity.GetIdentityUpdatesResponse{
+		Responses: resps,
+	}, nil
 }
 
 // Creates the installation and last resort key package

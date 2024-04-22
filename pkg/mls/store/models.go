@@ -6,6 +6,15 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type InboxLogEntry struct {
+	bun.BaseModel `bun:"table:inbox_log"`
+
+	SequenceId          uint64 `bun:",autoincrement"`
+	InboxId             string
+	ServerTimestampNs   int64
+	IdentityUpdateProto []byte
+}
+
 type Installation struct {
 	bun.BaseModel `bun:"table:installations"`
 

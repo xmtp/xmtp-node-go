@@ -217,10 +217,10 @@
           "type": "string",
           "title": "CAIP-10 contract address\nhttps://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-10.md"
         },
-        "blockHeight": {
+        "blockNumber": {
           "type": "string",
-          "format": "int64",
-          "title": "Specify the block height to verify the signature against"
+          "format": "uint64",
+          "title": "Specify the block number to verify the signature against"
         },
         "signature": {
           "type": "string",
@@ -278,7 +278,7 @@
           "$ref": "#/definitions/identityassociationsRecoverableEcdsaSignature"
         }
       },
-      "description": "An existing address on xmtpv2 may have already signed a legacy identity key\nof type SignedPublicKey via the 'Create Identity' signature.\nFor migration to xmtpv3, the legacy key is permitted to sign on behalf of the \naddress to create a matching xmtpv3 installation key.\nThis signature type can ONLY be used for CreateXid and AddAssociation\npayloads, and can only be used once in xmtpv3."
+      "description": "An existing address on xmtpv2 may have already signed a legacy identity key\nof type SignedPublicKey via the 'Create Identity' signature.\nFor migration to xmtpv3, the legacy key is permitted to sign on behalf of the\naddress to create a matching xmtpv3 installation key.\nThis signature type can ONLY be used for CreateXid and AddAssociation\npayloads, and can only be used once in xmtpv3."
     },
     "associationsMemberIdentifier": {
       "type": "object",

@@ -75,7 +75,7 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.PublishIdentityUpdate(ctx, req)
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
@@ -84,7 +84,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 		1. Query the inbox_log table for the inbox_id, ordering by sequence_id
 		2. Return all of the entries
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxLogs(ctx, req)
 }
 
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
