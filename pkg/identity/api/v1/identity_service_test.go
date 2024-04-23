@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -36,25 +35,6 @@ func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, 
 
 func newMockedValidationService() *mockedMLSValidationService {
 	return new(mockedMLSValidationService)
-}
-
-func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
-	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
-		{
-			InstallationKey:    installationId,
-			AccountAddress:     accountAddress,
-			CredentialIdentity: []byte("test"),
-			Expiration:         0,
-		},
-	}, nil)
-}
-
-func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId []byte) *mock.Call {
-	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
-		{
-			GroupId: fmt.Sprintf("%x", groupId),
-		},
-	}, nil)
 }
 
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func()) {
