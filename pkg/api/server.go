@@ -166,7 +166,7 @@ func (s *Server) startGRPC() error {
 		}
 		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
 
-		s.identityv1, err = identityv1.NewService(s.Log, s.Config.MLSStore)
+		s.identityv1, err = identityv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating identity service")
 		}

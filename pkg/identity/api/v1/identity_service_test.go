@@ -2,17 +2,60 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	associations "github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
+
+type mockedMLSValidationService struct {
+	mock.Mock
+}
+
+func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+	return nil, nil
+}
+
+func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
+	return nil, nil
+}
+
+func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
+	return nil, nil
+}
+
+func newMockedValidationService() *mockedMLSValidationService {
+	return new(mockedMLSValidationService)
+}
+
+func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
+	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
+		{
+			InstallationKey:    installationId,
+			AccountAddress:     accountAddress,
+			CredentialIdentity: []byte("test"),
+			Expiration:         0,
+		},
+	}, nil)
+}
+
+func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId []byte) *mock.Call {
+	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
+		{
+			GroupId: fmt.Sprintf("%x", groupId),
+		},
+	}, nil)
+}
 
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func()) {
 	log := test.NewLog(t)
@@ -22,6 +65,7 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func(
 		DB:  db,
 	})
 	require.NoError(t, err)
+	mlsValidationService := newMockedValidationService()
 	natsServer, err := server.NewServer(&server.Options{
 		Port: server.RANDOM_PORT,
 	})
@@ -31,7 +75,7 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func(
 		t.Fail()
 	}
 
-	svc, err := NewService(log, store)
+	svc, err := NewService(log, store, mlsValidationService)
 	require.NoError(t, err)
 
 	return svc, db, func() {

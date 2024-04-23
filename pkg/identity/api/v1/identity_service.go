@@ -4,6 +4,7 @@ import (
 	"context"
 
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -13,17 +14,19 @@ import (
 type Service struct {
 	api.UnimplementedIdentityApiServer
 
-	log   *zap.Logger
-	store mlsstore.MlsStore
+	log               *zap.Logger
+	store             mlsstore.MlsStore
+	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
-		log:   log.Named("identity"),
-		store: store,
+		log:               log.Named("identity"),
+		store:             store,
+		validationService: validationService,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
