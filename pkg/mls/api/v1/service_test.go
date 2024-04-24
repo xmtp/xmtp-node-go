@@ -15,6 +15,7 @@ import (
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
@@ -24,6 +25,10 @@ import (
 
 type mockedMLSValidationService struct {
 	mock.Mock
+}
+
+func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+	return nil, nil
 }
 
 func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {

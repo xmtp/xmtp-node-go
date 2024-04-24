@@ -3,16 +3,37 @@ package api
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	associations "github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
+
+type mockedMLSValidationService struct {
+	mock.Mock
+}
+
+func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+	return nil, nil
+}
+
+func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
+	return nil, nil
+}
+
+func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
+	return nil, nil
+}
+
+func newMockedValidationService() *mockedMLSValidationService {
+	return new(mockedMLSValidationService)
+}
 
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func()) {
 	log := test.NewLog(t)
@@ -22,16 +43,9 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func(
 		DB:  db,
 	})
 	require.NoError(t, err)
-	natsServer, err := server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	require.NoError(t, err)
-	go natsServer.Start()
-	if !natsServer.ReadyForConnections(4 * time.Second) {
-		t.Fail()
-	}
+	mlsValidationService := newMockedValidationService()
 
-	svc, err := NewService(log, store)
+	svc, err := NewService(log, store, mlsValidationService)
 	require.NoError(t, err)
 
 	return svc, db, func() {
