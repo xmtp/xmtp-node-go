@@ -7,8 +7,8 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	// "google.golang.org/grpc/codes"
+	// "google.golang.org/grpc/status"
 )
 
 type Service struct {
@@ -91,11 +91,13 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 }
 
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
+	// Needs a group by statement
 	/*
 		Algorithm for each request:
 		1. Query the address_log table for the largest association_sequence_id
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+
+	return s.store.GetInboxIds(ctx, req)
 }

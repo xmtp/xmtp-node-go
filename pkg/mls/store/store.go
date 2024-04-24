@@ -203,6 +203,51 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 	}, nil
 }
 
+func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
+
+	addresses := []string{}
+	for _, request := range req.Requests {
+		addresses = append(addresses, request.GetAddress())
+	}
+	s.log.Info("GetInboxIds", zap.Strings("addresses", addresses))
+
+	db_log_entries := make([]*AddressLogEntry, 0)
+
+	// maybe restrict select to only fields in groupby?
+	err := s.db.NewSelect().
+		Model(&db_log_entries).
+		Where("address IN (?)", bun.In(addresses)).
+		Where("revocation_sequence_id IS NULL OR revocation_sequence_id < association_sequence_id").
+		Group("address", "inbox_id", "association_sequence_id", "revocation_sequence_id").
+		Order("association_sequence_id DESC").
+		Scan(ctx)
+
+	s.log.Error("Db", zap.Any("err", err))
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("Db", zap.Any("db_log_entries", db_log_entries))
+
+	out := make([]*identity.GetInboxIdsResponse_Response, len(addresses))
+
+	for index, address := range addresses {
+		resp := identity.GetInboxIdsResponse_Response{}
+		resp.Address = address
+
+		for _, log_entry := range db_log_entries {
+			if log_entry.Address == address {
+				resp.InboxId = &log_entry.InboxId
+			}
+		}
+		out[index] = &resp
+	}
+
+	return &identity.GetInboxIdsResponse{
+		Responses: out,
+	}, nil
+}
+
 // Creates the installation and last resort key package
 func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error {
 	createdAt := nowNs()

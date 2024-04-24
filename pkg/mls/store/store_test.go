@@ -657,3 +657,53 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	require.Equal(t, []byte("content7"), resp.Messages[0].GetV1().Data)
 	require.Equal(t, []byte("content8"), resp.Messages[1].GetV1().Data)
 }
+
+func InsertAddressLog(store *Store, address string, inboxId string, associationSequenceId *uint64, revocationSequenceId *uint64) error {
+
+	entry := AddressLogEntry{
+		Address:               address,
+		InboxId:               inboxId,
+		AssociationSequenceId: associationSequenceId,
+		RevocationSequenceId:  revocationSequenceId,
+	}
+	ctx := context.Background()
+
+	_, err := store.db.NewInsert().
+		Model(&entry).
+		Exec(ctx)
+
+	return err
+}
+
+func TestInboxIds(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	seq, rev := uint64(1), uint64(5)
+	err := InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq, rev = uint64(2), uint64(8)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq, rev = uint64(3), uint64(9)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq, rev = uint64(4), uint64(1)
+	err = InsertAddressLog(store, "address", "correct", &seq, &rev)
+	require.NoError(t, err)
+
+	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address",
+	})
+	req := &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	resp, _ := store.GetInboxIds(context.Background(), req)
+
+	require.Equal(t, "correct", *resp.Responses[0].InboxId)
+
+	seq = uint64(5)
+	err = InsertAddressLog(store, "address", "correct_inbox2", &seq, nil)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	t.Log(resp)
+	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
+
+}
