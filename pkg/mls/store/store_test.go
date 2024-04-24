@@ -703,7 +703,14 @@ func TestInboxIds(t *testing.T) {
 	seq = uint64(5)
 	err = InsertAddressLog(store, "address", "correct_inbox2", &seq, nil)
 	resp, _ = store.GetInboxIds(context.Background(), req)
-	t.Log(resp)
 	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
 
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	req = &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	seq, rev = uint64(8), uint64(2)
+	err = InsertAddressLog(store, "address2", "inbox2", &seq, &rev)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
 }
