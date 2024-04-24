@@ -206,7 +206,7 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 type GroupedAddressLogEntry struct {
 	Address                  string
 	InboxId                  string
-	MaxAssociationSequenceId uint64 `bun:max_association_sequence_id",notnull"`
+	MaxAssociationSequenceId uint64
 }
 
 func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
