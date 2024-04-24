@@ -681,10 +681,13 @@ func TestInboxIds(t *testing.T) {
 
 	seq, rev := uint64(1), uint64(5)
 	err := InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
 	seq, rev = uint64(2), uint64(8)
 	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
 	seq, rev = uint64(3), uint64(9)
 	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
 	seq, rev = uint64(4), uint64(1)
 	err = InsertAddressLog(store, "address", "correct", &seq, &rev)
 	require.NoError(t, err)
@@ -702,6 +705,7 @@ func TestInboxIds(t *testing.T) {
 
 	seq = uint64(5)
 	err = InsertAddressLog(store, "address", "correct_inbox2", &seq, nil)
+	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
 
@@ -711,6 +715,7 @@ func TestInboxIds(t *testing.T) {
 	}
 	seq, rev = uint64(8), uint64(2)
 	err = InsertAddressLog(store, "address2", "inbox2", &seq, &rev)
+	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
 }

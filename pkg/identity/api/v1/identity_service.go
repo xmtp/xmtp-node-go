@@ -91,7 +91,6 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 }
 
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
-	// Needs a group by statement
 	/*
 		Algorithm for each request:
 		1. Query the address_log table for the largest association_sequence_id
