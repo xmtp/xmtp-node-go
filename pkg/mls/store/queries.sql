@@ -10,6 +10,27 @@ JOIN (
 ) as b on b.inbox_id = a.inbox_id AND a.sequence_id > b.sequence_id
 ORDER BY a.sequence_id ASC;
 
+-- name: GetAddressLogs :many
+SELECT 
+    a.address,
+    a.inbox_id,
+    a.association_sequence_id
+FROM 
+    address_log a
+INNER JOIN (
+    SELECT 
+        address,
+        MAX(association_sequence_id) AS max_association_sequence_id
+    FROM 
+        address_log
+    WHERE 
+        address = ANY (@addresses::text[])
+    AND
+        revocation_sequence_id IS NULL
+    GROUP BY 
+        address
+) b ON a.address = b.address AND a.association_sequence_id = b.max_association_sequence_id;
+
 -- name: InsertInboxLog :one
 INSERT INTO inbox_log (inbox_id, server_timestamp_ns, identity_update_proto)
 VALUES ($1, $2, $3)
