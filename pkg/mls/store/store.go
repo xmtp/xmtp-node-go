@@ -216,17 +216,23 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 		addresses = append(addresses, request.GetAddress())
 	}
 
-	db_log_entries := make([]*GroupedAddressLogEntry, 0)
+	db_log_entries := make([]*AddressLogEntry, 0)
 
-	// maybe restrict select to only fields in groupby?
-	err := s.db.NewSelect().
-		Model((*AddressLogEntry)(nil)).
-		ColumnExpr("address, inbox_id, MAX(association_sequence_id) as max_association_sequence_id").
+	s.log.Info("Addresses", zap.Any("addresses", addresses))
+	subquery := s.db.NewSelect().
+		Column("address").
+		ColumnExpr("MAX(association_sequence_id) AS max_association_sequence_id").
+		Table("address_log").
 		Where("address IN (?)", bun.In(addresses)).
-		Where("revocation_sequence_id IS NULL OR revocation_sequence_id < association_sequence_id").
-		Group("address", "inbox_id").
-		OrderExpr("MAX(association_sequence_id) ASC").
+		Group("address")
+
+	err := s.db.NewSelect().
+		Column("a.address", "a.inbox_id", "a.association_sequence_id").
+		TableExpr("address_log AS a").
+		Join("INNER JOIN (?) AS b ON a.address = b.address AND a.association_sequence_id = b.max_association_sequence_id", subquery).
 		Scan(ctx, &db_log_entries)
+
+	s.log.Info("GetInboxIds", zap.Any("db_log_entries", db_log_entries))
 
 	if err != nil {
 		return nil, err
