@@ -160,7 +160,6 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			}
 		}
 
-		// Update address log table
 		for _, removed_member := range state.StateDiff.RemovedMembers {
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
