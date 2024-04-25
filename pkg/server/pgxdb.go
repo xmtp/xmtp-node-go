@@ -14,7 +14,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
-func newPgxDb(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, error) {
+func newPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, error) {
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
@@ -39,8 +39,8 @@ func newPgxDb(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, e
 	return db, nil
 }
 
-func newBunPgxDb(dsn string, waitForDB, statementTimeout time.Duration) (*bun.DB, error) {
-	pgxDb, err := newPgxDb(dsn, waitForDB, statementTimeout)
+func newBunPGXDb(dsn string, waitForDB, statementTimeout time.Duration) (*bun.DB, error) {
+	pgxDb, err := newPGXDB(dsn, waitForDB, statementTimeout)
 	if err != nil {
 		return nil, err
 	}
