@@ -26,11 +26,11 @@ WHERE id = @id;
 
 -- name: FetchKeyPackages :many
 SELECT id, key_package FROM installations
-WHERE ID IN (@ids);
+WHERE id = ANY (sqlc.arg(installation_ids)::bytea[]);
 
 -- name: GetIdentityUpdates :many
 SELECT * FROM installations
-WHERE wallet_address IN (@wallet_addresses)
+WHERE wallet_address = ANY (@wallet_addresses::text[])
 AND (created_at > @start_time OR revoked_at > @start_time)
 ORDER BY created_at ASC;
 
