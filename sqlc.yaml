@@ -1,11 +1,9 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "pkg/identity/queries.sql"
+    queries: "pkg/mls/store/queries.sql"
     schema: "pkg/migrations/mls"
-    database:
-      uri: "postgres://postgres:xmtp@localhost:7654/postgres"
     gen:
       go:
         package: "queries"
-        out: "pkg/identity/queries"
+        out: "pkg/mls/store/queries"

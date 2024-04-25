@@ -25,10 +25,3 @@ CREATE TABLE address_log (
 --bun:split
 
 CREATE INDEX idx_address_log_address_inbox_id ON address_log(address, inbox_id);
-
--- bun:split
-
-CREATE TYPE inbox_filter AS (
-    sequence_id BIGINT,
-    inbox_id TEXT
-);

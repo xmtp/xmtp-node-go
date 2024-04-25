@@ -231,7 +231,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	var MLSStore *mlsstore.Store
 	if options.MLSStore.DbConnectionString != "" {
-		if s.mlsDB, err = createBunDB(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.MLSStore.MaxOpenConns); err != nil {
+		if s.mlsDB, err = newBunPGXDb(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout); err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
 
