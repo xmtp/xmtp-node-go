@@ -126,15 +126,17 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 		_ = append(updates, new_update)
 
-		validationService.GetAssociationState(ctx, updates, new_update)
-		// TODO: Validate the updates, and abort transaction if failed
+		state, err := validationService.GetAssociationState(ctx, updates, []*associations.IdentityUpdate{new_update})
+		if err != nil {
+			return err
+		}
 
 		protoBytes, err := proto.Marshal(new_update)
 		if err != nil {
 			return err
 		}
 
-		_, err = txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
+		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
 			InboxID:             new_update.GetInboxId(),
 			ServerTimestampNs:   nowNs(),
 			IdentityUpdateProto: protoBytes,
@@ -144,12 +146,24 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			return err
 		}
 
-		// TODO: Insert or update the address_log table using sequence_id
-		/*
-			_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
+		for _, new_member := range state.StateDiff.NewMembers {
+			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
+				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
+					Address:               address.Address,
+					InboxID:               state.AssociationState.InboxId,
+					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
+					RevocationSequenceID:  sql.NullInt64{Valid: false},
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
 
-			})
-		*/
+		// Update address log table
+		for _, removed_member := range state.StateDiff.RemovedMembers {
+
+		}
 
 		return nil
 	}); err != nil {

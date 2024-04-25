@@ -97,5 +97,5 @@ func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) 
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxIds(ctx, req)
 }

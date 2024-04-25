@@ -48,17 +48,17 @@ func TestInboxIds(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
 
-	seq, rev := uint64(1), uint64(5)
-	err := InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq := uint64(1)
+	err := InsertAddressLog(store, "address", "inbox1", &seq, nil)
 	require.NoError(t, err)
-	seq, rev = uint64(2), uint64(8)
-	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq = uint64(2)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, nil)
 	require.NoError(t, err)
-	seq, rev = uint64(3), uint64(9)
-	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	seq = uint64(3)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, nil)
 	require.NoError(t, err)
-	seq, rev = uint64(4), uint64(1)
-	err = InsertAddressLog(store, "address", "correct", &seq, &rev)
+	seq = uint64(4)
+	err = InsertAddressLog(store, "address", "correct", &seq, nil)
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -83,8 +83,8 @@ func TestInboxIds(t *testing.T) {
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	seq, rev = uint64(8), uint64(2)
-	err = InsertAddressLog(store, "address2", "inbox2", &seq, &rev)
+	seq = uint64(8)
+	err = InsertAddressLog(store, "address2", "inbox2", &seq, nil)
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
