@@ -9,8 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-
-	"github.com/lib/pq"
 )
 
 const createInstallation = `-- name: CreateInstallation :exec
@@ -41,7 +39,7 @@ func (q *Queries) CreateInstallation(ctx context.Context, arg CreateInstallation
 
 const fetchKeyPackages = `-- name: FetchKeyPackages :many
 SELECT id, key_package FROM installations
-WHERE id = ANY ($1::bytea[])
+WHERE ID IN ($1)
 `
 
 type FetchKeyPackagesRow struct {
@@ -49,8 +47,8 @@ type FetchKeyPackagesRow struct {
 	KeyPackage []byte
 }
 
-func (q *Queries) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]FetchKeyPackagesRow, error) {
-	rows, err := q.db.QueryContext(ctx, fetchKeyPackages, pq.Array(installationIds))
+func (q *Queries) FetchKeyPackages(ctx context.Context, ids []byte) ([]FetchKeyPackagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, fetchKeyPackages, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -108,18 +106,18 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxL
 
 const getIdentityUpdates = `-- name: GetIdentityUpdates :many
 SELECT id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration FROM installations
-WHERE wallet_address = ANY ($1::text[])
+WHERE wallet_address IN ($1)
 AND (created_at > $2 OR revoked_at > $2)
 ORDER BY created_at ASC
 `
 
 type GetIdentityUpdatesParams struct {
-	WalletAddresses []string
+	WalletAddresses string
 	StartTime       int64
 }
 
 func (q *Queries) GetIdentityUpdates(ctx context.Context, arg GetIdentityUpdatesParams) ([]Installation, error) {
-	rows, err := q.db.QueryContext(ctx, getIdentityUpdates, pq.Array(arg.WalletAddresses), arg.StartTime)
+	rows, err := q.db.QueryContext(ctx, getIdentityUpdates, arg.WalletAddresses, arg.StartTime)
 	if err != nil {
 		return nil, err
 	}
