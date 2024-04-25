@@ -14,16 +14,8 @@ import (
 )
 
 const createInstallation = `-- name: CreateInstallation :exec
-INSERT INTO installations (
-        id,
-        wallet_address,
-        created_at,
-        updated_at,
-        credential_identity,
-        key_package,
-        expiration
-    )
-VALUES ($1, $2, $3, $3, $4, $5, $6)
+INSERT INTO installations(id, wallet_address, created_at, updated_at, credential_identity, key_package, expiration)
+	VALUES ($1, $2, $3, $3, $4, $5, $6)
 `
 
 type CreateInstallationParams struct {
@@ -48,10 +40,13 @@ func (q *Queries) CreateInstallation(ctx context.Context, arg CreateInstallation
 }
 
 const fetchKeyPackages = `-- name: FetchKeyPackages :many
-SELECT id,
-    key_package
-FROM installations
-WHERE id = ANY ($1::bytea [])
+SELECT
+	id,
+	key_package
+FROM
+	installations
+WHERE
+	id = ANY ($1::BYTEA[])
 `
 
 type FetchKeyPackagesRow struct {
@@ -83,19 +78,24 @@ func (q *Queries) FetchKeyPackages(ctx context.Context, installationIds [][]byte
 }
 
 const getAddressLogs = `-- name: GetAddressLogs :many
-SELECT a.address,
-    a.inbox_id,
-    a.association_sequence_id
-FROM address_log a
-    INNER JOIN (
-        SELECT address,
-            MAX(association_sequence_id) AS max_association_sequence_id
-        FROM address_log
-        WHERE address = ANY ($1::text [])
-            AND revocation_sequence_id IS NULL
-        GROUP BY address
-    ) b ON a.address = b.address
-    AND a.association_sequence_id = b.max_association_sequence_id
+SELECT
+	a.address,
+	a.inbox_id,
+	a.association_sequence_id
+FROM
+	address_log a
+	INNER JOIN (
+		SELECT
+			address,
+			MAX(association_sequence_id) AS max_association_sequence_id
+		FROM
+			address_log
+		WHERE
+			address = ANY ($1::TEXT[])
+			AND revocation_sequence_id IS NULL
+		GROUP BY
+			address) b ON a.address = b.address
+	AND a.association_sequence_id = b.max_association_sequence_id
 `
 
 type GetAddressLogsRow struct {
@@ -128,11 +128,15 @@ func (q *Queries) GetAddressLogs(ctx context.Context, addresses []string) ([]Get
 }
 
 const getAllInboxLogs = `-- name: GetAllInboxLogs :many
-SELECT sequence_id, inbox_id, server_timestamp_ns, identity_update_proto
-FROM inbox_log
-WHERE inbox_id = $1
-ORDER BY sequence_id ASC FOR
-UPDATE
+SELECT
+	sequence_id, inbox_id, server_timestamp_ns, identity_update_proto
+FROM
+	inbox_log
+WHERE
+	inbox_id = $1
+ORDER BY
+	sequence_id ASC
+FOR UPDATE
 `
 
 func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxLog, error) {
@@ -164,14 +168,16 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxL
 }
 
 const getIdentityUpdates = `-- name: GetIdentityUpdates :many
-SELECT id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration
-FROM installations
-WHERE wallet_address = ANY ($1::text [])
-    AND (
-        created_at > $2
-        OR revoked_at > $2
-    )
-ORDER BY created_at ASC
+SELECT
+	id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration
+FROM
+	installations
+WHERE
+	wallet_address = ANY ($1::TEXT[])
+	AND (created_at > $2
+		OR revoked_at > $2)
+ORDER BY
+	created_at ASC
 `
 
 type GetIdentityUpdatesParams struct {
@@ -212,14 +218,19 @@ func (q *Queries) GetIdentityUpdates(ctx context.Context, arg GetIdentityUpdates
 }
 
 const getInboxLogFiltered = `-- name: GetInboxLogFiltered :many
-SELECT a.sequence_id, a.inbox_id, a.server_timestamp_ns, a.identity_update_proto
-FROM inbox_log AS a
-    JOIN (
-        SELECT inbox_id, sequence_id
-        FROM json_populate_recordset(null::inbox_filter, $1) as b(inbox_id, sequence_id)
-    ) as b on b.inbox_id = a.inbox_id
-    AND a.sequence_id > b.sequence_id
-ORDER BY a.sequence_id ASC
+SELECT
+	a.sequence_id, a.inbox_id, a.server_timestamp_ns, a.identity_update_proto
+FROM
+	inbox_log AS a
+	JOIN (
+		SELECT
+			inbox_id, sequence_id
+		FROM
+			json_populate_recordset(NULL::inbox_filter, $1) AS b(inbox_id,
+				sequence_id)) AS b ON b.inbox_id = a.inbox_id
+		AND a.sequence_id > b.sequence_id
+	ORDER BY
+		a.sequence_id ASC
 `
 
 func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessage) ([]InboxLog, error) {
@@ -251,14 +262,10 @@ func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessa
 }
 
 const insertAddressLog = `-- name: InsertAddressLog :one
-INSERT INTO address_log (
-        address,
-        inbox_id,
-        association_sequence_id,
-        revocation_sequence_id
-    )
-VALUES ($1, $2, $3, $4)
-RETURNING address, inbox_id, association_sequence_id, revocation_sequence_id
+INSERT INTO address_log(address, inbox_id, association_sequence_id, revocation_sequence_id)
+	VALUES ($1, $2, $3, $4)
+RETURNING
+	address, inbox_id, association_sequence_id, revocation_sequence_id
 `
 
 type InsertAddressLogParams struct {
@@ -286,9 +293,10 @@ func (q *Queries) InsertAddressLog(ctx context.Context, arg InsertAddressLogPara
 }
 
 const insertGroupMessage = `-- name: InsertGroupMessage :one
-INSERT INTO group_messages (group_id, data, group_id_data_hash)
-VALUES ($1, $2, $3)
-RETURNING id, created_at, group_id, data, group_id_data_hash
+INSERT INTO group_messages(group_id, data, group_id_data_hash)
+	VALUES ($1, $2, $3)
+RETURNING
+	id, created_at, group_id, data, group_id_data_hash
 `
 
 type InsertGroupMessageParams struct {
@@ -311,13 +319,10 @@ func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessage
 }
 
 const insertInboxLog = `-- name: InsertInboxLog :one
-INSERT INTO inbox_log (
-        inbox_id,
-        server_timestamp_ns,
-        identity_update_proto
-    )
-VALUES ($1, $2, $3)
-RETURNING sequence_id
+INSERT INTO inbox_log(inbox_id, server_timestamp_ns, identity_update_proto)
+	VALUES ($1, $2, $3)
+RETURNING
+	sequence_id
 `
 
 type InsertInboxLogParams struct {
@@ -334,14 +339,10 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 }
 
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
-INSERT INTO welcome_messages (
-        installation_key,
-        data,
-        installation_key_data_hash,
-        hpke_public_key
-    )
-VALUES ($1, $2, $3, $4)
-RETURNING id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+INSERT INTO welcome_messages(installation_key, data, installation_key_data_hash, hpke_public_key)
+	VALUES ($1, $2, $3, $4)
+RETURNING
+	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
 `
 
 type InsertWelcomeMessageParams struct {
@@ -371,10 +372,14 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 }
 
 const queryGroupMessagesAsc = `-- name: QueryGroupMessagesAsc :many
-SELECT id, created_at, group_id, data, group_id_data_hash
-FROM group_messages
-WHERE group_id = $1
-ORDER BY id ASC
+SELECT
+	id, created_at, group_id, data, group_id_data_hash
+FROM
+	group_messages
+WHERE
+	group_id = $1
+ORDER BY
+	id ASC
 LIMIT $2
 `
 
@@ -413,10 +418,14 @@ func (q *Queries) QueryGroupMessagesAsc(ctx context.Context, arg QueryGroupMessa
 }
 
 const queryGroupMessagesDesc = `-- name: QueryGroupMessagesDesc :many
-SELECT id, created_at, group_id, data, group_id_data_hash
-FROM group_messages
-WHERE group_id = $1
-ORDER BY id DESC
+SELECT
+	id, created_at, group_id, data, group_id_data_hash
+FROM
+	group_messages
+WHERE
+	group_id = $1
+ORDER BY
+	id DESC
 LIMIT $2
 `
 
@@ -455,11 +464,15 @@ func (q *Queries) QueryGroupMessagesDesc(ctx context.Context, arg QueryGroupMess
 }
 
 const queryGroupMessagesWithCursorAsc = `-- name: QueryGroupMessagesWithCursorAsc :many
-SELECT id, created_at, group_id, data, group_id_data_hash
-FROM group_messages
-WHERE group_id = $1
-    AND id > $2
-ORDER BY id ASC
+SELECT
+	id, created_at, group_id, data, group_id_data_hash
+FROM
+	group_messages
+WHERE
+	group_id = $1
+	AND id > $2
+ORDER BY
+	id ASC
 LIMIT $3
 `
 
@@ -499,11 +512,15 @@ func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg Query
 }
 
 const queryGroupMessagesWithCursorDesc = `-- name: QueryGroupMessagesWithCursorDesc :many
-SELECT id, created_at, group_id, data, group_id_data_hash
-FROM group_messages
-WHERE group_id = $1
-    AND id < $2
-ORDER BY id DESC
+SELECT
+	id, created_at, group_id, data, group_id_data_hash
+FROM
+	group_messages
+WHERE
+	group_id = $1
+	AND id < $2
+ORDER BY
+	id DESC
 LIMIT $3
 `
 
@@ -543,18 +560,23 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 }
 
 const revokeAddressFromLog = `-- name: RevokeAddressFromLog :exec
-UPDATE address_log
-SET revocation_sequence_id = $1
-WHERE (address, inbox_id, association_sequence_id) = (
-        SELECT address,
-            inbox_id,
-            MAX(association_sequence_id)
-        FROM address_log AS a
-        WHERE a.address = $2
-            AND a.inbox_id = $3
-        GROUP BY address,
-            inbox_id
-    )
+UPDATE
+	address_log
+SET
+	revocation_sequence_id = $1
+WHERE (address, inbox_id, association_sequence_id) =(
+	SELECT
+		address,
+		inbox_id,
+		MAX(association_sequence_id)
+	FROM
+		address_log AS a
+	WHERE
+		a.address = $2
+		AND a.inbox_id = $3
+	GROUP BY
+		address,
+		inbox_id)
 `
 
 type RevokeAddressFromLogParams struct {
@@ -569,10 +591,13 @@ func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFro
 }
 
 const revokeInstallation = `-- name: RevokeInstallation :exec
-UPDATE installations
-SET revoked_at = $1
-WHERE id = $2
-    AND revoked_at IS NULL
+UPDATE
+	installations
+SET
+	revoked_at = $1
+WHERE
+	id = $2
+	AND revoked_at IS NULL
 `
 
 type RevokeInstallationParams struct {
@@ -586,11 +611,14 @@ func (q *Queries) RevokeInstallation(ctx context.Context, arg RevokeInstallation
 }
 
 const updateKeyPackage = `-- name: UpdateKeyPackage :execrows
-UPDATE installations
-SET key_package = $1,
-    updated_at = $2,
-    expiration = $3
-WHERE id = $4
+UPDATE
+	installations
+SET
+	key_package = $1,
+	updated_at = $2,
+	expiration = $3
+WHERE
+	id = $4
 `
 
 type UpdateKeyPackageParams struct {
