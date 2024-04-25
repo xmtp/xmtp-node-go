@@ -1,0 +1,9 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "pkg/mls/store/queries.sql"
+    schema: "pkg/migrations/mls"
+    gen:
+      go:
+        package: "queries"
+        out: "pkg/mls/store/queries"

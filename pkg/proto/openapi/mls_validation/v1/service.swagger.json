@@ -142,9 +142,9 @@
     "associationsErc1271Signature": {
       "type": "object",
       "properties": {
-        "contractAddress": {
+        "accountId": {
           "type": "string",
-          "title": "CAIP-10 contract address\nhttps://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-10.md"
+          "title": "CAIP-10\nhttps://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-10.md"
         },
         "blockNumber": {
           "type": "string",
@@ -251,7 +251,13 @@
       "properties": {
         "bytes": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "title": "64 bytes [R(32 bytes) || S(32 bytes)]"
+        },
+        "publicKey": {
+          "type": "string",
+          "format": "byte",
+          "title": "32 bytes"
         }
       },
       "title": "EdDSA signature for 25519"
