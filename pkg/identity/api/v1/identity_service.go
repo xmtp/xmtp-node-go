@@ -78,7 +78,7 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	return s.store.PublishIdentityUpdate(ctx, req)
+	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {

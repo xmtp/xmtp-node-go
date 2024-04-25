@@ -13,6 +13,7 @@ import (
 	"github.com/uptrace/bun/migrate"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -30,7 +31,7 @@ type Store struct {
 }
 
 type IdentityStore interface {
-	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error)
+	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error)
 	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
 	GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error)
 }
@@ -99,7 +100,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 	}, nil
 }
 
-func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error) {
+func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error) {
 	new_update := req.GetIdentityUpdate()
 	if new_update == nil {
 		return nil, errors.New("IdentityUpdate is required")
@@ -125,6 +126,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 		_ = append(updates, new_update)
 
+		validationService.GetAssociationState(ctx, updates, new_update)
 		// TODO: Validate the updates, and abort transaction if failed
 
 		protoBytes, err := proto.Marshal(new_update)
@@ -141,7 +143,13 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		if err != nil {
 			return err
 		}
+
 		// TODO: Insert or update the address_log table using sequence_id
+		/*
+			_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
+
+			})
+		*/
 
 		return nil
 	}); err != nil {
