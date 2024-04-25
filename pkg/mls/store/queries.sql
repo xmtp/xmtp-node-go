@@ -31,6 +31,11 @@ INNER JOIN (
         address
 ) b ON a.address = b.address AND a.association_sequence_id = b.max_association_sequence_id;
 
+-- name: InsertAddressLog :one
+INSERT INTO address_log (address, inbox_id, association_sequence_id, revocation_sequence_id)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
 -- name: InsertInboxLog :one
 INSERT INTO inbox_log (inbox_id, server_timestamp_ns, identity_update_proto)
 VALUES ($1, $2, $3)
