@@ -41,6 +41,16 @@ INSERT INTO inbox_log (inbox_id, server_timestamp_ns, identity_update_proto)
 VALUES ($1, $2, $3)
 RETURNING sequence_id;
 
+-- name: RevokeAddressFromLog :exec
+UPDATE address_log
+SET revocation_sequence_id = $1
+WHERE (address, inbox_id, association_sequence_id) = (
+    SELECT address, inbox_id, MAX(association_sequence_id)
+    FROM address_log AS a
+    WHERE a.address = $2 AND a.inbox_id = $3
+    GROUP BY address, inbox_id
+);
+
 -- name: CreateInstallation :exec
 INSERT INTO installations (id, wallet_address, created_at, updated_at, credential_identity, key_package, expiration)
 VALUES ($1, $2, $3, $3, $4, $5, $6);

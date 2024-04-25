@@ -511,6 +511,28 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 	return items, nil
 }
 
+const revokeAddressFromLog = `-- name: RevokeAddressFromLog :exec
+UPDATE address_log
+SET revocation_sequence_id = $1
+WHERE (address, inbox_id, association_sequence_id) = (
+    SELECT address, inbox_id, MAX(association_sequence_id)
+    FROM address_log AS a
+    WHERE a.address = $2 AND a.inbox_id = $3
+    GROUP BY address, inbox_id
+)
+`
+
+type RevokeAddressFromLogParams struct {
+	RevocationSequenceID sql.NullInt64
+	Address              string
+	InboxID              string
+}
+
+func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFromLogParams) error {
+	_, err := q.db.ExecContext(ctx, revokeAddressFromLog, arg.RevocationSequenceID, arg.Address, arg.InboxID)
+	return err
+}
+
 const revokeInstallation = `-- name: RevokeInstallation :exec
 UPDATE installations
 SET revoked_at = $1
