@@ -20,7 +20,27 @@ type mockedMLSValidationService struct {
 }
 
 func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
-	return nil, nil
+
+	member_map := make([]*associations.MemberMap, 0)
+	member_map = append(member_map, &associations.MemberMap{
+		Key: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "key_address"}},
+		Value: &associations.Member{
+			Identifier:    &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "ident"}},
+			AddedByEntity: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "added_by_entity"}},
+		},
+	})
+
+	new_members := make([]*associations.MemberIdentifier, 0)
+
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x01"}})
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x02"}})
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x03"}})
+
+	out := mlsvalidate.AssociationStateResult{
+		AssociationState: &associations.AssociationState{InboxId: "test_inbox", Members: member_map, RecoveryAddress: "recovery", SeenSignatures: [][]byte{[]byte("seen"), []byte("sig")}},
+		StateDiff:        &associations.AssociationStateDiff{NewMembers: new_members, RemovedMembers: nil},
+	}
+	return &out, nil
 }
 
 func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {

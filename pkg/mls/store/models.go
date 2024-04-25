@@ -6,6 +6,15 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type AddressLogEntry struct {
+	bun.BaseModel `bun:"table:address_log"`
+
+	Address               string  `bun:",notnull"`
+	InboxId               string  `bun:",notnull"`
+	AssociationSequenceId *uint64 `bun:","`
+	RevocationSequenceId  *uint64 `bun:","`
+}
+
 type InboxLogEntry struct {
 	bun.BaseModel `bun:"table:inbox_log"`
 

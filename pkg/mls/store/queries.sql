@@ -15,6 +15,31 @@ FROM inbox_log AS a
     AND a.sequence_id > b.sequence_id
 ORDER BY a.sequence_id ASC;
 
+-- name: GetAddressLogs :many
+SELECT a.address,
+    a.inbox_id,
+    a.association_sequence_id
+FROM address_log a
+    INNER JOIN (
+        SELECT address,
+            MAX(association_sequence_id) AS max_association_sequence_id
+        FROM address_log
+        WHERE address = ANY (@addresses::text [])
+            AND revocation_sequence_id IS NULL
+        GROUP BY address
+    ) b ON a.address = b.address
+    AND a.association_sequence_id = b.max_association_sequence_id;
+
+-- name: InsertAddressLog :one
+INSERT INTO address_log (
+        address,
+        inbox_id,
+        association_sequence_id,
+        revocation_sequence_id
+    )
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
 -- name: InsertInboxLog :one
 INSERT INTO inbox_log (
         inbox_id,
@@ -23,6 +48,20 @@ INSERT INTO inbox_log (
     )
 VALUES ($1, $2, $3)
 RETURNING sequence_id;
+
+-- name: RevokeAddressFromLog :exec
+UPDATE address_log
+SET revocation_sequence_id = $1
+WHERE (address, inbox_id, association_sequence_id) = (
+        SELECT address,
+            inbox_id,
+            MAX(association_sequence_id)
+        FROM address_log AS a
+        WHERE a.address = $2
+            AND a.inbox_id = $3
+        GROUP BY address,
+            inbox_id
+    );
 
 -- name: CreateInstallation :exec
 INSERT INTO installations (

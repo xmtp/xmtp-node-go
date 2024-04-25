@@ -2,11 +2,14 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
@@ -24,6 +27,46 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	require.NoError(t, err)
 
 	return store, dbCleanup
+}
+
+func TestInboxIds(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+
+	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address",
+	})
+	req := &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	resp, _ := store.GetInboxIds(context.Background(), req)
+
+	require.Equal(t, "correct", *resp.Responses[0].InboxId)
+
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
+
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	req = &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
 }
 
 func TestCreateInstallation(t *testing.T) {
