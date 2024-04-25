@@ -7,8 +7,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Service struct {
@@ -78,7 +76,7 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	return s.store.PublishIdentityUpdate(ctx, req)
+	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
@@ -97,5 +95,5 @@ func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) 
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxIds(ctx, req)
 }

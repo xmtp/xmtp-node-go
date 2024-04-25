@@ -13,6 +13,7 @@ import (
 	"github.com/uptrace/bun/migrate"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -30,7 +31,7 @@ type Store struct {
 }
 
 type IdentityStore interface {
-	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error)
+	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error)
 	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
 	GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error)
 }
@@ -99,7 +100,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 	}, nil
 }
 
-func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error) {
+func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error) {
 	new_update := req.GetIdentityUpdate()
 	if new_update == nil {
 		return nil, errors.New("IdentityUpdate is required")
@@ -125,23 +126,57 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 		_ = append(updates, new_update)
 
-		// TODO: Validate the updates, and abort transaction if failed
+		state, err := validationService.GetAssociationState(ctx, updates, []*associations.IdentityUpdate{new_update})
+		if err != nil {
+			return err
+		}
 
+		s.log.Info("Got association state", zap.Any("state", state))
 		protoBytes, err := proto.Marshal(new_update)
 		if err != nil {
 			return err
 		}
 
-		_, err = txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
+		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
 			InboxID:             new_update.GetInboxId(),
 			ServerTimestampNs:   nowNs(),
 			IdentityUpdateProto: protoBytes,
 		})
 
+		s.log.Info("Inserted inbox log", zap.Any("sequence_id", sequence_id))
+
 		if err != nil {
 			return err
 		}
-		// TODO: Insert or update the address_log table using sequence_id
+
+		for _, new_member := range state.StateDiff.NewMembers {
+			s.log.Info("New member", zap.Any("member", new_member))
+			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
+				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
+					Address:               address.Address,
+					InboxID:               state.AssociationState.InboxId,
+					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
+					RevocationSequenceID:  sql.NullInt64{Valid: false},
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, removed_member := range state.StateDiff.RemovedMembers {
+			s.log.Info("New member", zap.Any("member", removed_member))
+			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
+				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
+					Address:              address.Address,
+					InboxID:              state.AssociationState.InboxId,
+					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
 
 		return nil
 	}); err != nil {
