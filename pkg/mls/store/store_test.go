@@ -69,7 +69,6 @@ func TestInboxIds(t *testing.T) {
 		Requests: reqs,
 	}
 	resp, _ := store.GetInboxIds(context.Background(), req)
-	t.Log(resp)
 
 	require.Equal(t, "correct", *resp.Responses[0].InboxId)
 
