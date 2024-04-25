@@ -41,6 +41,10 @@ You must have the _exact_ go version listed in `go.mod` - you can verify this by
 
 1. `dev/migrate-authz $MIGRATION_NAME`
 
+### Updating the SQLC Queries for the MLSStore
+
+If you modify `pkg/mls/store/queries.sql` you need to run `./dev/sqlc` from the root of this package to regenerate any generated code.
+
 ### Debugging metrics
 
 1. `dev/run --metrics`
