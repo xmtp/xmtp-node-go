@@ -32,6 +32,7 @@ type Store struct {
 type IdentityStore interface {
 	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error)
 	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
+	GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error)
 }
 
 type MlsStore interface {
@@ -65,6 +66,37 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
+
+	addresses := []string{}
+	for _, request := range req.Requests {
+		addresses = append(addresses, request.GetAddress())
+	}
+
+	addressLogEntries, err := s.queries.GetAddressLogs(ctx, addresses)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*identity.GetInboxIdsResponse_Response, len(addresses))
+
+	for index, address := range addresses {
+		resp := identity.GetInboxIdsResponse_Response{}
+		resp.Address = address
+
+		for _, log_entry := range addressLogEntries {
+			if log_entry.Address == address {
+				resp.InboxId = &log_entry.InboxID
+			}
+		}
+		out[index] = &resp
+	}
+
+	return &identity.GetInboxIdsResponse{
+		Responses: out,
+	}, nil
 }
 
 func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest) (*identity.PublishIdentityUpdateResponse, error) {

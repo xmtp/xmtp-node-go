@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
@@ -24,6 +25,69 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	require.NoError(t, err)
 
 	return store, dbCleanup
+}
+
+func InsertAddressLog(store *Store, address string, inboxId string, associationSequenceId *uint64, revocationSequenceId *uint64) error {
+
+	entry := AddressLogEntry{
+		Address:               address,
+		InboxId:               inboxId,
+		AssociationSequenceId: associationSequenceId,
+		RevocationSequenceId:  nil,
+	}
+	ctx := context.Background()
+
+	_, err := store.db.NewInsert().
+		Model(&entry).
+		Exec(ctx)
+
+	return err
+}
+
+func TestInboxIds(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	seq, rev := uint64(1), uint64(5)
+	err := InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
+	seq, rev = uint64(2), uint64(8)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
+	seq, rev = uint64(3), uint64(9)
+	err = InsertAddressLog(store, "address", "inbox1", &seq, &rev)
+	require.NoError(t, err)
+	seq, rev = uint64(4), uint64(1)
+	err = InsertAddressLog(store, "address", "correct", &seq, &rev)
+	require.NoError(t, err)
+
+	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address",
+	})
+	req := &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	resp, _ := store.GetInboxIds(context.Background(), req)
+	t.Log(resp)
+
+	require.Equal(t, "correct", *resp.Responses[0].InboxId)
+
+	seq = uint64(5)
+	err = InsertAddressLog(store, "address", "correct_inbox2", &seq, nil)
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
+
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	req = &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	seq, rev = uint64(8), uint64(2)
+	err = InsertAddressLog(store, "address2", "inbox2", &seq, &rev)
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
 }
 
 func TestCreateInstallation(t *testing.T) {
