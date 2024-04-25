@@ -131,6 +131,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			return err
 		}
 
+		s.log.Info("Got association state", zap.Any("state", state))
 		protoBytes, err := proto.Marshal(new_update)
 		if err != nil {
 			return err
@@ -142,11 +143,14 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			IdentityUpdateProto: protoBytes,
 		})
 
+		s.log.Info("Inserted inbox log", zap.Any("sequence_id", sequence_id))
+
 		if err != nil {
 			return err
 		}
 
 		for _, new_member := range state.StateDiff.NewMembers {
+			s.log.Info("New member", zap.Any("member", new_member))
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
@@ -161,6 +165,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		for _, removed_member := range state.StateDiff.RemovedMembers {
+			s.log.Info("New member", zap.Any("member", removed_member))
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
