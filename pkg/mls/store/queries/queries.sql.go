@@ -72,6 +72,57 @@ func (q *Queries) FetchKeyPackages(ctx context.Context, installationIds [][]byte
 	return items, nil
 }
 
+const getAddressLogs = `-- name: GetAddressLogs :many
+SELECT 
+    a.address,
+    a.inbox_id,
+    a.association_sequence_id
+FROM 
+    address_log a
+INNER JOIN (
+    SELECT 
+        address,
+        MAX(association_sequence_id) AS max_association_sequence_id
+    FROM 
+        address_log
+    WHERE 
+        address = ANY ($1::text[])
+    AND
+        revocation_sequence_id IS NULL
+    GROUP BY 
+        address
+) b ON a.address = b.address AND a.association_sequence_id = b.max_association_sequence_id
+`
+
+type GetAddressLogsRow struct {
+	Address               string
+	InboxID               string
+	AssociationSequenceID sql.NullInt64
+}
+
+func (q *Queries) GetAddressLogs(ctx context.Context, addresses []string) ([]GetAddressLogsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAddressLogs, pq.Array(addresses))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAddressLogsRow
+	for rows.Next() {
+		var i GetAddressLogsRow
+		if err := rows.Scan(&i.Address, &i.InboxID, &i.AssociationSequenceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllInboxLogs = `-- name: GetAllInboxLogs :many
 SELECT sequence_id, inbox_id, server_timestamp_ns, identity_update_proto FROM inbox_log
 WHERE inbox_id = $1
