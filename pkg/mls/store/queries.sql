@@ -62,94 +62,50 @@ ORDER BY created_at ASC;
 -- name: RevokeInstallation :exec
 UPDATE installations
 SET revoked_at = @revoked_at
-WHERE id = @installation_id << << << < HEAD
+WHERE id = @installation_id
     AND revoked_at IS NULL;
 
-== == == =
-AND revoked_at IS NULL;
-
->> >> >> > a99c43b (
-    Set up sqlc
-) -- name: InsertGroupMessage :one
+-- name: InsertGroupMessage :one
 INSERT INTO group_messages (group_id, data, group_id_data_hash)
 VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: InsertWelcomeMessage :one
-<< << << < HEAD
 INSERT INTO welcome_messages (
         installation_key,
         data,
         installation_key_data_hash,
         hpke_public_key
-    ) == == == =
-INSERT INTO welcome_messages (
-        installation_key,
-        data,
-        installation_key_data_hash,
-        hpke_public_key
-    ) >> >> >> > a99c43b (
-        Set up sqlc
     )
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: QueryGroupMessagesAsc :many
-<< << << < HEAD
 SELECT *
-FROM group_messages == == == =
-SELECT *
-FROM group_messages >> >> >> > a99c43b (
-        Set up sqlc
-    )
+FROM group_messages
 WHERE group_id = @group_id
 ORDER BY id ASC
 LIMIT @numrows;
 
 -- name: QueryGroupMessagesDesc :many
-<< << << < HEAD
 SELECT *
-FROM group_messages == == == =
-SELECT *
-FROM group_messages >> >> >> > a99c43b (
-        Set up sqlc
-    )
+FROM group_messages
 WHERE group_id = @group_id
 ORDER BY id DESC
 LIMIT @numrows;
 
 -- name: QueryGroupMessagesWithCursorAsc :many
-<< << << < HEAD
 SELECT *
 FROM group_messages
 WHERE group_id = $1
-    AND id > $2 == == == =
-SELECT *
-FROM group_messages
-WHERE group_id = $1
-    AND id > $2 >> >> >> > a99c43b (
-        Set up sqlc
-    )
+    AND id > $2
 ORDER BY id ASC
 LIMIT $3;
 
 -- name: QueryGroupMessagesWithCursorDesc :many
-<< << << < HEAD
 SELECT *
 FROM group_messages
 WHERE group_id = $1
     AND id < $2
 ORDER BY id DESC
 LIMIT $3;
-
-== == == =
-SELECT *
-FROM group_messages
-WHERE group_id = $1
-    AND id < $2
-ORDER BY id DESC
-LIMIT $3;
-
->> >> >> > a99c43b (
-    Set up sqlc
-)
