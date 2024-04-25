@@ -83,25 +83,19 @@ func (q *Queries) FetchKeyPackages(ctx context.Context, installationIds [][]byte
 }
 
 const getAddressLogs = `-- name: GetAddressLogs :many
-SELECT 
-    a.address,
+SELECT a.address,
     a.inbox_id,
     a.association_sequence_id
-FROM 
-    address_log a
-INNER JOIN (
-    SELECT 
-        address,
-        MAX(association_sequence_id) AS max_association_sequence_id
-    FROM 
-        address_log
-    WHERE 
-        address = ANY ($1::text[])
-    AND
-        revocation_sequence_id IS NULL
-    GROUP BY 
-        address
-) b ON a.address = b.address AND a.association_sequence_id = b.max_association_sequence_id
+FROM address_log a
+    INNER JOIN (
+        SELECT address,
+            MAX(association_sequence_id) AS max_association_sequence_id
+        FROM address_log
+        WHERE address = ANY ($1::text [])
+            AND revocation_sequence_id IS NULL
+        GROUP BY address
+    ) b ON a.address = b.address
+    AND a.association_sequence_id = b.max_association_sequence_id
 `
 
 type GetAddressLogsRow struct {
@@ -254,6 +248,41 @@ func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessa
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertAddressLog = `-- name: InsertAddressLog :one
+INSERT INTO address_log (
+        address,
+        inbox_id,
+        association_sequence_id,
+        revocation_sequence_id
+    )
+VALUES ($1, $2, $3, $4)
+RETURNING address, inbox_id, association_sequence_id, revocation_sequence_id
+`
+
+type InsertAddressLogParams struct {
+	Address               string
+	InboxID               string
+	AssociationSequenceID sql.NullInt64
+	RevocationSequenceID  sql.NullInt64
+}
+
+func (q *Queries) InsertAddressLog(ctx context.Context, arg InsertAddressLogParams) (AddressLog, error) {
+	row := q.db.QueryRowContext(ctx, insertAddressLog,
+		arg.Address,
+		arg.InboxID,
+		arg.AssociationSequenceID,
+		arg.RevocationSequenceID,
+	)
+	var i AddressLog
+	err := row.Scan(
+		&i.Address,
+		&i.InboxID,
+		&i.AssociationSequenceID,
+		&i.RevocationSequenceID,
+	)
+	return i, err
 }
 
 const insertGroupMessage = `-- name: InsertGroupMessage :one
@@ -511,6 +540,32 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeAddressFromLog = `-- name: RevokeAddressFromLog :exec
+UPDATE address_log
+SET revocation_sequence_id = $1
+WHERE (address, inbox_id, association_sequence_id) = (
+        SELECT address,
+            inbox_id,
+            MAX(association_sequence_id)
+        FROM address_log AS a
+        WHERE a.address = $2
+            AND a.inbox_id = $3
+        GROUP BY address,
+            inbox_id
+    )
+`
+
+type RevokeAddressFromLogParams struct {
+	RevocationSequenceID sql.NullInt64
+	Address              string
+	InboxID              string
+}
+
+func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFromLogParams) error {
+	_, err := q.db.ExecContext(ctx, revokeAddressFromLog, arg.RevocationSequenceID, arg.Address, arg.InboxID)
+	return err
 }
 
 const revokeInstallation = `-- name: RevokeInstallation :exec
