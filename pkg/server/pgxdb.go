@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -19,7 +18,7 @@ func newPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, e
 	if err != nil {
 		return nil, err
 	}
-	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
 	config.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(statementTimeout.Milliseconds())
 
 	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)

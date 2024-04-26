@@ -127,6 +127,44 @@ func (q *Queries) GetAddressLogs(ctx context.Context, addresses []string) ([]Get
 	return items, nil
 }
 
+const getAllGroupMessages = `-- name: GetAllGroupMessages :many
+SELECT
+	id, created_at, group_id, data, group_id_data_hash
+FROM
+	group_messages
+ORDER BY
+	id ASC
+`
+
+func (q *Queries) GetAllGroupMessages(ctx context.Context) ([]GroupMessage, error) {
+	rows, err := q.db.QueryContext(ctx, getAllGroupMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GroupMessage
+	for rows.Next() {
+		var i GroupMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.GroupID,
+			&i.Data,
+			&i.GroupIDDataHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllInboxLogs = `-- name: GetAllInboxLogs :many
 SELECT
 	sequence_id, inbox_id, server_timestamp_ns, identity_update_proto
@@ -153,6 +191,45 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxL
 			&i.InboxID,
 			&i.ServerTimestampNs,
 			&i.IdentityUpdateProto,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllWelcomeMessages = `-- name: GetAllWelcomeMessages :many
+SELECT
+	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+FROM
+	welcome_messages
+ORDER BY
+	id ASC
+`
+
+func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, error) {
+	rows, err := q.db.QueryContext(ctx, getAllWelcomeMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WelcomeMessage
+	for rows.Next() {
+		var i WelcomeMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InstallationKey,
+			&i.Data,
+			&i.InstallationKeyDataHash,
+			&i.HpkePublicKey,
 		); err != nil {
 			return nil, err
 		}
@@ -259,6 +336,31 @@ func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessa
 		return nil, err
 	}
 	return items, nil
+}
+
+const getInstallation = `-- name: GetInstallation :one
+SELECT
+	id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration
+FROM
+	installations
+WHERE
+	id = $1
+`
+
+func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation, error) {
+	row := q.db.QueryRowContext(ctx, getInstallation, id)
+	var i Installation
+	err := row.Scan(
+		&i.ID,
+		&i.WalletAddress,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CredentialIdentity,
+		&i.RevokedAt,
+		&i.KeyPackage,
+		&i.Expiration,
+	)
+	return i, err
 }
 
 const insertAddressLog = `-- name: InsertAddressLog :one
@@ -371,7 +473,7 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 	return i, err
 }
 
-const queryGroupMessagesAsc = `-- name: QueryGroupMessagesAsc :many
+const queryGroupMessages = `-- name: QueryGroupMessages :many
 SELECT
 	id, created_at, group_id, data, group_id_data_hash
 FROM
@@ -379,63 +481,23 @@ FROM
 WHERE
 	group_id = $1
 ORDER BY
-	id ASC
-LIMIT $2
+	CASE WHEN $2::BOOL THEN
+		id
+	END DESC,
+	CASE WHEN $2::BOOL = FALSE THEN
+		id
+	END ASC
+LIMIT $3
 `
 
-type QueryGroupMessagesAscParams struct {
-	GroupID []byte
-	Numrows int32
+type QueryGroupMessagesParams struct {
+	GroupID  []byte
+	SortDesc bool
+	Numrows  int32
 }
 
-func (q *Queries) QueryGroupMessagesAsc(ctx context.Context, arg QueryGroupMessagesAscParams) ([]GroupMessage, error) {
-	rows, err := q.db.QueryContext(ctx, queryGroupMessagesAsc, arg.GroupID, arg.Numrows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GroupMessage
-	for rows.Next() {
-		var i GroupMessage
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.GroupID,
-			&i.Data,
-			&i.GroupIDDataHash,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const queryGroupMessagesDesc = `-- name: QueryGroupMessagesDesc :many
-SELECT
-	id, created_at, group_id, data, group_id_data_hash
-FROM
-	group_messages
-WHERE
-	group_id = $1
-ORDER BY
-	id DESC
-LIMIT $2
-`
-
-type QueryGroupMessagesDescParams struct {
-	GroupID []byte
-	Numrows int32
-}
-
-func (q *Queries) QueryGroupMessagesDesc(ctx context.Context, arg QueryGroupMessagesDescParams) ([]GroupMessage, error) {
-	rows, err := q.db.QueryContext(ctx, queryGroupMessagesDesc, arg.GroupID, arg.Numrows)
+func (q *Queries) QueryGroupMessages(ctx context.Context, arg QueryGroupMessagesParams) ([]GroupMessage, error) {
+	rows, err := q.db.QueryContext(ctx, queryGroupMessages, arg.GroupID, arg.SortDesc, arg.Numrows)
 	if err != nil {
 		return nil, err
 	}
@@ -478,12 +540,12 @@ LIMIT $3
 
 type QueryGroupMessagesWithCursorAscParams struct {
 	GroupID []byte
-	ID      int64
-	Limit   int32
+	Cursor  int64
+	Numrows int32
 }
 
 func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg QueryGroupMessagesWithCursorAscParams) ([]GroupMessage, error) {
-	rows, err := q.db.QueryContext(ctx, queryGroupMessagesWithCursorAsc, arg.GroupID, arg.ID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, queryGroupMessagesWithCursorAsc, arg.GroupID, arg.Cursor, arg.Numrows)
 	if err != nil {
 		return nil, err
 	}
@@ -526,12 +588,12 @@ LIMIT $3
 
 type QueryGroupMessagesWithCursorDescParams struct {
 	GroupID []byte
-	ID      int64
-	Limit   int32
+	Cursor  int64
+	Numrows int32
 }
 
 func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg QueryGroupMessagesWithCursorDescParams) ([]GroupMessage, error) {
-	rows, err := q.db.QueryContext(ctx, queryGroupMessagesWithCursorDesc, arg.GroupID, arg.ID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, queryGroupMessagesWithCursorDesc, arg.GroupID, arg.Cursor, arg.Numrows)
 	if err != nil {
 		return nil, err
 	}
@@ -545,6 +607,157 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryWelcomeMessages = `-- name: QueryWelcomeMessages :many
+SELECT
+	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+FROM
+	welcome_messages
+WHERE
+	installation_key = $1
+ORDER BY
+	CASE WHEN $2::BOOL THEN
+		id
+	END DESC,
+	CASE WHEN $2::BOOL = FALSE THEN
+		id
+	END ASC
+LIMIT $3
+`
+
+type QueryWelcomeMessagesParams struct {
+	InstallationKey []byte
+	SortDesc        bool
+	Numrows         int32
+}
+
+func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMessagesParams) ([]WelcomeMessage, error) {
+	rows, err := q.db.QueryContext(ctx, queryWelcomeMessages, arg.InstallationKey, arg.SortDesc, arg.Numrows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WelcomeMessage
+	for rows.Next() {
+		var i WelcomeMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InstallationKey,
+			&i.Data,
+			&i.InstallationKeyDataHash,
+			&i.HpkePublicKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryWelcomeMessagesWithCursorAsc = `-- name: QueryWelcomeMessagesWithCursorAsc :many
+SELECT
+	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+FROM
+	welcome_messages
+WHERE
+	installation_key = $1
+	AND id > $2
+ORDER BY
+	id ASC
+LIMIT $3
+`
+
+type QueryWelcomeMessagesWithCursorAscParams struct {
+	InstallationKey []byte
+	Cursor          int64
+	Numrows         int32
+}
+
+func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg QueryWelcomeMessagesWithCursorAscParams) ([]WelcomeMessage, error) {
+	rows, err := q.db.QueryContext(ctx, queryWelcomeMessagesWithCursorAsc, arg.InstallationKey, arg.Cursor, arg.Numrows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WelcomeMessage
+	for rows.Next() {
+		var i WelcomeMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InstallationKey,
+			&i.Data,
+			&i.InstallationKeyDataHash,
+			&i.HpkePublicKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryWelcomeMessagesWithCursorDesc = `-- name: QueryWelcomeMessagesWithCursorDesc :many
+SELECT
+	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+FROM
+	welcome_messages
+WHERE
+	installation_key = $1
+	AND id < $2
+ORDER BY
+	id DESC
+LIMIT $3
+`
+
+type QueryWelcomeMessagesWithCursorDescParams struct {
+	InstallationKey []byte
+	Cursor          int64
+	Numrows         int32
+}
+
+func (q *Queries) QueryWelcomeMessagesWithCursorDesc(ctx context.Context, arg QueryWelcomeMessagesWithCursorDescParams) ([]WelcomeMessage, error) {
+	rows, err := q.db.QueryContext(ctx, queryWelcomeMessagesWithCursorDesc, arg.InstallationKey, arg.Cursor, arg.Numrows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WelcomeMessage
+	for rows.Next() {
+		var i WelcomeMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InstallationKey,
+			&i.Data,
+			&i.InstallationKeyDataHash,
+			&i.HpkePublicKey,
 		); err != nil {
 			return nil, err
 		}

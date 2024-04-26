@@ -43,8 +43,8 @@ type MlsStore interface {
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
-	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*WelcomeMessage, error)
+	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -319,44 +319,36 @@ func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) e
 	})
 }
 
-func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*GroupMessage, error) {
-	message := GroupMessage{
-		Data: data,
-	}
+func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error) {
+	dataHash := sha256.Sum256(append(groupId, data...))
+	message, err := s.queries.InsertGroupMessage(ctx, queries.InsertGroupMessageParams{
+		GroupID:         groupId,
+		Data:            data,
+		GroupIDDataHash: dataHash[:],
+	})
 
-	var id uint64
-	err := s.db.QueryRow("INSERT INTO group_messages (group_id, data, group_id_data_hash) VALUES (?, ?, ?) RETURNING id", groupId, data, sha256.Sum256(append(groupId, data...))).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
 		}
-		return nil, err
-	}
-
-	err = s.db.NewSelect().Model(&message).Where("id = ?", id).Scan(ctx)
-	if err != nil {
 		return nil, err
 	}
 
 	return &message, nil
 }
 
-func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*WelcomeMessage, error) {
-	message := WelcomeMessage{
-		Data: data,
-	}
-
-	var id uint64
-	err := s.db.QueryRow("INSERT INTO welcome_messages (installation_key, data, installation_key_data_hash, hpke_public_key) VALUES (?, ?, ?, ?) RETURNING id", installationId, data, sha256.Sum256(append(installationId, data...)), hpkePublicKey).Scan(&id)
+func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error) {
+	dataHash := sha256.Sum256(append(installationId, data...))
+	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
+		InstallationKey:         installationId,
+		Data:                    data,
+		InstallationKeyDataHash: dataHash[:],
+		HpkePublicKey:           hpkePublicKey,
+	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
 		}
-		return nil, err
-	}
-
-	err = s.db.NewSelect().Model(&message).Where("id = ?", id).Scan(ctx)
-	if err != nil {
 		return nil, err
 	}
 
@@ -364,136 +356,159 @@ func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte,
 }
 
 func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
-	msgs := make([]*GroupMessage, 0)
-
 	if len(req.GroupId) == 0 {
 		return nil, errors.New("group is required")
 	}
 
-	q := s.db.NewSelect().
-		Model(&msgs).
-		Where("group_id = ?", req.GroupId)
+	sortDesc := true
+	var idCursor int64
+	var err error
+	var messages []queries.GroupMessage
+	pageSize := int32(maxPageSize)
 
-	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
-	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
-		direction = req.PagingInfo.Direction
-	}
-	switch direction {
-	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
-		q = q.Order("id DESC")
-	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
-		q = q.Order("id ASC")
+	if req.PagingInfo != nil && req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+		sortDesc = false
 	}
 
-	pageSize := maxPageSize
 	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
-		pageSize = int(req.PagingInfo.Limit)
+		pageSize = int32(req.PagingInfo.Limit)
 	}
-	q = q.Limit(pageSize)
 
 	if req.PagingInfo != nil && req.PagingInfo.IdCursor != 0 {
-		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
-			q = q.Where("id > ?", req.PagingInfo.IdCursor)
-		} else {
-			q = q.Where("id < ?", req.PagingInfo.IdCursor)
-		}
+		idCursor = int64(req.PagingInfo.IdCursor)
 	}
 
-	err := q.Scan(ctx)
+	if idCursor > 0 {
+		if sortDesc {
+			messages, err = s.queries.QueryGroupMessagesWithCursorDesc(ctx, queries.QueryGroupMessagesWithCursorDescParams{
+				GroupID: req.GroupId,
+				Cursor:  idCursor,
+				Numrows: pageSize,
+			})
+		} else {
+			messages, err = s.queries.QueryGroupMessagesWithCursorAsc(ctx, queries.QueryGroupMessagesWithCursorAscParams{
+				GroupID: req.GroupId,
+				Cursor:  idCursor,
+				Numrows: pageSize,
+			})
+		}
+	} else {
+		messages, err = s.queries.QueryGroupMessages(ctx, queries.QueryGroupMessagesParams{
+			GroupID:  req.GroupId,
+			Numrows:  pageSize,
+			SortDesc: sortDesc,
+		})
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	messages := make([]*mlsv1.GroupMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &mlsv1.GroupMessage{
+	out := make([]*mlsv1.GroupMessage, len(messages))
+	for idx, msg := range messages {
+		out[idx] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        msg.Id,
+					Id:        uint64(msg.ID),
 					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupId,
+					GroupId:   msg.GroupID,
 					Data:      msg.Data,
 				},
 			},
-		})
+		}
+	}
+
+	direction := mlsv1.SortDirection_SORT_DIRECTION_ASCENDING
+	if sortDesc {
+		direction = mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
 	}
 
 	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
-	if len(messages) >= pageSize {
-		lastMsg := msgs[len(messages)-1]
-		pagingInfo.IdCursor = lastMsg.Id
+	if len(messages) >= int(pageSize) {
+		lastMsg := messages[len(messages)-1]
+		pagingInfo.IdCursor = uint64(lastMsg.ID)
 	}
 
 	return &mlsv1.QueryGroupMessagesResponse{
-		Messages:   messages,
+		Messages:   out,
 		PagingInfo: pagingInfo,
 	}, nil
 }
 
 func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
-	msgs := make([]*WelcomeMessage, 0)
-
 	if len(req.InstallationKey) == 0 {
 		return nil, errors.New("installation is required")
 	}
 
-	q := s.db.NewSelect().
-		Model(&msgs).
-		Where("installation_key = ?", req.InstallationKey)
-
+	sortDesc := true
 	direction := mlsv1.SortDirection_SORT_DIRECTION_DESCENDING
-	if req.PagingInfo != nil && req.PagingInfo.Direction != mlsv1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
-		direction = req.PagingInfo.Direction
-	}
-	switch direction {
-	case mlsv1.SortDirection_SORT_DIRECTION_DESCENDING:
-		q = q.Order("id DESC")
-	case mlsv1.SortDirection_SORT_DIRECTION_ASCENDING:
-		q = q.Order("id ASC")
+	pageSize := int32(maxPageSize)
+	var idCursor int64
+	var err error
+	var messages []queries.WelcomeMessage
+
+	if req.PagingInfo != nil && req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+		sortDesc = false
+		direction = mlsv1.SortDirection_SORT_DIRECTION_ASCENDING
 	}
 
-	pageSize := maxPageSize
 	if req.PagingInfo != nil && req.PagingInfo.Limit > 0 && req.PagingInfo.Limit <= maxPageSize {
-		pageSize = int(req.PagingInfo.Limit)
+		pageSize = int32(req.PagingInfo.Limit)
 	}
-	q = q.Limit(pageSize)
 
 	if req.PagingInfo != nil && req.PagingInfo.IdCursor != 0 {
-		if direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
-			q = q.Where("id > ?", req.PagingInfo.IdCursor)
-		} else {
-			q = q.Where("id < ?", req.PagingInfo.IdCursor)
-		}
+		idCursor = int64(req.PagingInfo.IdCursor)
 	}
 
-	err := q.Scan(ctx)
+	if idCursor > 0 {
+		if sortDesc {
+			messages, err = s.queries.QueryWelcomeMessagesWithCursorDesc(ctx, queries.QueryWelcomeMessagesWithCursorDescParams{
+				InstallationKey: req.InstallationKey,
+				Cursor:          idCursor,
+				Numrows:         pageSize,
+			})
+		} else {
+			messages, err = s.queries.QueryWelcomeMessagesWithCursorAsc(ctx, queries.QueryWelcomeMessagesWithCursorAscParams{
+				InstallationKey: req.InstallationKey,
+				Cursor:          idCursor,
+				Numrows:         pageSize,
+			})
+		}
+	} else {
+		messages, err = s.queries.QueryWelcomeMessages(ctx, queries.QueryWelcomeMessagesParams{
+			InstallationKey: req.InstallationKey,
+			Numrows:         pageSize,
+			SortDesc:        sortDesc,
+		})
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	messages := make([]*mlsv1.WelcomeMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		messages = append(messages, &mlsv1.WelcomeMessage{
+	out := make([]*mlsv1.WelcomeMessage, len(messages))
+	for idx, msg := range messages {
+		out[idx] = &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              msg.Id,
+					Id:              uint64(msg.ID),
 					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
 					Data:            msg.Data,
 					InstallationKey: msg.InstallationKey,
 					HpkePublicKey:   msg.HpkePublicKey,
 				},
 			},
-		})
+		}
 	}
 
 	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: direction}
-	if len(messages) >= pageSize {
-		lastMsg := msgs[len(messages)-1]
-		pagingInfo.IdCursor = lastMsg.Id
+	if len(messages) >= int(pageSize) {
+		lastMsg := messages[len(messages)-1]
+		pagingInfo.IdCursor = uint64(lastMsg.ID)
 	}
 
 	return &mlsv1.QueryWelcomeMessagesResponse{
-		Messages:   messages,
+		Messages:   out,
 		PagingInfo: pagingInfo,
 	}, nil
 }
