@@ -4,26 +4,27 @@ import (
 	"context"
 
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Service struct {
 	api.UnimplementedIdentityApiServer
 
-	log   *zap.Logger
-	store mlsstore.MlsStore
+	log               *zap.Logger
+	store             mlsstore.MlsStore
+	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
-		log:   log.Named("identity"),
-		store: store,
+		log:               log.Named("identity"),
+		store:             store,
+		validationService: validationService,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -75,7 +76,7 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
@@ -84,7 +85,7 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 		1. Query the inbox_log table for the inbox_id, ordering by sequence_id
 		2. Return all of the entries
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxLogs(ctx, req)
 }
 
 func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
@@ -94,5 +95,5 @@ func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) 
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return s.store.GetInboxIds(ctx, req)
 }

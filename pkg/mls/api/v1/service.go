@@ -262,9 +262,9 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 		msgB, err := pb.Marshal(&mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        msg.Id,
+					Id:        uint64(msg.ID),
 					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupId,
+					GroupId:   msg.GroupID,
 					Data:      msg.Data,
 				},
 			},
@@ -312,7 +312,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              msg.Id,
+					Id:              uint64(msg.ID),
 					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
 					InstallationKey: msg.InstallationKey,
 					Data:            msg.Data,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	associations "github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	svc "github.com/xmtp/xmtp-node-go/pkg/proto/mls_validation/v1"
 	"google.golang.org/grpc"
@@ -21,6 +22,11 @@ type GroupMessageValidationResult struct {
 	GroupId string
 }
 
+type AssociationStateResult struct {
+	AssociationState *associations.AssociationState     `protobuf:"bytes,1,opt,name=association_state,json=associationState,proto3" json:"association_state,omitempty"`
+	StateDiff        *associations.AssociationStateDiff `protobuf:"bytes,2,opt,name=state_diff,json=stateDiff,proto3" json:"state_diff,omitempty"`
+}
+
 type IdentityInput struct {
 	SigningPublicKey []byte
 	Identity         []byte
@@ -29,6 +35,7 @@ type IdentityInput struct {
 type MLSValidationService interface {
 	ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
 	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
+	GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error)
 }
 
 type MLSValidationServiceImpl struct {
@@ -42,6 +49,21 @@ func NewMlsValidationService(ctx context.Context, options MLSValidationOptions) 
 	}
 	return &MLSValidationServiceImpl{
 		grpcClient: svc.NewValidationApiClient(conn),
+	}, nil
+}
+
+func (s *MLSValidationServiceImpl) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error) {
+	req := &svc.GetAssociationStateRequest{
+		OldUpdates: oldUpdates,
+		NewUpdates: newUpdates,
+	}
+	response, err := s.grpcClient.GetAssociationState(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &AssociationStateResult{
+		AssociationState: response.GetAssociationState(),
+		StateDiff:        response.GetStateDiff(),
 	}, nil
 }
 

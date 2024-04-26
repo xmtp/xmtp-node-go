@@ -2,11 +2,14 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
@@ -26,6 +29,46 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	return store, dbCleanup
 }
 
+func TestInboxIds(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+
+	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address",
+	})
+	req := &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	resp, _ := store.GetInboxIds(context.Background(), req)
+
+	require.Equal(t, "correct", *resp.Responses[0].InboxId)
+
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
+
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	req = &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	resp, _ = store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
+}
+
 func TestCreateInstallation(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
@@ -37,8 +80,8 @@ func TestCreateInstallation(t *testing.T) {
 	err := store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32), test.RandomBytes(32), 0)
 	require.NoError(t, err)
 
-	installationFromDb := &Installation{}
-	require.NoError(t, store.db.NewSelect().Model(installationFromDb).Where("id = ?", installationId).Scan(ctx))
+	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
+	require.NoError(t, err)
 	require.Equal(t, walletAddress, installationFromDb.WalletAddress)
 }
 
@@ -58,11 +101,11 @@ func TestUpdateKeyPackage(t *testing.T) {
 	err = store.UpdateKeyPackage(ctx, installationId, keyPackage2, 1)
 	require.NoError(t, err)
 
-	installationFromDb := &Installation{}
-	require.NoError(t, store.db.NewSelect().Model(installationFromDb).Where("id = ?", installationId).Scan(ctx))
+	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
+	require.NoError(t, err)
 
 	require.Equal(t, keyPackage2, installationFromDb.KeyPackage)
-	require.Equal(t, uint64(1), installationFromDb.Expiration)
+	require.Equal(t, int64(1), installationFromDb.Expiration)
 }
 
 func TestConsumeLastResortKeyPackage(t *testing.T) {
@@ -183,16 +226,15 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	msg, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
-	require.Equal(t, uint64(1), msg.Id)
+	require.Equal(t, int64(1), msg.ID)
 	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
-	require.Equal(t, []byte("group"), msg.GroupId)
+	require.Equal(t, []byte("group"), msg.GroupID)
 	require.Equal(t, []byte("data"), msg.Data)
 
-	msgs := make([]*GroupMessage, 0)
-	err = store.db.NewSelect().Model(&msgs).Scan(ctx)
+	msgs, err := store.queries.GetAllGroupMessages(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
-	require.Equal(t, msg, msgs[0])
+	require.Equal(t, *msg, msgs[0])
 }
 
 func TestInsertGroupMessage_Duplicate(t *testing.T) {
@@ -222,13 +264,12 @@ func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 	_, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data3"))
 	require.NoError(t, err)
 
-	msgs := make([]*GroupMessage, 0)
-	err = store.db.NewSelect().Model(&msgs).Order("created_at DESC").Scan(ctx)
+	msgs, err := store.queries.GetAllGroupMessages(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 3)
-	require.Equal(t, []byte("data3"), msgs[0].Data)
+	require.Equal(t, []byte("data1"), msgs[0].Data)
 	require.Equal(t, []byte("data2"), msgs[1].Data)
-	require.Equal(t, []byte("data1"), msgs[2].Data)
+	require.Equal(t, []byte("data3"), msgs[2].Data)
 }
 
 func TestInsertWelcomeMessage_Single(t *testing.T) {
@@ -240,17 +281,16 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
 	require.NoError(t, err)
 	require.NotNil(t, msg)
-	require.Equal(t, uint64(1), msg.Id)
-	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
+	require.Equal(t, int64(1), msg.ID)
+	require.True(t, msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started))
 	require.Equal(t, []byte("installation"), msg.InstallationKey)
 	require.Equal(t, []byte("data"), msg.Data)
 	require.Equal(t, []byte("hpke"), msg.HpkePublicKey)
 
-	msgs := make([]*WelcomeMessage, 0)
-	err = store.db.NewSelect().Model(&msgs).Scan(ctx)
+	msgs, err := store.queries.GetAllWelcomeMessages(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
-	require.Equal(t, msg, msgs[0])
+	require.Equal(t, *msg, msgs[0])
 }
 
 func TestInsertWelcomeMessage_Duplicate(t *testing.T) {
@@ -280,13 +320,14 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"), []byte("hpke"))
 	require.NoError(t, err)
 
-	msgs := make([]*WelcomeMessage, 0)
-	err = store.db.NewSelect().Model(&msgs).Order("created_at DESC").Scan(ctx)
+	msgs, err := store.queries.GetAllWelcomeMessages(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 3)
-	require.Equal(t, []byte("data3"), msgs[0].Data)
+	require.Equal(t, []byte("data1"), msgs[0].Data)
 	require.Equal(t, []byte("data2"), msgs[1].Data)
-	require.Equal(t, []byte("data1"), msgs[2].Data)
+	require.Equal(t, []byte("data3"), msgs[2].Data)
+	require.Greater(t, msgs[1].CreatedAt, msgs[0].CreatedAt)
+	require.Greater(t, msgs[2].CreatedAt, msgs[1].CreatedAt)
 }
 
 func TestQueryGroupMessagesV1_MissingGroup(t *testing.T) {

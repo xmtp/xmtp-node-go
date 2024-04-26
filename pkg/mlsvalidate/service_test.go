@@ -14,6 +14,10 @@ type MockedGRPCService struct {
 	mock.Mock
 }
 
+func (m *MockedGRPCService) GetAssociationState(ctx context.Context, in *svc.GetAssociationStateRequest, opts ...grpc.CallOption) (*svc.GetAssociationStateResponse, error) {
+	return nil, nil
+}
+
 func (m *MockedGRPCService) ValidateKeyPackages(ctx context.Context, req *svc.ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*svc.ValidateKeyPackagesResponse, error) {
 	args := m.Called(ctx, req)
 

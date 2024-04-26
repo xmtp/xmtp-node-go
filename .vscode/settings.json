@@ -1,0 +1,7 @@
+{
+  "pgFormatter.typeCase": "uppercase",
+  "pgFormatter.tabs": true,
+  "[sql]": {
+    "editor.defaultFormatter": "bradymholt.pgformatter"
+  }
+}

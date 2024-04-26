@@ -14,7 +14,9 @@ import (
 	"github.com/uptrace/bun"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
@@ -24,6 +26,10 @@ import (
 
 type mockedMLSValidationService struct {
 	mock.Mock
+}
+
+func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+	return nil, nil
 }
 
 func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
@@ -115,12 +121,10 @@ func TestRegisterInstallation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, installationId, res.InstallationKey)
 
-	installations := []mlsstore.Installation{}
-	err = mlsDb.NewSelect().Model(&installations).Where("id = ?", installationId).Scan(ctx)
+	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
-	require.Len(t, installations, 1)
-	require.Equal(t, accountAddress, installations[0].WalletAddress)
+	require.Equal(t, accountAddress, installation.WalletAddress)
 }
 
 func TestRegisterInstallationError(t *testing.T) {
@@ -165,9 +169,9 @@ func TestUploadKeyPackage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, uploadRes)
 
-	installation := &mlsstore.Installation{}
-	err = mlsDb.NewSelect().Model(installation).Where("id = ?", installationId).Scan(ctx)
+	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
+	require.Equal(t, accountAddress, installation.WalletAddress)
 }
 
 func TestFetchKeyPackages(t *testing.T) {
