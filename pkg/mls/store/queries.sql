@@ -18,7 +18,7 @@ FROM
 		SELECT
 			*
 		FROM
-			json_populate_recordset(NULL::inbox_filter, sqlc.arg(filters)) AS b(inbox_id,
+			json_populate_recordset(NULL::inbox_filter, @filters) AS b(inbox_id,
 				sequence_id)) AS b ON b.inbox_id = a.inbox_id
 		AND a.sequence_id > b.sequence_id
 	ORDER BY
@@ -79,6 +79,14 @@ WHERE (address, inbox_id, association_sequence_id) =(
 INSERT INTO installations(id, wallet_address, created_at, updated_at, credential_identity, key_package, expiration)
 	VALUES ($1, $2, $3, $3, $4, $5, $6);
 
+-- name: GetInstallation :one
+SELECT
+	*
+FROM
+	installations
+WHERE
+	id = $1;
+
 -- name: UpdateKeyPackage :execrows
 UPDATE
 	installations
@@ -96,7 +104,7 @@ SELECT
 FROM
 	installations
 WHERE
-	id = ANY (sqlc.arg(installation_ids)::BYTEA[]);
+	id = ANY (@installation_ids::BYTEA[]);
 
 -- name: GetIdentityUpdates :many
 SELECT
@@ -131,18 +139,15 @@ INSERT INTO welcome_messages(installation_key, data, installation_key_data_hash,
 RETURNING
 	*;
 
--- name: QueryGroupMessagesAsc :many
+-- name: GetAllGroupMessages :many
 SELECT
 	*
 FROM
 	group_messages
-WHERE
-	group_id = @group_id
 ORDER BY
-	id ASC
-LIMIT @numrows;
+	id ASC;
 
--- name: QueryGroupMessagesDesc :many
+-- name: QueryGroupMessages :many
 SELECT
 	*
 FROM
@@ -150,7 +155,12 @@ FROM
 WHERE
 	group_id = @group_id
 ORDER BY
-	id DESC
+	CASE WHEN @sort_desc::BOOL THEN
+		id
+	END DESC,
+	CASE WHEN @sort_desc::BOOL = FALSE THEN
+		id
+	END ASC
 LIMIT @numrows;
 
 -- name: QueryGroupMessagesWithCursorAsc :many
@@ -159,11 +169,11 @@ SELECT
 FROM
 	group_messages
 WHERE
-	group_id = $1
-	AND id > $2
+	group_id = @group_id
+	AND id > @cursor
 ORDER BY
 	id ASC
-LIMIT $3;
+LIMIT @numrows;
 
 -- name: QueryGroupMessagesWithCursorDesc :many
 SELECT
@@ -171,9 +181,57 @@ SELECT
 FROM
 	group_messages
 WHERE
-	group_id = $1
-	AND id < $2
+	group_id = @group_id
+	AND id < @cursor
 ORDER BY
 	id DESC
-LIMIT $3;
+LIMIT @numrows;
+
+-- name: GetAllWelcomeMessages :many
+SELECT
+	*
+FROM
+	welcome_messages
+ORDER BY
+	id ASC;
+
+-- name: QueryWelcomeMessages :many
+SELECT
+	*
+FROM
+	welcome_messages
+WHERE
+	installation_key = @installation_key
+ORDER BY
+	CASE WHEN @sort_desc::BOOL THEN
+		id
+	END DESC,
+	CASE WHEN @sort_desc::BOOL = FALSE THEN
+		id
+	END ASC
+LIMIT @numrows;
+
+-- name: QueryWelcomeMessagesWithCursorAsc :many
+SELECT
+	*
+FROM
+	welcome_messages
+WHERE
+	installation_key = @installation_key
+	AND id > @cursor
+ORDER BY
+	id ASC
+LIMIT @numrows;
+
+-- name: QueryWelcomeMessagesWithCursorDesc :many
+SELECT
+	*
+FROM
+	welcome_messages
+WHERE
+	installation_key = @installation_key
+	AND id < @cursor
+ORDER BY
+	id DESC
+LIMIT @numrows;
 
