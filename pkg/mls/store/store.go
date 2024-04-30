@@ -106,7 +106,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		return nil, errors.New("IdentityUpdate is required")
 	}
 
-	if err := s.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, func(ctx context.Context, txQueries *queries.Queries) error {
+	if err := s.RunInSerializableTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
 		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, new_update.GetInboxId())
 		if err != nil {
 			return err
@@ -604,4 +604,21 @@ func (s *Store) RunInTx(
 
 	done = true
 	return tx.Commit()
+}
+
+func (s *Store) RunInSerializableTx(ctx context.Context, numRetries int, fn func(ctx context.Context, txQueries *queries.Queries) error) error {
+	var err error
+	for i := 0; i < numRetries; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			err = s.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, fn)
+			if err == nil {
+				return nil
+			}
+			s.log.Warn("Error in serializable tx", zap.Error(err))
+		}
+	}
+	return err
 }
