@@ -142,9 +142,6 @@ func (s *Server) startGRPC() error {
 		grpc.Creds(insecure.NewCredentials()),
 		grpc.UnaryInterceptor(middleware.ChainUnaryServer(unary...)),
 		grpc.StreamInterceptor(middleware.ChainStreamServer(stream...)),
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time: 5 * time.Minute,
-		}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime: 15 * time.Second,
 		}),
