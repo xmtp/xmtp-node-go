@@ -26,6 +26,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -141,6 +142,9 @@ func (s *Server) startGRPC() error {
 		grpc.Creds(insecure.NewCredentials()),
 		grpc.UnaryInterceptor(middleware.ChainUnaryServer(unary...)),
 		grpc.StreamInterceptor(middleware.ChainStreamServer(stream...)),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: 15 * time.Second,
+		}),
 		grpc.MaxRecvMsgSize(s.Config.Options.MaxMsgSize),
 	}
 	grpcServer := grpc.NewServer(options...)
