@@ -12,5 +12,5 @@ DROP INDEX IF EXISTS message_recvts_shouldexpire_idx;
 -- bun:split
 -- Replace recvts_shouldexpire_idx with an index just on receiver timestamp
 -- This index is used in our data pipelines to power the data warehouse for high level analytics on network growth
-CREATE INDEX CONCURRENTLY IF NOT EXISTS message_receivertimestamp_idx ON public.message(receiverTimestamp);
+CREATE INDEX CONCURRENTLY message_receivertimestamp_idx ON public.message(receiverTimestamp);
 
