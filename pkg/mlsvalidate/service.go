@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	identity_proto "github.com/xmtp/xmtp-node-go/pkg/proto/identity"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	associations "github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -122,23 +123,52 @@ func (s *MLSValidationServiceImpl) validateInboxIdKeyPackages(ctx context.Contex
 		}
 	}
 
+	// TODO: do we need to take sequence ID Into account?
 	request := &identity.GetIdentityUpdatesRequest{Requests: identityUpdatesRequest}
 	identity_updates, err := s.identityStore.GetInboxLogs(ctx, request)
 
-	/*
-	     for i, response := range response.Responses {
-	   		if !response.IsOk {
-	   			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
-	   		}
-	   		out[i] = IdentityValidationResult{
-	   			AccountAddress:     response.AccountAddress,
-	   			InstallationKey:    response.InstallationId,
-	   			CredentialIdentity: response.CredentialIdentityBytes,
-	   			Expiration:         response.Expiration,
-	   		}
-	   	}
-	*/
+	if err != nil {
+		return nil, err
+	}
+
+	validation_requests := make([]*svc.ValidateInboxIdsRequest_ValidationRequest, len(identity_updates.Responses))
+	for i, response := range identity_updates.Responses {
+		validation_requests[i] = makeValidationRequest(response, installationPublicKeys)
+	}
+
+	validation_request := svc.ValidateInboxIdsRequest{Requests: validation_requests}
+	s.grpcClient.ValidateInboxIds(ctx, &validation_request)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, response := range response.Responses {
+		if !response.IsOk {
+			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
+		}
+		out[i] = IdentityValidationResult{
+			// AccountAddress:     response.AccountAddress,
+			InstallationKey:    response.InstallationPublicKey,
+			CredentialIdentity: response.credential,
+			Expiration:         null,
+		}
+	}
 	return out, nil
+}
+
+func makeValidationRequest(update *identity.GetIdentityUpdatesResponse_Response, pub_keys map[string][]byte) *svc.ValidateInboxIdsRequest_ValidationRequest {
+	identity_updates := make([]*associations.IdentityUpdate, len(update.Updates))
+	for i, identity_log := range update.Updates {
+		identity_updates[i] = identity_log.Update
+	}
+
+	out := svc.ValidateInboxIdsRequest_ValidationRequest{
+		Credential:            &identity_proto.MlsCredential{InboxId: update.InboxId},
+		InstallationPublicKey: pub_keys[update.InboxId],
+		IdentityUpdates:       identity_updates,
+	}
+
+	return &out
 }
 
 func (s *MLSValidationServiceImpl) validateV3KeyPackages(ctx context.Context, keyPackages [][]byte, req *svc.ValidateKeyPackagesRequest) ([]IdentityValidationResult, error) {
