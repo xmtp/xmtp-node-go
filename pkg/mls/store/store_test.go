@@ -69,6 +69,31 @@ func TestInboxIds(t *testing.T) {
 	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
 }
 
+func TestMultipleInboxIds(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	require.NoError(t, err)
+
+	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address_1",
+	})
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Address: "address_2",
+	})
+	req := &identity.GetInboxIdsRequest{
+		Requests: reqs,
+	}
+	resp, _ := store.GetInboxIds(context.Background(), req)
+	require.Equal(t, "inbox_1", *resp.Responses[0].InboxId)
+	require.Equal(t, "inbox_2", *resp.Responses[1].InboxId)
+}
+
 func TestCreateInstallation(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
