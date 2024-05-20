@@ -87,9 +87,10 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 		resp := identity.GetInboxIdsResponse_Response{}
 		resp.Address = address
 
-		for _, log_entry := range addressLogEntries {
-			if log_entry.Address == address {
-				resp.InboxId = &log_entry.InboxID
+		for _, logEntry := range addressLogEntries {
+			if logEntry.Address == address {
+				inboxId := logEntry.InboxID
+				resp.InboxId = &inboxId
 			}
 		}
 		out[index] = &resp
