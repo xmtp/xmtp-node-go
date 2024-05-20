@@ -30,6 +30,18 @@ func (m *MockedGRPCService) ValidateGroupMessages(ctx context.Context, req *svc.
 	return args.Get(0).(*svc.ValidateGroupMessagesResponse), args.Error(1)
 }
 
+func (m *MockedGRPCService) ValidateInboxIdKeyPackages(ctx context.Context, req *svc.ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*svc.ValidateInboxIdKeyPackagesResponse, error) {
+	args := m.Called(ctx, req)
+
+	return args.Get(0).(*svc.ValidateInboxIdKeyPackagesResponse), args.Error(1)
+}
+
+func (m *MockedGRPCService) ValidateInboxIds(ctx context.Context, req *svc.ValidateInboxIdsRequest, opts ...grpc.CallOption) (*svc.ValidateInboxIdsResponse, error) {
+	args := m.Called(ctx, req)
+
+	return args.Get(0).(*svc.ValidateInboxIdsResponse), args.Error(1)
+}
+
 func getMockedService() (*MockedGRPCService, MLSValidationService) {
 	mockService := new(MockedGRPCService)
 	service := &MLSValidationServiceImpl{
@@ -56,7 +68,7 @@ func TestValidateKeyPackages(t *testing.T) {
 		Responses: []*svc.ValidateKeyPackagesResponse_ValidationResponse{&firstResponse},
 	}, nil)
 
-	res, err := service.ValidateKeyPackages(ctx, nil)
+	res, err := service.ValidateV3KeyPackages(ctx, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res))
 	assert.Equal(t, "0x123", res[0].AccountAddress)

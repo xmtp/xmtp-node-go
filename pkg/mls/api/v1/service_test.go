@@ -32,7 +32,7 @@ func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, ol
 	return nil, nil
 }
 
-func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
+func (m *mockedMLSValidationService) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
 	args := m.Called(ctx, keyPackages)
 
 	response := args.Get(0)
@@ -41,6 +41,17 @@ func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, ke
 	}
 
 	return response.([]mlsvalidate.IdentityValidationResult), args.Error(1)
+}
+
+func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.InboxIdValidationResult, error) {
+	args := m.Called(ctx, keyPackages)
+
+	response := args.Get(0)
+	if response == nil {
+		return nil, args.Error(1)
+	}
+
+	return response.([]mlsvalidate.InboxIdValidationResult), args.Error(1)
 }
 
 func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {

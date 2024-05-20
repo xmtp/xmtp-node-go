@@ -43,11 +43,15 @@ func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, ol
 	return &out, nil
 }
 
-func (m *mockedMLSValidationService) ValidateKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
+func (m *mockedMLSValidationService) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
 	return nil, nil
 }
 
 func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
+	return nil, nil
+}
+
+func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.InboxIdValidationResult, error) {
 	return nil, nil
 }
 

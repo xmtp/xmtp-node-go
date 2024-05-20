@@ -118,25 +118,45 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterI
 		return nil, err
 	}
 
-	results, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
-	}
-	if len(results) != 1 {
-		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
-	}
+	if req.IsInboxIdCredential {
+		results, err := s.validationService.ValidateInboxIdKeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+		}
 
-	installationId := results[0].InstallationKey
-	accountAddress := results[0].AccountAddress
-	credentialIdentity := results[0].CredentialIdentity
+		if len(results) != 1 {
+			return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
+		}
+		installationKey := results[0].InstallationKey
+		credential := results[0].Credential
+		if err = s.store.CreateInstallation(ctx, installationKey, "", []byte(credential.InboxId), req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
+			return nil, err
+		}
+		return &mlsv1.RegisterInstallationResponse{
+			InstallationKey: installationKey,
+		}, nil
+	} else {
+		results, err := s.validationService.ValidateV3KeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+		}
 
-	if err = s.store.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
-		return nil, err
+		if len(results) != 1 {
+			return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
+		}
+
+		installationId := results[0].InstallationKey
+		accountAddress := results[0].AccountAddress
+		credentialIdentity := results[0].CredentialIdentity
+
+		if err = s.store.CreateInstallation(ctx, installationId, accountAddress, credentialIdentity, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
+			return nil, err
+		}
+
+		return &mlsv1.RegisterInstallationResponse{
+			InstallationKey: installationId,
+		}, nil
 	}
-
-	return &mlsv1.RegisterInstallationResponse{
-		InstallationKey: installationId,
-	}, nil
 }
 
 func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPackagesRequest) (*mlsv1.FetchKeyPackagesResponse, error) {
@@ -175,19 +195,35 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPack
 	// Extract the key packages from the request
 	keyPackageBytes := req.KeyPackage.KeyPackageTlsSerialized
 
-	validationResults, err := s.validationService.ValidateKeyPackages(ctx, [][]byte{keyPackageBytes})
-	if err != nil {
-		// TODO: Differentiate between validation errors and internal errors
-		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
-	}
-	installationId := validationResults[0].InstallationKey
-	expiration := validationResults[0].Expiration
+	if req.IsInboxIdCredential {
+		validationResults, err := s.validationService.ValidateInboxIdKeyPackages(ctx, [][]byte{keyPackageBytes})
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+		}
 
-	if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
-	}
+		installationId := validationResults[0].InstallationKey
+		expiration := validationResults[0].Expiration
 
-	return &emptypb.Empty{}, nil
+		if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
+		}
+
+		return &emptypb.Empty{}, nil
+	} else {
+		validationResults, err := s.validationService.ValidateV3KeyPackages(ctx, [][]byte{keyPackageBytes})
+		if err != nil {
+			// TODO: Differentiate between validation errors and internal errors
+			return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
+		}
+		installationId := validationResults[0].InstallationKey
+		expiration := validationResults[0].Expiration
+
+		if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
+		}
+
+		return &emptypb.Empty{}, nil
+	}
 }
 
 func (s *Service) RevokeInstallation(ctx context.Context, req *mlsv1.RevokeInstallationRequest) (*emptypb.Empty, error) {

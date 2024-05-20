@@ -444,6 +444,10 @@
         "installationPublicKey": {
           "type": "string",
           "format": "byte"
+        },
+        "expiration": {
+          "type": "string",
+          "format": "uint64"
         }
       },
       "title": "one response corresponding to information about one key package"
