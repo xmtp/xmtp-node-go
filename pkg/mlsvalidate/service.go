@@ -26,12 +26,6 @@ type InboxIdValidationResult struct {
 	Expiration      uint64
 }
 
-type ValidationResult struct {
-	isInboxIdCredential bool
-	InboxIdResult       *[]InboxIdValidationResult
-	V3Result            *[]IdentityValidationResult
-}
-
 type GroupMessageValidationResult struct {
 	GroupId string
 }

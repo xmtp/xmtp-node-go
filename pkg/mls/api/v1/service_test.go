@@ -44,14 +44,7 @@ func (m *mockedMLSValidationService) ValidateV3KeyPackages(ctx context.Context, 
 }
 
 func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.InboxIdValidationResult, error) {
-	args := m.Called(ctx, keyPackages)
-
-	response := args.Get(0)
-	if response == nil {
-		return nil, args.Error(1)
-	}
-
-	return response.([]mlsvalidate.InboxIdValidationResult), args.Error(1)
+	return nil, nil
 }
 
 func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
@@ -65,7 +58,7 @@ func newMockedValidationService() *mockedMLSValidationService {
 }
 
 func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
-	return m.On("ValidateKeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
+	return m.On("ValidateV3KeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
 		{
 			InstallationKey:    installationId,
 			AccountAddress:     accountAddress,
@@ -127,6 +120,7 @@ func TestRegisterInstallation(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 
 	require.NoError(t, err)
@@ -143,12 +137,13 @@ func TestRegisterInstallationError(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	mlsValidationService.On("ValidateKeyPackages", ctx, mock.Anything).Return(nil, errors.New("error validating"))
+	mlsValidationService.On("ValidateV3KeyPackages", ctx, mock.Anything).Return(nil, errors.New("error validating"))
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.Error(t, err)
 	require.Nil(t, res)
@@ -168,6 +163,7 @@ func TestUploadKeyPackage(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
@@ -176,6 +172,7 @@ func TestUploadKeyPackage(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, uploadRes)
@@ -199,6 +196,7 @@ func TestFetchKeyPackages(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
@@ -214,6 +212,7 @@ func TestFetchKeyPackages(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
@@ -328,6 +327,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 
@@ -352,6 +352,7 @@ func TestGetIdentityUpdates(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
+		IsInboxIdCredential: false,
 	})
 	require.NoError(t, err)
 
