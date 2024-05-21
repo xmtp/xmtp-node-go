@@ -715,6 +715,9 @@
         "keyPackage": {
           "$ref": "#/definitions/v1KeyPackageUpload",
           "title": "The Key Package contains all information needed to register an installation"
+        },
+        "isInboxIdCredential": {
+          "type": "boolean"
         }
       },
       "title": "Register a new installation"
@@ -829,6 +832,9 @@
         "keyPackage": {
           "$ref": "#/definitions/v1KeyPackageUpload",
           "title": "An individual key package upload request"
+        },
+        "isInboxIdCredential": {
+          "type": "boolean"
         }
       },
       "title": "Upload a new key packages"

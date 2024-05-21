@@ -15,6 +15,7 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/jarcoal/httpmock v1.2.0
 	github.com/jessevdk/go-flags v1.4.0
+	github.com/lib/pq v1.10.9
 	github.com/libp2p/go-libp2p v0.29.2
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/mattn/go-sqlite3 v1.14.17
@@ -44,7 +45,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 )
 
 require (
@@ -59,7 +59,6 @@ require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect

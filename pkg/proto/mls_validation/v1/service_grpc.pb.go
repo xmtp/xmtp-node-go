@@ -21,9 +21,11 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ValidationApi_ValidateKeyPackages_FullMethodName   = "/xmtp.mls_validation.v1.ValidationApi/ValidateKeyPackages"
-	ValidationApi_ValidateGroupMessages_FullMethodName = "/xmtp.mls_validation.v1.ValidationApi/ValidateGroupMessages"
-	ValidationApi_GetAssociationState_FullMethodName   = "/xmtp.mls_validation.v1.ValidationApi/GetAssociationState"
+	ValidationApi_ValidateKeyPackages_FullMethodName        = "/xmtp.mls_validation.v1.ValidationApi/ValidateKeyPackages"
+	ValidationApi_ValidateGroupMessages_FullMethodName      = "/xmtp.mls_validation.v1.ValidationApi/ValidateGroupMessages"
+	ValidationApi_GetAssociationState_FullMethodName        = "/xmtp.mls_validation.v1.ValidationApi/GetAssociationState"
+	ValidationApi_ValidateInboxIdKeyPackages_FullMethodName = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIdKeyPackages"
+	ValidationApi_ValidateInboxIds_FullMethodName           = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIds"
 )
 
 // ValidationApiClient is the client API for ValidationApi service.
@@ -36,6 +38,12 @@ type ValidationApiClient interface {
 	ValidateGroupMessages(ctx context.Context, in *ValidateGroupMessagesRequest, opts ...grpc.CallOption) (*ValidateGroupMessagesResponse, error)
 	// Gets the final association state for a batch of identity updates
 	GetAssociationState(ctx context.Context, in *GetAssociationStateRequest, opts ...grpc.CallOption) (*GetAssociationStateResponse, error)
+	// Validates InboxID key packages and returns credential information for them, without checking
+	// whether an InboxId <> InstallationPublicKey pair is really valid.
+	ValidateInboxIdKeyPackages(ctx context.Context, in *ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*ValidateInboxIdKeyPackagesResponse, error)
+	// Validate an InboxID Key Package
+	// need public key possibly
+	ValidateInboxIds(ctx context.Context, in *ValidateInboxIdsRequest, opts ...grpc.CallOption) (*ValidateInboxIdsResponse, error)
 }
 
 type validationApiClient struct {
@@ -73,6 +81,24 @@ func (c *validationApiClient) GetAssociationState(ctx context.Context, in *GetAs
 	return out, nil
 }
 
+func (c *validationApiClient) ValidateInboxIdKeyPackages(ctx context.Context, in *ValidateKeyPackagesRequest, opts ...grpc.CallOption) (*ValidateInboxIdKeyPackagesResponse, error) {
+	out := new(ValidateInboxIdKeyPackagesResponse)
+	err := c.cc.Invoke(ctx, ValidationApi_ValidateInboxIdKeyPackages_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *validationApiClient) ValidateInboxIds(ctx context.Context, in *ValidateInboxIdsRequest, opts ...grpc.CallOption) (*ValidateInboxIdsResponse, error) {
+	out := new(ValidateInboxIdsResponse)
+	err := c.cc.Invoke(ctx, ValidationApi_ValidateInboxIds_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ValidationApiServer is the server API for ValidationApi service.
 // All implementations must embed UnimplementedValidationApiServer
 // for forward compatibility
@@ -83,6 +109,12 @@ type ValidationApiServer interface {
 	ValidateGroupMessages(context.Context, *ValidateGroupMessagesRequest) (*ValidateGroupMessagesResponse, error)
 	// Gets the final association state for a batch of identity updates
 	GetAssociationState(context.Context, *GetAssociationStateRequest) (*GetAssociationStateResponse, error)
+	// Validates InboxID key packages and returns credential information for them, without checking
+	// whether an InboxId <> InstallationPublicKey pair is really valid.
+	ValidateInboxIdKeyPackages(context.Context, *ValidateKeyPackagesRequest) (*ValidateInboxIdKeyPackagesResponse, error)
+	// Validate an InboxID Key Package
+	// need public key possibly
+	ValidateInboxIds(context.Context, *ValidateInboxIdsRequest) (*ValidateInboxIdsResponse, error)
 	mustEmbedUnimplementedValidationApiServer()
 }
 
@@ -98,6 +130,12 @@ func (UnimplementedValidationApiServer) ValidateGroupMessages(context.Context, *
 }
 func (UnimplementedValidationApiServer) GetAssociationState(context.Context, *GetAssociationStateRequest) (*GetAssociationStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAssociationState not implemented")
+}
+func (UnimplementedValidationApiServer) ValidateInboxIdKeyPackages(context.Context, *ValidateKeyPackagesRequest) (*ValidateInboxIdKeyPackagesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateInboxIdKeyPackages not implemented")
+}
+func (UnimplementedValidationApiServer) ValidateInboxIds(context.Context, *ValidateInboxIdsRequest) (*ValidateInboxIdsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateInboxIds not implemented")
 }
 func (UnimplementedValidationApiServer) mustEmbedUnimplementedValidationApiServer() {}
 
@@ -166,6 +204,42 @@ func _ValidationApi_GetAssociationState_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ValidationApi_ValidateInboxIdKeyPackages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateKeyPackagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ValidationApiServer).ValidateInboxIdKeyPackages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ValidationApi_ValidateInboxIdKeyPackages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ValidationApiServer).ValidateInboxIdKeyPackages(ctx, req.(*ValidateKeyPackagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ValidationApi_ValidateInboxIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateInboxIdsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ValidationApiServer).ValidateInboxIds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ValidationApi_ValidateInboxIds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ValidationApiServer).ValidateInboxIds(ctx, req.(*ValidateInboxIdsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ValidationApi_ServiceDesc is the grpc.ServiceDesc for ValidationApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -184,6 +258,14 @@ var ValidationApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAssociationState",
 			Handler:    _ValidationApi_GetAssociationState_Handler,
+		},
+		{
+			MethodName: "ValidateInboxIdKeyPackages",
+			Handler:    _ValidationApi_ValidateInboxIdKeyPackages_Handler,
+		},
+		{
+			MethodName: "ValidateInboxIds",
+			Handler:    _ValidationApi_ValidateInboxIds_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
