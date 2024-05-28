@@ -1,3 +1,7 @@
+-- name: LockInboxLog :exec
+SELECT
+	pg_advisory_xact_lock(hashtext(@inbox_id));
+
 -- name: GetAllInboxLogs :many
 SELECT
 	*
@@ -6,8 +10,7 @@ FROM
 WHERE
 	inbox_id = $1
 ORDER BY
-	sequence_id ASC
-FOR UPDATE;
+	sequence_id ASC;
 
 -- name: GetInboxLogFiltered :many
 SELECT

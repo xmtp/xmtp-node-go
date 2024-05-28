@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -49,10 +50,15 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	mockController := gomock.NewController(t)
 	mockMlsValidation := mocks.NewMockMLSValidationService(mockController)
 
-	// Retun the matching address from the map. Each inboxId will return a different address
+	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
 	mockMlsValidation.EXPECT().GetAssociationState(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, _ any, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
 		inboxId := updates[0].InboxId
-		address := inboxes[inboxId]
+		address, ok := inboxes[inboxId]
+
+		if !ok {
+			return nil, errors.New("inbox id not found")
+		}
+
 		return &mlsvalidate.AssociationStateResult{
 			AssociationState: &associations.AssociationState{
 				InboxId: inboxId,
