@@ -3,15 +3,21 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate/mocks"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/mock/gomock"
 )
 
 func NewTestStore(t *testing.T) (*Store, func()) {
@@ -27,6 +33,64 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	require.NoError(t, err)
 
 	return store, dbCleanup
+}
+
+func TestPublishIdentityUpdateParallel(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// for i := 0; i < 10000; i++ {
+	// 	inboxId := fmt.Sprintf("fake_%d", i)
+	// 	store.queries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
+	// 		InboxID:             inboxId,
+	// 		ServerTimestampNs:   nowNs(),
+	// 		IdentityUpdateProto: []byte(inboxId),
+	// 	})
+	// }
+
+	// Create a mapping of inboxes to addresses
+	inboxes := make(map[string]string)
+	for i := 0; i < 10; i++ {
+		inboxes[fmt.Sprintf("inbox_%d", i)] = fmt.Sprintf("address_%d", i)
+	}
+
+	mockController := gomock.NewController(t)
+	mockMlsValidation := mocks.NewMockMLSValidationService(mockController)
+
+	// Retun the matching address from the map. Each inboxId will return a different address
+	mockMlsValidation.EXPECT().GetAssociationState(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, _ any, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+		inboxId := updates[0].InboxId
+		address := inboxes[inboxId]
+		return &mlsvalidate.AssociationStateResult{
+			AssociationState: &associations.AssociationState{
+				InboxId: inboxId,
+			},
+			StateDiff: &associations.AssociationStateDiff{
+				NewMembers: []*associations.MemberIdentifier{{
+					Kind: &associations.MemberIdentifier_Address{
+						Address: address,
+					},
+				}},
+			},
+		}, nil
+	}).AnyTimes()
+
+	var wg sync.WaitGroup
+	for inboxId := range inboxes {
+		inboxId := inboxId
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := store.PublishIdentityUpdate(ctx, &identity.PublishIdentityUpdateRequest{
+				IdentityUpdate: &associations.IdentityUpdate{
+					InboxId: inboxId,
+				},
+			}, mockMlsValidation)
+			require.NoError(t, err)
+		}()
+	}
+	wg.Wait()
 }
 
 func TestInboxIds(t *testing.T) {
@@ -54,7 +118,7 @@ func TestInboxIds(t *testing.T) {
 
 	require.Equal(t, "correct", *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: 5, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
@@ -63,7 +127,7 @@ func TestInboxIds(t *testing.T) {
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: 8, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
@@ -74,9 +138,9 @@ func TestMultipleInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: 1, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: 2, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
