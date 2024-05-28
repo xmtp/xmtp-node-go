@@ -17,6 +17,7 @@ import (
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -626,6 +627,7 @@ func (s *Store) RunInRepeatableReadTx(ctx context.Context, numRetries int, fn fu
 				return nil
 			}
 			s.log.Warn("Error in serializable tx", zap.Error(err))
+			utils.RandomSleep(20)
 		}
 	}
 	return err
