@@ -3,15 +3,22 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
+	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate/mocks"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/mock/gomock"
 )
 
 func NewTestStore(t *testing.T) (*Store, func()) {
@@ -27,6 +34,60 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	require.NoError(t, err)
 
 	return store, dbCleanup
+}
+
+func TestPublishIdentityUpdateParallel(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create a mapping of inboxes to addresses
+	inboxes := make(map[string]string)
+	for i := 0; i < 50; i++ {
+		inboxes[fmt.Sprintf("inbox_%d", i)] = fmt.Sprintf("address_%d", i)
+	}
+
+	mockController := gomock.NewController(t)
+	mockMlsValidation := mocks.NewMockMLSValidationService(mockController)
+
+	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
+	mockMlsValidation.EXPECT().GetAssociationState(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, _ any, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+		inboxId := updates[0].InboxId
+		address, ok := inboxes[inboxId]
+
+		if !ok {
+			return nil, errors.New("inbox id not found")
+		}
+
+		return &mlsvalidate.AssociationStateResult{
+			AssociationState: &associations.AssociationState{
+				InboxId: inboxId,
+			},
+			StateDiff: &associations.AssociationStateDiff{
+				NewMembers: []*associations.MemberIdentifier{{
+					Kind: &associations.MemberIdentifier_Address{
+						Address: address,
+					},
+				}},
+			},
+		}, nil
+	}).AnyTimes()
+
+	var wg sync.WaitGroup
+	for inboxId := range inboxes {
+		inboxId := inboxId
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := store.PublishIdentityUpdate(ctx, &identity.PublishIdentityUpdateRequest{
+				IdentityUpdate: &associations.IdentityUpdate{
+					InboxId: inboxId,
+				},
+			}, mockMlsValidation)
+			require.NoError(t, err)
+		}()
+	}
+	wg.Wait()
 }
 
 func TestInboxIds(t *testing.T) {

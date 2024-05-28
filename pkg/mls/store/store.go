@@ -17,6 +17,7 @@ import (
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -102,13 +103,21 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 }
 
 func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error) {
-	new_update := req.GetIdentityUpdate()
-	if new_update == nil {
+	newUpdate := req.GetIdentityUpdate()
+	if newUpdate == nil {
 		return nil, errors.New("IdentityUpdate is required")
 	}
 
-	if err := s.RunInSerializableTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
-		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, new_update.GetInboxId())
+	if err := s.RunInRepeatableReadTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
+		inboxId := newUpdate.GetInboxId()
+		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
+		// This allows the lock to be enforced even when there are no existing `inbox_log`s
+		if err := txQueries.LockInboxLog(ctx, inboxId); err != nil {
+			return err
+		}
+
+		log := s.log.With(zap.String("inbox_id", inboxId))
+		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxId)
 		if err != nil {
 			return err
 		}
@@ -125,33 +134,31 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			}
 			updates = append(updates, identityUpdate)
 		}
-		_ = append(updates, new_update)
 
-		state, err := validationService.GetAssociationState(ctx, updates, []*associations.IdentityUpdate{new_update})
+		state, err := validationService.GetAssociationState(ctx, updates, []*associations.IdentityUpdate{newUpdate})
 		if err != nil {
 			return err
 		}
 
-		s.log.Info("Got association state", zap.Any("state", state))
-		protoBytes, err := proto.Marshal(new_update)
+		protoBytes, err := proto.Marshal(newUpdate)
 		if err != nil {
 			return err
 		}
 
 		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
-			InboxID:             new_update.GetInboxId(),
+			InboxID:             inboxId,
 			ServerTimestampNs:   nowNs(),
 			IdentityUpdateProto: protoBytes,
 		})
 
-		s.log.Info("Inserted inbox log", zap.Any("sequence_id", sequence_id))
+		log.Info("Inserted inbox log", zap.Any("sequence_id", sequence_id))
 
 		if err != nil {
 			return err
 		}
 
 		for _, new_member := range state.StateDiff.NewMembers {
-			s.log.Info("New member", zap.Any("member", new_member))
+			log.Info("New member", zap.Any("member", new_member))
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
@@ -166,7 +173,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		for _, removed_member := range state.StateDiff.RemovedMembers {
-			s.log.Info("New member", zap.Any("member", removed_member))
+			log.Info("Removed member", zap.Any("member", removed_member))
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
@@ -607,18 +614,19 @@ func (s *Store) RunInTx(
 	return tx.Commit()
 }
 
-func (s *Store) RunInSerializableTx(ctx context.Context, numRetries int, fn func(ctx context.Context, txQueries *queries.Queries) error) error {
+func (s *Store) RunInRepeatableReadTx(ctx context.Context, numRetries int, fn func(ctx context.Context, txQueries *queries.Queries) error) error {
 	var err error
 	for i := 0; i < numRetries; i++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			err = s.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable}, fn)
+			err = s.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead}, fn)
 			if err == nil {
 				return nil
 			}
 			s.log.Warn("Error in serializable tx", zap.Error(err))
+			utils.RandomSleep(20)
 		}
 	}
 	return err
