@@ -40,18 +40,9 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// for i := 0; i < 10000; i++ {
-	// 	inboxId := fmt.Sprintf("fake_%d", i)
-	// 	store.queries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
-	// 		InboxID:             inboxId,
-	// 		ServerTimestampNs:   nowNs(),
-	// 		IdentityUpdateProto: []byte(inboxId),
-	// 	})
-	// }
-
 	// Create a mapping of inboxes to addresses
 	inboxes := make(map[string]string)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 50; i++ {
 		inboxes[fmt.Sprintf("inbox_%d", i)] = fmt.Sprintf("address_%d", i)
 	}
 
@@ -118,7 +109,7 @@ func TestInboxIds(t *testing.T) {
 
 	require.Equal(t, "correct", *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: 5, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
@@ -127,7 +118,7 @@ func TestInboxIds(t *testing.T) {
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: 8, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
@@ -138,9 +129,9 @@ func TestMultipleInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: 1, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: 2, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)

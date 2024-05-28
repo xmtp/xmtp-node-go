@@ -157,7 +157,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
 					InboxID:               state.AssociationState.InboxId,
-					AssociationSequenceID: sequence_id,
+					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
 				})
 				if err != nil {
