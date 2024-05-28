@@ -111,7 +111,10 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		inboxId := newUpdate.GetInboxId()
 		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
 		// This allows the lock to be enforced even when there are no existing `inbox_log`s
-		txQueries.LockInboxLog(ctx, inboxId)
+		if err := txQueries.LockInboxLog(ctx, inboxId); err != nil {
+			return err
+		}
+
 		log := s.log.With(zap.String("inbox_id", inboxId))
 		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxId)
 		if err != nil {
