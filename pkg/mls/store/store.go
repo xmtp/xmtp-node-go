@@ -134,7 +134,6 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			}
 			updates = append(updates, identityUpdate)
 		}
-		_ = append(updates, newUpdate)
 
 		state, err := validationService.GetAssociationState(ctx, updates, []*associations.IdentityUpdate{newUpdate})
 		if err != nil {
