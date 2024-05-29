@@ -18,6 +18,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
 )
 
@@ -44,7 +45,7 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	// Create a mapping of inboxes to addresses
 	inboxes := make(map[string]string)
 	for i := 0; i < 50; i++ {
-		inboxes[utils.HexEncode([]byte(fmt.Sprintf("inbox_%d", i)))] = fmt.Sprintf("address_%d", i)
+		inboxes[testutils.RandomInboxId()] = fmt.Sprintf("address_%d", i)
 	}
 
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)

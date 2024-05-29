@@ -128,7 +128,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			return errors.New("inbox log is full")
 		}
 
-		updates := make([]*associations.IdentityUpdate, 0, len(inboxLogEntries)+1)
+		updates := make([]*associations.IdentityUpdate, 0, len(inboxLogEntries))
 		for _, log := range inboxLogEntries {
 			identityUpdate := &associations.IdentityUpdate{}
 			if err := proto.Unmarshal(log.IdentityUpdateProto, identityUpdate); err != nil {
