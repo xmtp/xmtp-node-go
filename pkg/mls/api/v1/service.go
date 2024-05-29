@@ -519,29 +519,6 @@ func buildNatsSubjectForWelcomeMessages(installationId []byte) string {
 	return envelopes.BuildNatsSubject(contentTopic)
 }
 
-func buildIdentityUpdate(update mlsstore.IdentityUpdate) *mlsv1.GetIdentityUpdatesResponse_Update {
-	base := mlsv1.GetIdentityUpdatesResponse_Update{
-		TimestampNs: update.TimestampNs,
-	}
-	switch update.Kind {
-	case mlsstore.Create:
-		base.Kind = &mlsv1.GetIdentityUpdatesResponse_Update_NewInstallation{
-			NewInstallation: &mlsv1.GetIdentityUpdatesResponse_NewInstallationUpdate{
-				InstallationKey:    update.InstallationKey,
-				CredentialIdentity: update.CredentialIdentity,
-			},
-		}
-	case mlsstore.Revoke:
-		base.Kind = &mlsv1.GetIdentityUpdatesResponse_Update_RevokedInstallation{
-			RevokedInstallation: &mlsv1.GetIdentityUpdatesResponse_RevokedInstallationUpdate{
-				InstallationKey: update.InstallationKey,
-			},
-		}
-	}
-
-	return &base
-}
-
 func validateSendGroupMessagesRequest(req *mlsv1.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no group messages to send")
@@ -581,13 +558,6 @@ func validateRegisterInstallationRequest(req *mlsv1.RegisterInstallationRequest)
 func validateUploadKeyPackageRequest(req *mlsv1.UploadKeyPackageRequest) error {
 	if req == nil || req.KeyPackage == nil {
 		return status.Errorf(codes.InvalidArgument, "no key package")
-	}
-	return nil
-}
-
-func validateGetIdentityUpdatesRequest(req *mlsv1.GetIdentityUpdatesRequest) error {
-	if req == nil || len(req.AccountAddresses) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no wallet addresses to get updates for")
 	}
 	return nil
 }
