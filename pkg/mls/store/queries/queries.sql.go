@@ -14,25 +14,25 @@ import (
 )
 
 const createInstallation = `-- name: CreateInstallation :exec
-INSERT INTO installations(id, wallet_address, created_at, updated_at, credential_identity, key_package, expiration)
-	VALUES ($1, $2, $3, $3, $4, $5, $6)
+INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
+	VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateInstallationParams struct {
-	ID                 []byte
-	WalletAddress      string
-	CreatedAt          int64
-	CredentialIdentity []byte
-	KeyPackage         []byte
-	Expiration         int64
+	ID         []byte
+	CreatedAt  int64
+	UpdatedAt  int64
+	InboxID    []byte
+	KeyPackage []byte
+	Expiration int64
 }
 
 func (q *Queries) CreateInstallation(ctx context.Context, arg CreateInstallationParams) error {
 	_, err := q.db.ExecContext(ctx, createInstallation,
 		arg.ID,
-		arg.WalletAddress,
 		arg.CreatedAt,
-		arg.CredentialIdentity,
+		arg.UpdatedAt,
+		arg.InboxID,
 		arg.KeyPackage,
 		arg.Expiration,
 	)
@@ -100,7 +100,7 @@ FROM
 
 type GetAddressLogsRow struct {
 	Address               string
-	InboxID               string
+	InboxID               []byte
 	AssociationSequenceID sql.NullInt64
 }
 
@@ -176,7 +176,7 @@ ORDER BY
 	sequence_id ASC
 `
 
-func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxLog, error) {
+func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID []byte) ([]InboxLog, error) {
 	rows, err := q.db.QueryContext(ctx, getAllInboxLogs, inboxID)
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]InboxL
 
 const getAllWelcomeMessages = `-- name: GetAllWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 ORDER BY
@@ -227,58 +227,8 @@ func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, 
 			&i.CreatedAt,
 			&i.InstallationKey,
 			&i.Data,
-			&i.InstallationKeyDataHash,
 			&i.HpkePublicKey,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getIdentityUpdates = `-- name: GetIdentityUpdates :many
-SELECT
-	id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration
-FROM
-	installations
-WHERE
-	wallet_address = ANY ($1::TEXT[])
-	AND (created_at > $2
-		OR revoked_at > $2)
-ORDER BY
-	created_at ASC
-`
-
-type GetIdentityUpdatesParams struct {
-	WalletAddresses []string
-	StartTime       int64
-}
-
-func (q *Queries) GetIdentityUpdates(ctx context.Context, arg GetIdentityUpdatesParams) ([]Installation, error) {
-	rows, err := q.db.QueryContext(ctx, getIdentityUpdates, pq.Array(arg.WalletAddresses), arg.StartTime)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Installation
-	for rows.Next() {
-		var i Installation
-		if err := rows.Scan(
-			&i.ID,
-			&i.WalletAddress,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.CredentialIdentity,
-			&i.RevokedAt,
-			&i.KeyPackage,
-			&i.Expiration,
+			&i.InstallationKeyDataHash,
 		); err != nil {
 			return nil, err
 		}
@@ -339,7 +289,7 @@ func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessa
 
 const getInstallation = `-- name: GetInstallation :one
 SELECT
-	id, wallet_address, created_at, updated_at, credential_identity, revoked_at, key_package, expiration
+	id, created_at, updated_at, inbox_id, key_package, expiration
 FROM
 	installations
 WHERE
@@ -351,11 +301,9 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 	var i Installation
 	err := row.Scan(
 		&i.ID,
-		&i.WalletAddress,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.CredentialIdentity,
-		&i.RevokedAt,
+		&i.InboxID,
 		&i.KeyPackage,
 		&i.Expiration,
 	)
@@ -371,7 +319,7 @@ RETURNING
 
 type InsertAddressLogParams struct {
 	Address               string
-	InboxID               string
+	InboxID               []byte
 	AssociationSequenceID sql.NullInt64
 	RevocationSequenceID  sql.NullInt64
 }
@@ -427,7 +375,7 @@ RETURNING
 `
 
 type InsertInboxLogParams struct {
-	InboxID             string
+	InboxID             []byte
 	ServerTimestampNs   int64
 	IdentityUpdateProto []byte
 }
@@ -443,7 +391,7 @@ const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 INSERT INTO welcome_messages(installation_key, data, installation_key_data_hash, hpke_public_key)
 	VALUES ($1, $2, $3, $4)
 RETURNING
-	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 `
 
 type InsertWelcomeMessageParams struct {
@@ -466,8 +414,8 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		&i.CreatedAt,
 		&i.InstallationKey,
 		&i.Data,
-		&i.InstallationKeyDataHash,
 		&i.HpkePublicKey,
+		&i.InstallationKeyDataHash,
 	)
 	return i, err
 }
@@ -632,7 +580,7 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 
 const queryWelcomeMessages = `-- name: QueryWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -667,8 +615,8 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 			&i.CreatedAt,
 			&i.InstallationKey,
 			&i.Data,
-			&i.InstallationKeyDataHash,
 			&i.HpkePublicKey,
+			&i.InstallationKeyDataHash,
 		); err != nil {
 			return nil, err
 		}
@@ -685,7 +633,7 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 
 const queryWelcomeMessagesWithCursorAsc = `-- name: QueryWelcomeMessagesWithCursorAsc :many
 SELECT
-	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -716,8 +664,8 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 			&i.CreatedAt,
 			&i.InstallationKey,
 			&i.Data,
-			&i.InstallationKeyDataHash,
 			&i.HpkePublicKey,
+			&i.InstallationKeyDataHash,
 		); err != nil {
 			return nil, err
 		}
@@ -734,7 +682,7 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 
 const queryWelcomeMessagesWithCursorDesc = `-- name: QueryWelcomeMessagesWithCursorDesc :many
 SELECT
-	id, created_at, installation_key, data, installation_key_data_hash, hpke_public_key
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -765,8 +713,8 @@ func (q *Queries) QueryWelcomeMessagesWithCursorDesc(ctx context.Context, arg Qu
 			&i.CreatedAt,
 			&i.InstallationKey,
 			&i.Data,
-			&i.InstallationKeyDataHash,
 			&i.HpkePublicKey,
+			&i.InstallationKeyDataHash,
 		); err != nil {
 			return nil, err
 		}
@@ -804,31 +752,11 @@ WHERE (address, inbox_id, association_sequence_id) =(
 type RevokeAddressFromLogParams struct {
 	RevocationSequenceID sql.NullInt64
 	Address              string
-	InboxID              string
+	InboxID              []byte
 }
 
 func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFromLogParams) error {
 	_, err := q.db.ExecContext(ctx, revokeAddressFromLog, arg.RevocationSequenceID, arg.Address, arg.InboxID)
-	return err
-}
-
-const revokeInstallation = `-- name: RevokeInstallation :exec
-UPDATE
-	installations
-SET
-	revoked_at = $1
-WHERE
-	id = $2
-	AND revoked_at IS NULL
-`
-
-type RevokeInstallationParams struct {
-	RevokedAt      sql.NullInt64
-	InstallationID []byte
-}
-
-func (q *Queries) RevokeInstallation(ctx context.Context, arg RevokeInstallationParams) error {
-	_, err := q.db.ExecContext(ctx, revokeInstallation, arg.RevokedAt, arg.InstallationID)
 	return err
 }
 

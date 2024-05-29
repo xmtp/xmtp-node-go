@@ -79,8 +79,8 @@ WHERE (address, inbox_id, association_sequence_id) =(
 		inbox_id);
 
 -- name: CreateInstallation :exec
-INSERT INTO installations(id, wallet_address, created_at, updated_at, credential_identity, key_package, expiration)
-	VALUES ($1, $2, $3, $3, $4, $5, $6);
+INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
+	VALUES (@id, @created_at, @updated_at, @inbox_id, @key_package, @expiration);
 
 -- name: GetInstallation :one
 SELECT
@@ -108,27 +108,6 @@ FROM
 	installations
 WHERE
 	id = ANY (@installation_ids::BYTEA[]);
-
--- name: GetIdentityUpdates :many
-SELECT
-	*
-FROM
-	installations
-WHERE
-	wallet_address = ANY (@wallet_addresses::TEXT[])
-	AND (created_at > @start_time
-		OR revoked_at > @start_time)
-ORDER BY
-	created_at ASC;
-
--- name: RevokeInstallation :exec
-UPDATE
-	installations
-SET
-	revoked_at = @revoked_at
-WHERE
-	id = @installation_id
-	AND revoked_at IS NULL;
 
 -- name: InsertGroupMessage :one
 INSERT INTO group_messages(group_id, data, group_id_data_hash)

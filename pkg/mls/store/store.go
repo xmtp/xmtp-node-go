@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -40,10 +39,9 @@ type IdentityStore interface {
 type MlsStore interface {
 	IdentityStore
 
-	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error
+	CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
-	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
@@ -90,7 +88,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 
 		for _, logEntry := range addressLogEntries {
 			if logEntry.Address == address {
-				inboxId := logEntry.InboxID
+				inboxId := utils.HexEncode(logEntry.InboxID)
 				resp.InboxId = &inboxId
 			}
 		}
@@ -110,6 +108,10 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 	if err := s.RunInRepeatableReadTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
 		inboxId := newUpdate.GetInboxId()
+		inboxIdBytes, err := utils.HexDecode(inboxId)
+		if err != nil {
+			return err
+		}
 		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
 		// This allows the lock to be enforced even when there are no existing `inbox_log`s
 		if err := txQueries.LockInboxLog(ctx, inboxId); err != nil {
@@ -117,7 +119,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		log := s.log.With(zap.String("inbox_id", inboxId))
-		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxId)
+		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxIdBytes)
 		if err != nil {
 			return err
 		}
@@ -146,7 +148,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
-			InboxID:             inboxId,
+			InboxID:             inboxIdBytes,
 			ServerTimestampNs:   nowNs(),
 			IdentityUpdateProto: protoBytes,
 		})
@@ -162,7 +164,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
-					InboxID:               state.AssociationState.InboxId,
+					InboxID:               inboxIdBytes,
 					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
 				})
@@ -177,7 +179,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
-					InboxID:              state.AssociationState.InboxId,
+					InboxID:              inboxIdBytes,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
 				if err != nil {
@@ -217,7 +219,8 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 	// Organize the results by inbox ID
 	resultMap := make(map[string][]queries.InboxLog)
 	for _, result := range results {
-		resultMap[result.InboxID] = append(resultMap[result.InboxID], result)
+		inboxId := utils.HexEncode(result.InboxID)
+		resultMap[inboxId] = append(resultMap[inboxId], result)
 	}
 
 	resps := make([]*identity.GetIdentityUpdatesResponse_Response, len(reqs))
@@ -247,16 +250,18 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error {
 	createdAt := nowNs()
-
+	inboxIdBytes, err := utils.HexDecode(inboxId)
+	if err != nil {
+		return err
+	}
 	return s.queries.CreateInstallation(ctx, queries.CreateInstallationParams{
-		ID:                 installationId,
-		WalletAddress:      walletAddress,
-		CreatedAt:          createdAt,
-		CredentialIdentity: credentialIdentity,
-		KeyPackage:         keyPackage,
-		Expiration:         int64(expiration),
+		ID:         installationId,
+		CreatedAt:  createdAt,
+		InboxID:    inboxIdBytes,
+		KeyPackage: keyPackage,
+		Expiration: int64(expiration),
 	})
 }
 
@@ -282,49 +287,6 @@ func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage
 
 func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error) {
 	return s.queries.FetchKeyPackages(ctx, installationIds)
-}
-
-func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
-	updated, err := s.queries.GetIdentityUpdates(ctx, queries.GetIdentityUpdatesParams{
-		WalletAddresses: walletAddresses,
-		StartTime:       startTimeNs,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// The returned list is only partially sorted
-	out := make(map[string]IdentityUpdateList)
-	for _, installation := range updated {
-		if installation.CreatedAt > startTimeNs {
-			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:               Create,
-				InstallationKey:    installation.ID,
-				CredentialIdentity: installation.CredentialIdentity,
-				TimestampNs:        uint64(installation.CreatedAt),
-			})
-		}
-		if installation.RevokedAt.Valid && installation.RevokedAt.Int64 > startTimeNs {
-			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:            Revoke,
-				InstallationKey: installation.ID,
-				TimestampNs:     uint64(installation.RevokedAt.Int64),
-			})
-		}
-	}
-	// Sort the updates by timestamp now that the full list is assembled
-	for _, updates := range out {
-		sort.Sort(updates)
-	}
-
-	return out, nil
-}
-
-func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) error {
-	return s.queries.RevokeInstallation(ctx, queries.RevokeInstallationParams{
-		RevokedAt:      sql.NullInt64{Valid: true, Int64: nowNs()},
-		InstallationID: installationId,
-	})
 }
 
 func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error) {

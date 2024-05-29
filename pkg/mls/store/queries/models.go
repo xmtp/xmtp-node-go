@@ -11,7 +11,7 @@ import (
 
 type AddressLog struct {
 	Address               string
-	InboxID               string
+	InboxID               []byte
 	AssociationSequenceID sql.NullInt64
 	RevocationSequenceID  sql.NullInt64
 }
@@ -26,20 +26,18 @@ type GroupMessage struct {
 
 type InboxLog struct {
 	SequenceID          int64
-	InboxID             string
+	InboxID             []byte
 	ServerTimestampNs   int64
 	IdentityUpdateProto []byte
 }
 
 type Installation struct {
-	ID                 []byte
-	WalletAddress      string
-	CreatedAt          int64
-	UpdatedAt          int64
-	CredentialIdentity []byte
-	RevokedAt          sql.NullInt64
-	KeyPackage         []byte
-	Expiration         int64
+	ID         []byte
+	CreatedAt  int64
+	UpdatedAt  int64
+	InboxID    []byte
+	KeyPackage []byte
+	Expiration int64
 }
 
 type WelcomeMessage struct {
@@ -47,6 +45,6 @@ type WelcomeMessage struct {
 	CreatedAt               time.Time
 	InstallationKey         []byte
 	Data                    []byte
-	InstallationKeyDataHash []byte
 	HpkePublicKey           []byte
+	InstallationKeyDataHash []byte
 }

@@ -1,20 +1,14 @@
 SET statement_timeout = 0;
 
 --bun:split
-DROP TABLE IF EXISTS installations, group_messages, welcome_messages, inbox_log, address_log;
-
---bun:split
 CREATE TABLE installations(
 	id BYTEA PRIMARY KEY,
 	created_at BIGINT NOT NULL,
 	updated_at BIGINT NOT NULL,
-	credential_identity BYTEA NOT NULL,
+	inbox_id BYTEA NOT NULL,
 	key_package BYTEA NOT NULL,
 	expiration BIGINT NOT NULL
 );
-
---bun:split
-CREATE INDEX idx_installations_created_at ON installations(created_at);
 
 --bun:split
 CREATE TABLE group_messages(
@@ -26,7 +20,7 @@ CREATE TABLE group_messages(
 );
 
 --bun:split
-CREATE INDEX idx_group_messages_group_id_created_at ON group_messages(group_id, created_at);
+CREATE INDEX idx_group_messages_group_id_id ON group_messages(group_id, id);
 
 --bun:split
 CREATE UNIQUE INDEX idx_group_messages_group_id_data_hash ON group_messages(group_id_data_hash);
@@ -42,7 +36,7 @@ CREATE TABLE welcome_messages(
 );
 
 --bun:split
-CREATE INDEX idx_welcome_messages_installation_key_created_at ON welcome_messages(installation_key, created_at);
+CREATE INDEX idx_welcome_messages_installation_key_id ON welcome_messages(installation_key, id);
 
 --bun:split
 CREATE UNIQUE INDEX idx_welcome_messages_group_key_data_hash ON welcome_messages(installation_key_data_hash);

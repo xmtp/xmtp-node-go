@@ -16,67 +16,37 @@ import (
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
+	"github.com/xmtp/xmtp-node-go/pkg/mocks"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"go.uber.org/mock/gomock"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
-type mockedMLSValidationService struct {
-	mock.Mock
-}
-
-func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
-	return nil, nil
-}
-
-func (m *mockedMLSValidationService) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.IdentityValidationResult, error) {
-	args := m.Called(ctx, keyPackages)
-
-	response := args.Get(0)
-	if response == nil {
-		return nil, args.Error(1)
-	}
-
-	return response.([]mlsvalidate.IdentityValidationResult), args.Error(1)
-}
-
-func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]mlsvalidate.InboxIdValidationResult, error) {
-	return nil, nil
-}
-
-func (m *mockedMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
-	args := m.Called(ctx, groupMessages)
-
-	return args.Get(0).([]mlsvalidate.GroupMessageValidationResult), args.Error(1)
-}
-
-func newMockedValidationService() *mockedMLSValidationService {
-	return new(mockedMLSValidationService)
-}
-
-func (m *mockedMLSValidationService) mockValidateKeyPackages(installationId []byte, accountAddress string) *mock.Call {
-	return m.On("ValidateV3KeyPackages", mock.Anything, mock.Anything).Return([]mlsvalidate.IdentityValidationResult{
+func mockValidateInboxIdKeyPackages(m *mocks.MockMLSValidationService, installationId []byte, inboxId string) *mocks.MockMLSValidationService_ValidateInboxIdKeyPackages_Call {
+	return m.EXPECT().ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).Return([]mlsvalidate.InboxIdValidationResult{
 		{
-			InstallationKey:    installationId,
-			AccountAddress:     accountAddress,
-			CredentialIdentity: []byte("test"),
-			Expiration:         0,
+			InstallationKey: installationId,
+			Credential: &identity.MlsCredential{
+				InboxId: inboxId,
+			},
+			Expiration: 0,
 		},
 	}, nil)
 }
 
-func (m *mockedMLSValidationService) mockValidateGroupMessages(groupId []byte) *mock.Call {
-	return m.On("ValidateGroupMessages", mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
+func mockValidateGroupMessages(m *mocks.MockMLSValidationService, groupId []byte) *mocks.MockMLSValidationService_ValidateGroupMessages_Call {
+	return m.EXPECT().ValidateGroupMessages(mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
 		{
 			GroupId: fmt.Sprintf("%x", groupId),
 		},
 	}, nil)
 }
 
-func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mockedMLSValidationService, func()) {
+func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mocks.MockMLSValidationService, func()) {
 	log := test.NewLog(t)
 	db, _, mlsDbCleanup := test.NewMLSDB(t)
 	store, err := mlsstore.New(ctx, mlsstore.Config{
@@ -84,7 +54,7 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		DB:  db,
 	})
 	require.NoError(t, err)
-	mlsValidationService := newMockedValidationService()
+	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 	natsServer, err := server.NewServer(&server.Options{
 		Port: server.RANDOM_PORT,
 	})
@@ -94,12 +64,12 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		t.Fail()
 	}
 
-	svc, err := NewService(log, store, mlsValidationService, natsServer, func(ctx context.Context, wm *wakupb.WakuMessage) error {
+	svc, err := NewService(log, store, mockMlsValidation, natsServer, func(ctx context.Context, wm *wakupb.WakuMessage) error {
 		return nil
 	})
 	require.NoError(t, err)
 
-	return svc, db, mlsValidationService, func() {
+	return svc, db, mockMlsValidation, func() {
 		svc.Close()
 		natsServer.Shutdown()
 		mlsDbCleanup()
@@ -112,9 +82,9 @@ func TestRegisterInstallation(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	accountAddress := test.RandomString(32)
+	inboxId := test.RandomInboxId()
 
-	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, inboxId)
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
@@ -129,7 +99,7 @@ func TestRegisterInstallation(t *testing.T) {
 	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
-	require.Equal(t, accountAddress, installation.WalletAddress)
+	require.Equal(t, inboxId, utils.HexEncode(installation.InboxID))
 }
 
 func TestRegisterInstallationError(t *testing.T) {
@@ -137,7 +107,7 @@ func TestRegisterInstallationError(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	mlsValidationService.On("ValidateV3KeyPackages", ctx, mock.Anything).Return(nil, errors.New("error validating"))
+	mlsValidationService.EXPECT().ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).Return(nil, errors.New("error validating"))
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
@@ -155,15 +125,15 @@ func TestUploadKeyPackage(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	accountAddress := test.RandomString(32)
+	inboxId := test.RandomInboxId()
 
-	mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, inboxId)
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
-		IsInboxIdCredential: false,
+		IsInboxIdCredential: true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
@@ -172,14 +142,14 @@ func TestUploadKeyPackage(t *testing.T) {
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
-		IsInboxIdCredential: false,
+		IsInboxIdCredential: true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, uploadRes)
 
 	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
-	require.Equal(t, accountAddress, installation.WalletAddress)
+	require.Equal(t, []byte("test2"), installation.KeyPackage)
 }
 
 func TestFetchKeyPackages(t *testing.T) {
@@ -188,9 +158,9 @@ func TestFetchKeyPackages(t *testing.T) {
 	defer cleanup()
 
 	installationId1 := test.RandomBytes(32)
-	accountAddress1 := test.RandomString(32)
+	inboxId := test.RandomInboxId()
 
-	mockCall := mlsValidationService.mockValidateKeyPackages(installationId1, accountAddress1)
+	mockCall := mockValidateInboxIdKeyPackages(mlsValidationService, installationId1, inboxId)
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
@@ -203,10 +173,10 @@ func TestFetchKeyPackages(t *testing.T) {
 
 	// Add a second key package
 	installationId2 := test.RandomBytes(32)
-	accountAddress2 := test.RandomString(32)
 	// Unset the original mock so we can set a new one
 	mockCall.Unset()
-	mlsValidationService.mockValidateKeyPackages(installationId2, accountAddress2)
+
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId2, inboxId)
 
 	res, err = svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
@@ -258,7 +228,7 @@ func TestSendGroupMessages(t *testing.T) {
 
 	groupId := []byte(test.RandomString(32))
 
-	mlsValidationService.mockValidateGroupMessages(groupId)
+	mockValidateGroupMessages(mlsValidationService, groupId)
 
 	_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
 		Messages: []*mlsv1.GroupMessageInput{
@@ -313,57 +283,6 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
-func TestGetIdentityUpdates(t *testing.T) {
-	ctx := context.Background()
-	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
-	defer cleanup()
-
-	installationId := test.RandomBytes(32)
-	accountAddress := test.RandomString(32)
-
-	mockCall := mlsValidationService.mockValidateKeyPackages(installationId, accountAddress)
-
-	_, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
-		KeyPackage: &mlsv1.KeyPackageUpload{
-			KeyPackageTlsSerialized: []byte("test"),
-		},
-		IsInboxIdCredential: false,
-	})
-	require.NoError(t, err)
-
-	identityUpdates, err := svc.GetIdentityUpdates(ctx, &mlsv1.GetIdentityUpdatesRequest{
-		AccountAddresses: []string{accountAddress},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, identityUpdates)
-	require.Len(t, identityUpdates.Updates, 1)
-	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().InstallationKey, installationId)
-	require.Equal(t, identityUpdates.Updates[0].Updates[0].GetNewInstallation().CredentialIdentity, []byte("test"))
-
-	for _, walletUpdate := range identityUpdates.Updates {
-		for _, update := range walletUpdate.Updates {
-			require.Equal(t, installationId, update.GetNewInstallation().InstallationKey)
-		}
-	}
-
-	mockCall.Unset()
-	mlsValidationService.mockValidateKeyPackages(test.RandomBytes(32), accountAddress)
-	_, err = svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
-		KeyPackage: &mlsv1.KeyPackageUpload{
-			KeyPackageTlsSerialized: []byte("test"),
-		},
-		IsInboxIdCredential: false,
-	})
-	require.NoError(t, err)
-
-	identityUpdates, err = svc.GetIdentityUpdates(ctx, &mlsv1.GetIdentityUpdatesRequest{
-		AccountAddresses: []string{accountAddress},
-	})
-	require.NoError(t, err)
-	require.Len(t, identityUpdates.Updates, 1)
-	require.Len(t, identityUpdates.Updates[0].Updates, 2)
-}
-
 func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
@@ -385,11 +304,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		}
 	}
 
-	ctrl := gomock.NewController(t)
-	stream := NewMockMlsApi_SubscribeGroupMessagesServer(ctrl)
-	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	stream := mocks.NewMockMlsApi_SubscribeGroupMessagesServer(t)
+	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(newGroupMessageEqualsMatcher(msg)).Return(nil).Times(1)
+		stream.EXPECT().Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -417,7 +335,7 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
@@ -428,7 +346,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 	groupId := []byte(test.RandomString(32))
 
 	// Initial message before stream starts.
-	mlsValidationService.mockValidateGroupMessages(groupId)
+	mockValidateGroupMessages(mlsValidationService, groupId)
 	initialMsgs := []*mlsv1.GroupMessageInput{
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
@@ -474,22 +392,20 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		}
 	}
 
-	// Set up expectations of streaming the 11 messages from cursor.
-	ctrl := gomock.NewController(t)
-	stream := NewMockMlsApi_SubscribeGroupMessagesServer(ctrl)
-	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
-	stream.EXPECT().Send(newGroupMessageIdAndDataEqualsMatcher(&mlsv1.GroupMessage{
+	stream := mocks.NewMockMlsApi_SubscribeGroupMessagesServer(t)
+	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
+	stream.EXPECT().Send(mock.MatchedBy(newGroupMessageIdAndDataEqualsMatcher(&mlsv1.GroupMessage{
 		Version: &mlsv1.GroupMessage_V1_{
 			V1: &mlsv1.GroupMessage_V1{
 				Id:   3,
 				Data: []byte("data3"),
 			},
 		},
-	})).Return(nil).Times(1)
+	}).Matches)).Return(nil).Times(1)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(newGroupMessageEqualsMatcher(msg)).Return(nil).Times(1)
+		stream.EXPECT().Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
 	}
-	stream.EXPECT().Context().Return(ctx).AnyTimes()
+	stream.EXPECT().Context().Return(ctx)
 
 	go func() {
 		err := svc.SubscribeGroupMessages(&mlsv1.SubscribeGroupMessagesRequest{
@@ -518,7 +434,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 	}
 
 	// Expectations should eventually be satisfied.
-	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
@@ -543,11 +459,10 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 		}
 	}
 
-	ctrl := gomock.NewController(t)
-	stream := NewMockMlsApi_SubscribeWelcomeMessagesServer(ctrl)
-	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
+	stream := mocks.NewMockMlsApi_SubscribeWelcomeMessagesServer(t)
+	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(newWelcomeMessageEqualsMatcher(msg)).Return(nil).Times(1)
+		stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -575,7 +490,7 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
@@ -640,10 +555,9 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 	}
 
 	// Set up expectations of streaming the 11 messages from cursor.
-	ctrl := gomock.NewController(t)
-	stream := NewMockMlsApi_SubscribeWelcomeMessagesServer(ctrl)
-	stream.EXPECT().SendHeader(map[string][]string{"subscribed": {"true"}})
-	stream.EXPECT().Send(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
+	stream := mocks.NewMockMlsApi_SubscribeWelcomeMessagesServer(t)
+	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
+	stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
 		Version: &mlsv1.WelcomeMessage_V1_{
 			V1: &mlsv1.WelcomeMessage_V1{
 				Id:              3,
@@ -652,11 +566,11 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 				Data:            []byte("data3"),
 			},
 		},
-	})).Return(nil).Times(1)
+	}).Matches)).Return(nil).Times(1)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(newWelcomeMessageEqualsMatcher(msg)).Return(nil).Times(1)
+		stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
 	}
-	stream.EXPECT().Context().Return(ctx).AnyTimes()
+	stream.EXPECT().Context().Return(ctx)
 
 	go func() {
 		err := svc.SubscribeWelcomeMessages(&mlsv1.SubscribeWelcomeMessagesRequest{
@@ -685,7 +599,7 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 	}
 
 	// Expectations should eventually be satisfied.
-	require.Eventually(t, ctrl.Satisfied, 5*time.Second, 100*time.Millisecond)
+	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
 }
 
 type groupMessageEqualsMatcher struct {
@@ -754,4 +668,24 @@ func (m *welcomeMessageEqualsMatcherWithoutTimestamp) Matches(obj interface{}) b
 
 func (m *welcomeMessageEqualsMatcherWithoutTimestamp) String() string {
 	return m.obj.String()
+}
+
+func assertExpectationsWithTimeout(t *testing.T, mockObj *mock.Mock, timeout, interval time.Duration) {
+	timeoutChan := time.After(timeout)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeoutChan:
+			if !mockObj.AssertExpectations(t) {
+				t.Error("Expectations were not met within the timeout period")
+			}
+			return
+		case <-ticker.C:
+			if mockObj.AssertExpectations(t) {
+				return
+			}
+		}
+	}
 }

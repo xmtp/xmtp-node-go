@@ -1,0 +1,18 @@
+with-expecter: true
+packages:
+  github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1:
+    config:
+      dir: ./pkg/mocks
+      outpkg: mocks
+    interfaces:
+      MlsApi_SubscribeGroupMessagesServer:
+        config:
+      MlsApi_SubscribeWelcomeMessagesServer:
+        config:
+  github.com/xmtp/xmtp-node-go/pkg/mlsvalidate:
+    config:
+      dir: ./pkg/mocks
+      outpkg: mocks
+    interfaces:
+      MLSValidationService:
+        config:
