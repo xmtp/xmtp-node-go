@@ -152,7 +152,7 @@ func TestPublishedUpdatesCanBeRead(t *testing.T) {
 	svc, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	inbox_id := "test_inbox"
+	inbox_id := test.RandomInboxId()
 	address := "test_address"
 
 	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))
@@ -173,7 +173,7 @@ func TestPublishedUpdatesAreInOrder(t *testing.T) {
 	svc, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	inbox_id := "test_inbox"
+	inbox_id := test.RandomInboxId()
 	address := "test_address"
 
 	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))
@@ -210,10 +210,10 @@ func TestQueryMultipleInboxes(t *testing.T) {
 	svc, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	first_inbox_id := "test_inbox"
-	second_inbox_id := "second_inbox"
-	first_address := "test_address"
-	second_address := "test_address"
+	first_inbox_id := test.RandomInboxId()
+	second_inbox_id := test.RandomInboxId()
+	first_address := test.RandomInboxId()
+	second_address := test.RandomInboxId()
 
 	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(first_inbox_id, makeCreateInbox(first_address)))
 	require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestInboxSizeLimit(t *testing.T) {
 	svc, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	inbox_id := "test_inbox"
+	inbox_id := test.RandomInboxId()
 	address := "test_address"
 
 	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inbox_id, makeCreateInbox(address)))

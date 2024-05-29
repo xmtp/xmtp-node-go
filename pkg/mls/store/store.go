@@ -201,12 +201,14 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 
 	filters := make(queries.InboxLogFilterList, len(reqs))
 	for i, req := range reqs {
+		s.log.Info("Filtering for inbox_id", zap.Any("inbox_id", req.InboxId))
 		filters[i] = queries.InboxLogFilter{
 			InboxId:    req.InboxId,
 			SequenceId: int64(req.SequenceId),
 		}
 	}
 	filterBytes, err := filters.ToSql()
+	s.log.Info("Filter bytes", zap.Any("filter_bytes", filterBytes))
 	if err != nil {
 		return nil, err
 	}

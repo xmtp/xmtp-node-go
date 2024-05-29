@@ -253,7 +253,7 @@ FROM
 			inbox_id, sequence_id
 		FROM
 			json_populate_recordset(NULL::inbox_filter, $1) AS b(inbox_id,
-				sequence_id)) AS b ON b.inbox_id = a.inbox_id
+				sequence_id)) AS b ON decode(b.inbox_id::TEXT, 'hex') = a.inbox_id::BYTEA
 		AND a.sequence_id > b.sequence_id
 	ORDER BY
 		a.sequence_id ASC
