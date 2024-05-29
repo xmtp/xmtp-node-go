@@ -22,6 +22,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Type of update to admin lists
+type AdminListUpdateType int32
+
+const (
+	AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_UNSPECIFIED        AdminListUpdateType = 0
+	AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_ADD_ADMIN          AdminListUpdateType = 1
+	AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_REMOVE_ADMIN       AdminListUpdateType = 2
+	AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_ADD_SUPER_ADMIN    AdminListUpdateType = 3
+	AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_REMOVE_SUPER_ADMIN AdminListUpdateType = 4
+)
+
+// Enum value maps for AdminListUpdateType.
+var (
+	AdminListUpdateType_name = map[int32]string{
+		0: "ADMIN_LIST_UPDATE_TYPE_UNSPECIFIED",
+		1: "ADMIN_LIST_UPDATE_TYPE_ADD_ADMIN",
+		2: "ADMIN_LIST_UPDATE_TYPE_REMOVE_ADMIN",
+		3: "ADMIN_LIST_UPDATE_TYPE_ADD_SUPER_ADMIN",
+		4: "ADMIN_LIST_UPDATE_TYPE_REMOVE_SUPER_ADMIN",
+	}
+	AdminListUpdateType_value = map[string]int32{
+		"ADMIN_LIST_UPDATE_TYPE_UNSPECIFIED":        0,
+		"ADMIN_LIST_UPDATE_TYPE_ADD_ADMIN":          1,
+		"ADMIN_LIST_UPDATE_TYPE_REMOVE_ADMIN":       2,
+		"ADMIN_LIST_UPDATE_TYPE_ADD_SUPER_ADMIN":    3,
+		"ADMIN_LIST_UPDATE_TYPE_REMOVE_SUPER_ADMIN": 4,
+	}
+)
+
+func (x AdminListUpdateType) Enum() *AdminListUpdateType {
+	p := new(AdminListUpdateType)
+	*p = x
+	return p
+}
+
+func (x AdminListUpdateType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AdminListUpdateType) Descriptor() protoreflect.EnumDescriptor {
+	return file_mls_database_intents_proto_enumTypes[0].Descriptor()
+}
+
+func (AdminListUpdateType) Type() protoreflect.EnumType {
+	return &file_mls_database_intents_proto_enumTypes[0]
+}
+
+func (x AdminListUpdateType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AdminListUpdateType.Descriptor instead.
+func (AdminListUpdateType) EnumDescriptor() ([]byte, []int) {
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{0}
+}
+
 // The data required to publish a message
 type SendMessageData struct {
 	state         protoimpl.MessageState
@@ -543,6 +599,74 @@ type UpdateMetadataData_V1_ struct {
 
 func (*UpdateMetadataData_V1_) isUpdateMetadataData_Version() {}
 
+// The data required to update group admin/super admin lists
+type UpdateAdminListsData struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Version:
+	//
+	//	*UpdateAdminListsData_V1_
+	Version isUpdateAdminListsData_Version `protobuf_oneof:"version"`
+}
+
+func (x *UpdateAdminListsData) Reset() {
+	*x = UpdateAdminListsData{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mls_database_intents_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UpdateAdminListsData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAdminListsData) ProtoMessage() {}
+
+func (x *UpdateAdminListsData) ProtoReflect() protoreflect.Message {
+	mi := &file_mls_database_intents_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAdminListsData.ProtoReflect.Descriptor instead.
+func (*UpdateAdminListsData) Descriptor() ([]byte, []int) {
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{8}
+}
+
+func (m *UpdateAdminListsData) GetVersion() isUpdateAdminListsData_Version {
+	if m != nil {
+		return m.Version
+	}
+	return nil
+}
+
+func (x *UpdateAdminListsData) GetV1() *UpdateAdminListsData_V1 {
+	if x, ok := x.GetVersion().(*UpdateAdminListsData_V1_); ok {
+		return x.V1
+	}
+	return nil
+}
+
+type isUpdateAdminListsData_Version interface {
+	isUpdateAdminListsData_Version()
+}
+
+type UpdateAdminListsData_V1_ struct {
+	V1 *UpdateAdminListsData_V1 `protobuf:"bytes,1,opt,name=v1,proto3,oneof"`
+}
+
+func (*UpdateAdminListsData_V1_) isUpdateAdminListsData_Version() {}
+
 // Generic data-type for all post-commit actions
 type PostCommitAction struct {
 	state         protoimpl.MessageState
@@ -558,7 +682,7 @@ type PostCommitAction struct {
 func (x *PostCommitAction) Reset() {
 	*x = PostCommitAction{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[8]
+		mi := &file_mls_database_intents_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -571,7 +695,7 @@ func (x *PostCommitAction) String() string {
 func (*PostCommitAction) ProtoMessage() {}
 
 func (x *PostCommitAction) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[8]
+	mi := &file_mls_database_intents_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +708,7 @@ func (x *PostCommitAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostCommitAction.ProtoReflect.Descriptor instead.
 func (*PostCommitAction) Descriptor() ([]byte, []int) {
-	return file_mls_database_intents_proto_rawDescGZIP(), []int{8}
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{9}
 }
 
 func (m *PostCommitAction) GetKind() isPostCommitAction_Kind {
@@ -623,7 +747,7 @@ type SendMessageData_V1 struct {
 func (x *SendMessageData_V1) Reset() {
 	*x = SendMessageData_V1{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[9]
+		mi := &file_mls_database_intents_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -636,7 +760,7 @@ func (x *SendMessageData_V1) String() string {
 func (*SendMessageData_V1) ProtoMessage() {}
 
 func (x *SendMessageData_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[9]
+	mi := &file_mls_database_intents_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +795,7 @@ type AddMembersData_V1 struct {
 func (x *AddMembersData_V1) Reset() {
 	*x = AddMembersData_V1{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[10]
+		mi := &file_mls_database_intents_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -684,7 +808,7 @@ func (x *AddMembersData_V1) String() string {
 func (*AddMembersData_V1) ProtoMessage() {}
 
 func (x *AddMembersData_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[10]
+	mi := &file_mls_database_intents_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +843,7 @@ type RemoveMembersData_V1 struct {
 func (x *RemoveMembersData_V1) Reset() {
 	*x = RemoveMembersData_V1{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[11]
+		mi := &file_mls_database_intents_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -732,7 +856,7 @@ func (x *RemoveMembersData_V1) String() string {
 func (*RemoveMembersData_V1) ProtoMessage() {}
 
 func (x *RemoveMembersData_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[11]
+	mi := &file_mls_database_intents_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,7 +894,7 @@ type UpdateGroupMembershipData_V1 struct {
 func (x *UpdateGroupMembershipData_V1) Reset() {
 	*x = UpdateGroupMembershipData_V1{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[12]
+		mi := &file_mls_database_intents_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -783,7 +907,7 @@ func (x *UpdateGroupMembershipData_V1) String() string {
 func (*UpdateGroupMembershipData_V1) ProtoMessage() {}
 
 func (x *UpdateGroupMembershipData_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[12]
+	mi := &file_mls_database_intents_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -826,7 +950,7 @@ type UpdateMetadataData_V1 struct {
 func (x *UpdateMetadataData_V1) Reset() {
 	*x = UpdateMetadataData_V1{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[14]
+		mi := &file_mls_database_intents_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -839,7 +963,7 @@ func (x *UpdateMetadataData_V1) String() string {
 func (*UpdateMetadataData_V1) ProtoMessage() {}
 
 func (x *UpdateMetadataData_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[14]
+	mi := &file_mls_database_intents_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -869,6 +993,62 @@ func (x *UpdateMetadataData_V1) GetFieldValue() string {
 	return ""
 }
 
+// V1 of UpdateAdminListsPublishData
+type UpdateAdminListsData_V1 struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AdminListUpdateType AdminListUpdateType `protobuf:"varint,1,opt,name=admin_list_update_type,json=adminListUpdateType,proto3,enum=xmtp.mls.database.AdminListUpdateType" json:"admin_list_update_type,omitempty"`
+	InboxId             string              `protobuf:"bytes,2,opt,name=inbox_id,json=inboxId,proto3" json:"inbox_id,omitempty"`
+}
+
+func (x *UpdateAdminListsData_V1) Reset() {
+	*x = UpdateAdminListsData_V1{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mls_database_intents_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UpdateAdminListsData_V1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAdminListsData_V1) ProtoMessage() {}
+
+func (x *UpdateAdminListsData_V1) ProtoReflect() protoreflect.Message {
+	mi := &file_mls_database_intents_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAdminListsData_V1.ProtoReflect.Descriptor instead.
+func (*UpdateAdminListsData_V1) Descriptor() ([]byte, []int) {
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{8, 0}
+}
+
+func (x *UpdateAdminListsData_V1) GetAdminListUpdateType() AdminListUpdateType {
+	if x != nil {
+		return x.AdminListUpdateType
+	}
+	return AdminListUpdateType_ADMIN_LIST_UPDATE_TYPE_UNSPECIFIED
+}
+
+func (x *UpdateAdminListsData_V1) GetInboxId() string {
+	if x != nil {
+		return x.InboxId
+	}
+	return ""
+}
+
 // An installation
 type PostCommitAction_Installation struct {
 	state         protoimpl.MessageState
@@ -882,7 +1062,7 @@ type PostCommitAction_Installation struct {
 func (x *PostCommitAction_Installation) Reset() {
 	*x = PostCommitAction_Installation{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[15]
+		mi := &file_mls_database_intents_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -895,7 +1075,7 @@ func (x *PostCommitAction_Installation) String() string {
 func (*PostCommitAction_Installation) ProtoMessage() {}
 
 func (x *PostCommitAction_Installation) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[15]
+	mi := &file_mls_database_intents_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -908,7 +1088,7 @@ func (x *PostCommitAction_Installation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostCommitAction_Installation.ProtoReflect.Descriptor instead.
 func (*PostCommitAction_Installation) Descriptor() ([]byte, []int) {
-	return file_mls_database_intents_proto_rawDescGZIP(), []int{8, 0}
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{9, 0}
 }
 
 func (x *PostCommitAction_Installation) GetInstallationKey() []byte {
@@ -938,7 +1118,7 @@ type PostCommitAction_SendWelcomes struct {
 func (x *PostCommitAction_SendWelcomes) Reset() {
 	*x = PostCommitAction_SendWelcomes{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mls_database_intents_proto_msgTypes[16]
+		mi := &file_mls_database_intents_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -951,7 +1131,7 @@ func (x *PostCommitAction_SendWelcomes) String() string {
 func (*PostCommitAction_SendWelcomes) ProtoMessage() {}
 
 func (x *PostCommitAction_SendWelcomes) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_database_intents_proto_msgTypes[16]
+	mi := &file_mls_database_intents_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -964,7 +1144,7 @@ func (x *PostCommitAction_SendWelcomes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostCommitAction_SendWelcomes.ProtoReflect.Descriptor instead.
 func (*PostCommitAction_SendWelcomes) Descriptor() ([]byte, []int) {
-	return file_mls_database_intents_proto_rawDescGZIP(), []int{8, 1}
+	return file_mls_database_intents_proto_rawDescGZIP(), []int{9, 1}
 }
 
 func (x *PostCommitAction_SendWelcomes) GetInstallations() []*PostCommitAction_Installation {
@@ -1075,6 +1255,20 @@ var file_mls_database_intents_proto_rawDesc = []byte{
 	0x66, 0x69, 0x65, 0x6c, 0x64, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x66, 0x69, 0x65,
 	0x6c, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a,
 	0x66, 0x69, 0x65, 0x6c, 0x64, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x42, 0x09, 0x0a, 0x07, 0x76, 0x65,
+	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0xdd, 0x01, 0x0a, 0x14, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65,
+	0x41, 0x64, 0x6d, 0x69, 0x6e, 0x4c, 0x69, 0x73, 0x74, 0x73, 0x44, 0x61, 0x74, 0x61, 0x12, 0x3c,
+	0x0a, 0x02, 0x76, 0x31, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2a, 0x2e, 0x78, 0x6d, 0x74,
+	0x70, 0x2e, 0x6d, 0x6c, 0x73, 0x2e, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x2e, 0x55,
+	0x70, 0x64, 0x61, 0x74, 0x65, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x4c, 0x69, 0x73, 0x74, 0x73, 0x44,
+	0x61, 0x74, 0x61, 0x2e, 0x56, 0x31, 0x48, 0x00, 0x52, 0x02, 0x76, 0x31, 0x1a, 0x7c, 0x0a, 0x02,
+	0x56, 0x31, 0x12, 0x5b, 0x0a, 0x16, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x5f, 0x6c, 0x69, 0x73, 0x74,
+	0x5f, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0e, 0x32, 0x26, 0x2e, 0x78, 0x6d, 0x74, 0x70, 0x2e, 0x6d, 0x6c, 0x73, 0x2e, 0x64, 0x61,
+	0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x2e, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x4c, 0x69, 0x73, 0x74,
+	0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x54, 0x79, 0x70, 0x65, 0x52, 0x13, 0x61, 0x64, 0x6d, 0x69,
+	0x6e, 0x4c, 0x69, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12,
+	0x19, 0x0a, 0x08, 0x69, 0x6e, 0x62, 0x6f, 0x78, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x69, 0x6e, 0x62, 0x6f, 0x78, 0x49, 0x64, 0x42, 0x09, 0x0a, 0x07, 0x76, 0x65,
 	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0xe8, 0x02, 0x0a, 0x10, 0x50, 0x6f, 0x73, 0x74, 0x43, 0x6f,
 	0x6d, 0x6d, 0x69, 0x74, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x57, 0x0a, 0x0d, 0x73, 0x65,
 	0x6e, 0x64, 0x5f, 0x77, 0x65, 0x6c, 0x63, 0x6f, 0x6d, 0x65, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28,
@@ -1098,19 +1292,34 @@ var file_mls_database_intents_proto_rawDesc = []byte{
 	0x27, 0x0a, 0x0f, 0x77, 0x65, 0x6c, 0x63, 0x6f, 0x6d, 0x65, 0x5f, 0x6d, 0x65, 0x73, 0x73, 0x61,
 	0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x0e, 0x77, 0x65, 0x6c, 0x63, 0x6f, 0x6d,
 	0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x6b, 0x69, 0x6e, 0x64,
-	0x42, 0xc0, 0x01, 0x0a, 0x15, 0x63, 0x6f, 0x6d, 0x2e, 0x78, 0x6d, 0x74, 0x70, 0x2e, 0x6d, 0x6c,
-	0x73, 0x2e, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x42, 0x0c, 0x49, 0x6e, 0x74, 0x65,
-	0x6e, 0x74, 0x73, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x33, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x78, 0x6d, 0x74, 0x70, 0x2f, 0x78, 0x6d, 0x74, 0x70,
-	0x2d, 0x6e, 0x6f, 0x64, 0x65, 0x2d, 0x67, 0x6f, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2f, 0x6d, 0x6c, 0x73, 0x2f, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0xa2,
-	0x02, 0x03, 0x58, 0x4d, 0x44, 0xaa, 0x02, 0x11, 0x58, 0x6d, 0x74, 0x70, 0x2e, 0x4d, 0x6c, 0x73,
-	0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0xca, 0x02, 0x11, 0x58, 0x6d, 0x74, 0x70,
-	0x5c, 0x4d, 0x6c, 0x73, 0x5c, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0xe2, 0x02, 0x1d,
-	0x58, 0x6d, 0x74, 0x70, 0x5c, 0x4d, 0x6c, 0x73, 0x5c, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73,
-	0x65, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x13,
-	0x58, 0x6d, 0x74, 0x70, 0x3a, 0x3a, 0x4d, 0x6c, 0x73, 0x3a, 0x3a, 0x44, 0x61, 0x74, 0x61, 0x62,
-	0x61, 0x73, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x2a, 0xe7, 0x01, 0x0a, 0x13, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x4c, 0x69, 0x73, 0x74, 0x55, 0x70,
+	0x64, 0x61, 0x74, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x26, 0x0a, 0x22, 0x41, 0x44, 0x4d, 0x49,
+	0x4e, 0x5f, 0x4c, 0x49, 0x53, 0x54, 0x5f, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45, 0x5f, 0x54, 0x59,
+	0x50, 0x45, 0x5f, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00,
+	0x12, 0x24, 0x0a, 0x20, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x5f, 0x4c, 0x49, 0x53, 0x54, 0x5f, 0x55,
+	0x50, 0x44, 0x41, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x41, 0x44, 0x44, 0x5f, 0x41,
+	0x44, 0x4d, 0x49, 0x4e, 0x10, 0x01, 0x12, 0x27, 0x0a, 0x23, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x5f,
+	0x4c, 0x49, 0x53, 0x54, 0x5f, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45,
+	0x5f, 0x52, 0x45, 0x4d, 0x4f, 0x56, 0x45, 0x5f, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x10, 0x02, 0x12,
+	0x2a, 0x0a, 0x26, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x5f, 0x4c, 0x49, 0x53, 0x54, 0x5f, 0x55, 0x50,
+	0x44, 0x41, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x41, 0x44, 0x44, 0x5f, 0x53, 0x55,
+	0x50, 0x45, 0x52, 0x5f, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x10, 0x03, 0x12, 0x2d, 0x0a, 0x29, 0x41,
+	0x44, 0x4d, 0x49, 0x4e, 0x5f, 0x4c, 0x49, 0x53, 0x54, 0x5f, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45,
+	0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x52, 0x45, 0x4d, 0x4f, 0x56, 0x45, 0x5f, 0x53, 0x55, 0x50,
+	0x45, 0x52, 0x5f, 0x41, 0x44, 0x4d, 0x49, 0x4e, 0x10, 0x04, 0x42, 0xc0, 0x01, 0x0a, 0x15, 0x63,
+	0x6f, 0x6d, 0x2e, 0x78, 0x6d, 0x74, 0x70, 0x2e, 0x6d, 0x6c, 0x73, 0x2e, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x61, 0x73, 0x65, 0x42, 0x0c, 0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x73, 0x50, 0x72, 0x6f,
+	0x74, 0x6f, 0x50, 0x01, 0x5a, 0x33, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
+	0x2f, 0x78, 0x6d, 0x74, 0x70, 0x2f, 0x78, 0x6d, 0x74, 0x70, 0x2d, 0x6e, 0x6f, 0x64, 0x65, 0x2d,
+	0x67, 0x6f, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x6c, 0x73,
+	0x2f, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0xa2, 0x02, 0x03, 0x58, 0x4d, 0x44, 0xaa,
+	0x02, 0x11, 0x58, 0x6d, 0x74, 0x70, 0x2e, 0x4d, 0x6c, 0x73, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62,
+	0x61, 0x73, 0x65, 0xca, 0x02, 0x11, 0x58, 0x6d, 0x74, 0x70, 0x5c, 0x4d, 0x6c, 0x73, 0x5c, 0x44,
+	0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0xe2, 0x02, 0x1d, 0x58, 0x6d, 0x74, 0x70, 0x5c, 0x4d,
+	0x6c, 0x73, 0x5c, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x5c, 0x47, 0x50, 0x42, 0x4d,
+	0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x13, 0x58, 0x6d, 0x74, 0x70, 0x3a, 0x3a,
+	0x4d, 0x6c, 0x73, 0x3a, 0x3a, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1125,44 +1334,50 @@ func file_mls_database_intents_proto_rawDescGZIP() []byte {
 	return file_mls_database_intents_proto_rawDescData
 }
 
-var file_mls_database_intents_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_mls_database_intents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_mls_database_intents_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_mls_database_intents_proto_goTypes = []interface{}{
-	(*SendMessageData)(nil),               // 0: xmtp.mls.database.SendMessageData
-	(*AccountAddresses)(nil),              // 1: xmtp.mls.database.AccountAddresses
-	(*InstallationIds)(nil),               // 2: xmtp.mls.database.InstallationIds
-	(*AddressesOrInstallationIds)(nil),    // 3: xmtp.mls.database.AddressesOrInstallationIds
-	(*AddMembersData)(nil),                // 4: xmtp.mls.database.AddMembersData
-	(*RemoveMembersData)(nil),             // 5: xmtp.mls.database.RemoveMembersData
-	(*UpdateGroupMembershipData)(nil),     // 6: xmtp.mls.database.UpdateGroupMembershipData
-	(*UpdateMetadataData)(nil),            // 7: xmtp.mls.database.UpdateMetadataData
-	(*PostCommitAction)(nil),              // 8: xmtp.mls.database.PostCommitAction
-	(*SendMessageData_V1)(nil),            // 9: xmtp.mls.database.SendMessageData.V1
-	(*AddMembersData_V1)(nil),             // 10: xmtp.mls.database.AddMembersData.V1
-	(*RemoveMembersData_V1)(nil),          // 11: xmtp.mls.database.RemoveMembersData.V1
-	(*UpdateGroupMembershipData_V1)(nil),  // 12: xmtp.mls.database.UpdateGroupMembershipData.V1
-	nil,                                   // 13: xmtp.mls.database.UpdateGroupMembershipData.V1.MembershipUpdatesEntry
-	(*UpdateMetadataData_V1)(nil),         // 14: xmtp.mls.database.UpdateMetadataData.V1
-	(*PostCommitAction_Installation)(nil), // 15: xmtp.mls.database.PostCommitAction.Installation
-	(*PostCommitAction_SendWelcomes)(nil), // 16: xmtp.mls.database.PostCommitAction.SendWelcomes
+	(AdminListUpdateType)(0),              // 0: xmtp.mls.database.AdminListUpdateType
+	(*SendMessageData)(nil),               // 1: xmtp.mls.database.SendMessageData
+	(*AccountAddresses)(nil),              // 2: xmtp.mls.database.AccountAddresses
+	(*InstallationIds)(nil),               // 3: xmtp.mls.database.InstallationIds
+	(*AddressesOrInstallationIds)(nil),    // 4: xmtp.mls.database.AddressesOrInstallationIds
+	(*AddMembersData)(nil),                // 5: xmtp.mls.database.AddMembersData
+	(*RemoveMembersData)(nil),             // 6: xmtp.mls.database.RemoveMembersData
+	(*UpdateGroupMembershipData)(nil),     // 7: xmtp.mls.database.UpdateGroupMembershipData
+	(*UpdateMetadataData)(nil),            // 8: xmtp.mls.database.UpdateMetadataData
+	(*UpdateAdminListsData)(nil),          // 9: xmtp.mls.database.UpdateAdminListsData
+	(*PostCommitAction)(nil),              // 10: xmtp.mls.database.PostCommitAction
+	(*SendMessageData_V1)(nil),            // 11: xmtp.mls.database.SendMessageData.V1
+	(*AddMembersData_V1)(nil),             // 12: xmtp.mls.database.AddMembersData.V1
+	(*RemoveMembersData_V1)(nil),          // 13: xmtp.mls.database.RemoveMembersData.V1
+	(*UpdateGroupMembershipData_V1)(nil),  // 14: xmtp.mls.database.UpdateGroupMembershipData.V1
+	nil,                                   // 15: xmtp.mls.database.UpdateGroupMembershipData.V1.MembershipUpdatesEntry
+	(*UpdateMetadataData_V1)(nil),         // 16: xmtp.mls.database.UpdateMetadataData.V1
+	(*UpdateAdminListsData_V1)(nil),       // 17: xmtp.mls.database.UpdateAdminListsData.V1
+	(*PostCommitAction_Installation)(nil), // 18: xmtp.mls.database.PostCommitAction.Installation
+	(*PostCommitAction_SendWelcomes)(nil), // 19: xmtp.mls.database.PostCommitAction.SendWelcomes
 }
 var file_mls_database_intents_proto_depIdxs = []int32{
-	9,  // 0: xmtp.mls.database.SendMessageData.v1:type_name -> xmtp.mls.database.SendMessageData.V1
-	1,  // 1: xmtp.mls.database.AddressesOrInstallationIds.account_addresses:type_name -> xmtp.mls.database.AccountAddresses
-	2,  // 2: xmtp.mls.database.AddressesOrInstallationIds.installation_ids:type_name -> xmtp.mls.database.InstallationIds
-	10, // 3: xmtp.mls.database.AddMembersData.v1:type_name -> xmtp.mls.database.AddMembersData.V1
-	11, // 4: xmtp.mls.database.RemoveMembersData.v1:type_name -> xmtp.mls.database.RemoveMembersData.V1
-	12, // 5: xmtp.mls.database.UpdateGroupMembershipData.v1:type_name -> xmtp.mls.database.UpdateGroupMembershipData.V1
-	14, // 6: xmtp.mls.database.UpdateMetadataData.v1:type_name -> xmtp.mls.database.UpdateMetadataData.V1
-	16, // 7: xmtp.mls.database.PostCommitAction.send_welcomes:type_name -> xmtp.mls.database.PostCommitAction.SendWelcomes
-	3,  // 8: xmtp.mls.database.AddMembersData.V1.addresses_or_installation_ids:type_name -> xmtp.mls.database.AddressesOrInstallationIds
-	3,  // 9: xmtp.mls.database.RemoveMembersData.V1.addresses_or_installation_ids:type_name -> xmtp.mls.database.AddressesOrInstallationIds
-	13, // 10: xmtp.mls.database.UpdateGroupMembershipData.V1.membership_updates:type_name -> xmtp.mls.database.UpdateGroupMembershipData.V1.MembershipUpdatesEntry
-	15, // 11: xmtp.mls.database.PostCommitAction.SendWelcomes.installations:type_name -> xmtp.mls.database.PostCommitAction.Installation
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	11, // 0: xmtp.mls.database.SendMessageData.v1:type_name -> xmtp.mls.database.SendMessageData.V1
+	2,  // 1: xmtp.mls.database.AddressesOrInstallationIds.account_addresses:type_name -> xmtp.mls.database.AccountAddresses
+	3,  // 2: xmtp.mls.database.AddressesOrInstallationIds.installation_ids:type_name -> xmtp.mls.database.InstallationIds
+	12, // 3: xmtp.mls.database.AddMembersData.v1:type_name -> xmtp.mls.database.AddMembersData.V1
+	13, // 4: xmtp.mls.database.RemoveMembersData.v1:type_name -> xmtp.mls.database.RemoveMembersData.V1
+	14, // 5: xmtp.mls.database.UpdateGroupMembershipData.v1:type_name -> xmtp.mls.database.UpdateGroupMembershipData.V1
+	16, // 6: xmtp.mls.database.UpdateMetadataData.v1:type_name -> xmtp.mls.database.UpdateMetadataData.V1
+	17, // 7: xmtp.mls.database.UpdateAdminListsData.v1:type_name -> xmtp.mls.database.UpdateAdminListsData.V1
+	19, // 8: xmtp.mls.database.PostCommitAction.send_welcomes:type_name -> xmtp.mls.database.PostCommitAction.SendWelcomes
+	4,  // 9: xmtp.mls.database.AddMembersData.V1.addresses_or_installation_ids:type_name -> xmtp.mls.database.AddressesOrInstallationIds
+	4,  // 10: xmtp.mls.database.RemoveMembersData.V1.addresses_or_installation_ids:type_name -> xmtp.mls.database.AddressesOrInstallationIds
+	15, // 11: xmtp.mls.database.UpdateGroupMembershipData.V1.membership_updates:type_name -> xmtp.mls.database.UpdateGroupMembershipData.V1.MembershipUpdatesEntry
+	0,  // 12: xmtp.mls.database.UpdateAdminListsData.V1.admin_list_update_type:type_name -> xmtp.mls.database.AdminListUpdateType
+	18, // 13: xmtp.mls.database.PostCommitAction.SendWelcomes.installations:type_name -> xmtp.mls.database.PostCommitAction.Installation
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_mls_database_intents_proto_init() }
@@ -1268,7 +1483,7 @@ func file_mls_database_intents_proto_init() {
 			}
 		}
 		file_mls_database_intents_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PostCommitAction); i {
+			switch v := v.(*UpdateAdminListsData); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1280,7 +1495,7 @@ func file_mls_database_intents_proto_init() {
 			}
 		}
 		file_mls_database_intents_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SendMessageData_V1); i {
+			switch v := v.(*PostCommitAction); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1292,7 +1507,7 @@ func file_mls_database_intents_proto_init() {
 			}
 		}
 		file_mls_database_intents_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddMembersData_V1); i {
+			switch v := v.(*SendMessageData_V1); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1304,7 +1519,7 @@ func file_mls_database_intents_proto_init() {
 			}
 		}
 		file_mls_database_intents_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveMembersData_V1); i {
+			switch v := v.(*AddMembersData_V1); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1316,6 +1531,18 @@ func file_mls_database_intents_proto_init() {
 			}
 		}
 		file_mls_database_intents_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RemoveMembersData_V1); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mls_database_intents_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateGroupMembershipData_V1); i {
 			case 0:
 				return &v.state
@@ -1327,7 +1554,7 @@ func file_mls_database_intents_proto_init() {
 				return nil
 			}
 		}
-		file_mls_database_intents_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_mls_database_intents_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateMetadataData_V1); i {
 			case 0:
 				return &v.state
@@ -1339,7 +1566,19 @@ func file_mls_database_intents_proto_init() {
 				return nil
 			}
 		}
-		file_mls_database_intents_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+		file_mls_database_intents_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UpdateAdminListsData_V1); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mls_database_intents_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PostCommitAction_Installation); i {
 			case 0:
 				return &v.state
@@ -1351,7 +1590,7 @@ func file_mls_database_intents_proto_init() {
 				return nil
 			}
 		}
-		file_mls_database_intents_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+		file_mls_database_intents_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PostCommitAction_SendWelcomes); i {
 			case 0:
 				return &v.state
@@ -1384,6 +1623,9 @@ func file_mls_database_intents_proto_init() {
 		(*UpdateMetadataData_V1_)(nil),
 	}
 	file_mls_database_intents_proto_msgTypes[8].OneofWrappers = []interface{}{
+		(*UpdateAdminListsData_V1_)(nil),
+	}
+	file_mls_database_intents_proto_msgTypes[9].OneofWrappers = []interface{}{
 		(*PostCommitAction_SendWelcomes_)(nil),
 	}
 	type x struct{}
@@ -1391,13 +1633,14 @@ func file_mls_database_intents_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_mls_database_intents_proto_rawDesc,
-			NumEnums:      0,
-			NumMessages:   17,
+			NumEnums:      1,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_mls_database_intents_proto_goTypes,
 		DependencyIndexes: file_mls_database_intents_proto_depIdxs,
+		EnumInfos:         file_mls_database_intents_proto_enumTypes,
 		MessageInfos:      file_mls_database_intents_proto_msgTypes,
 	}.Build()
 	File_mls_database_intents_proto = out.File
