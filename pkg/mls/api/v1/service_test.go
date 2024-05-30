@@ -21,7 +21,6 @@ import (
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
@@ -99,7 +98,7 @@ func TestRegisterInstallation(t *testing.T) {
 	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
-	require.Equal(t, inboxId, utils.HexEncode(installation.InboxID))
+	require.Equal(t, inboxId, installation.InboxID)
 }
 
 func TestRegisterInstallationError(t *testing.T) {

@@ -15,14 +15,14 @@ import (
 
 const createInstallation = `-- name: CreateInstallation :exec
 INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
-	VALUES ($1, $2, $3, $4, $5, $6)
+	VALUES ($1, $2, $3, decode($4, 'hex'), $5, $6)
 `
 
 type CreateInstallationParams struct {
 	ID         []byte
 	CreatedAt  int64
 	UpdatedAt  int64
-	InboxID    []byte
+	InboxID    string
 	KeyPackage []byte
 	Expiration int64
 }
@@ -80,7 +80,7 @@ func (q *Queries) FetchKeyPackages(ctx context.Context, installationIds [][]byte
 const getAddressLogs = `-- name: GetAddressLogs :many
 SELECT
 	a.address,
-	a.inbox_id,
+	encode(a.inbox_id, 'hex') AS inbox_id,
 	a.association_sequence_id
 FROM
 	address_log a
@@ -100,7 +100,7 @@ FROM
 
 type GetAddressLogsRow struct {
 	Address               string
-	InboxID               []byte
+	InboxID               string
 	AssociationSequenceID sql.NullInt64
 }
 
@@ -167,30 +167,33 @@ func (q *Queries) GetAllGroupMessages(ctx context.Context) ([]GroupMessage, erro
 
 const getAllInboxLogs = `-- name: GetAllInboxLogs :many
 SELECT
-	sequence_id, inbox_id, server_timestamp_ns, identity_update_proto
+	sequence_id,
+	encode(inbox_id, 'hex') AS inbox_id,
+	identity_update_proto
 FROM
 	inbox_log
 WHERE
-	inbox_id = $1
+	inbox_id = decode($1, 'hex')
 ORDER BY
 	sequence_id ASC
 `
 
-func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID []byte) ([]InboxLog, error) {
+type GetAllInboxLogsRow struct {
+	SequenceID          int64
+	InboxID             string
+	IdentityUpdateProto []byte
+}
+
+func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]GetAllInboxLogsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAllInboxLogs, inboxID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []InboxLog
+	var items []GetAllInboxLogsRow
 	for rows.Next() {
-		var i InboxLog
-		if err := rows.Scan(
-			&i.SequenceID,
-			&i.InboxID,
-			&i.ServerTimestampNs,
-			&i.IdentityUpdateProto,
-		); err != nil {
+		var i GetAllInboxLogsRow
+		if err := rows.Scan(&i.SequenceID, &i.InboxID, &i.IdentityUpdateProto); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -245,7 +248,10 @@ func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, 
 
 const getInboxLogFiltered = `-- name: GetInboxLogFiltered :many
 SELECT
-	a.sequence_id, a.inbox_id, a.server_timestamp_ns, a.identity_update_proto
+	a.sequence_id,
+	encode(a.inbox_id, 'hex') AS inbox_id,
+	a.identity_update_proto,
+	a.server_timestamp_ns
 FROM
 	inbox_log AS a
 	JOIN (
@@ -253,26 +259,33 @@ FROM
 			inbox_id, sequence_id
 		FROM
 			json_populate_recordset(NULL::inbox_filter, $1) AS b(inbox_id,
-				sequence_id)) AS b ON decode(b.inbox_id::TEXT, 'hex') = a.inbox_id::BYTEA
+				sequence_id)) AS b ON decode(b.inbox_id, 'hex') = a.inbox_id::BYTEA
 		AND a.sequence_id > b.sequence_id
 	ORDER BY
 		a.sequence_id ASC
 `
 
-func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessage) ([]InboxLog, error) {
+type GetInboxLogFilteredRow struct {
+	SequenceID          int64
+	InboxID             string
+	IdentityUpdateProto []byte
+	ServerTimestampNs   int64
+}
+
+func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessage) ([]GetInboxLogFilteredRow, error) {
 	rows, err := q.db.QueryContext(ctx, getInboxLogFiltered, filters)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []InboxLog
+	var items []GetInboxLogFilteredRow
 	for rows.Next() {
-		var i InboxLog
+		var i GetInboxLogFilteredRow
 		if err := rows.Scan(
 			&i.SequenceID,
 			&i.InboxID,
-			&i.ServerTimestampNs,
 			&i.IdentityUpdateProto,
+			&i.ServerTimestampNs,
 		); err != nil {
 			return nil, err
 		}
@@ -289,16 +302,30 @@ func (q *Queries) GetInboxLogFiltered(ctx context.Context, filters json.RawMessa
 
 const getInstallation = `-- name: GetInstallation :one
 SELECT
-	id, created_at, updated_at, inbox_id, key_package, expiration
+	id,
+	created_at,
+	updated_at,
+	encode(inbox_id, 'hex') AS inbox_id,
+	key_package,
+	expiration
 FROM
 	installations
 WHERE
 	id = $1
 `
 
-func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation, error) {
+type GetInstallationRow struct {
+	ID         []byte
+	CreatedAt  int64
+	UpdatedAt  int64
+	InboxID    string
+	KeyPackage []byte
+	Expiration int64
+}
+
+func (q *Queries) GetInstallation(ctx context.Context, id []byte) (GetInstallationRow, error) {
 	row := q.db.QueryRowContext(ctx, getInstallation, id)
-	var i Installation
+	var i GetInstallationRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -312,14 +339,14 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 
 const insertAddressLog = `-- name: InsertAddressLog :one
 INSERT INTO address_log(address, inbox_id, association_sequence_id, revocation_sequence_id)
-	VALUES ($1, $2, $3, $4)
+	VALUES ($1, decode($2, 'hex'), $3, $4)
 RETURNING
 	address, inbox_id, association_sequence_id, revocation_sequence_id
 `
 
 type InsertAddressLogParams struct {
 	Address               string
-	InboxID               []byte
+	InboxID               string
 	AssociationSequenceID sql.NullInt64
 	RevocationSequenceID  sql.NullInt64
 }
@@ -369,13 +396,13 @@ func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessage
 
 const insertInboxLog = `-- name: InsertInboxLog :one
 INSERT INTO inbox_log(inbox_id, server_timestamp_ns, identity_update_proto)
-	VALUES ($1, $2, $3)
+	VALUES (decode($1, 'hex'), $2, $3)
 RETURNING
 	sequence_id
 `
 
 type InsertInboxLogParams struct {
-	InboxID             []byte
+	InboxID             string
 	ServerTimestampNs   int64
 	IdentityUpdateProto []byte
 }
@@ -743,7 +770,7 @@ WHERE (address, inbox_id, association_sequence_id) =(
 		address_log AS a
 	WHERE
 		a.address = $2
-		AND a.inbox_id = $3
+		AND a.inbox_id = decode($3, 'hex')
 	GROUP BY
 		address,
 		inbox_id)
@@ -752,7 +779,7 @@ WHERE (address, inbox_id, association_sequence_id) =(
 type RevokeAddressFromLogParams struct {
 	RevocationSequenceID sql.NullInt64
 	Address              string
-	InboxID              []byte
+	InboxID              string
 }
 
 func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFromLogParams) error {

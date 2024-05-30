@@ -4,17 +4,22 @@ SELECT
 
 -- name: GetAllInboxLogs :many
 SELECT
-	*
+	sequence_id,
+	encode(inbox_id, 'hex') AS inbox_id,
+	identity_update_proto
 FROM
 	inbox_log
 WHERE
-	inbox_id = $1
+	inbox_id = decode(@inbox_id, 'hex')
 ORDER BY
 	sequence_id ASC;
 
 -- name: GetInboxLogFiltered :many
 SELECT
-	a.*
+	a.sequence_id,
+	encode(a.inbox_id, 'hex') AS inbox_id,
+	a.identity_update_proto,
+	a.server_timestamp_ns
 FROM
 	inbox_log AS a
 	JOIN (
@@ -30,7 +35,7 @@ FROM
 -- name: GetAddressLogs :many
 SELECT
 	a.address,
-	a.inbox_id,
+	encode(a.inbox_id, 'hex') AS inbox_id,
 	a.association_sequence_id
 FROM
 	address_log a
@@ -49,13 +54,13 @@ FROM
 
 -- name: InsertAddressLog :one
 INSERT INTO address_log(address, inbox_id, association_sequence_id, revocation_sequence_id)
-	VALUES ($1, $2, $3, $4)
+	VALUES (@address, decode(@inbox_id, 'hex'), @association_sequence_id, @revocation_sequence_id)
 RETURNING
 	*;
 
 -- name: InsertInboxLog :one
 INSERT INTO inbox_log(inbox_id, server_timestamp_ns, identity_update_proto)
-	VALUES ($1, $2, $3)
+	VALUES (decode(@inbox_id, 'hex'), @server_timestamp_ns, @identity_update_proto)
 RETURNING
 	sequence_id;
 
@@ -63,7 +68,7 @@ RETURNING
 UPDATE
 	address_log
 SET
-	revocation_sequence_id = $1
+	revocation_sequence_id = @revocation_sequence_id
 WHERE (address, inbox_id, association_sequence_id) =(
 	SELECT
 		address,
@@ -72,19 +77,24 @@ WHERE (address, inbox_id, association_sequence_id) =(
 	FROM
 		address_log AS a
 	WHERE
-		a.address = $2
-		AND a.inbox_id = $3
+		a.address = @address
+		AND a.inbox_id = decode(@inbox_id, 'hex')
 	GROUP BY
 		address,
 		inbox_id);
 
 -- name: CreateInstallation :exec
 INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
-	VALUES (@id, @created_at, @updated_at, @inbox_id, @key_package, @expiration);
+	VALUES (@id, @created_at, @updated_at, decode(@inbox_id, 'hex'), @key_package, @expiration);
 
 -- name: GetInstallation :one
 SELECT
-	*
+	id,
+	created_at,
+	updated_at,
+	encode(inbox_id, 'hex') AS inbox_id,
+	key_package,
+	expiration
 FROM
 	installations
 WHERE

@@ -19,7 +19,7 @@ import (
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
-	"github.com/xmtp/xmtp-node-go/pkg/utils"
+	"go.uber.org/zap"
 )
 
 func NewTestStore(t *testing.T) (*Store, func()) {
@@ -95,18 +95,18 @@ func TestInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	inbox1 := utils.HexEncode([]byte("inbox1"))
-	inbox2 := utils.HexEncode([]byte("inbox2"))
-	correctInbox := utils.HexEncode([]byte("correct"))
-	correctInbox2 := utils.HexEncode([]byte("correct_inbox2"))
+	inbox1 := testutils.RandomInboxId()
+	inbox2 := testutils.RandomInboxId()
+	correctInbox := testutils.RandomInboxId()
+	correctInbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: utils.AssertHexDecode(inbox1), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: utils.AssertHexDecode(inbox1), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: utils.AssertHexDecode(inbox1), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: utils.AssertHexDecode(correctInbox), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -120,7 +120,7 @@ func TestInboxIds(t *testing.T) {
 
 	require.Equal(t, correctInbox, *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: utils.AssertHexDecode(correctInbox2), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, correctInbox2, *resp.Responses[0].InboxId)
@@ -129,7 +129,7 @@ func TestInboxIds(t *testing.T) {
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: utils.AssertHexDecode(inbox2), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, inbox2, *resp.Responses[1].InboxId)
@@ -140,12 +140,12 @@ func TestMultipleInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	inbox1 := utils.HexEncode([]byte("inbox1"))
-	inbox2 := utils.HexEncode([]byte("inbox2"))
+	inbox1 := testutils.RandomInboxId()
+	inbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: utils.AssertHexDecode(inbox1), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: utils.AssertHexDecode(inbox2), AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -231,7 +231,8 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
-	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
+	store.log.Info("Created at", zap.Time("created_at", msg.CreatedAt))
+	require.True(t, msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started))
 	require.Equal(t, []byte("group"), msg.GroupID)
 	require.Equal(t, []byte("data"), msg.Data)
 

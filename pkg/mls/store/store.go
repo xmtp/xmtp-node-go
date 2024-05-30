@@ -88,7 +88,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 
 		for _, logEntry := range addressLogEntries {
 			if logEntry.Address == address {
-				inboxId := utils.HexEncode(logEntry.InboxID)
+				inboxId := logEntry.InboxID
 				resp.InboxId = &inboxId
 			}
 		}
@@ -108,10 +108,6 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 	if err := s.RunInRepeatableReadTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
 		inboxId := newUpdate.GetInboxId()
-		inboxIdBytes, err := utils.HexDecode(inboxId)
-		if err != nil {
-			return err
-		}
 		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
 		// This allows the lock to be enforced even when there are no existing `inbox_log`s
 		if err := txQueries.LockInboxLog(ctx, inboxId); err != nil {
@@ -119,7 +115,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		log := s.log.With(zap.String("inbox_id", inboxId))
-		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxIdBytes)
+		inboxLogEntries, err := txQueries.GetAllInboxLogs(ctx, inboxId)
 		if err != nil {
 			return err
 		}
@@ -148,7 +144,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		}
 
 		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
-			InboxID:             inboxIdBytes,
+			InboxID:             inboxId,
 			ServerTimestampNs:   nowNs(),
 			IdentityUpdateProto: protoBytes,
 		})
@@ -164,7 +160,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
-					InboxID:               inboxIdBytes,
+					InboxID:               inboxId,
 					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
 				})
@@ -179,7 +175,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
-					InboxID:              inboxIdBytes,
+					InboxID:              inboxId,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
 				if err != nil {
@@ -217,9 +213,9 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 	}
 
 	// Organize the results by inbox ID
-	resultMap := make(map[string][]queries.InboxLog)
+	resultMap := make(map[string][]queries.GetInboxLogFilteredRow)
 	for _, result := range results {
-		inboxId := utils.HexEncode(result.InboxID)
+		inboxId := result.InboxID
 		resultMap[inboxId] = append(resultMap[inboxId], result)
 	}
 
@@ -252,14 +248,11 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 // Creates the installation and last resort key package
 func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error {
 	createdAt := nowNs()
-	inboxIdBytes, err := utils.HexDecode(inboxId)
-	if err != nil {
-		return err
-	}
+
 	return s.queries.CreateInstallation(ctx, queries.CreateInstallationParams{
 		ID:         installationId,
 		CreatedAt:  createdAt,
-		InboxID:    inboxIdBytes,
+		InboxID:    inboxId,
 		KeyPackage: keyPackage,
 		Expiration: int64(expiration),
 	})
