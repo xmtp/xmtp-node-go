@@ -32,7 +32,6 @@ require (
 	github.com/waku-org/go-waku v0.8.0
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
 	github.com/yoheimuta/protolint v0.39.0
-	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
 	google.golang.org/genproto v0.0.0-20230223222841-637eb2293923
@@ -42,6 +41,7 @@ require (
 )
 
 require (
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect

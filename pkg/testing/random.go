@@ -4,6 +4,8 @@ import (
 	cryptoRand "crypto/rand"
 	"math/rand"
 	"strings"
+
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 )
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -24,4 +26,10 @@ func RandomBytes(n int) []byte {
 	b := make([]byte, n)
 	_, _ = cryptoRand.Read(b)
 	return b
+}
+
+func RandomInboxId() string {
+	bytes := RandomBytes(32)
+
+	return utils.HexEncode(bytes)
 }

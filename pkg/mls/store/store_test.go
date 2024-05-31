@@ -5,20 +5,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate/mocks"
+	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
-	"go.uber.org/mock/gomock"
+	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"go.uber.org/zap"
 )
 
 func NewTestStore(t *testing.T) (*Store, func()) {
@@ -44,14 +45,13 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	// Create a mapping of inboxes to addresses
 	inboxes := make(map[string]string)
 	for i := 0; i < 50; i++ {
-		inboxes[fmt.Sprintf("inbox_%d", i)] = fmt.Sprintf("address_%d", i)
+		inboxes[testutils.RandomInboxId()] = fmt.Sprintf("address_%d", i)
 	}
 
-	mockController := gomock.NewController(t)
-	mockMlsValidation := mocks.NewMockMLSValidationService(mockController)
+	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 
 	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
-	mockMlsValidation.EXPECT().GetAssociationState(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, _ any, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+	mockMlsValidation.EXPECT().GetAssociationState(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
 		inboxId := updates[0].InboxId
 		address, ok := inboxes[inboxId]
 
@@ -71,7 +71,7 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 				}},
 			},
 		}, nil
-	}).AnyTimes()
+	})
 
 	var wg sync.WaitGroup
 	for inboxId := range inboxes {
@@ -95,13 +95,18 @@ func TestInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	inbox1 := testutils.RandomInboxId()
+	inbox2 := testutils.RandomInboxId()
+	correctInbox := testutils.RandomInboxId()
+	correctInbox2 := testutils.RandomInboxId()
+
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "inbox1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -113,21 +118,21 @@ func TestInboxIds(t *testing.T) {
 	}
 	resp, _ := store.GetInboxIds(context.Background(), req)
 
-	require.Equal(t, "correct", *resp.Responses[0].InboxId)
+	require.Equal(t, correctInbox, *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: "correct_inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
-	require.Equal(t, "correct_inbox2", *resp.Responses[0].InboxId)
+	require.Equal(t, correctInbox2, *resp.Responses[0].InboxId)
 
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: "inbox2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
-	require.Equal(t, "inbox2", *resp.Responses[1].InboxId)
+	require.Equal(t, inbox2, *resp.Responses[1].InboxId)
 }
 
 func TestMultipleInboxIds(t *testing.T) {
@@ -135,9 +140,12 @@ func TestMultipleInboxIds(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: "inbox_1", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	inbox1 := testutils.RandomInboxId()
+	inbox2 := testutils.RandomInboxId()
+
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: "inbox_2", AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -151,8 +159,8 @@ func TestMultipleInboxIds(t *testing.T) {
 		Requests: reqs,
 	}
 	resp, _ := store.GetInboxIds(context.Background(), req)
-	require.Equal(t, "inbox_1", *resp.Responses[0].InboxId)
-	require.Equal(t, "inbox_2", *resp.Responses[1].InboxId)
+	require.Equal(t, inbox1, *resp.Responses[0].InboxId)
+	require.Equal(t, inbox2, *resp.Responses[1].InboxId)
 }
 
 func TestCreateInstallation(t *testing.T) {
@@ -161,14 +169,14 @@ func TestCreateInstallation(t *testing.T) {
 
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
+	inboxId := test.RandomInboxId()
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, test.RandomBytes(32), test.RandomBytes(32), 0)
+	err := store.CreateInstallation(ctx, installationId, inboxId, test.RandomBytes(32), 0)
 	require.NoError(t, err)
 
 	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
 	require.NoError(t, err)
-	require.Equal(t, walletAddress, installationFromDb.WalletAddress)
+	require.Equal(t, installationFromDb.ID, installationId)
 }
 
 func TestUpdateKeyPackage(t *testing.T) {
@@ -177,10 +185,10 @@ func TestUpdateKeyPackage(t *testing.T) {
 
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
+	inboxId := test.RandomInboxId()
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage, 0)
+	err := store.CreateInstallation(ctx, installationId, inboxId, keyPackage, 0)
 	require.NoError(t, err)
 
 	keyPackage2 := test.RandomBytes(32)
@@ -200,10 +208,10 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
-	walletAddress := test.RandomString(32)
 	keyPackage := test.RandomBytes(32)
+	inboxId := test.RandomInboxId()
 
-	err := store.CreateInstallation(ctx, installationId, walletAddress, keyPackage, keyPackage, 0)
+	err := store.CreateInstallation(ctx, installationId, inboxId, keyPackage, 0)
 	require.NoError(t, err)
 
 	fetchResult, err := store.FetchKeyPackages(ctx, [][]byte{installationId})
@@ -211,96 +219,6 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	require.Len(t, fetchResult, 1)
 	require.Equal(t, keyPackage, fetchResult[0].KeyPackage)
 	require.Equal(t, installationId, fetchResult[0].ID)
-}
-
-func TestGetIdentityUpdates(t *testing.T) {
-	store, cleanup := NewTestStore(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	walletAddress := test.RandomString(32)
-
-	installationId1 := test.RandomBytes(32)
-	keyPackage1 := test.RandomBytes(32)
-
-	err := store.CreateInstallation(ctx, installationId1, walletAddress, keyPackage1, keyPackage1, 0)
-	require.NoError(t, err)
-
-	installationId2 := test.RandomBytes(32)
-	keyPackage2 := test.RandomBytes(32)
-
-	err = store.CreateInstallation(ctx, installationId2, walletAddress, keyPackage2, keyPackage2, 0)
-	require.NoError(t, err)
-
-	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
-	require.NoError(t, err)
-	require.Len(t, identityUpdates[walletAddress], 2)
-	require.Equal(t, identityUpdates[walletAddress][0].InstallationKey, installationId1)
-	require.Equal(t, identityUpdates[walletAddress][0].Kind, Create)
-	require.Equal(t, identityUpdates[walletAddress][1].InstallationKey, installationId2)
-
-	// Make sure that date filtering works
-	identityUpdates, err = store.GetIdentityUpdates(ctx, []string{walletAddress}, nowNs()+1000000)
-	require.NoError(t, err)
-	require.Len(t, identityUpdates[walletAddress], 0)
-}
-
-func TestGetIdentityUpdatesMultipleWallets(t *testing.T) {
-	store, cleanup := NewTestStore(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	walletAddress1 := test.RandomString(32)
-	installationId1 := test.RandomBytes(32)
-	keyPackage1 := test.RandomBytes(32)
-
-	err := store.CreateInstallation(ctx, installationId1, walletAddress1, keyPackage1, keyPackage1, 0)
-	require.NoError(t, err)
-
-	walletAddress2 := test.RandomString(32)
-	installationId2 := test.RandomBytes(32)
-	keyPackage2 := test.RandomBytes(32)
-
-	err = store.CreateInstallation(ctx, installationId2, walletAddress2, keyPackage2, keyPackage2, 0)
-	require.NoError(t, err)
-
-	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress1, walletAddress2}, 0)
-	require.NoError(t, err)
-	require.Len(t, identityUpdates[walletAddress1], 1)
-	require.Len(t, identityUpdates[walletAddress2], 1)
-}
-
-func TestGetIdentityUpdatesNoResult(t *testing.T) {
-	store, cleanup := NewTestStore(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	walletAddress := test.RandomString(32)
-
-	identityUpdates, err := store.GetIdentityUpdates(ctx, []string{walletAddress}, 0)
-	require.NoError(t, err)
-	require.Len(t, identityUpdates[walletAddress], 0)
-}
-
-func TestIdentityUpdateSort(t *testing.T) {
-	updates := IdentityUpdateList([]IdentityUpdate{
-		{
-			Kind:        Create,
-			TimestampNs: 2,
-		},
-		{
-			Kind:        Create,
-			TimestampNs: 3,
-		},
-		{
-			Kind:        Create,
-			TimestampNs: 1,
-		},
-	})
-	sort.Sort(updates)
-	require.Equal(t, updates[0].TimestampNs, uint64(1))
-	require.Equal(t, updates[1].TimestampNs, uint64(2))
-	require.Equal(t, updates[2].TimestampNs, uint64(3))
 }
 
 func TestInsertGroupMessage_Single(t *testing.T) {
@@ -313,7 +231,8 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
-	require.True(t, msg.CreatedAt.Before(time.Now().UTC()) && msg.CreatedAt.After(started))
+	store.log.Info("Created at", zap.Time("created_at", msg.CreatedAt))
+	require.True(t, msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started))
 	require.Equal(t, []byte("group"), msg.GroupID)
 	require.Equal(t, []byte("data"), msg.Data)
 

@@ -1,5 +1,9 @@
 SET statement_timeout = 0;
 
 --bun:split
-DROP TABLE IF EXISTS messages;
 
+SELECT 1
+
+--bun:split
+
+SELECT 2

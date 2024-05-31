@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -40,10 +39,9 @@ type IdentityStore interface {
 type MlsStore interface {
 	IdentityStore
 
-	CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error
+	CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error
 	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
-	GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
@@ -162,7 +160,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
-					InboxID:               state.AssociationState.InboxId,
+					InboxID:               inboxId,
 					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
 				})
@@ -177,7 +175,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
-					InboxID:              state.AssociationState.InboxId,
+					InboxID:              inboxId,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
 				if err != nil {
@@ -200,7 +198,7 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 	filters := make(queries.InboxLogFilterList, len(reqs))
 	for i, req := range reqs {
 		filters[i] = queries.InboxLogFilter{
-			InboxId:    req.InboxId,
+			InboxId:    req.InboxId, // InboxLogFilters take inbox_id as text and decode it inside Postgres, since the filters are JSON
 			SequenceId: int64(req.SequenceId),
 		}
 	}
@@ -215,9 +213,10 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 	}
 
 	// Organize the results by inbox ID
-	resultMap := make(map[string][]queries.InboxLog)
+	resultMap := make(map[string][]queries.GetInboxLogFilteredRow)
 	for _, result := range results {
-		resultMap[result.InboxID] = append(resultMap[result.InboxID], result)
+		inboxId := result.InboxID
+		resultMap[inboxId] = append(resultMap[inboxId], result)
 	}
 
 	resps := make([]*identity.GetIdentityUpdatesResponse_Response, len(reqs))
@@ -247,16 +246,15 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, walletAddress string, credentialIdentity, keyPackage []byte, expiration uint64) error {
+func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error {
 	createdAt := nowNs()
 
 	return s.queries.CreateInstallation(ctx, queries.CreateInstallationParams{
-		ID:                 installationId,
-		WalletAddress:      walletAddress,
-		CreatedAt:          createdAt,
-		CredentialIdentity: credentialIdentity,
-		KeyPackage:         keyPackage,
-		Expiration:         int64(expiration),
+		ID:         installationId,
+		CreatedAt:  createdAt,
+		InboxID:    inboxId,
+		KeyPackage: keyPackage,
+		Expiration: int64(expiration),
 	})
 }
 
@@ -282,49 +280,6 @@ func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage
 
 func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error) {
 	return s.queries.FetchKeyPackages(ctx, installationIds)
-}
-
-func (s *Store) GetIdentityUpdates(ctx context.Context, walletAddresses []string, startTimeNs int64) (map[string]IdentityUpdateList, error) {
-	updated, err := s.queries.GetIdentityUpdates(ctx, queries.GetIdentityUpdatesParams{
-		WalletAddresses: walletAddresses,
-		StartTime:       startTimeNs,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// The returned list is only partially sorted
-	out := make(map[string]IdentityUpdateList)
-	for _, installation := range updated {
-		if installation.CreatedAt > startTimeNs {
-			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:               Create,
-				InstallationKey:    installation.ID,
-				CredentialIdentity: installation.CredentialIdentity,
-				TimestampNs:        uint64(installation.CreatedAt),
-			})
-		}
-		if installation.RevokedAt.Valid && installation.RevokedAt.Int64 > startTimeNs {
-			out[installation.WalletAddress] = append(out[installation.WalletAddress], IdentityUpdate{
-				Kind:            Revoke,
-				InstallationKey: installation.ID,
-				TimestampNs:     uint64(installation.RevokedAt.Int64),
-			})
-		}
-	}
-	// Sort the updates by timestamp now that the full list is assembled
-	for _, updates := range out {
-		sort.Sort(updates)
-	}
-
-	return out, nil
-}
-
-func (s *Store) RevokeInstallation(ctx context.Context, installationId []byte) error {
-	return s.queries.RevokeInstallation(ctx, queries.RevokeInstallationParams{
-		RevokedAt:      sql.NullInt64{Valid: true, Int64: nowNs()},
-		InstallationID: installationId,
-	})
 }
 
 func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error) {
