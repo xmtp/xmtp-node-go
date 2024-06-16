@@ -13,7 +13,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	identityv1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 )
@@ -160,6 +162,16 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 	cost := 1
 	limitType := ratelimiter.DEFAULT
 	switch req := req.(type) {
+	case *identityv1.PublishIdentityUpdateRequest:
+		limitType = ratelimiter.IDENTITY_PUBLISH
+	case *mlsv1.FetchKeyPackagesRequest, *mlsv1.SubscribeGroupMessagesRequest, *mlsv1.SubscribeWelcomeMessagesRequest, *identityv1.GetIdentityUpdatesRequest, *identityv1.GetInboxIdsRequest:
+		limitType = ratelimiter.V3_DEFAULT
+	case *mlsv1.SendWelcomeMessagesRequest:
+		cost = len(req.Messages)
+		limitType = ratelimiter.V3_PUBLISH
+	case *mlsv1.SendGroupMessagesRequest:
+		cost = len(req.Messages)
+		limitType = ratelimiter.V3_PUBLISH
 	case *messagev1.PublishRequest:
 		cost = len(req.Envelopes)
 		limitType = ratelimiter.PUBLISH
