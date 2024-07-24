@@ -6,17 +6,25 @@ services:
     ports:
       - 15432:5432
   authz-db:
-    image: postgres:13
+    image: postgres:16
     environment:
       POSTGRES_PASSWORD: xmtp
     ports:
       - 6543:5432
+
   mls-db:
-    image: postgres:13
+    image: postgres:16
     environment:
       POSTGRES_PASSWORD: xmtp
     ports:
       - 7654:5432
+
+  replication-db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: xmtp
+    ports:
+      - 8765:5432
 
   prometheus:
     image: prom/prometheus

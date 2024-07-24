@@ -3,14 +3,20 @@ package replication
 import (
 	"context"
 	"crypto/ecdsa"
+	"database/sql"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/migrate"
+	"github.com/xmtp/xmtp-node-go/pkg/migrations/replication"
 	"github.com/xmtp/xmtp-node-go/pkg/replication/api"
 	"github.com/xmtp/xmtp-node-go/pkg/replication/registry"
+	legacyServer "github.com/xmtp/xmtp-node-go/pkg/server"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +28,8 @@ type Server struct {
 	apiServer    *api.ApiServer
 	nodeRegistry registry.NodeRegistry
 	privateKey   *ecdsa.PrivateKey
+	writerDb     *sql.DB
+	// Can add reader DB later if needed
 }
 
 func New(ctx context.Context, log *zap.Logger, options Options, nodeRegistry registry.NodeRegistry) (*Server, error) {
@@ -35,6 +43,10 @@ func New(ctx context.Context, log *zap.Logger, options Options, nodeRegistry reg
 	if err != nil {
 		return nil, err
 	}
+	s.writerDb, err = getWriterDb(options.DB)
+	if err != nil {
+		return nil, err
+	}
 
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.apiServer, err = api.NewAPIServer(ctx, log, options.API.Port)
@@ -43,6 +55,25 @@ func New(ctx context.Context, log *zap.Logger, options Options, nodeRegistry reg
 	}
 	log.Info("Replication server started", zap.Int("port", options.API.Port))
 	return s, nil
+}
+
+func (s *Server) Migrate() error {
+	db := bun.NewDB(s.writerDb, pgdialect.New())
+	migrator := migrate.NewMigrator(db, replication.Migrations)
+	err := migrator.Init(s.ctx)
+	if err != nil {
+		return err
+	}
+
+	group, err := migrator.Migrate(s.ctx)
+	if err != nil {
+		return err
+	}
+	if group.IsZero() {
+		s.log.Info("No new migrations to run")
+	}
+
+	return nil
 }
 
 func (s *Server) Addr() net.Addr {
@@ -62,4 +93,13 @@ func (s *Server) Shutdown() {
 
 func parsePrivateKey(privateKeyString string) (*ecdsa.PrivateKey, error) {
 	return crypto.HexToECDSA(privateKeyString)
+}
+
+func getWriterDb(options DbOptions) (*sql.DB, error) {
+	db, err := legacyServer.NewPGXDB(options.WriterConnectionString, options.WaitForDB, options.ReadTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
