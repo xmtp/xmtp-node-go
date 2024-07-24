@@ -34,7 +34,7 @@ func NewAPIServer(ctx context.Context, log *zap.Logger, port int) (*ApiServer, e
 		return nil, err
 	}
 	s := &ApiServer{
-		log:          log,
+		log:          log.Named("api"),
 		ctx:          ctx,
 		wg:           sync.WaitGroup{},
 		grpcListener: &proxyproto.Listener{Listener: grpcListener, ReadHeaderTimeout: 10 * time.Second},
@@ -77,6 +77,21 @@ func NewAPIServer(ctx context.Context, log *zap.Logger, port int) (*ApiServer, e
 
 func (s *ApiServer) Addr() net.Addr {
 	return s.grpcListener.Addr()
+}
+
+func (s *ApiServer) Close() {
+	s.log.Info("closing")
+
+	if s.grpcListener != nil {
+		err := s.grpcListener.Close()
+		if err != nil {
+			s.log.Error("closing grpc listener", zap.Error(err))
+		}
+		s.grpcListener = nil
+	}
+
+	s.wg.Wait()
+	s.log.Info("closed")
 }
 
 func isErrUseOfClosedConnection(err error) bool {

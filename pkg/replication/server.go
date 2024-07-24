@@ -89,6 +89,9 @@ func (s *Server) WaitForShutdown() {
 
 func (s *Server) Shutdown() {
 	s.cancel()
+	if s.apiServer != nil {
+		s.apiServer.Close()
+	}
 }
 
 func parsePrivateKey(privateKeyString string) (*ecdsa.PrivateKey, error) {

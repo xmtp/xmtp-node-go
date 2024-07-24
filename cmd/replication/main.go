@@ -27,6 +27,7 @@ func main() {
 		}
 		return
 	}
+	addEnvVars()
 
 	log, _, err := buildLogger(options)
 	if err != nil {
@@ -60,6 +61,20 @@ func main() {
 	}
 	cancel()
 	wg.Wait()
+}
+
+func addEnvVars() {
+	if connStr, hasConnstr := os.LookupEnv("WRITER_DB_CONNECTION_STRING"); hasConnstr {
+		options.DB.WriterConnectionString = connStr
+	}
+
+	if connStr, hasConnstr := os.LookupEnv("READER_DB_CONNECTION_STRING"); hasConnstr {
+		options.DB.WriterConnectionString = connStr
+	}
+
+	if privKey, hasPrivKey := os.LookupEnv("PRIVATE_KEY"); hasPrivKey {
+		options.PrivateKeyString = privKey
+	}
 }
 
 func fatal(msg string, args ...any) {
