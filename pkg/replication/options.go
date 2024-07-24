@@ -14,6 +14,8 @@ type Options struct {
 	//nolint:staticcheck
 	LogEncoding string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
 
+	PrivateKeyString string `long:"private-key" description:"Private key to use for the node"`
+
 	API ApiOptions `group:"API Options" namespace:"api"`
 	DB  DbOptions  `group:"Database Options" namespace:"db"`
 }

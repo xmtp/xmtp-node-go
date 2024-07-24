@@ -29,6 +29,7 @@ type ApiServer struct {
 
 func NewAPIServer(ctx context.Context, log *zap.Logger, port int) (*ApiServer, error) {
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +73,10 @@ func NewAPIServer(ctx context.Context, log *zap.Logger, port int) (*ApiServer, e
 	})
 
 	return s, nil
+}
+
+func (s *ApiServer) Addr() net.Addr {
+	return s.grpcListener.Addr()
 }
 
 func isErrUseOfClosedConnection(err error) bool {
