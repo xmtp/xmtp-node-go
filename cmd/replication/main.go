@@ -10,6 +10,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/xmtp/xmtp-node-go/pkg/replication"
+	"github.com/xmtp/xmtp-node-go/pkg/replication/registry"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -37,7 +38,7 @@ func main() {
 	var wg sync.WaitGroup
 	doneC := make(chan bool, 1)
 	tracing.GoPanicWrap(ctx, &wg, "main", func(ctx context.Context) {
-		s, err := replication.New(ctx, log, options)
+		s, err := replication.New(ctx, log, options, registry.NewFixedNodeRegistry([]registry.Node{}))
 		if err != nil {
 			log.Fatal("initializing server", zap.Error(err))
 		}
