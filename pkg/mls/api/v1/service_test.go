@@ -207,6 +207,33 @@ func TestFetchKeyPackages(t *testing.T) {
 	require.Equal(t, []byte("test"), consumeRes.KeyPackages[1].KeyPackageTlsSerialized)
 }
 
+func TestMissingKeyPackage(t *testing.T) {
+	ctx := context.Background()
+	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId1 := test.RandomBytes(32)
+	inboxId := test.RandomInboxId()
+
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId1, inboxId)
+
+	_, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
+			KeyPackageTlsSerialized: []byte("test"),
+		},
+		IsInboxIdCredential: false,
+	})
+	require.NoError(t, err)
+
+	// Request a second key package that doesn't exist
+	results, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
+		InstallationKeys: [][]byte{installationId1, test.RandomBytes(32)},
+	})
+	require.Nil(t, results)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "requested 2 key packages but only received 1")
+}
+
 // Trying to fetch key packages that don't exist should return nil
 func TestFetchKeyPackagesFail(t *testing.T) {
 	ctx := context.Background()

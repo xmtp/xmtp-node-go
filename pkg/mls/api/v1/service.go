@@ -147,6 +147,10 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPacka
 		keyPackageMap[string(id)] = idx
 	}
 
+	if len(installations) != len(ids) {
+		return nil, status.Errorf(codes.NotFound, "requested %d key packages but only received %s", len(ids), len(installations))
+	}
+
 	resPackages := make([]*mlsv1.FetchKeyPackagesResponse_KeyPackage, len(ids))
 	for _, installation := range installations {
 
