@@ -243,8 +243,8 @@ func TestFetchKeyPackagesFail(t *testing.T) {
 	consumeRes, err := svc.FetchKeyPackages(ctx, &mlsv1.FetchKeyPackagesRequest{
 		InstallationKeys: [][]byte{test.RandomBytes(32)},
 	})
-	require.Nil(t, err)
-	require.Equal(t, []*mlsv1.FetchKeyPackagesResponse_KeyPackage{nil}, consumeRes.KeyPackages)
+	require.Error(t, err)
+	require.Nil(t, consumeRes)
 }
 
 func TestSendGroupMessages(t *testing.T) {
