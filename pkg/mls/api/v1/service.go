@@ -148,7 +148,7 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPacka
 	}
 
 	if len(installations) != len(ids) {
-		return nil, status.Errorf(codes.NotFound, "requested %d key packages but only received %s", len(ids), len(installations))
+		return nil, status.Errorf(codes.NotFound, "requested %d key packages but only received %d", len(ids), len(installations))
 	}
 
 	resPackages := make([]*mlsv1.FetchKeyPackagesResponse_KeyPackage, len(ids))
