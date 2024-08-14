@@ -13,28 +13,27 @@ import (
 	"github.com/lib/pq"
 )
 
-const createInstallation = `-- name: CreateInstallation :exec
-INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
-	VALUES ($1, $2, $3, decode($4, 'hex'), $5, $6)
+const createOrUpdateInstallation = `-- name: CreateOrUpdateInstallation :exec
+INSERT INTO installations(id, created_at, updated_at, key_package)
+	VALUES ($1, $2, $3, $4)
+ON CONFLICT (id)
+	DO UPDATE SET
+		key_package = $4, updated_at = $3
 `
 
-type CreateInstallationParams struct {
+type CreateOrUpdateInstallationParams struct {
 	ID         []byte
 	CreatedAt  int64
 	UpdatedAt  int64
-	InboxID    string
 	KeyPackage []byte
-	Expiration int64
 }
 
-func (q *Queries) CreateInstallation(ctx context.Context, arg CreateInstallationParams) error {
-	_, err := q.db.ExecContext(ctx, createInstallation,
+func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUpdateInstallationParams) error {
+	_, err := q.db.ExecContext(ctx, createOrUpdateInstallation,
 		arg.ID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.InboxID,
 		arg.KeyPackage,
-		arg.Expiration,
 	)
 	return err
 }
@@ -305,34 +304,21 @@ SELECT
 	id,
 	created_at,
 	updated_at,
-	encode(inbox_id, 'hex') AS inbox_id,
-	key_package,
-	expiration
+	key_package
 FROM
 	installations
 WHERE
 	id = $1
 `
 
-type GetInstallationRow struct {
-	ID         []byte
-	CreatedAt  int64
-	UpdatedAt  int64
-	InboxID    string
-	KeyPackage []byte
-	Expiration int64
-}
-
-func (q *Queries) GetInstallation(ctx context.Context, id []byte) (GetInstallationRow, error) {
+func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation, error) {
 	row := q.db.QueryRowContext(ctx, getInstallation, id)
-	var i GetInstallationRow
+	var i Installation
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.InboxID,
 		&i.KeyPackage,
-		&i.Expiration,
 	)
 	return i, err
 }
@@ -785,35 +771,4 @@ type RevokeAddressFromLogParams struct {
 func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFromLogParams) error {
 	_, err := q.db.ExecContext(ctx, revokeAddressFromLog, arg.RevocationSequenceID, arg.Address, arg.InboxID)
 	return err
-}
-
-const updateKeyPackage = `-- name: UpdateKeyPackage :execrows
-UPDATE
-	installations
-SET
-	key_package = $1,
-	updated_at = $2,
-	expiration = $3
-WHERE
-	id = $4
-`
-
-type UpdateKeyPackageParams struct {
-	KeyPackage []byte
-	UpdatedAt  int64
-	Expiration int64
-	ID         []byte
-}
-
-func (q *Queries) UpdateKeyPackage(ctx context.Context, arg UpdateKeyPackageParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, updateKeyPackage,
-		arg.KeyPackage,
-		arg.UpdatedAt,
-		arg.Expiration,
-		arg.ID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }

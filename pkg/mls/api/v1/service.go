@@ -113,6 +113,11 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 	return nil
 }
 
+/*
+*
+DEPRECATED: Use UploadKeyPackage instead
+*
+*/
 func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterInstallationRequest) (*mlsv1.RegisterInstallationResponse, error) {
 	if err := validateRegisterInstallationRequest(req); err != nil {
 		return nil, err
@@ -126,9 +131,9 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterI
 	if len(results) != 1 {
 		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
 	}
+
 	installationKey := results[0].InstallationKey
-	credential := results[0].Credential
-	if err = s.store.CreateInstallation(ctx, installationKey, credential.InboxId, req.KeyPackage.KeyPackageTlsSerialized, results[0].Expiration); err != nil {
+	if err = s.store.CreateOrUpdateInstallation(ctx, installationKey, req.KeyPackage.KeyPackageTlsSerialized); err != nil {
 		return nil, err
 	}
 	return &mlsv1.RegisterInstallationResponse{
@@ -152,7 +157,7 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPacka
 
 		idx, ok := keyPackageMap[string(installation.ID)]
 		if !ok {
-			return nil, status.Errorf(codes.Internal, "could not find key package for installation")
+			return nil, status.Error(codes.Internal, "could not find key package for installation")
 		}
 
 		resPackages[idx] = &mlsv1.FetchKeyPackagesResponse_KeyPackage{
@@ -178,9 +183,8 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPack
 	}
 
 	installationId := validationResults[0].InstallationKey
-	expiration := validationResults[0].Expiration
 
-	if err = s.store.UpdateKeyPackage(ctx, installationId, keyPackageBytes, expiration); err != nil {
+	if err = s.store.CreateOrUpdateInstallation(ctx, installationId, keyPackageBytes); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -188,11 +192,11 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPack
 }
 
 func (s *Service) RevokeInstallation(ctx context.Context, req *mlsv1.RevokeInstallationRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return nil, status.Error(codes.Unimplemented, "unimplemented")
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *mlsv1.GetIdentityUpdatesRequest) (res *mlsv1.GetIdentityUpdatesResponse, err error) {
-	return nil, status.Errorf(codes.Unimplemented, "unimplemented")
+	return nil, status.Error(codes.Unimplemented, "unimplemented")
 }
 
 func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
@@ -521,11 +525,11 @@ func buildNatsSubjectForWelcomeMessages(installationId []byte) string {
 
 func validateSendGroupMessagesRequest(req *mlsv1.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no group messages to send")
+		return status.Error(codes.InvalidArgument, "no group messages to send")
 	}
 	for _, input := range req.Messages {
 		if input == nil || input.GetV1() == nil {
-			return status.Errorf(codes.InvalidArgument, "invalid group message")
+			return status.Error(codes.InvalidArgument, "invalid group message")
 		}
 	}
 	return nil
@@ -537,12 +541,12 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 	}
 	for _, input := range req.Messages {
 		if input == nil || input.GetV1() == nil {
-			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
+			return status.Error(codes.InvalidArgument, "invalid welcome message")
 		}
 
 		v1 := input.GetV1()
 		if len(v1.Data) == 0 || len(v1.InstallationKey) == 0 || len(v1.HpkePublicKey) == 0 {
-			return status.Errorf(codes.InvalidArgument, "invalid welcome message")
+			return status.Error(codes.InvalidArgument, "invalid welcome message")
 		}
 	}
 	return nil
@@ -550,24 +554,24 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 
 func validateRegisterInstallationRequest(req *mlsv1.RegisterInstallationRequest) error {
 	if req == nil || req.KeyPackage == nil {
-		return status.Errorf(codes.InvalidArgument, "no key package")
+		return status.Error(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
 
 func validateUploadKeyPackageRequest(req *mlsv1.UploadKeyPackageRequest) error {
 	if req == nil || req.KeyPackage == nil {
-		return status.Errorf(codes.InvalidArgument, "no key package")
+		return status.Error(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
 
 func requireReadyToSend(groupId string, message []byte) error {
 	if len(groupId) == 0 {
-		return status.Errorf(codes.InvalidArgument, "group id is empty")
+		return status.Error(codes.InvalidArgument, "group id is empty")
 	}
 	if len(message) == 0 {
-		return status.Errorf(codes.InvalidArgument, "message is empty")
+		return status.Error(codes.InvalidArgument, "message is empty")
 	}
 	return nil
 }

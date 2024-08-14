@@ -39,8 +39,7 @@ type IdentityStore interface {
 type MlsStore interface {
 	IdentityStore
 
-	CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error
-	UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error
+	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
@@ -246,36 +245,15 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateInstallation(ctx context.Context, installationId []byte, inboxId string, keyPackage []byte, expiration uint64) error {
-	createdAt := nowNs()
+func (s *Store) CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error {
+	now := nowNs()
 
-	return s.queries.CreateInstallation(ctx, queries.CreateInstallationParams{
+	return s.queries.CreateOrUpdateInstallation(ctx, queries.CreateOrUpdateInstallationParams{
 		ID:         installationId,
-		CreatedAt:  createdAt,
-		InboxID:    inboxId,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 		KeyPackage: keyPackage,
-		Expiration: int64(expiration),
 	})
-}
-
-// Insert a new key package, ignoring any that may already exist
-func (s *Store) UpdateKeyPackage(ctx context.Context, installationId, keyPackage []byte, expiration uint64) error {
-	rowsUpdated, err := s.queries.UpdateKeyPackage(ctx, queries.UpdateKeyPackageParams{
-		ID:         installationId,
-		UpdatedAt:  nowNs(),
-		KeyPackage: keyPackage,
-		Expiration: int64(expiration),
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if rowsUpdated == 0 {
-		return errors.New("installation id unknown")
-	}
-
-	return nil
 }
 
 func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error) {

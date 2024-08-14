@@ -83,32 +83,23 @@ WHERE (address, inbox_id, association_sequence_id) =(
 		address,
 		inbox_id);
 
--- name: CreateInstallation :exec
-INSERT INTO installations(id, created_at, updated_at, inbox_id, key_package, expiration)
-	VALUES (@id, @created_at, @updated_at, decode(@inbox_id, 'hex'), @key_package, @expiration);
+-- name: CreateOrUpdateInstallation :exec
+INSERT INTO installations(id, created_at, updated_at, key_package)
+	VALUES (@id, @created_at, @updated_at, @key_package)
+ON CONFLICT (id)
+	DO UPDATE SET
+		key_package = @key_package, updated_at = @updated_at;
 
 -- name: GetInstallation :one
 SELECT
 	id,
 	created_at,
 	updated_at,
-	encode(inbox_id, 'hex') AS inbox_id,
-	key_package,
-	expiration
+	key_package
 FROM
 	installations
 WHERE
 	id = $1;
-
--- name: UpdateKeyPackage :execrows
-UPDATE
-	installations
-SET
-	key_package = @key_package,
-	updated_at = @updated_at,
-	expiration = @expiration
-WHERE
-	id = @id;
 
 -- name: FetchKeyPackages :many
 SELECT
