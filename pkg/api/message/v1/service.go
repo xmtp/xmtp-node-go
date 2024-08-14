@@ -130,17 +130,17 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 		log.Debug("received message")
 
 		if len(env.ContentTopic) > MaxContentTopicNameSize {
-			return nil, status.Errorf(codes.InvalidArgument, "topic length too big")
+			return nil, status.Error(codes.InvalidArgument, "topic length too big")
 		}
 
 		if len(env.Message) > MaxMessageSize {
-			return nil, status.Errorf(codes.InvalidArgument, "message too big")
+			return nil, status.Error(codes.InvalidArgument, "message too big")
 		}
 
 		if !topic.IsEphemeral(env.ContentTopic) {
 			_, err := s.store.InsertMessage(env)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 
@@ -150,7 +150,7 @@ func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*prot
 			Payload:      env.Message,
 		})
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 
 		metrics.EmitPublishedEnvelope(ctx, log, env)
@@ -393,7 +393,7 @@ func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) 
 		// We execute the query using the existing Query API
 		resp, err := s.Query(ctx, query)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 		responses = append(responses, resp)
 	}

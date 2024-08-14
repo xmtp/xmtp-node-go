@@ -87,11 +87,6 @@ func (s *MLSValidationServiceImpl) GetAssociationState(ctx context.Context, oldU
 	}, nil
 }
 
-type KeyAndExpiration struct {
-	InstallationId []byte
-	Expiration     uint64
-}
-
 func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]InboxIdValidationResult, error) {
 	req := makeValidateKeyPackageRequest(keyPackages, true)
 
@@ -100,67 +95,18 @@ func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Contex
 		return nil, err
 	}
 
-	keyPackageCredential := make(map[string]KeyAndExpiration, len(response.Responses))
-	identityUpdatesRequest := make([]*identity.GetIdentityUpdatesRequest_Request, len(response.Responses))
+	out := make([]InboxIdValidationResult, len(response.Responses))
 	for i, response := range response.Responses {
 		if !response.IsOk {
 			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
 		}
-		keyPackageCredential[response.Credential.InboxId] = KeyAndExpiration{
-			InstallationId: response.InstallationPublicKey,
-			Expiration:     response.Expiration,
-		}
-		identityUpdatesRequest[i] = &identity.GetIdentityUpdatesRequest_Request{
-			InboxId:    response.Credential.InboxId,
-			SequenceId: 0,
-		}
-	}
-
-	// TODO: do we need to take sequence ID Into account?
-	request := &identity.GetIdentityUpdatesRequest{Requests: identityUpdatesRequest}
-	identity_updates, err := s.identityStore.GetInboxLogs(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-
-	validation_requests := make([]*svc.ValidateInboxIdsRequest_ValidationRequest, len(identity_updates.Responses))
-	for i, response := range identity_updates.Responses {
-		validation_requests[i] = makeValidationRequest(response, keyPackageCredential)
-	}
-
-	validation_request := svc.ValidateInboxIdsRequest{Requests: validation_requests}
-	validate_inbox_response, err := s.grpcClient.ValidateInboxIds(ctx, &validation_request)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]InboxIdValidationResult, len(response.Responses))
-	for i, response := range validate_inbox_response.Responses {
-		if !response.IsOk {
-			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
-		}
 		out[i] = InboxIdValidationResult{
-			InstallationKey: keyPackageCredential[response.InboxId].InstallationId,
-			Credential:      &identity_proto.MlsCredential{InboxId: response.InboxId},
-			Expiration:      keyPackageCredential[response.InboxId].Expiration,
+			InstallationKey: response.InstallationPublicKey,
+			Credential:      nil,
+			Expiration:      response.Expiration,
 		}
 	}
 	return out, nil
-}
-
-func makeValidationRequest(update *identity.GetIdentityUpdatesResponse_Response, pub_keys map[string]KeyAndExpiration) *svc.ValidateInboxIdsRequest_ValidationRequest {
-	identity_updates := make([]*associations.IdentityUpdate, len(update.Updates))
-	for i, identity_log := range update.Updates {
-		identity_updates[i] = identity_log.Update
-	}
-
-	out := svc.ValidateInboxIdsRequest_ValidationRequest{
-		Credential:            &identity_proto.MlsCredential{InboxId: update.InboxId},
-		InstallationPublicKey: pub_keys[update.InboxId].InstallationId,
-		IdentityUpdates:       identity_updates,
-	}
-
-	return &out
 }
 
 func (s *MLSValidationServiceImpl) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error) {

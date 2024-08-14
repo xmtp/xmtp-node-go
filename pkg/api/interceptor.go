@@ -96,17 +96,17 @@ func (wa *WalletAuthorizer) requiresAuthorization(req interface{}) bool {
 func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return "", status.Errorf(codes.Unauthenticated, "metadata is not provided")
+		return "", status.Error(codes.Unauthenticated, "metadata is not provided")
 	}
 
 	values := md.Get(authorizationMetadataKey)
 	if len(values) == 0 {
-		return "", status.Errorf(codes.Unauthenticated, "authorization token is not provided")
+		return "", status.Error(codes.Unauthenticated, "authorization token is not provided")
 	}
 
 	words := strings.SplitN(values[0], " ", 2)
 	if len(words) != 2 {
-		return "", status.Errorf(codes.Unauthenticated, "invalid authorization header")
+		return "", status.Error(codes.Unauthenticated, "invalid authorization header")
 	}
 	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
 		return "", status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
@@ -127,14 +127,14 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wall
 	if pub, isPublish := req.(*messagev1.PublishRequest); isPublish {
 		for _, env := range pub.Envelopes {
 			if !wa.privilegedAddresses[wallet] && !allowedToPublish(env.ContentTopic, wallet) {
-				return status.Errorf(codes.PermissionDenied, "publishing to restricted topic")
+				return status.Error(codes.PermissionDenied, "publishing to restricted topic")
 			}
 		}
 	}
 	if wa.AllowLists {
 		if wa.AllowLister.IsDenyListed(wallet.String()) {
 			wa.Log.Debug("wallet deny listed", logging.WalletAddress(wallet.String()))
-			return status.Errorf(codes.PermissionDenied, ErrDenyListed.Error())
+			return status.Error(codes.PermissionDenied, ErrDenyListed.Error())
 		}
 	}
 	return nil
@@ -185,7 +185,8 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 		logging.String("method", method),
 		logging.String("limit", string(limitType)),
 		logging.Int("cost", cost))
-	return status.Errorf(codes.ResourceExhausted, err.Error())
+
+	return status.Error(codes.ResourceExhausted, err.Error())
 }
 
 const (

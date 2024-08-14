@@ -81,13 +81,13 @@ func TestRegisterInstallation(t *testing.T) {
 	defer cleanup()
 
 	installationId := test.RandomBytes(32)
-	inboxId := test.RandomInboxId()
+	keyPackage := []byte("test")
 
-	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, inboxId)
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, test.RandomInboxId())
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
-			KeyPackageTlsSerialized: []byte("test"),
+			KeyPackageTlsSerialized: keyPackage,
 		},
 		IsInboxIdCredential: false,
 	})
@@ -98,7 +98,8 @@ func TestRegisterInstallation(t *testing.T) {
 	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
-	require.Equal(t, inboxId, installation.InboxID)
+	require.Equal(t, installationId, installation.ID)
+	require.Equal(t, []byte("test"), installation.KeyPackage)
 }
 
 func TestRegisterInstallationError(t *testing.T) {

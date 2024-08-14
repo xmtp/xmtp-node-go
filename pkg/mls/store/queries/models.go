@@ -35,9 +35,7 @@ type Installation struct {
 	ID         []byte
 	CreatedAt  int64
 	UpdatedAt  int64
-	InboxID    []byte
 	KeyPackage []byte
-	Expiration int64
 }
 
 type WelcomeMessage struct {

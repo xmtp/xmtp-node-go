@@ -76,6 +76,37 @@ func TestValidateKeyPackages(t *testing.T) {
 	assert.Equal(t, []byte("456"), res[0].CredentialIdentity)
 }
 
-func TestValidateKeyPackagesError(t *testing.T) {
+func TestValidateInboxIdKeyPackages(t *testing.T) {
+	mockGrpc, service := getMockedService()
 
+	ctx := context.Background()
+	installationKey := []byte("key")
+	firstResponse := svc.ValidateInboxIdKeyPackagesResponse_Response{
+		IsOk:                  true,
+		Credential:            nil,
+		InstallationPublicKey: installationKey,
+		ErrorMessage:          "",
+	}
+	mockGrpc.On("ValidateInboxIdKeyPackages", ctx, mock.Anything).Return(&svc.ValidateInboxIdKeyPackagesResponse{Responses: []*svc.ValidateInboxIdKeyPackagesResponse_Response{&firstResponse}}, nil)
+
+	res, err := service.ValidateInboxIdKeyPackages(ctx, [][]byte{[]byte("123")})
+	assert.NoError(t, err)
+	assert.Equal(t, res[0].InstallationKey, installationKey)
+}
+
+func TestValidateInboxIdKeyPackagesError(t *testing.T) {
+	mockGrpc, service := getMockedService()
+
+	ctx := context.Background()
+	firstResponse := svc.ValidateInboxIdKeyPackagesResponse_Response{
+		IsOk:                  false,
+		Credential:            nil,
+		InstallationPublicKey: []byte("foo"),
+		ErrorMessage:          "DERP",
+	}
+	mockGrpc.On("ValidateInboxIdKeyPackages", ctx, mock.Anything).Return(&svc.ValidateInboxIdKeyPackagesResponse{Responses: []*svc.ValidateInboxIdKeyPackagesResponse_Response{&firstResponse}}, nil)
+
+	res, err := service.ValidateInboxIdKeyPackages(ctx, [][]byte{[]byte("123")})
+	assert.Error(t, err)
+	assert.Nil(t, res)
 }

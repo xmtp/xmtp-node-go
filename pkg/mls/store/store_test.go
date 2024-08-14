@@ -169,9 +169,8 @@ func TestCreateInstallation(t *testing.T) {
 
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
-	inboxId := test.RandomInboxId()
 
-	err := store.CreateInstallation(ctx, installationId, inboxId, test.RandomBytes(32), 0)
+	err := store.CreateOrUpdateInstallation(ctx, installationId, test.RandomBytes(32))
 	require.NoError(t, err)
 
 	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
@@ -185,21 +184,23 @@ func TestUpdateKeyPackage(t *testing.T) {
 
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
-	inboxId := test.RandomInboxId()
 	keyPackage := test.RandomBytes(32)
 
-	err := store.CreateInstallation(ctx, installationId, inboxId, keyPackage, 0)
+	err := store.CreateOrUpdateInstallation(ctx, installationId, keyPackage)
+	require.NoError(t, err)
+	afterCreate, err := store.queries.GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
 	keyPackage2 := test.RandomBytes(32)
-	err = store.UpdateKeyPackage(ctx, installationId, keyPackage2, 1)
+	err = store.CreateOrUpdateInstallation(ctx, installationId, keyPackage2)
 	require.NoError(t, err)
 
 	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
 	require.Equal(t, keyPackage2, installationFromDb.KeyPackage)
-	require.Equal(t, int64(1), installationFromDb.Expiration)
+	require.Greater(t, installationFromDb.UpdatedAt, afterCreate.UpdatedAt)
+	require.Equal(t, installationFromDb.CreatedAt, afterCreate.CreatedAt)
 }
 
 func TestConsumeLastResortKeyPackage(t *testing.T) {
@@ -209,9 +210,8 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	ctx := context.Background()
 	installationId := test.RandomBytes(32)
 	keyPackage := test.RandomBytes(32)
-	inboxId := test.RandomInboxId()
 
-	err := store.CreateInstallation(ctx, installationId, inboxId, keyPackage, 0)
+	err := store.CreateOrUpdateInstallation(ctx, installationId, keyPackage)
 	require.NoError(t, err)
 
 	fetchResult, err := store.FetchKeyPackages(ctx, [][]byte{installationId})
