@@ -604,7 +604,8 @@
       "properties": {
         "data": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "title": "Serialized MlsProtocolMessage"
         },
         "senderHmac": {
           "type": "string",
