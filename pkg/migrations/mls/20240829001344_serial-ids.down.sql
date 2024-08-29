@@ -1,9 +1,6 @@
-SET statement_timeout = 0;
+DROP FUNCTION insert_group_message;
 
---bun:split
+DROP FUNCTION insert_welcome_message;
 
-SELECT 1
+DROP FUNCTION insert_inbox_log;
 
---bun:split
-
-SELECT 2
