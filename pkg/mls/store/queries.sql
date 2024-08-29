@@ -59,10 +59,10 @@ RETURNING
 	*;
 
 -- name: InsertInboxLog :one
-INSERT INTO inbox_log(inbox_id, server_timestamp_ns, identity_update_proto)
-	VALUES (decode(@inbox_id, 'hex'), @server_timestamp_ns, @identity_update_proto)
-RETURNING
-	sequence_id;
+SELECT
+	sequence_id
+FROM
+	insert_inbox_log(decode(@inbox_id, 'hex'), @server_timestamp_ns, @identity_update_proto);
 
 -- name: RevokeAddressFromLog :exec
 UPDATE
@@ -111,16 +111,16 @@ WHERE
 	id = ANY (@installation_ids::BYTEA[]);
 
 -- name: InsertGroupMessage :one
-INSERT INTO group_messages(group_id, data, group_id_data_hash)
-	VALUES ($1, $2, $3)
-RETURNING
-	*;
+SELECT
+	*
+FROM
+	insert_group_message(@group_id, @data, @group_id_data_hash);
 
 -- name: InsertWelcomeMessage :one
-INSERT INTO welcome_messages(installation_key, data, installation_key_data_hash, hpke_public_key)
-	VALUES ($1, $2, $3, $4)
-RETURNING
-	*;
+SELECT
+	*
+FROM
+	insert_welcome_message(@installation_key, @data, @installation_key_data_hash, @hpke_public_key);
 
 -- name: GetAllGroupMessages :many
 SELECT
