@@ -20,7 +20,7 @@ CREATE FUNCTION insert_welcome_message(installation_key BYTEA, data BYTEA, insta
 BEGIN
 	PERFORM
 		pg_advisory_xact_lock(hashtext('welcome_messages_sequence'));
-	RETURN QUERY INSERT INTO group_messages(installation_key, data, installation_key_data_hash, hpke_public_key)
+	RETURN QUERY INSERT INTO welcome_messages(installation_key, data, installation_key_data_hash, hpke_public_key)
 		VALUES(installation_key, data, installation_key_data_hash, hpke_public_key)
 	RETURNING
 		*;
