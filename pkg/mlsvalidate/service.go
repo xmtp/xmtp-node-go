@@ -42,7 +42,6 @@ type IdentityInput struct {
 
 type MLSValidationService interface {
 	ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]InboxIdValidationResult, error)
-	ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
 	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
 	GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error)
 }
@@ -109,39 +108,15 @@ func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Contex
 	return out, nil
 }
 
-func (s *MLSValidationServiceImpl) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error) {
-	req := makeValidateKeyPackageRequest(keyPackages, false)
-
-	response, err := s.grpcClient.ValidateKeyPackages(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]IdentityValidationResult, len(response.Responses))
-	for i, response := range response.Responses {
-		if !response.IsOk {
-			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
-		}
-		out[i] = IdentityValidationResult{
-			AccountAddress:     response.AccountAddress,
-			InstallationKey:    response.InstallationId,
-			CredentialIdentity: response.CredentialIdentityBytes,
-			Expiration:         response.Expiration,
-		}
-	}
-
-	return out, nil
-}
-
-func makeValidateKeyPackageRequest(keyPackageBytes [][]byte, isInboxIdCredential bool) *svc.ValidateKeyPackagesRequest {
-	keyPackageRequests := make([]*svc.ValidateKeyPackagesRequest_KeyPackage, len(keyPackageBytes))
+func makeValidateKeyPackageRequest(keyPackageBytes [][]byte, isInboxIdCredential bool) *svc.ValidateInboxIdKeyPackagesRequest {
+	keyPackageRequests := make([]*svc.ValidateInboxIdKeyPackagesRequest_KeyPackage, len(keyPackageBytes))
 	for i, keyPackage := range keyPackageBytes {
-		keyPackageRequests[i] = &svc.ValidateKeyPackagesRequest_KeyPackage{
+		keyPackageRequests[i] = &svc.ValidateInboxIdKeyPackagesRequest_KeyPackage{
 			KeyPackageBytesTlsSerialized: keyPackage,
 			IsInboxIdCredential:          isInboxIdCredential,
 		}
 	}
-	return &svc.ValidateKeyPackagesRequest{
+	return &svc.ValidateInboxIdKeyPackagesRequest{
 		KeyPackages: keyPackageRequests,
 	}
 }

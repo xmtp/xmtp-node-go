@@ -113,34 +113,6 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 	return nil
 }
 
-/*
-*
-DEPRECATED: Use UploadKeyPackage instead
-*
-*/
-func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterInstallationRequest) (*mlsv1.RegisterInstallationResponse, error) {
-	if err := validateRegisterInstallationRequest(req); err != nil {
-		return nil, err
-	}
-
-	results, err := s.validationService.ValidateInboxIdKeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
-	}
-
-	if len(results) != 1 {
-		return nil, status.Errorf(codes.Internal, "unexpected number of results: %d", len(results))
-	}
-
-	installationKey := results[0].InstallationKey
-	if err = s.store.CreateOrUpdateInstallation(ctx, installationKey, req.KeyPackage.KeyPackageTlsSerialized); err != nil {
-		return nil, err
-	}
-	return &mlsv1.RegisterInstallationResponse{
-		InstallationKey: installationKey,
-	}, nil
-}
-
 func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPackagesRequest) (*mlsv1.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationKeys
 	installations, err := s.store.FetchKeyPackages(ctx, ids)
@@ -189,14 +161,6 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPack
 	}
 
 	return &emptypb.Empty{}, nil
-}
-
-func (s *Service) RevokeInstallation(ctx context.Context, req *mlsv1.RevokeInstallationRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "unimplemented")
-}
-
-func (s *Service) GetIdentityUpdates(ctx context.Context, req *mlsv1.GetIdentityUpdatesRequest) (res *mlsv1.GetIdentityUpdatesResponse, err error) {
-	return nil, status.Error(codes.Unimplemented, "unimplemented")
 }
 
 func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
@@ -548,13 +512,6 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 		if len(v1.Data) == 0 || len(v1.InstallationKey) == 0 || len(v1.HpkePublicKey) == 0 {
 			return status.Error(codes.InvalidArgument, "invalid welcome message")
 		}
-	}
-	return nil
-}
-
-func validateRegisterInstallationRequest(req *mlsv1.RegisterInstallationRequest) error {
-	if req == nil || req.KeyPackage == nil {
-		return status.Error(codes.InvalidArgument, "no key package")
 	}
 	return nil
 }
