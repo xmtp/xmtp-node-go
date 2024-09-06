@@ -135,7 +135,7 @@
       },
       "title": "Single subscription request for envelopes"
     },
-    "associationsRecoverableEcdsaSignature": {
+    "identityassociationsRecoverableEcdsaSignature": {
       "type": "object",
       "properties": {
         "bytes": {
@@ -194,7 +194,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/xmtpv4OriginatorEnvelope"
+            "$ref": "#/definitions/xmtpv4GatewayEnvelope"
           }
         }
       },
@@ -222,16 +222,34 @@
           "format": "byte",
           "title": "Client queries"
         },
-        "originatorNodeId": {
+        "originatorId": {
           "type": "integer",
           "format": "int64",
           "title": "Node queries"
         },
-        "lastSeen": {
-          "$ref": "#/definitions/xmtpv4VectorClock"
+        "originatorSid": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "gatewaySid": {
+          "type": "string",
+          "format": "uint64"
         }
       },
       "title": "Query for envelopes, shared by query and subscribe endpoints"
+    },
+    "xmtpv4GatewayEnvelope": {
+      "type": "object",
+      "properties": {
+        "gatewaySid": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "originatorEnvelope": {
+          "$ref": "#/definitions/xmtpv4OriginatorEnvelope"
+        }
+      },
+      "title": "Wraps originator envelope with a sequence ID assigned by the gateway"
     },
     "xmtpv4OriginatorEnvelope": {
       "type": "object",
@@ -242,7 +260,7 @@
           "title": "Protobuf serialized"
         },
         "originatorSignature": {
-          "$ref": "#/definitions/associationsRecoverableEcdsaSignature"
+          "$ref": "#/definitions/identityassociationsRecoverableEcdsaSignature"
         },
         "blockchainProof": {
           "$ref": "#/definitions/xmtpv4BlockchainProof"
@@ -259,7 +277,7 @@
           "title": "Protobuf serialized"
         },
         "payerSignature": {
-          "$ref": "#/definitions/associationsRecoverableEcdsaSignature"
+          "$ref": "#/definitions/identityassociationsRecoverableEcdsaSignature"
         }
       },
       "title": "Wraps client envelope with payer signature"
@@ -300,24 +318,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/xmtpv4OriginatorEnvelope"
+            "$ref": "#/definitions/xmtpv4GatewayEnvelope"
           }
         }
       },
       "title": "Query envelopes response"
-    },
-    "xmtpv4VectorClock": {
-      "type": "object",
-      "properties": {
-        "originatorSids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uint64"
-          }
-        }
-      },
-      "description": "The last seen entry per originator. Originators that have not been seen are omitted.\nEntries MUST be sorted in ascending order, so that smaller node ID's appear first."
     }
   }
 }
