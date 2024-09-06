@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -74,6 +75,50 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 	}
 }
 
+func TestRegisterInstallation(t *testing.T) {
+	ctx := context.Background()
+	svc, mlsDb, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := test.RandomBytes(32)
+	keyPackage := []byte("test")
+
+	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, test.RandomInboxId())
+
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
+			KeyPackageTlsSerialized: keyPackage,
+		},
+		IsInboxIdCredential: false,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, installationId, res.InstallationKey)
+
+	installation, err := queries.New(mlsDb.DB).GetInstallation(ctx, installationId)
+	require.NoError(t, err)
+
+	require.Equal(t, installationId, installation.ID)
+	require.Equal(t, []byte("test"), installation.KeyPackage)
+}
+
+func TestRegisterInstallationError(t *testing.T) {
+	ctx := context.Background()
+	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	mlsValidationService.EXPECT().ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).Return(nil, errors.New("error validating"))
+
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
+		KeyPackage: &mlsv1.KeyPackageUpload{
+			KeyPackageTlsSerialized: []byte("test"),
+		},
+		IsInboxIdCredential: false,
+	})
+	require.Error(t, err)
+	require.Nil(t, res)
+}
+
 func TestUploadKeyPackage(t *testing.T) {
 	ctx := context.Background()
 	svc, mlsDb, mlsValidationService, cleanup := newTestService(t, ctx)
@@ -84,7 +129,7 @@ func TestUploadKeyPackage(t *testing.T) {
 
 	mockValidateInboxIdKeyPackages(mlsValidationService, installationId, inboxId)
 
-	res, err := svc.UploadKeyPackage(ctx, &mlsv1.UploadKeyPackageRequest{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
@@ -117,7 +162,7 @@ func TestFetchKeyPackages(t *testing.T) {
 
 	mockCall := mockValidateInboxIdKeyPackages(mlsValidationService, installationId1, inboxId)
 
-	res, err := svc.UploadKeyPackage(ctx, &mlsv1.UploadKeyPackageRequest{
+	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test"),
 		},
@@ -133,7 +178,7 @@ func TestFetchKeyPackages(t *testing.T) {
 
 	mockValidateInboxIdKeyPackages(mlsValidationService, installationId2, inboxId)
 
-	res, err = svc.UploadKeyPackage(ctx, &mlsv1.UploadKeyPackageRequest{
+	res, err = svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
 			KeyPackageTlsSerialized: []byte("test2"),
 		},
