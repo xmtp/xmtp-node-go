@@ -379,6 +379,8 @@ func preflightHandler(w http.ResponseWriter, r *http.Request) {
 		"Sec-CH-UA-Platform",
 		"Sentry-Trace",
 		"User-Agent",
+		"x-libxmtp-version",
+		"x-app-version",
 	}
 	w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ","))
 	methods := []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
