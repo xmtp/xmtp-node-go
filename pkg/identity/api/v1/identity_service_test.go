@@ -55,6 +55,12 @@ func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(ctx context.Cont
 	return nil, nil
 }
 
+func (m *mockedMLSValidationService) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
+	args := m.Called(ctx, req)
+
+	return args.Get(0).(*identity.VerifySmartContractWalletSignaturesResponse), args.Error(1)
+}
+
 func newMockedValidationService() *mockedMLSValidationService {
 	return new(mockedMLSValidationService)
 }
