@@ -53,7 +53,7 @@
       "type": "object",
       "properties": {
         "credential": {
-          "$ref": "#/definitions/xmtpidentityMlsCredential"
+          "$ref": "#/definitions/identityMlsCredential"
         },
         "installationPublicKey": {
           "type": "string",
@@ -204,7 +204,7 @@
           "$ref": "#/definitions/message_contentsSignedPublicKey"
         },
         "signature": {
-          "$ref": "#/definitions/identityassociationsRecoverableEcdsaSignature"
+          "$ref": "#/definitions/associationsRecoverableEcdsaSignature"
         }
       },
       "description": "An existing address on xmtpv2 may have already signed a legacy identity key\nof type SignedPublicKey via the 'Create Identity' signature.\nFor migration to xmtpv3, the legacy key is permitted to sign on behalf of the\naddress to create a matching xmtpv3 installation key.\nThis signature type can ONLY be used for CreateXid and AddAssociation\npayloads, and can only be used once in xmtpv3."
@@ -217,6 +217,10 @@
         },
         "addedByEntity": {
           "$ref": "#/definitions/associationsMemberIdentifier"
+        },
+        "clientTimestampNs": {
+          "type": "string",
+          "format": "uint64"
         }
       },
       "title": "single member that optionally indicates the member that added them"
@@ -245,6 +249,17 @@
         }
       },
       "title": "Map of members belonging to an inbox_id"
+    },
+    "associationsRecoverableEcdsaSignature": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "string",
+          "format": "byte",
+          "title": "65-bytes [ R || S || V ], with recovery id as the last byte"
+        }
+      },
+      "title": "RecoverableEcdsaSignature for EIP-191 and V2 signatures"
     },
     "associationsRecoverableEd25519Signature": {
       "type": "object",
@@ -290,30 +305,24 @@
           "type": "string",
           "format": "byte",
           "title": "The actual signature bytes"
-        },
-        "chainRpcUrl": {
-          "type": "string",
-          "title": "The RPC URL specifies a chain to verify the signature against"
         }
       },
       "title": "Smart Contract Wallet signature"
     },
-    "identityassociationsRecoverableEcdsaSignature": {
+    "identityMlsCredential": {
       "type": "object",
       "properties": {
-        "bytes": {
-          "type": "string",
-          "format": "byte",
-          "title": "65-bytes [ R || S || V ], with recovery id as the last byte"
+        "inboxId": {
+          "type": "string"
         }
       },
-      "title": "RecoverableEcdsaSignature for EIP-191 and V2 signatures"
+      "title": "A credential that can be used in MLS leaf nodes"
     },
     "identityassociationsSignature": {
       "type": "object",
       "properties": {
         "erc191": {
-          "$ref": "#/definitions/identityassociationsRecoverableEcdsaSignature"
+          "$ref": "#/definitions/associationsRecoverableEcdsaSignature"
         },
         "erc6492": {
           "$ref": "#/definitions/associationsSmartContractWalletSignature"
@@ -382,6 +391,19 @@
       },
       "title": "Response to GetAssociationStateRequest, containing the final association state\nfor an InboxID"
     },
+    "v1UnverifiedSmartContractWalletSignature": {
+      "type": "object",
+      "properties": {
+        "scwSignature": {
+          "$ref": "#/definitions/associationsSmartContractWalletSignature"
+        },
+        "hash": {
+          "type": "string",
+          "format": "byte",
+          "title": "SHA256 hash of the signature payload"
+        }
+      }
+    },
     "v1ValidateGroupMessagesRequestGroupMessage": {
       "type": "object",
       "properties": {
@@ -443,7 +465,7 @@
           "type": "string"
         },
         "credential": {
-          "$ref": "#/definitions/xmtpidentityMlsCredential"
+          "$ref": "#/definitions/identityMlsCredential"
         },
         "installationPublicKey": {
           "type": "string",
@@ -538,14 +560,28 @@
       },
       "title": "An individual response to one key package"
     },
-    "xmtpidentityMlsCredential": {
+    "v1VerifySmartContractWalletSignaturesResponse": {
       "type": "object",
       "properties": {
-        "inboxId": {
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VerifySmartContractWalletSignaturesResponseValidationResponse"
+          }
+        }
+      }
+    },
+    "v1VerifySmartContractWalletSignaturesResponseValidationResponse": {
+      "type": "object",
+      "properties": {
+        "isValid": {
+          "type": "boolean"
+        },
+        "error": {
           "type": "string"
         }
-      },
-      "title": "A credential that can be used in MLS leaf nodes"
+      }
     },
     "xmtpmessage_contentsSignature": {
       "type": "object",

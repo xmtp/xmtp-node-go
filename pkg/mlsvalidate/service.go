@@ -45,6 +45,7 @@ type MLSValidationService interface {
 	ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
 	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
 	GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error)
+	VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error)
 }
 
 type IdentityStore interface {
@@ -177,4 +178,8 @@ func makeValidateGroupMessagesRequest(groupMessages []*mlsv1.GroupMessageInput) 
 	return &svc.ValidateGroupMessagesRequest{
 		GroupMessages: groupMessageRequests,
 	}
+}
+
+func (s *MLSValidationServiceImpl) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
+	return s.grpcClient.VerifySmartContractWalletSignatures(ctx, req)
 }
