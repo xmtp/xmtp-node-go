@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	svc "github.com/xmtp/xmtp-node-go/pkg/proto/mls_validation/v1"
 	"google.golang.org/grpc"
 )
@@ -40,6 +41,12 @@ func (m *MockedGRPCService) ValidateInboxIds(ctx context.Context, req *svc.Valid
 	args := m.Called(ctx, req)
 
 	return args.Get(0).(*svc.ValidateInboxIdsResponse), args.Error(1)
+}
+
+func (m *MockedGRPCService) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest, opts ...grpc.CallOption) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
+	args := m.Called(ctx, req)
+
+	return args.Get(0).(*identity.VerifySmartContractWalletSignaturesResponse), args.Error(1)
 }
 
 func getMockedService() (*MockedGRPCService, MLSValidationService) {

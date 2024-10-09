@@ -10,6 +10,7 @@ package mls_validationv1
 
 import (
 	context "context"
+	v1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -21,11 +22,12 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ValidationApi_ValidateKeyPackages_FullMethodName        = "/xmtp.mls_validation.v1.ValidationApi/ValidateKeyPackages"
-	ValidationApi_ValidateGroupMessages_FullMethodName      = "/xmtp.mls_validation.v1.ValidationApi/ValidateGroupMessages"
-	ValidationApi_GetAssociationState_FullMethodName        = "/xmtp.mls_validation.v1.ValidationApi/GetAssociationState"
-	ValidationApi_ValidateInboxIdKeyPackages_FullMethodName = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIdKeyPackages"
-	ValidationApi_ValidateInboxIds_FullMethodName           = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIds"
+	ValidationApi_ValidateKeyPackages_FullMethodName                 = "/xmtp.mls_validation.v1.ValidationApi/ValidateKeyPackages"
+	ValidationApi_ValidateGroupMessages_FullMethodName               = "/xmtp.mls_validation.v1.ValidationApi/ValidateGroupMessages"
+	ValidationApi_GetAssociationState_FullMethodName                 = "/xmtp.mls_validation.v1.ValidationApi/GetAssociationState"
+	ValidationApi_ValidateInboxIdKeyPackages_FullMethodName          = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIdKeyPackages"
+	ValidationApi_ValidateInboxIds_FullMethodName                    = "/xmtp.mls_validation.v1.ValidationApi/ValidateInboxIds"
+	ValidationApi_VerifySmartContractWalletSignatures_FullMethodName = "/xmtp.mls_validation.v1.ValidationApi/VerifySmartContractWalletSignatures"
 )
 
 // ValidationApiClient is the client API for ValidationApi service.
@@ -44,6 +46,9 @@ type ValidationApiClient interface {
 	// Validate an InboxID Key Package
 	// need public key possibly
 	ValidateInboxIds(ctx context.Context, in *ValidateInboxIdsRequest, opts ...grpc.CallOption) (*ValidateInboxIdsResponse, error)
+	// Verifies smart contracts
+	// This request is proxied from the node, so we'll reuse those messgaes.
+	VerifySmartContractWalletSignatures(ctx context.Context, in *v1.VerifySmartContractWalletSignaturesRequest, opts ...grpc.CallOption) (*v1.VerifySmartContractWalletSignaturesResponse, error)
 }
 
 type validationApiClient struct {
@@ -99,6 +104,15 @@ func (c *validationApiClient) ValidateInboxIds(ctx context.Context, in *Validate
 	return out, nil
 }
 
+func (c *validationApiClient) VerifySmartContractWalletSignatures(ctx context.Context, in *v1.VerifySmartContractWalletSignaturesRequest, opts ...grpc.CallOption) (*v1.VerifySmartContractWalletSignaturesResponse, error) {
+	out := new(v1.VerifySmartContractWalletSignaturesResponse)
+	err := c.cc.Invoke(ctx, ValidationApi_VerifySmartContractWalletSignatures_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ValidationApiServer is the server API for ValidationApi service.
 // All implementations must embed UnimplementedValidationApiServer
 // for forward compatibility
@@ -115,6 +129,9 @@ type ValidationApiServer interface {
 	// Validate an InboxID Key Package
 	// need public key possibly
 	ValidateInboxIds(context.Context, *ValidateInboxIdsRequest) (*ValidateInboxIdsResponse, error)
+	// Verifies smart contracts
+	// This request is proxied from the node, so we'll reuse those messgaes.
+	VerifySmartContractWalletSignatures(context.Context, *v1.VerifySmartContractWalletSignaturesRequest) (*v1.VerifySmartContractWalletSignaturesResponse, error)
 	mustEmbedUnimplementedValidationApiServer()
 }
 
@@ -136,6 +153,9 @@ func (UnimplementedValidationApiServer) ValidateInboxIdKeyPackages(context.Conte
 }
 func (UnimplementedValidationApiServer) ValidateInboxIds(context.Context, *ValidateInboxIdsRequest) (*ValidateInboxIdsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateInboxIds not implemented")
+}
+func (UnimplementedValidationApiServer) VerifySmartContractWalletSignatures(context.Context, *v1.VerifySmartContractWalletSignaturesRequest) (*v1.VerifySmartContractWalletSignaturesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifySmartContractWalletSignatures not implemented")
 }
 func (UnimplementedValidationApiServer) mustEmbedUnimplementedValidationApiServer() {}
 
@@ -240,6 +260,24 @@ func _ValidationApi_ValidateInboxIds_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ValidationApi_VerifySmartContractWalletSignatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(v1.VerifySmartContractWalletSignaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ValidationApiServer).VerifySmartContractWalletSignatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ValidationApi_VerifySmartContractWalletSignatures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ValidationApiServer).VerifySmartContractWalletSignatures(ctx, req.(*v1.VerifySmartContractWalletSignaturesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ValidationApi_ServiceDesc is the grpc.ServiceDesc for ValidationApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -266,6 +304,10 @@ var ValidationApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateInboxIds",
 			Handler:    _ValidationApi_ValidateInboxIds_Handler,
+		},
+		{
+			MethodName: "VerifySmartContractWalletSignatures",
+			Handler:    _ValidationApi_VerifySmartContractWalletSignatures_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
