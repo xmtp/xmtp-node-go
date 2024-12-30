@@ -3,13 +3,18 @@ package api
 import (
 	"context"
 
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
+	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/metadata"
+	pb "google.golang.org/protobuf/proto"
 )
 
 type Service struct {
@@ -20,16 +25,22 @@ type Service struct {
 	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
+	nc        *nats.Conn
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
 		store:             store,
 		validationService: validationService,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+
+	s.nc, err = nats.Connect(natsServer.ClientURL())
+	if err != nil {
+		return nil, err
+	}
 
 	s.log.Info("Starting identity service")
 	return s, nil
@@ -109,5 +120,47 @@ func (s *Service) SubscribeAssociationChanges(req *identity.SubscribeAssociation
 	log := s.log.Named("subscribe-association-changes")
 	log.Info("subscription started")
 
-	return status.Errorf(codes.Unimplemented, "method SubscribeAssociationChanges not implemented")
+	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
+
+	natsSubject := buildNatsSubjectForAssociationChanges()
+	sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
+		msg, err := getAssociationChangedMessageFromNats(natsMsg)
+		if err != nil {
+			log.Error("parsing message", zap.Error(err))
+		}
+		if err = stream.Send(msg); err != nil {
+			log.Warn("sending message to stream", zap.Error(err))
+		}
+	})
+
+	if err != nil {
+		log.Error("error subscribing to nats", zap.Error(err))
+		return err
+	}
+
+	defer func() {
+		_ = sub.Unsubscribe()
+	}()
+
+	return nil
+}
+
+func buildNatsSubjectForAssociationChanges() string {
+	return envelopes.BuildNatsSubject(topic.BuildAssociationChangedTopic())
+}
+
+func getAssociationChangedMessageFromNats(natsMsg *nats.Msg) (*identity.SubscribeAssociationChangesResponse, error) {
+	var env v1proto.Envelope
+	err := pb.Unmarshal(natsMsg.Data, &env)
+	if err != nil {
+		return nil, err
+	}
+
+	var msg identity.SubscribeAssociationChangesResponse
+	err = pb.Unmarshal(env.Message, &msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &msg, nil
 }
