@@ -8,6 +8,8 @@ import (
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Service struct {
@@ -101,4 +103,11 @@ func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) 
 
 func (s *Service) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
 	return s.validationService.VerifySmartContractWalletSignatures(ctx, req)
+}
+
+func (s *Service) SubscribeAssociationChanges(req *identity.SubscribeAssociationChangesRequest, stream identity.IdentityApi_SubscribeAssociationChangesServer) error {
+	log := s.log.Named("subscribe-association-changes")
+	log.Info("subscription started")
+
+	return status.Errorf(codes.Unimplemented, "method SubscribeAssociationChanges not implemented")
 }

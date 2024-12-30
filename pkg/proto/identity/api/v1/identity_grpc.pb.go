@@ -25,6 +25,7 @@ const (
 	IdentityApi_GetIdentityUpdates_FullMethodName                  = "/xmtp.identity.api.v1.IdentityApi/GetIdentityUpdates"
 	IdentityApi_GetInboxIds_FullMethodName                         = "/xmtp.identity.api.v1.IdentityApi/GetInboxIds"
 	IdentityApi_VerifySmartContractWalletSignatures_FullMethodName = "/xmtp.identity.api.v1.IdentityApi/VerifySmartContractWalletSignatures"
+	IdentityApi_SubscribeAssociationChanges_FullMethodName         = "/xmtp.identity.api.v1.IdentityApi/SubscribeAssociationChanges"
 )
 
 // IdentityApiClient is the client API for IdentityApi service.
@@ -42,6 +43,7 @@ type IdentityApiClient interface {
 	GetInboxIds(ctx context.Context, in *GetInboxIdsRequest, opts ...grpc.CallOption) (*GetInboxIdsResponse, error)
 	// Verify an unverified smart contract wallet signature
 	VerifySmartContractWalletSignatures(ctx context.Context, in *VerifySmartContractWalletSignaturesRequest, opts ...grpc.CallOption) (*VerifySmartContractWalletSignaturesResponse, error)
+	SubscribeAssociationChanges(ctx context.Context, in *SubscribeAssociationChangesRequest, opts ...grpc.CallOption) (IdentityApi_SubscribeAssociationChangesClient, error)
 }
 
 type identityApiClient struct {
@@ -88,6 +90,38 @@ func (c *identityApiClient) VerifySmartContractWalletSignatures(ctx context.Cont
 	return out, nil
 }
 
+func (c *identityApiClient) SubscribeAssociationChanges(ctx context.Context, in *SubscribeAssociationChangesRequest, opts ...grpc.CallOption) (IdentityApi_SubscribeAssociationChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &IdentityApi_ServiceDesc.Streams[0], IdentityApi_SubscribeAssociationChanges_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &identityApiSubscribeAssociationChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type IdentityApi_SubscribeAssociationChangesClient interface {
+	Recv() (*SubscribeAssociationChangesResponse, error)
+	grpc.ClientStream
+}
+
+type identityApiSubscribeAssociationChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *identityApiSubscribeAssociationChangesClient) Recv() (*SubscribeAssociationChangesResponse, error) {
+	m := new(SubscribeAssociationChangesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // IdentityApiServer is the server API for IdentityApi service.
 // All implementations must embed UnimplementedIdentityApiServer
 // for forward compatibility
@@ -103,6 +137,7 @@ type IdentityApiServer interface {
 	GetInboxIds(context.Context, *GetInboxIdsRequest) (*GetInboxIdsResponse, error)
 	// Verify an unverified smart contract wallet signature
 	VerifySmartContractWalletSignatures(context.Context, *VerifySmartContractWalletSignaturesRequest) (*VerifySmartContractWalletSignaturesResponse, error)
+	SubscribeAssociationChanges(*SubscribeAssociationChangesRequest, IdentityApi_SubscribeAssociationChangesServer) error
 	mustEmbedUnimplementedIdentityApiServer()
 }
 
@@ -121,6 +156,9 @@ func (UnimplementedIdentityApiServer) GetInboxIds(context.Context, *GetInboxIdsR
 }
 func (UnimplementedIdentityApiServer) VerifySmartContractWalletSignatures(context.Context, *VerifySmartContractWalletSignaturesRequest) (*VerifySmartContractWalletSignaturesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifySmartContractWalletSignatures not implemented")
+}
+func (UnimplementedIdentityApiServer) SubscribeAssociationChanges(*SubscribeAssociationChangesRequest, IdentityApi_SubscribeAssociationChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeAssociationChanges not implemented")
 }
 func (UnimplementedIdentityApiServer) mustEmbedUnimplementedIdentityApiServer() {}
 
@@ -207,6 +245,27 @@ func _IdentityApi_VerifySmartContractWalletSignatures_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityApi_SubscribeAssociationChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeAssociationChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(IdentityApiServer).SubscribeAssociationChanges(m, &identityApiSubscribeAssociationChangesServer{stream})
+}
+
+type IdentityApi_SubscribeAssociationChangesServer interface {
+	Send(*SubscribeAssociationChangesResponse) error
+	grpc.ServerStream
+}
+
+type identityApiSubscribeAssociationChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *identityApiSubscribeAssociationChangesServer) Send(m *SubscribeAssociationChangesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // IdentityApi_ServiceDesc is the grpc.ServiceDesc for IdentityApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -231,6 +290,12 @@ var IdentityApi_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IdentityApi_VerifySmartContractWalletSignatures_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeAssociationChanges",
+			Handler:       _IdentityApi_SubscribeAssociationChanges_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "identity/api/v1/identity.proto",
 }

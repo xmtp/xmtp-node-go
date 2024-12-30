@@ -135,6 +135,27 @@ func local_request_IdentityApi_VerifySmartContractWalletSignatures_0(ctx context
 
 }
 
+func request_IdentityApi_SubscribeAssociationChanges_0(ctx context.Context, marshaler runtime.Marshaler, client IdentityApiClient, req *http.Request, pathParams map[string]string) (IdentityApi_SubscribeAssociationChangesClient, runtime.ServerMetadata, error) {
+	var protoReq SubscribeAssociationChangesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	stream, err := client.SubscribeAssociationChanges(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+
+}
+
 // RegisterIdentityApiHandlerServer registers the http handlers for service IdentityApi to "mux".
 // UnaryRPC     :call IdentityApiServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -239,6 +260,13 @@ func RegisterIdentityApiHandlerServer(ctx context.Context, mux *runtime.ServeMux
 
 		forward_IdentityApi_VerifySmartContractWalletSignatures_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
+	})
+
+	mux.Handle("POST", pattern_IdentityApi_SubscribeAssociationChanges_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
 	})
 
 	return nil
@@ -370,6 +398,28 @@ func RegisterIdentityApiHandlerClient(ctx context.Context, mux *runtime.ServeMux
 
 	})
 
+	mux.Handle("POST", pattern_IdentityApi_SubscribeAssociationChanges_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/xmtp.identity.api.v1.IdentityApi/SubscribeAssociationChanges", runtime.WithHTTPPathPattern("/identity/v1/subscribe-association-changes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_IdentityApi_SubscribeAssociationChanges_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_IdentityApi_SubscribeAssociationChanges_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -381,6 +431,8 @@ var (
 	pattern_IdentityApi_GetInboxIds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"identity", "v1", "get-inbox-ids"}, ""))
 
 	pattern_IdentityApi_VerifySmartContractWalletSignatures_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"identity", "v1", "verify-smart-contract-wallet-signatures"}, ""))
+
+	pattern_IdentityApi_SubscribeAssociationChanges_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"identity", "v1", "subscribe-association-changes"}, ""))
 )
 
 var (
@@ -391,4 +443,6 @@ var (
 	forward_IdentityApi_GetInboxIds_0 = runtime.ForwardResponseMessage
 
 	forward_IdentityApi_VerifySmartContractWalletSignatures_0 = runtime.ForwardResponseMessage
+
+	forward_IdentityApi_SubscribeAssociationChanges_0 = runtime.ForwardResponseStream
 )
