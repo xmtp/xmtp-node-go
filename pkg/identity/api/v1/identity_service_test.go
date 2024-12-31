@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,13 +10,17 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	associations "github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
+	pb "google.golang.org/protobuf/proto"
 )
+
+const INBOX_ID = "test_inbox"
 
 type mockedMLSValidationService struct {
 	mock.Mock
@@ -39,7 +44,7 @@ func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, ol
 	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x03"}})
 
 	out := mlsvalidate.AssociationStateResult{
-		AssociationState: &associations.AssociationState{InboxId: "test_inbox", Members: member_map, RecoveryAddress: "recovery", SeenSignatures: [][]byte{[]byte("seen"), []byte("sig")}},
+		AssociationState: &associations.AssociationState{InboxId: INBOX_ID, Members: member_map, RecoveryAddress: "recovery", SeenSignatures: [][]byte{[]byte("seen"), []byte("sig")}},
 		StateDiff:        &associations.AssociationStateDiff{NewMembers: new_members, RemovedMembers: nil},
 	}
 	return &out, nil
@@ -83,10 +88,12 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func(
 	if !natsServer.ReadyForConnections(4 * time.Second) {
 		t.Fail()
 	}
-	require.NoError(t, err)
 	mlsValidationService := newMockedValidationService()
+	publishToWakuRelay := func(ctx context.Context, msg *wakupb.WakuMessage) error {
+		return nil
+	}
 
-	svc, err := NewService(log, store, mlsValidationService, natsServer)
+	svc, err := NewService(log, store, mlsValidationService, natsServer, publishToWakuRelay)
 	require.NoError(t, err)
 
 	return svc, db, func() {
@@ -270,4 +277,30 @@ func TestInboxSizeLimit(t *testing.T) {
 	require.Len(t, res.Responses, 1)
 	require.Equal(t, res.Responses[0].InboxId, inbox_id)
 	require.Len(t, res.Responses[0].Updates, 256)
+}
+
+func TestPublishAssociationChanges(t *testing.T) {
+	ctx := context.Background()
+	svc, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	inboxId := test.RandomInboxId()
+	address := "test_address"
+
+	numPublishedToWaku := 0
+	svc.publishToWakuRelay = func(ctx context.Context, wakuMsg *wakupb.WakuMessage) error {
+		numPublishedToWaku++
+		var msg identity.SubscribeAssociationChangesResponse
+		err := pb.Unmarshal(wakuMsg.Payload, &msg)
+		require.NoError(t, err)
+		require.Equal(t, msg.GetAccountAddressAssociation().InboxId, inboxId)
+		require.Equal(t, msg.GetAccountAddressAssociation().AccountAddress, fmt.Sprintf("0x0%d", numPublishedToWaku))
+		return nil
+	}
+
+	_, err := svc.PublishIdentityUpdate(ctx, publishIdentityUpdateRequest(inboxId, makeCreateInbox(address)))
+	require.NoError(t, err)
+
+	// The mocked GetAssociationState always returns 3 new addresses
+	require.Equal(t, numPublishedToWaku, 3)
 }

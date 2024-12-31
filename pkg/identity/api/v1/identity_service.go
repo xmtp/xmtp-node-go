@@ -5,7 +5,9 @@ import (
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
+	identityTypes "github.com/xmtp/xmtp-node-go/pkg/identity/types"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
@@ -24,16 +26,24 @@ type Service struct {
 	store             mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
 
-	ctx       context.Context
-	nc        *nats.Conn
-	ctxCancel func()
+	ctx                context.Context
+	nc                 *nats.Conn
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
+	ctxCancel          func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server) (s *Service, err error) {
+func NewService(
+	log *zap.Logger,
+	store mlsstore.MlsStore,
+	validationService mlsvalidate.MLSValidationService,
+	natsServer *server.Server,
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error,
+) (s *Service, err error) {
 	s = &Service{
-		log:               log.Named("identity"),
-		store:             store,
-		validationService: validationService,
+		log:                log.Named("identity"),
+		store:              store,
+		validationService:  validationService,
+		publishToWakuRelay: publishToWakuRelay,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -90,7 +100,17 @@ Start transaction (SERIALIZABLE isolation level)
 End transaction
 */
 func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
-	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
+	res, err := s.store.PublishIdentityUpdate(ctx, req, s.validationService)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = s.PublishAssociationChangesEvent(ctx, res); err != nil {
+		s.log.Error("error publishing association changes event", zap.Error(err))
+		// Don't return the erro here because the transaction has already been committed
+	}
+
+	return &api.PublishIdentityUpdateResponse{}, nil
 }
 
 func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
@@ -141,6 +161,30 @@ func (s *Service) SubscribeAssociationChanges(req *identity.SubscribeAssociation
 	defer func() {
 		_ = sub.Unsubscribe()
 	}()
+
+	return nil
+}
+
+func (s *Service) PublishAssociationChangesEvent(ctx context.Context, identityUpdateResult *identityTypes.PublishIdentityUpdateResult) error {
+	protoEvents := identityUpdateResult.GetChanges()
+	if len(protoEvents) == 0 {
+		return nil
+	}
+
+	for _, protoEvent := range protoEvents {
+		msgBytes, err := pb.Marshal(protoEvent)
+		if err != nil {
+			return err
+		}
+
+		if err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
+			ContentTopic: topic.AssociationChangedTopic,
+			Timestamp:    int64(identityUpdateResult.TimestampNs),
+			Payload:      msgBytes,
+		}); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

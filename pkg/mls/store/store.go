@@ -10,6 +10,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
+	identityTypes "github.com/xmtp/xmtp-node-go/pkg/identity/types"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -31,7 +32,7 @@ type Store struct {
 }
 
 type IdentityStore interface {
-	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error)
+	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identityTypes.PublishIdentityUpdateResult, error)
 	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
 	GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error)
 }
@@ -99,13 +100,21 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 	}, nil
 }
 
-func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error) {
+func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identityTypes.PublishIdentityUpdateResult, error) {
 	newUpdate := req.GetIdentityUpdate()
 	if newUpdate == nil {
 		return nil, errors.New("IdentityUpdate is required")
 	}
 
+	now := nowNs()
+	var newAccountAddresses []string
+	var revokedAccountAddresses []string
+
 	if err := s.RunInRepeatableReadTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
+		// Reset these lists to allow for safe retries of the TX
+		newAccountAddresses = make([]string, 0)
+		revokedAccountAddresses = make([]string, 0)
+
 		inboxId := newUpdate.GetInboxId()
 		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
 		// This allows the lock to be enforced even when there are no existing `inbox_log`s
@@ -144,7 +153,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 		sequence_id, err := txQueries.InsertInboxLog(ctx, queries.InsertInboxLogParams{
 			InboxID:             inboxId,
-			ServerTimestampNs:   nowNs(),
+			ServerTimestampNs:   now,
 			IdentityUpdateProto: protoBytes,
 		})
 
@@ -157,6 +166,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		for _, new_member := range state.StateDiff.NewMembers {
 			log.Info("New member", zap.Any("member", new_member))
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
+				newAccountAddresses = append(newAccountAddresses, address.Address)
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.Address,
 					InboxID:               inboxId,
@@ -172,6 +182,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		for _, removed_member := range state.StateDiff.RemovedMembers {
 			log.Info("Removed member", zap.Any("member", removed_member))
 			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
+				revokedAccountAddresses = append(revokedAccountAddresses, address.Address)
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Address:              address.Address,
 					InboxID:              inboxId,
@@ -188,7 +199,16 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 		return nil, err
 	}
 
-	return &identity.PublishIdentityUpdateResponse{}, nil
+	result := identityTypes.NewPublishIdentityUpdateResult(
+		req.IdentityUpdate.InboxId,
+		uint64(now),
+		newAccountAddresses,
+		revokedAccountAddresses,
+		[][]byte{}, // TODO: Handle installations added
+		[][]byte{}, // TODO: Handle installations revoked
+	)
+
+	return result, nil
 }
 
 func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error) {
