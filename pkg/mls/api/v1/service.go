@@ -73,26 +73,19 @@ func (s *Service) Close() {
 }
 
 func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
-	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
-		s.log.Info("received group message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+	isMlsGroup := topic.IsMLSV1Group(wakuMsg.ContentTopic)
+	isMlsWelcome := topic.IsMLSV1Welcome(wakuMsg.ContentTopic)
+	isAssociationChanged := topic.IsAssociationChanged(wakuMsg.ContentTopic)
+	if isMlsGroup || isMlsWelcome || isAssociationChanged {
+		if isMlsGroup {
+			s.log.Info("received group message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+		} else if isMlsWelcome {
+			s.log.Info("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+		} else if isAssociationChanged {
+			s.log.Info("received association changed message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+		}
 
 		// Build the nats subject from the topic
-		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
-		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
-		env := envelopes.BuildEnvelope(wakuMsg)
-		envB, err := pb.Marshal(env)
-		if err != nil {
-			return err
-		}
-
-		err = s.nc.Publish(natsSubject, envB)
-		if err != nil {
-			s.log.Error("error publishing to nats", zap.Error(err))
-			return err
-		}
-	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
-		s.log.Info("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-
 		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
 		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
 		env := envelopes.BuildEnvelope(wakuMsg)

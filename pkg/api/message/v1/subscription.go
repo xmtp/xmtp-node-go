@@ -153,5 +153,5 @@ func (sub *subscription) Unsubscribe() {
 }
 
 func isValidSubscribeAllTopic(contentTopic string) bool {
-	return strings.HasPrefix(contentTopic, validXMTPTopicPrefix) || topic.IsMLSV1(contentTopic)
+	return strings.HasPrefix(contentTopic, validXMTPTopicPrefix) || (topic.IsMLSV1(contentTopic) && !topic.IsAssociationChanged(contentTopic))
 }
