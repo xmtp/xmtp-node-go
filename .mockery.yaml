@@ -1,5 +1,12 @@
 with-expecter: true
 packages:
+  github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1:
+    config:
+      dir: ./pkg/mocks
+      outpkg: mocks
+    interfaces:
+      IdentityApi_SubscribeAssociationChangesServer:
+        config:
   github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1:
     config:
       dir: ./pkg/mocks
