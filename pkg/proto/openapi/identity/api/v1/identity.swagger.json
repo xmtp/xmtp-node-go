@@ -115,6 +115,47 @@
         ]
       }
     },
+    "/identity/v1/subscribe-association-changes": {
+      "post": {
+        "operationId": "IdentityApi_SubscribeAssociationChanges",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1SubscribeAssociationChangesResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1SubscribeAssociationChangesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubscribeAssociationChangesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IdentityApi"
+        ]
+      }
+    },
     "/identity/v1/verify-smart-contract-wallet-signatures": {
       "post": {
         "summary": "Verify an unverified smart contract wallet signature",
@@ -198,6 +239,30 @@
         }
       },
       "description": "ECDSA signature bytes and the recovery bit\nproduced by xmtp-js::PublicKey.signWithWallet function, i.e.\nEIP-191 signature of a \"Create Identity\" message with the key embedded.\nUsed to sign identity keys."
+    },
+    "SubscribeAssociationChangesResponseAccountAddressAssociation": {
+      "type": "object",
+      "properties": {
+        "accountAddress": {
+          "type": "string"
+        },
+        "inboxId": {
+          "type": "string"
+        }
+      },
+      "title": "A change in account_address -\u003e inbox_id association"
+    },
+    "SubscribeAssociationChangesResponseAccountAddressRevocation": {
+      "type": "object",
+      "properties": {
+        "accountAddress": {
+          "type": "string"
+        },
+        "inboxId": {
+          "type": "string"
+        }
+      },
+      "title": "A revocation of an account_address -\u003e inbox_id association"
     },
     "apiv1GetInboxIdsRequest": {
       "type": "object",
@@ -514,6 +579,25 @@
     "v1PublishIdentityUpdateResponse": {
       "type": "object",
       "title": "The response when an identity update is published"
+    },
+    "v1SubscribeAssociationChangesRequest": {
+      "type": "object",
+      "title": "Request to subscribe to association changes, triggered by Identity Updates"
+    },
+    "v1SubscribeAssociationChangesResponse": {
+      "type": "object",
+      "properties": {
+        "timestampNs": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "accountAddressAssociation": {
+          "$ref": "#/definitions/SubscribeAssociationChangesResponseAccountAddressAssociation"
+        },
+        "accountAddressRevocation": {
+          "$ref": "#/definitions/SubscribeAssociationChangesResponseAccountAddressRevocation"
+        }
+      }
     },
     "v1VerifySmartContractWalletSignatureRequestSignature": {
       "type": "object",
