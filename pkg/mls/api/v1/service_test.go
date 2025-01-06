@@ -352,6 +352,8 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data1"),
+					SenderHmac: []byte("hmac1"),
+
 				},
 			},
 		},
@@ -359,6 +361,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data2"),
+					SenderHmac: []byte("hmac2"),
 				},
 			},
 		},
@@ -366,6 +369,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data3"),
+					SenderHmac: []byte("hmac3"),
 				},
 			},
 		},
@@ -387,7 +391,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 					CreatedNs:  uint64(i + 4),
 					GroupId:    groupId,
 					Data:       []byte(fmt.Sprintf("data%d", i+4)),
-					SenderHmac: []byte(fmt.Sprintf("data%d", i+5)),
+					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+4)),
 				},
 			},
 		}
@@ -400,7 +404,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			V1: &mlsv1.GroupMessage_V1{
 				Id:   3,
 				Data: []byte("data3"),
-				SenderHmac: []byte("data4"),
+				SenderHmac: []byte("hmac3"),
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
@@ -630,7 +634,8 @@ func newGroupMessageIdAndDataEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessag
 
 func (m *groupMessageIdAndDataEqualsMatcher) Matches(obj interface{}) bool {
 	return m.obj.GetV1().Id == obj.(*mlsv1.GroupMessage).GetV1().Id &&
-		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data)
+		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data) &&
+		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac)
 }
 
 func (m *groupMessageIdAndDataEqualsMatcher) String() string {
