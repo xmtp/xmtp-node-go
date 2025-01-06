@@ -383,10 +383,11 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		msgs[i] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(i + 4),
-					CreatedNs: uint64(i + 4),
-					GroupId:   groupId,
-					Data:      []byte(fmt.Sprintf("data%d", i+4)),
+					Id:         uint64(i + 4),
+					CreatedNs:  uint64(i + 4),
+					GroupId:    groupId,
+					Data:       []byte(fmt.Sprintf("data%d", i+4)),
+					SenderHmac: []byte(fmt.Sprintf("data%d", i+5)),
 				},
 			},
 		}
@@ -399,6 +400,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			V1: &mlsv1.GroupMessage_V1{
 				Id:   3,
 				Data: []byte("data3"),
+				SenderHmac: []byte("data4"),
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
