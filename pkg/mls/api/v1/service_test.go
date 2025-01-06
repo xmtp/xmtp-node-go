@@ -299,6 +299,7 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 					CreatedNs: uint64(i + 1),
 					GroupId:   groupId,
 					Data:      []byte(fmt.Sprintf("data%d", i+1)),
+					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 				},
 			},
 		}
@@ -404,7 +405,6 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			V1: &mlsv1.GroupMessage_V1{
 				Id:   3,
 				Data: []byte("data3"),
-				SenderHmac: []byte("hmac3"),
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
@@ -617,7 +617,8 @@ func newGroupMessageEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessageEqualsMa
 }
 
 func (m *groupMessageEqualsMatcher) Matches(obj interface{}) bool {
-	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage))
+	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage)) &&
+		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac)
 }
 
 func (m *groupMessageEqualsMatcher) String() string {
