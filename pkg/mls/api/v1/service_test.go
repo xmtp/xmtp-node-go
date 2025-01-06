@@ -299,6 +299,7 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 					CreatedNs: uint64(i + 1),
 					GroupId:   groupId,
 					Data:      []byte(fmt.Sprintf("data%d", i+1)),
+					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 				},
 			},
 		}
@@ -352,6 +353,8 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data1"),
+					SenderHmac: []byte("hmac1"),
+
 				},
 			},
 		},
@@ -359,6 +362,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data2"),
+					SenderHmac: []byte("hmac2"),
 				},
 			},
 		},
@@ -366,6 +370,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
 					Data: []byte("data3"),
+					SenderHmac: []byte("hmac3"),
 				},
 			},
 		},
@@ -383,10 +388,11 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		msgs[i] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(i + 4),
-					CreatedNs: uint64(i + 4),
-					GroupId:   groupId,
-					Data:      []byte(fmt.Sprintf("data%d", i+4)),
+					Id:         uint64(i + 4),
+					CreatedNs:  uint64(i + 4),
+					GroupId:    groupId,
+					Data:       []byte(fmt.Sprintf("data%d", i+4)),
+					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+4)),
 				},
 			},
 		}
@@ -611,7 +617,8 @@ func newGroupMessageEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessageEqualsMa
 }
 
 func (m *groupMessageEqualsMatcher) Matches(obj interface{}) bool {
-	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage))
+	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage)) &&
+		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac)
 }
 
 func (m *groupMessageEqualsMatcher) String() string {
@@ -628,7 +635,8 @@ func newGroupMessageIdAndDataEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessag
 
 func (m *groupMessageIdAndDataEqualsMatcher) Matches(obj interface{}) bool {
 	return m.obj.GetV1().Id == obj.(*mlsv1.GroupMessage).GetV1().Id &&
-		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data)
+		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data) &&
+		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac)
 }
 
 func (m *groupMessageIdAndDataEqualsMatcher) String() string {

@@ -226,7 +226,9 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			log.Warn("invalid group id", zap.Error(err))
 			return nil, status.Error(codes.InvalidArgument, "invalid group id")
 		}
-		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, input.GetV1().Data)
+
+		msgV1 := input.GetV1()
+		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, msgV1.Data)
 		if err != nil {
 			log.Warn("error inserting message", zap.Error(err))
 			if mlsstore.IsAlreadyExistsError(err) {
@@ -242,6 +244,7 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
 					GroupId:   msg.GroupID,
 					Data:      msg.Data,
+					SenderHmac: msgV1.SenderHmac,
 				},
 			},
 		})
