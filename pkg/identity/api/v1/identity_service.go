@@ -162,7 +162,12 @@ func (s *Service) SubscribeAssociationChanges(req *identity.SubscribeAssociation
 		_ = sub.Unsubscribe()
 	}()
 
-	return nil
+	select {
+	case <-stream.Context().Done():
+		return nil
+	case <-s.ctx.Done():
+		return nil
+	}
 }
 
 func (s *Service) PublishAssociationChangesEvent(ctx context.Context, identityUpdateResult *identityTypes.PublishIdentityUpdateResult) error {
