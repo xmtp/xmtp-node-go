@@ -42,7 +42,6 @@ type IdentityInput struct {
 
 type MLSValidationService interface {
 	ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]InboxIdValidationResult, error)
-	ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error)
 	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
 	GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error)
 	VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error)
@@ -107,30 +106,6 @@ func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Contex
 			Expiration:      response.Expiration,
 		}
 	}
-	return out, nil
-}
-
-func (s *MLSValidationServiceImpl) ValidateV3KeyPackages(ctx context.Context, keyPackages [][]byte) ([]IdentityValidationResult, error) {
-	req := makeValidateKeyPackageRequest(keyPackages, false)
-
-	response, err := s.grpcClient.ValidateKeyPackages(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]IdentityValidationResult, len(response.Responses))
-	for i, response := range response.Responses {
-		if !response.IsOk {
-			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
-		}
-		out[i] = IdentityValidationResult{
-			AccountAddress:     response.AccountAddress,
-			InstallationKey:    response.InstallationId,
-			CredentialIdentity: response.CredentialIdentityBytes,
-			Expiration:         response.Expiration,
-		}
-	}
-
 	return out, nil
 }
 
