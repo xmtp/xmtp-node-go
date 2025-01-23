@@ -37,12 +37,6 @@ func (m *MockedGRPCService) ValidateInboxIdKeyPackages(ctx context.Context, req 
 	return args.Get(0).(*svc.ValidateInboxIdKeyPackagesResponse), args.Error(1)
 }
 
-func (m *MockedGRPCService) ValidateInboxIds(ctx context.Context, req *svc.ValidateInboxIdsRequest, opts ...grpc.CallOption) (*svc.ValidateInboxIdsResponse, error) {
-	args := m.Called(ctx, req)
-
-	return args.Get(0).(*svc.ValidateInboxIdsResponse), args.Error(1)
-}
-
 func (m *MockedGRPCService) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest, opts ...grpc.CallOption) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
 	args := m.Called(ctx, req)
 
