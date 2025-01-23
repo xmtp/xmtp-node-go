@@ -21,23 +21,19 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ReplicationApi_BatchSubscribeEnvelopes_FullMethodName = "/xmtp.xmtpv4.ReplicationApi/BatchSubscribeEnvelopes"
-	ReplicationApi_QueryEnvelopes_FullMethodName          = "/xmtp.xmtpv4.ReplicationApi/QueryEnvelopes"
-	ReplicationApi_PublishEnvelope_FullMethodName         = "/xmtp.xmtpv4.ReplicationApi/PublishEnvelope"
-	ReplicationApi_GetInboxIds_FullMethodName             = "/xmtp.xmtpv4.ReplicationApi/GetInboxIds"
+	ReplicationApi_SubscribeEnvelopes_FullMethodName    = "/xmtp.xmtpv4.message_api.ReplicationApi/SubscribeEnvelopes"
+	ReplicationApi_QueryEnvelopes_FullMethodName        = "/xmtp.xmtpv4.message_api.ReplicationApi/QueryEnvelopes"
+	ReplicationApi_PublishPayerEnvelopes_FullMethodName = "/xmtp.xmtpv4.message_api.ReplicationApi/PublishPayerEnvelopes"
+	ReplicationApi_GetInboxIds_FullMethodName           = "/xmtp.xmtpv4.message_api.ReplicationApi/GetInboxIds"
 )
 
 // ReplicationApiClient is the client API for ReplicationApi service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ReplicationApiClient interface {
-	// Subscribe to envelopes
-	BatchSubscribeEnvelopes(ctx context.Context, in *BatchSubscribeEnvelopesRequest, opts ...grpc.CallOption) (ReplicationApi_BatchSubscribeEnvelopesClient, error)
-	// Query envelopes
+	SubscribeEnvelopes(ctx context.Context, in *SubscribeEnvelopesRequest, opts ...grpc.CallOption) (ReplicationApi_SubscribeEnvelopesClient, error)
 	QueryEnvelopes(ctx context.Context, in *QueryEnvelopesRequest, opts ...grpc.CallOption) (*QueryEnvelopesResponse, error)
-	// Publish envelope
-	PublishEnvelope(ctx context.Context, in *PublishEnvelopeRequest, opts ...grpc.CallOption) (*PublishEnvelopeResponse, error)
-	// Get inbox ids
+	PublishPayerEnvelopes(ctx context.Context, in *PublishPayerEnvelopesRequest, opts ...grpc.CallOption) (*PublishPayerEnvelopesResponse, error)
 	GetInboxIds(ctx context.Context, in *GetInboxIdsRequest, opts ...grpc.CallOption) (*GetInboxIdsResponse, error)
 }
 
@@ -49,12 +45,12 @@ func NewReplicationApiClient(cc grpc.ClientConnInterface) ReplicationApiClient {
 	return &replicationApiClient{cc}
 }
 
-func (c *replicationApiClient) BatchSubscribeEnvelopes(ctx context.Context, in *BatchSubscribeEnvelopesRequest, opts ...grpc.CallOption) (ReplicationApi_BatchSubscribeEnvelopesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ReplicationApi_ServiceDesc.Streams[0], ReplicationApi_BatchSubscribeEnvelopes_FullMethodName, opts...)
+func (c *replicationApiClient) SubscribeEnvelopes(ctx context.Context, in *SubscribeEnvelopesRequest, opts ...grpc.CallOption) (ReplicationApi_SubscribeEnvelopesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ReplicationApi_ServiceDesc.Streams[0], ReplicationApi_SubscribeEnvelopes_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &replicationApiBatchSubscribeEnvelopesClient{stream}
+	x := &replicationApiSubscribeEnvelopesClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -64,17 +60,17 @@ func (c *replicationApiClient) BatchSubscribeEnvelopes(ctx context.Context, in *
 	return x, nil
 }
 
-type ReplicationApi_BatchSubscribeEnvelopesClient interface {
-	Recv() (*BatchSubscribeEnvelopesResponse, error)
+type ReplicationApi_SubscribeEnvelopesClient interface {
+	Recv() (*SubscribeEnvelopesResponse, error)
 	grpc.ClientStream
 }
 
-type replicationApiBatchSubscribeEnvelopesClient struct {
+type replicationApiSubscribeEnvelopesClient struct {
 	grpc.ClientStream
 }
 
-func (x *replicationApiBatchSubscribeEnvelopesClient) Recv() (*BatchSubscribeEnvelopesResponse, error) {
-	m := new(BatchSubscribeEnvelopesResponse)
+func (x *replicationApiSubscribeEnvelopesClient) Recv() (*SubscribeEnvelopesResponse, error) {
+	m := new(SubscribeEnvelopesResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -90,9 +86,9 @@ func (c *replicationApiClient) QueryEnvelopes(ctx context.Context, in *QueryEnve
 	return out, nil
 }
 
-func (c *replicationApiClient) PublishEnvelope(ctx context.Context, in *PublishEnvelopeRequest, opts ...grpc.CallOption) (*PublishEnvelopeResponse, error) {
-	out := new(PublishEnvelopeResponse)
-	err := c.cc.Invoke(ctx, ReplicationApi_PublishEnvelope_FullMethodName, in, out, opts...)
+func (c *replicationApiClient) PublishPayerEnvelopes(ctx context.Context, in *PublishPayerEnvelopesRequest, opts ...grpc.CallOption) (*PublishPayerEnvelopesResponse, error) {
+	out := new(PublishPayerEnvelopesResponse)
+	err := c.cc.Invoke(ctx, ReplicationApi_PublishPayerEnvelopes_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,13 +108,9 @@ func (c *replicationApiClient) GetInboxIds(ctx context.Context, in *GetInboxIdsR
 // All implementations must embed UnimplementedReplicationApiServer
 // for forward compatibility
 type ReplicationApiServer interface {
-	// Subscribe to envelopes
-	BatchSubscribeEnvelopes(*BatchSubscribeEnvelopesRequest, ReplicationApi_BatchSubscribeEnvelopesServer) error
-	// Query envelopes
+	SubscribeEnvelopes(*SubscribeEnvelopesRequest, ReplicationApi_SubscribeEnvelopesServer) error
 	QueryEnvelopes(context.Context, *QueryEnvelopesRequest) (*QueryEnvelopesResponse, error)
-	// Publish envelope
-	PublishEnvelope(context.Context, *PublishEnvelopeRequest) (*PublishEnvelopeResponse, error)
-	// Get inbox ids
+	PublishPayerEnvelopes(context.Context, *PublishPayerEnvelopesRequest) (*PublishPayerEnvelopesResponse, error)
 	GetInboxIds(context.Context, *GetInboxIdsRequest) (*GetInboxIdsResponse, error)
 	mustEmbedUnimplementedReplicationApiServer()
 }
@@ -127,14 +119,14 @@ type ReplicationApiServer interface {
 type UnimplementedReplicationApiServer struct {
 }
 
-func (UnimplementedReplicationApiServer) BatchSubscribeEnvelopes(*BatchSubscribeEnvelopesRequest, ReplicationApi_BatchSubscribeEnvelopesServer) error {
-	return status.Errorf(codes.Unimplemented, "method BatchSubscribeEnvelopes not implemented")
+func (UnimplementedReplicationApiServer) SubscribeEnvelopes(*SubscribeEnvelopesRequest, ReplicationApi_SubscribeEnvelopesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeEnvelopes not implemented")
 }
 func (UnimplementedReplicationApiServer) QueryEnvelopes(context.Context, *QueryEnvelopesRequest) (*QueryEnvelopesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryEnvelopes not implemented")
 }
-func (UnimplementedReplicationApiServer) PublishEnvelope(context.Context, *PublishEnvelopeRequest) (*PublishEnvelopeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PublishEnvelope not implemented")
+func (UnimplementedReplicationApiServer) PublishPayerEnvelopes(context.Context, *PublishPayerEnvelopesRequest) (*PublishPayerEnvelopesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PublishPayerEnvelopes not implemented")
 }
 func (UnimplementedReplicationApiServer) GetInboxIds(context.Context, *GetInboxIdsRequest) (*GetInboxIdsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInboxIds not implemented")
@@ -152,24 +144,24 @@ func RegisterReplicationApiServer(s grpc.ServiceRegistrar, srv ReplicationApiSer
 	s.RegisterService(&ReplicationApi_ServiceDesc, srv)
 }
 
-func _ReplicationApi_BatchSubscribeEnvelopes_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BatchSubscribeEnvelopesRequest)
+func _ReplicationApi_SubscribeEnvelopes_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeEnvelopesRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ReplicationApiServer).BatchSubscribeEnvelopes(m, &replicationApiBatchSubscribeEnvelopesServer{stream})
+	return srv.(ReplicationApiServer).SubscribeEnvelopes(m, &replicationApiSubscribeEnvelopesServer{stream})
 }
 
-type ReplicationApi_BatchSubscribeEnvelopesServer interface {
-	Send(*BatchSubscribeEnvelopesResponse) error
+type ReplicationApi_SubscribeEnvelopesServer interface {
+	Send(*SubscribeEnvelopesResponse) error
 	grpc.ServerStream
 }
 
-type replicationApiBatchSubscribeEnvelopesServer struct {
+type replicationApiSubscribeEnvelopesServer struct {
 	grpc.ServerStream
 }
 
-func (x *replicationApiBatchSubscribeEnvelopesServer) Send(m *BatchSubscribeEnvelopesResponse) error {
+func (x *replicationApiSubscribeEnvelopesServer) Send(m *SubscribeEnvelopesResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -191,20 +183,20 @@ func _ReplicationApi_QueryEnvelopes_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReplicationApi_PublishEnvelope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PublishEnvelopeRequest)
+func _ReplicationApi_PublishPayerEnvelopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishPayerEnvelopesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReplicationApiServer).PublishEnvelope(ctx, in)
+		return srv.(ReplicationApiServer).PublishPayerEnvelopes(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ReplicationApi_PublishEnvelope_FullMethodName,
+		FullMethod: ReplicationApi_PublishPayerEnvelopes_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReplicationApiServer).PublishEnvelope(ctx, req.(*PublishEnvelopeRequest))
+		return srv.(ReplicationApiServer).PublishPayerEnvelopes(ctx, req.(*PublishPayerEnvelopesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -231,7 +223,7 @@ func _ReplicationApi_GetInboxIds_Handler(srv interface{}, ctx context.Context, d
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ReplicationApi_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "xmtp.xmtpv4.ReplicationApi",
+	ServiceName: "xmtp.xmtpv4.message_api.ReplicationApi",
 	HandlerType: (*ReplicationApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -239,8 +231,8 @@ var ReplicationApi_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ReplicationApi_QueryEnvelopes_Handler,
 		},
 		{
-			MethodName: "PublishEnvelope",
-			Handler:    _ReplicationApi_PublishEnvelope_Handler,
+			MethodName: "PublishPayerEnvelopes",
+			Handler:    _ReplicationApi_PublishPayerEnvelopes_Handler,
 		},
 		{
 			MethodName: "GetInboxIds",
@@ -249,8 +241,8 @@ var ReplicationApi_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "BatchSubscribeEnvelopes",
-			Handler:       _ReplicationApi_BatchSubscribeEnvelopes_Handler,
+			StreamName:    "SubscribeEnvelopes",
+			Handler:       _ReplicationApi_SubscribeEnvelopes_Handler,
 			ServerStreams: true,
 		},
 	},

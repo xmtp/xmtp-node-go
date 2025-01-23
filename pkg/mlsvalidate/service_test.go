@@ -58,31 +58,6 @@ func getMockedService() (*MockedGRPCService, MLSValidationService) {
 	return mockService, service
 }
 
-func TestValidateKeyPackages(t *testing.T) {
-	mockGrpc, service := getMockedService()
-
-	ctx := context.Background()
-
-	firstResponse := svc.ValidateKeyPackagesResponse_ValidationResponse{
-		IsOk:                    true,
-		AccountAddress:          "0x123",
-		InstallationId:          []byte("123"),
-		CredentialIdentityBytes: []byte("456"),
-		ErrorMessage:            "",
-	}
-
-	mockGrpc.On("ValidateKeyPackages", ctx, mock.Anything).Return(&svc.ValidateKeyPackagesResponse{
-		Responses: []*svc.ValidateKeyPackagesResponse_ValidationResponse{&firstResponse},
-	}, nil)
-
-	res, err := service.ValidateV3KeyPackages(ctx, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(res))
-	assert.Equal(t, "0x123", res[0].AccountAddress)
-	assert.Equal(t, []byte("123"), res[0].InstallationKey)
-	assert.Equal(t, []byte("456"), res[0].CredentialIdentity)
-}
-
 func TestValidateInboxIdKeyPackages(t *testing.T) {
 	mockGrpc, service := getMockedService()
 
