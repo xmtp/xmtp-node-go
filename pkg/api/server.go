@@ -234,6 +234,7 @@ func (s *Server) startGRPC() error {
 func (s *Server) startHTTP() error {
 	mux := http.NewServeMux()
 	gwmux := runtime.NewServeMux(
+		runtime.WithMarshalerOption("application/x-protobuf", &runtime.ProtoMarshaller{}),
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
 		runtime.WithStreamErrorHandler(runtime.DefaultStreamErrorHandler),
 		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
