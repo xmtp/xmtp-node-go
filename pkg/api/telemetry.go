@@ -7,6 +7,7 @@ import (
 
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -63,7 +64,7 @@ func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, d
 		ri.ZapFields()...,
 	)
 
-	if ip := clientIPFromContext(ctx); len(ip) > 0 {
+	if ip := utils.ClientIPFromContext(ctx); len(ip) > 0 {
 		fields = append(fields, zap.String("client_ip", ip))
 	}
 

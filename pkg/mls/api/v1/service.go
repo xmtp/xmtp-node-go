@@ -16,12 +16,15 @@ import (
 	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 type Service struct {
@@ -240,10 +243,10 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 		msgB, err := pb.Marshal(&mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(msg.ID),
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupID,
-					Data:      msg.Data,
+					Id:         uint64(msg.ID),
+					CreatedNs:  uint64(msg.CreatedAt.UnixNano()),
+					GroupId:    msg.GroupID,
+					Data:       msg.Data,
 					SenderHmac: msgV1.SenderHmac,
 				},
 			},
@@ -278,42 +281,64 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		return nil, err
 	}
 
-	// TODO: Wrap this in a transaction so publishing is all or nothing
-	for _, input := range req.Messages {
-		msg, err := s.store.InsertWelcomeMessage(ctx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey)
-		if err != nil {
-			if mlsstore.IsAlreadyExistsError(err) {
-				continue
+	// TODO: Remove after debugging is done
+	ip := utils.ClientIPFromContext(ctx)
+
+	err = tracing.Wrap(ctx, log, "send-welcome-messages", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
+		tracing.SpanTag(span, "client_ip", ip)
+		tracing.SpanTag(span, "message_count", len(req.Messages))
+
+		// TODO: Wrap this in a transaction so publishing is all or nothing
+		for _, input := range req.Messages {
+			insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
+			insertLogger := tracing.Link(insertSpan, log)
+			insertLogger.Info("inserting welcome message", zap.String("client_ip", ip), zap.Int("message_length", len(input.GetV1().Data)))
+			msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey)
+			insertSpan.Finish(tracing.WithError(err))
+			if err != nil {
+				if mlsstore.IsAlreadyExistsError(err) {
+					continue
+				}
+				return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 			}
-			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
-		}
 
-		msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
-			Version: &mlsv1.WelcomeMessage_V1_{
-				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              uint64(msg.ID),
-					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-					InstallationKey: msg.InstallationKey,
-					Data:            msg.Data,
-					HpkePublicKey:   msg.HpkePublicKey,
+			msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
+				Version: &mlsv1.WelcomeMessage_V1_{
+					V1: &mlsv1.WelcomeMessage_V1{
+						Id:              uint64(msg.ID),
+						CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+						InstallationKey: msg.InstallationKey,
+						Data:            msg.Data,
+						HpkePublicKey:   msg.HpkePublicKey,
+					},
 				},
-			},
-		})
-		if err != nil {
-			return nil, err
+			})
+			if err != nil {
+				return err
+			}
+
+			publishSpan, publishCtx := tracer.StartSpanFromContext(ctx, "publish-welcome-to-relay")
+			err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
+				ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
+				Timestamp:    msg.CreatedAt.UnixNano(),
+				Payload:      msgB,
+			})
+			publishSpan.Finish(tracing.WithError(err))
+
+			if err != nil {
+				return err
+			}
+
+			metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
 		}
 
-		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
-			ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
-			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msgB,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return nil
+	})
 
-		metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
+	if err != nil {
+		return nil, err
 	}
+
 	return &emptypb.Empty{}, nil
 }
 

@@ -9,13 +9,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 )
 
 var ErrDenyListed = errors.New("wallet is deny listed")
@@ -145,7 +145,7 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
 	_, method := splitMethodName(fullMethod)
 
-	ip := clientIPFromContext(ctx)
+	ip := utils.ClientIPFromContext(ctx)
 	if len(ip) == 0 {
 		// requests without an IP address are bucketed together as "ip_unknown"
 		ip = "ip_unknown"
@@ -235,21 +235,4 @@ func allowedToPublish(topic string, wallet types.WalletAddr) bool {
 	}
 
 	return true
-}
-
-func clientIPFromContext(ctx context.Context) string {
-	md, _ := metadata.FromIncomingContext(ctx)
-	vals := md.Get("x-forwarded-for")
-	if len(vals) == 0 {
-		p, ok := peer.FromContext(ctx)
-		if ok {
-			ipAndPort := strings.Split(p.Addr.String(), ":")
-			return ipAndPort[0]
-		} else {
-			return ""
-		}
-	}
-	// There are potentially multiple comma separated IPs bundled in that first value
-	ips := strings.Split(vals[0], ",")
-	return strings.TrimSpace(ips[0])
 }
