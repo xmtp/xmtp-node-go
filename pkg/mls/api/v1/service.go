@@ -248,6 +248,7 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 					GroupId:    msg.GroupID,
 					Data:       msg.Data,
 					SenderHmac: msgV1.SenderHmac,
+					ShouldPush: msgV1.ShouldPush,
 				},
 			},
 		})
