@@ -14,16 +14,21 @@ import (
 type LimitType string
 
 const (
-	DEFAULT_PRIORITY_MULTIPLIER = uint16(5)
-	PUBLISH_PRIORITY_MULTIPLIER = uint16(25)
-	DEFAULT_RATE_PER_MINUTE     = uint16(2000)
-	DEFAULT_MAX_TOKENS          = uint16(10000)
-	PUBLISH_RATE_PER_MINUTE     = uint16(200)
-	PUBLISH_MAX_TOKENS          = uint16(1000)
-	MAX_UINT_16                 = 65535
+	DEFAULT_PRIORITY_MULTIPLIER      = uint16(5)
+	PUBLISH_PRIORITY_MULTIPLIER      = uint16(25)
+	DEFAULT_RATE_PER_MINUTE          = uint16(2000)
+	DEFAULT_MAX_TOKENS               = uint16(10000)
+	PUBLISH_RATE_PER_MINUTE          = uint16(200)
+	PUBLISH_MAX_TOKENS               = uint16(1000)
+	IDENTITY_PUBLISH_RATE_PER_MINUTE = uint16(10)
+	IDENTITY_PUBLISH_MAX_TOKENS      = uint16(50)
+	MAX_UINT_16                      = 65535
 
-	DEFAULT LimitType = "DEF"
-	PUBLISH LimitType = "PUB"
+	DEFAULT          LimitType = "DEF"
+	V3_DEFAULT       LimitType = "V3DEF"
+	PUBLISH          LimitType = "PUB"
+	V3_PUBLISH       LimitType = "V3PUB"
+	IDENTITY_PUBLISH LimitType = "IDPUB"
 )
 
 type RateLimiter interface {
@@ -91,8 +96,11 @@ func NewTokenBucketRateLimiter(ctx context.Context, log *zap.Logger) *TokenBucke
 	tb.PriorityMultiplier = DEFAULT_PRIORITY_MULTIPLIER
 	tb.PublishPriorityMultiplier = PUBLISH_PRIORITY_MULTIPLIER
 	tb.Limits = map[LimitType]*Limit{
-		DEFAULT: {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
-		PUBLISH: {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
+		DEFAULT:          {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
+		V3_DEFAULT:       {DEFAULT_MAX_TOKENS, DEFAULT_RATE_PER_MINUTE},
+		PUBLISH:          {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
+		V3_PUBLISH:       {PUBLISH_MAX_TOKENS, PUBLISH_RATE_PER_MINUTE},
+		IDENTITY_PUBLISH: {IDENTITY_PUBLISH_MAX_TOKENS, IDENTITY_PUBLISH_RATE_PER_MINUTE},
 	}
 	return tb
 }
@@ -109,6 +117,7 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 	limit := rl.getLimit(limitType)
 	multiplier := uint16(1)
 	if isPriority {
+		// There are no priority limits for V3
 		if limitType == PUBLISH {
 			multiplier = rl.PublishPriorityMultiplier
 		} else {
