@@ -69,19 +69,27 @@ func New(ctx context.Context, config Config) (*Store, error) {
 
 func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
 
-	addresses := []string{}
+	identifiers := []string{}
+	identifierKinds := []int32{}
 	for _, request := range req.Requests {
-		addresses = append(addresses, request.GetAddress())
+		identifiers = append(identifiers, request.GetIdentifier())
+
+		identifierKind := request.GetIdentifierKind()
+		// Old libXmtp versions will come in as unspecified. We need to coalesce them to ethereum.
+		if identifierKind == associations.IdentifierKind_IDENTIFIER_KIND_UNSPECIFIED {
+			identifierKind = associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM
+		}
+		identifierKinds = append(identifierKinds, int32(identifierKind))
 	}
 
-	addressLogEntries, err := s.queries.GetAddressLogs(ctx, addresses)
+	addressLogEntries, err := s.queries.GetAddressLogs(ctx, identifiers)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*identity.GetInboxIdsResponse_Response, len(addresses))
+	out := make([]*identity.GetInboxIdsResponse_Response, len(identifiers))
 
-	for index, address := range addresses {
+	for index, address := range identifiers {
 		resp := identity.GetInboxIdsResponse_Response{}
 		resp.Address = address
 
