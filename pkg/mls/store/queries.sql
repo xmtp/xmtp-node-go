@@ -81,7 +81,7 @@ WHERE (identifier, identifier_kind, inbox_id, association_sequence_id) =(
 		address_log AS a
 	WHERE
 		a.identifier = @identifier
-		AND a.identifier_kind = @identifier_kind,
+		AND a.identifier_kind = @identifier_kind
 		AND a.inbox_id = decode(@inbox_id, 'hex')
 	GROUP BY
 		identifier,

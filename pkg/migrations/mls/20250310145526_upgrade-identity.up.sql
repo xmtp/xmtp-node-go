@@ -4,7 +4,9 @@ SET
 DROP INDEX idx_address_log_address_inbox_id;
 
 ALTER TABLE address_log
-ADD COLUMN identifier_kind INT,
+ADD COLUMN identifier_kind INT;
+
+ALTER TABLE address_log
 RENAME COLUMN address TO identifier;
 
 -- Default all of the existing identifier_kinds to 1 (Ethereum)
