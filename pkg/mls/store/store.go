@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -68,27 +69,37 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
-
-	addresses := []string{}
+	identifiers := []string{}
+	identifierKinds := []int32{}
 	for _, request := range req.Requests {
-		addresses = append(addresses, request.GetAddress())
+		identifiers = append(identifiers, request.GetIdentifier())
+
+		identifierKind := request.GetIdentifierKind()
+		// Old libXmtp versions will come in as unspecified. We need to coalesce them to ethereum.
+		if identifierKind == associations.IdentifierKind_IDENTIFIER_KIND_UNSPECIFIED {
+			identifierKind = associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM
+		}
+		identifierKinds = append(identifierKinds, int32(identifierKind))
 	}
 
-	addressLogEntries, err := s.queries.GetAddressLogs(ctx, addresses)
+	addressLogEntries, err := s.queries.GetAddressLogs(ctx, queries.GetAddressLogsParams{
+		Identifiers:     identifiers,
+		IdentifierKinds: identifierKinds,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*identity.GetInboxIdsResponse_Response, len(addresses))
+	out := make([]*identity.GetInboxIdsResponse_Response, len(identifiers))
 
-	for index, address := range addresses {
+	for index, identifier := range identifiers {
 		resp := identity.GetInboxIdsResponse_Response{}
-		resp.Address = address
+		resp.Identifier = identifier
+		identifierKind := identifierKinds[index]
 
 		for _, logEntry := range addressLogEntries {
-			if logEntry.Address == address {
-				inboxId := logEntry.InboxID
-				resp.InboxId = &inboxId
+			if logEntry.Identifier == identifier && logEntry.IdentifierKind == identifierKind {
+				resp.InboxId = &logEntry.InboxID
 			}
 		}
 		out[index] = &resp
@@ -156,9 +167,22 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 		for _, new_member := range state.StateDiff.NewMembers {
 			log.Info("New member", zap.Any("member", new_member))
-			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
+			if address, ok := new_member.Kind.(*associations.MemberIdentifier_EthereumAddress); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
-					Address:               address.Address,
+					Identifier:            address.EthereumAddress,
+					IdentifierKind:        int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
+					InboxID:               inboxId,
+					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
+					RevocationSequenceID:  sql.NullInt64{Valid: false},
+				})
+				if err != nil {
+					return err
+				}
+			} else if passkey, ok := new_member.Kind.(*associations.MemberIdentifier_Passkey); ok {
+				identifier := hex.EncodeToString(passkey.Passkey.GetKey())
+				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
+					Identifier:            identifier,
+					IdentifierKind:        int32(associations.IdentifierKind_IDENTIFIER_KIND_PASSKEY),
 					InboxID:               inboxId,
 					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
@@ -171,9 +195,21 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 		for _, removed_member := range state.StateDiff.RemovedMembers {
 			log.Info("Removed member", zap.Any("member", removed_member))
-			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
+			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_EthereumAddress); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
-					Address:              address.Address,
+					Identifier:           address.EthereumAddress,
+					IdentifierKind:       int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
+					InboxID:              inboxId,
+					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
+				})
+				if err != nil {
+					return err
+				}
+			} else if passkey, ok := removed_member.Kind.(*associations.MemberIdentifier_Passkey); ok {
+				identifier := hex.EncodeToString(passkey.Passkey.GetKey())
+				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
+					Identifier:           identifier,
+					IdentifierKind:       int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
 					InboxID:              inboxId,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
