@@ -100,6 +100,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 		for _, logEntry := range addressLogEntries {
 			if logEntry.Identifier == identifier && logEntry.IdentifierKind == identifierKind {
 				resp.InboxId = &logEntry.InboxID
+				break
 			}
 		}
 		out[index] = &resp

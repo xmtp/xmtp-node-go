@@ -145,9 +145,21 @@ func TestMultipleInboxIds(t *testing.T) {
 	inbox1 := testutils.RandomInboxId()
 	inbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address_1", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx,
+		queries.InsertAddressLogParams{
+			Identifier:     "address_1",
+			IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
+			InboxID:        inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1},
+			RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address_2", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Identifier:            "address_2",
+			IdentifierKind:        int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
+			InboxID:               inbox2,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2},
+			RevocationSequenceID:  sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
