@@ -116,8 +116,10 @@ func TestInboxIds(t *testing.T) {
 	req := &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	resp, _ := store.GetInboxIds(context.Background(), req)
+	resp, err := store.GetInboxIds(context.Background(), req)
 
+	require.NoError(t, err)
+	require.Greater(t, len(resp.Responses), 0)
 	require.Equal(t, correctInbox, *resp.Responses[0].InboxId)
 
 	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})

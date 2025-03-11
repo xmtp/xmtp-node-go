@@ -95,7 +95,7 @@ FROM
 		    (identifier, identifier_kind) IN (SELECT unnest($1::TEXT[]), unnest($2::INT[]))
 			AND revocation_sequence_id IS NULL
 		GROUP BY
-			identifier) b ON a.identifier = b.identifier
+			identifier, identifier_kind) b ON a.identifier = b.identifier
 	AND a.association_sequence_id = b.max_association_sequence_id
 `
 
