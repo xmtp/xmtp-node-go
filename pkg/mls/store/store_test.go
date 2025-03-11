@@ -65,8 +65,8 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 			},
 			StateDiff: &associations.AssociationStateDiff{
 				NewMembers: []*associations.MemberIdentifier{{
-					Kind: &associations.MemberIdentifier_Address{
-						Address: address,
+					Kind: &associations.MemberIdentifier_EthereumAddress{
+						EthereumAddress: address,
 					},
 				}},
 			},
@@ -100,18 +100,18 @@ func TestInboxIds(t *testing.T) {
 	correctInbox := testutils.RandomInboxId()
 	correctInbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: correctInbox, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address",
+		Identifier: "address",
 	})
 	req := &identity.GetInboxIdsRequest{
 		Requests: reqs,
@@ -120,16 +120,16 @@ func TestInboxIds(t *testing.T) {
 
 	require.Equal(t, correctInbox, *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address", InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, correctInbox2, *resp.Responses[0].InboxId)
 
-	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Identifier: "address2"})
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, inbox2, *resp.Responses[1].InboxId)
@@ -143,17 +143,19 @@ func TestMultipleInboxIds(t *testing.T) {
 	inbox1 := testutils.RandomInboxId()
 	inbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address_1", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Identifier: "address_2", IdentifierKind: int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM), InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address_1",
+		Identifier:     "address_1",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
 	})
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address_2",
+		Identifier:     "address_2",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
 	})
 	req := &identity.GetInboxIdsRequest{
 		Requests: reqs,
