@@ -210,7 +210,7 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 				identifier := hex.EncodeToString(passkey.Passkey.GetKey())
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
 					Identifier:           identifier,
-					IdentifierKind:       int32(associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM),
+					IdentifierKind:       int32(associations.IdentifierKind_IDENTIFIER_KIND_PASSKEY),
 					InboxID:              inboxId,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
