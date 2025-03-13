@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -122,8 +123,8 @@ func TestPublishIdentityUpdateSameInboxParallel(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	numErrors := 0
-	numSuccesses := 0
+	numErrors := int32(0)
+	numSuccesses := int32(0)
 	for i := 0; i < numUpdates; i++ {
 		wg.Add(1)
 		go func() {
@@ -134,16 +135,16 @@ func TestPublishIdentityUpdateSameInboxParallel(t *testing.T) {
 				},
 			}, mockMlsValidation)
 			if err != nil {
-				numErrors++
+				atomic.AddInt32(&numErrors, 1)
 			} else {
-				numSuccesses++
+				atomic.AddInt32(&numSuccesses, 1)
 			}
 		}()
 	}
 	wg.Wait()
-	require.Equal(t, numUpdates, numSuccesses+numErrors)
+	require.Equal(t, int32(numUpdates), numSuccesses+numErrors)
 	// We expect all but one to fail if the old updates array isn't empty
-	require.Equal(t, numErrors, numUpdates-1)
+	require.Equal(t, numErrors, int32(numUpdates-1))
 }
 
 func TestInboxIds(t *testing.T) {
