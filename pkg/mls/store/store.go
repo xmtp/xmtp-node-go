@@ -69,49 +69,58 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
-	identifiers := []string{}
-	identifierKinds := []associations.IdentifierKind{}
-	identifierKindNumbers := []int32{}
-	for _, request := range req.Requests {
-		identifiers = append(identifiers, request.GetIdentifier())
+	// Create query params with exact capacity needed
+	queryParams := queries.GetAddressLogsParams{
+		Identifiers:     make([]string, len(req.Requests)),
+		IdentifierKinds: make([]int32, len(req.Requests)),
+	}
 
+	// Process request data in a single pass
+	for i, request := range req.Requests {
+		queryParams.Identifiers[i] = request.GetIdentifier()
+
+		// Coalesce unspecified to ethereum
 		identifierKind := request.GetIdentifierKind()
-		// Old libXmtp versions will come in as unspecified. We need to coalesce them to ethereum.
 		if identifierKind == associations.IdentifierKind_IDENTIFIER_KIND_UNSPECIFIED {
 			identifierKind = associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM
 		}
-		identifierKinds = append(identifierKinds, identifierKind)
-		identifierKindNumbers = append(identifierKindNumbers, int32(identifierKind.Number()))
+		queryParams.IdentifierKinds[i] = int32(identifierKind.Number())
 	}
 
-	addressLogEntries, err := s.queries.GetAddressLogs(ctx, queries.GetAddressLogsParams{
-		Identifiers:     identifiers,
-		IdentifierKinds: identifierKindNumbers,
-	})
+	// Query the database
+	addressLogEntries, err := s.queries.GetAddressLogs(ctx, queryParams)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*identity.GetInboxIdsResponse_Response, len(identifiers))
+	// Build responses with the same capacity as requests
+	responses := make([]*identity.GetInboxIdsResponse_Response, len(req.Requests))
 
-	for index, identifier := range identifiers {
-		resp := identity.GetInboxIdsResponse_Response{}
-		resp.Identifier = identifier
-		identifierKind := identifierKinds[index]
-		resp.IdentifierKind = identifierKind
+	for i, request := range req.Requests {
+		identifier := request.GetIdentifier()
+		identifierKind := request.GetIdentifierKind()
+		if identifierKind == associations.IdentifierKind_IDENTIFIER_KIND_UNSPECIFIED {
+			identifierKind = associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM
+		}
+
+		// Create response with the required identifier information
+		responses[i] = &identity.GetInboxIdsResponse_Response{
+			Identifier:     identifier,
+			IdentifierKind: identifierKind,
+		}
+
+		// Find matching inbox ID directly from addressLogEntries
 		identifierKindNumber := int32(identifierKind.Number())
-
 		for _, logEntry := range addressLogEntries {
 			if logEntry.Identifier == identifier && logEntry.IdentifierKind == identifierKindNumber {
-				resp.InboxId = &logEntry.InboxID
+				responses[i].InboxId = &logEntry.InboxID
 				break
 			}
 		}
-		out[index] = &resp
 	}
 
 	return &identity.GetInboxIdsResponse{
-		Responses: out,
+		Responses: responses,
 	}, nil
 }
 
