@@ -90,6 +90,62 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	wg.Wait()
 }
 
+func TestPublishIdentityUpdateSameInboxParallel(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	inboxId := testutils.RandomInboxId()
+	address := testutils.RandomString(32)
+	numUpdates := 50
+
+	mockMlsValidation := mocks.NewMockMLSValidationService(t)
+
+	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
+	mockMlsValidation.EXPECT().GetAssociationState(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, oldUpdates []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+		if len(oldUpdates) > 0 {
+			return nil, errors.New("old updates should be empty")
+		}
+
+		return &mlsvalidate.AssociationStateResult{
+			AssociationState: &associations.AssociationState{
+				InboxId: inboxId,
+			},
+			StateDiff: &associations.AssociationStateDiff{
+				NewMembers: []*associations.MemberIdentifier{{
+					Kind: &associations.MemberIdentifier_Address{
+						Address: address,
+					},
+				}},
+			},
+		}, nil
+	})
+
+	var wg sync.WaitGroup
+	numErrors := 0
+	numSuccesses := 0
+	for i := 0; i < numUpdates; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := store.PublishIdentityUpdate(ctx, &identity.PublishIdentityUpdateRequest{
+				IdentityUpdate: &associations.IdentityUpdate{
+					InboxId: inboxId,
+				},
+			}, mockMlsValidation)
+			if err != nil {
+				numErrors++
+			} else {
+				numSuccesses++
+			}
+		}()
+	}
+	wg.Wait()
+	require.Equal(t, numUpdates, numSuccesses+numErrors)
+	// We expect all but one to fail if the old updates array isn't empty
+	require.Equal(t, numErrors, numUpdates-1)
+}
+
 func TestInboxIds(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
