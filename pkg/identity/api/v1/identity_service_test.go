@@ -23,21 +23,21 @@ func (m *mockedMLSValidationService) GetAssociationState(ctx context.Context, ol
 
 	member_map := make([]*associations.MemberMap, 0)
 	member_map = append(member_map, &associations.MemberMap{
-		Key: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "key_address"}},
+		Key: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "key_address"}},
 		Value: &associations.Member{
-			Identifier:    &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "ident"}},
-			AddedByEntity: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "added_by_entity"}},
+			Identifier:    &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "ident"}},
+			AddedByEntity: &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "added_by_entity"}},
 		},
 	})
 
 	new_members := make([]*associations.MemberIdentifier, 0)
 
-	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x01"}})
-	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x02"}})
-	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_Address{Address: "0x03"}})
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "0x01"}})
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "0x02"}})
+	new_members = append(new_members, &associations.MemberIdentifier{Kind: &associations.MemberIdentifier_EthereumAddress{EthereumAddress: "0x03"}})
 
 	out := mlsvalidate.AssociationStateResult{
-		AssociationState: &associations.AssociationState{InboxId: "test_inbox", Members: member_map, RecoveryAddress: "recovery", SeenSignatures: [][]byte{[]byte("seen"), []byte("sig")}},
+		AssociationState: &associations.AssociationState{InboxId: "test_inbox", Members: member_map, RecoveryIdentifier: "recovery", RecoveryIdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM, SeenSignatures: [][]byte{[]byte("seen"), []byte("sig")}},
 		StateDiff:        &associations.AssociationStateDiff{NewMembers: new_members, RemovedMembers: nil},
 	}
 	return &out, nil
@@ -88,9 +88,10 @@ func makeCreateInbox(address string) *associations.IdentityAction {
 	return &associations.IdentityAction{
 		Kind: &associations.IdentityAction_CreateInbox{
 			CreateInbox: &associations.CreateInbox{
-				InitialAddress:          address,
-				Nonce:                   0,
-				InitialAddressSignature: &associations.Signature{},
+				InitialIdentifier:          address,
+				InitialIdentifierKind:      associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
+				Nonce:                      0,
+				InitialIdentifierSignature: &associations.Signature{},
 			},
 		},
 	}
@@ -110,8 +111,8 @@ func makeRevokeAssociation() *associations.IdentityAction {
 	return &associations.IdentityAction{
 		Kind: &associations.IdentityAction_Revoke{
 			Revoke: &associations.RevokeAssociation{
-				MemberToRevoke:           &associations.MemberIdentifier{},
-				RecoveryAddressSignature: &associations.Signature{},
+				MemberToRevoke:              &associations.MemberIdentifier{},
+				RecoveryIdentifierSignature: &associations.Signature{},
 			},
 		},
 	}
@@ -120,8 +121,8 @@ func makeChangeRecoveryAddress() *associations.IdentityAction {
 	return &associations.IdentityAction{
 		Kind: &associations.IdentityAction_ChangeRecoveryAddress{
 			ChangeRecoveryAddress: &associations.ChangeRecoveryAddress{
-				NewRecoveryAddress:               "",
-				ExistingRecoveryAddressSignature: &associations.Signature{},
+				NewRecoveryIdentifier:               "",
+				ExistingRecoveryIdentifierSignature: &associations.Signature{},
 			},
 		},
 	}
@@ -171,7 +172,8 @@ func TestPublishedUpdatesCanBeRead(t *testing.T) {
 	require.Equal(t, res.Responses[0].InboxId, inbox_id)
 	require.Len(t, res.Responses[0].Updates, 1)
 	require.Len(t, res.Responses[0].Updates[0].Update.Actions, 1)
-	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, address)
+	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialIdentifier, address)
+	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialIdentifierKind, associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM)
 }
 
 func TestPublishedUpdatesAreInOrder(t *testing.T) {
@@ -230,8 +232,8 @@ func TestQueryMultipleInboxes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, res.Responses, 2)
-	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, first_address)
-	require.Equal(t, res.Responses[1].Updates[0].Update.Actions[0].GetCreateInbox().InitialAddress, second_address)
+	require.Equal(t, res.Responses[0].Updates[0].Update.Actions[0].GetCreateInbox().InitialIdentifier, first_address)
+	require.Equal(t, res.Responses[1].Updates[0].Update.Actions[0].GetCreateInbox().InitialIdentifier, second_address)
 }
 
 func TestInboxSizeLimit(t *testing.T) {
