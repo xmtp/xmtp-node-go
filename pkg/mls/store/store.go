@@ -183,6 +183,11 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 			}
 		}
 
+		err = txQueries.TouchInbox(ctx, inboxId)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}); err != nil {
 		return nil, err
@@ -558,7 +563,7 @@ func (s *Store) RunInRepeatableReadTx(ctx context.Context, numRetries int, fn fu
 			if err == nil {
 				return nil
 			}
-			s.log.Warn("Error in serializable tx", zap.Error(err))
+			s.log.Warn("Error in tx", zap.Error(err))
 			utils.RandomSleep(20)
 		}
 	}

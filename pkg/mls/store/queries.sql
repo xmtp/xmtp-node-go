@@ -218,3 +218,10 @@ ORDER BY
 	id DESC
 LIMIT @numrows;
 
+-- name: TouchInbox :exec
+INSERT INTO inboxes(id)
+	VALUES (decode(@inbox_id, 'hex'))
+ON CONFLICT (id)
+	DO UPDATE SET
+		updated_at = NOW();
+
