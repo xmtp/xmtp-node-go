@@ -83,8 +83,8 @@ func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
 				// consume the data fast enough. In that case, we don't want to block further since it migth
 				// slow down other users. Instead, we're going to close the channel and let the
 				// consumer re-establish the connection if needed.
-				// close(subscription.messagesCh)
-				// delete(d.subscriptions, subscription)
+				close(subscription.messagesCh)
+				delete(d.subscriptions, subscription)
 			}
 		}
 	}
