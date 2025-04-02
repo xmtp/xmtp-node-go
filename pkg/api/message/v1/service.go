@@ -16,6 +16,7 @@ import (
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -312,9 +313,10 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 }
 
 func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
-	log := s.log.Named("subscribeAll")
+	ip := utils.ClientIPFromContext(stream.Context())
+	log := s.log.Named("subscribeAll").With(zap.String("client_ip", ip))
 	log.Info("started")
-	defer log.Debug("stopped")
+	defer log.Info("stopped")
 
 	// Subscribe to all nats subjects via wildcard
 	// https://docs.nats.io/nats-concepts/subjects#wildcards
