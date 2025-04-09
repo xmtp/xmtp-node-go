@@ -419,6 +419,16 @@
       },
       "title": "SignedPublicKey"
     },
+    "message_contentsWelcomeEncryption": {
+      "type": "string",
+      "enum": [
+        "WELCOME_ENCRYPTION_UNSPECIFIED",
+        "WELCOME_ENCRYPTION_CURVE25519",
+        "WELCOME_ENCRYPTION_XWING_MLKEM_512"
+      ],
+      "default": "WELCOME_ENCRYPTION_UNSPECIFIED",
+      "title": "WelcomeEncryption"
+    },
     "payer_apiPublishClientEnvelopesRequest": {
       "type": "object",
       "properties": {
@@ -546,6 +556,9 @@
         "hpkePublicKey": {
           "type": "string",
           "format": "byte"
+        },
+        "ciphersuite": {
+          "$ref": "#/definitions/message_contentsWelcomeEncryption"
         }
       },
       "title": "Version 1 of the WelcomeMessageInput format"
