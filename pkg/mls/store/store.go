@@ -45,6 +45,7 @@ type MlsStore interface {
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
+	RunInTx(ctx context.Context, opts *sql.TxOptions, fn func(ctx context.Context, txQueries *queries.Queries) error) error
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {

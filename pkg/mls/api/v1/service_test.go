@@ -283,6 +283,91 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
+func TestSendWelcomeMessagesConcurrent(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := []byte(test.RandomString(32))
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{
+			{
+				Version: &mlsv1.WelcomeMessageInput_V1_{
+					V1: &mlsv1.WelcomeMessageInput_V1{
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test1"),
+						HpkePublicKey:   []byte("test1"),
+					},
+				},
+			},
+			{
+				Version: &mlsv1.WelcomeMessageInput_V1_{
+					V1: &mlsv1.WelcomeMessageInput_V1{
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test2"),
+						HpkePublicKey:   []byte("test2"),
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: installationId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+
+	hasMessage1 := false
+	hasMessage2 := false
+	for _, msg := range resp.Messages {
+		if bytes.Equal(msg.GetV1().Data, []byte("test1")) {
+			hasMessage1 = true
+		}
+		if bytes.Equal(msg.GetV1().Data, []byte("test2")) {
+			hasMessage2 = true
+		}
+	}
+	require.True(t, hasMessage1, "should have message with data 'test1'")
+	require.True(t, hasMessage2, "should have message with data 'test2'")
+}
+
+func TestSendWelcomeMessagesDuplicate(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := []byte(test.RandomString(32))
+
+	msg := &mlsv1.WelcomeMessageInput{
+		Version: &mlsv1.WelcomeMessageInput_V1_{
+			V1: &mlsv1.WelcomeMessageInput_V1{
+				InstallationKey: []byte(installationId),
+				Data:            []byte("test1"),
+				HpkePublicKey:   []byte("test1"),
+			},
+		},
+	}
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{msg},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{msg},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: installationId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 1)
+}
+
 func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
@@ -295,10 +380,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		msgs[i] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(i + 1),
-					CreatedNs: uint64(i + 1),
-					GroupId:   groupId,
-					Data:      []byte(fmt.Sprintf("data%d", i+1)),
+					Id:         uint64(i + 1),
+					CreatedNs:  uint64(i + 1),
+					GroupId:    groupId,
+					Data:       []byte(fmt.Sprintf("data%d", i+1)),
 					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 					ShouldPush: true,
 				},
@@ -353,7 +438,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data1"),
+					Data:       []byte("data1"),
 					SenderHmac: []byte("hmac1"),
 					ShouldPush: true,
 				},
@@ -362,7 +447,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data2"),
+					Data:       []byte("data2"),
 					SenderHmac: []byte("hmac2"),
 					ShouldPush: true,
 				},
@@ -371,7 +456,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data3"),
+					Data:       []byte("data3"),
 					SenderHmac: []byte("hmac3"),
 					ShouldPush: false,
 				},
