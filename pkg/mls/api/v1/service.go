@@ -83,7 +83,7 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 
 		// Build the nats subject from the topic
 		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
-		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
+		s.log.Debug("publishing to nats subject from relay", zap.String("subject", natsSubject))
 		env := envelopes.BuildEnvelope(wakuMsg)
 		envB, err := pb.Marshal(env)
 		if err != nil {
@@ -96,10 +96,10 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 			return err
 		}
 	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
-		s.log.Info("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+		s.log.Debug("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
 
 		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
-		s.log.Info("publishing to nats subject from relay", zap.String("subject", natsSubject))
+		s.log.Debug("publishing to nats subject from relay", zap.String("subject", natsSubject))
 		env := envelopes.BuildEnvelope(wakuMsg)
 		envB, err := pb.Marshal(env)
 		if err != nil {

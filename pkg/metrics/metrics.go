@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	grpcPrometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -32,6 +33,7 @@ func NewMetricsServer(ctx context.Context, address string, port int, log *zap.Lo
 		return nil, err
 	}
 	registerCollectors(reg)
+	reg.MustRegister(grpcPrometheus.DefaultServerMetrics)
 	srv := http.Server{
 		Addr:    addr,
 		Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}),
