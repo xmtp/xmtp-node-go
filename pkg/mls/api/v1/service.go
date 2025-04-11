@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -13,14 +12,13 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
-	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -284,44 +282,27 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		return nil, err
 	}
 
+	// TODO: Remove after debugging is done
+	ip := utils.ClientIPFromContext(ctx)
+
 	err = tracing.Wrap(ctx, log, "send-welcome-messages", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
+		tracing.SpanTag(span, "client_ip", ip)
 		tracing.SpanTag(span, "message_count", len(req.Messages))
-		savedMessages := make([]*queries.WelcomeMessage, len(req.Messages))
 
-		txErr := s.store.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead}, func(ctx context.Context, txQueries *queries.Queries) error {
-			g, ctx := errgroup.WithContext(ctx)
-			for idx, input := range req.Messages {
-				idx := idx
-				input := input
-				g.Go(func() error {
-					insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
-					msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey)
-					insertSpan.Finish(tracing.WithError(err))
-					if err != nil {
-						if mlsstore.IsAlreadyExistsError(err) {
-							return nil
-						}
-
-						return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-					}
-					savedMessages[idx] = msg
-					return nil
-				})
+		// TODO: Wrap this in a transaction so publishing is all or nothing
+		for _, input := range req.Messages {
+			insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
+			insertLogger := tracing.Link(insertSpan, log)
+			insertLogger.Info("inserting welcome message", zap.String("client_ip", ip), zap.Int("message_length", len(input.GetV1().Data)))
+			msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey)
+			insertSpan.Finish(tracing.WithError(err))
+			if err != nil {
+				if mlsstore.IsAlreadyExistsError(err) {
+					continue
+				}
+				return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 			}
-			return g.Wait()
-		})
 
-		if txErr != nil {
-			return txErr
-		}
-
-		// Publish any new messages to Waku
-		for idx, input := range req.Messages {
-			msg := savedMessages[idx]
-			if msg == nil {
-				// If the message is nil, it was already inserted or there was an error
-				continue
-			}
 			msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
 				Version: &mlsv1.WelcomeMessage_V1_{
 					V1: &mlsv1.WelcomeMessage_V1{
