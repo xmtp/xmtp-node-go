@@ -6,7 +6,7 @@ go generate ./...
 # Generate mocks
 mockery
 rm -rf pkg/proto/**/*.pb.go pkg/proto/**/*.pb.gw.go pkg/proto/**/*.swagger.json
-if ! buf generate https://github.com/xmtp/proto.git#branch=main,subdir=proto; then
+if ! buf generate https://github.com/xmtp/proto.git#branch=04-08-add_welcomeencryption_parameters_to_proto,subdir=proto; then
     echo "Failed to generate protobuf definitions"
     exit 1
 fi
