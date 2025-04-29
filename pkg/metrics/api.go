@@ -15,10 +15,11 @@ import (
 
 var (
 	appClientVersionTagKeys = []string{
-		"client",
-		"client_version",
 		"app",
 		"app_version",
+		"client",
+		"client_version",
+		"libxmtp_version",
 	}
 	apiRequestTagKeys = append([]string{
 		"service",
