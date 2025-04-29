@@ -371,8 +371,9 @@ func preflightHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type",
 		"Accept",
 		"Authorization",
-		"X-Client-Version",
 		"X-App-Version",
+		"X-Client-Version",
+		"X-Libxmtp-Version",
 		"Baggage",
 		"DNT",
 		"Sec-CH-UA",
@@ -401,9 +402,11 @@ func allowCORS(h http.Handler) http.Handler {
 
 func incomingHeaderMatcher(key string) (string, bool) {
 	switch strings.ToLower(key) {
+	case apicontext.AppVersionMetadataKey:
+		return key, true
 	case apicontext.ClientVersionMetadataKey:
 		return key, true
-	case apicontext.AppVersionMetadataKey:
+	case apicontext.LibxmtpVersionMetadataKey:
 		return key, true
 	default:
 		return key, false
