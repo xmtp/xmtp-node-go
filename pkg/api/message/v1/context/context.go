@@ -77,9 +77,6 @@ func (ri *requesterInfo) isSupportedClient() bool {
 	if ri.LibxmtpVersion == "" || !semver.IsValid(ri.LibxmtpVersion) {
 		return true
 	}
-	if ri.LibxmtpVersion == "1.2.0-dev" {
-		return true
-	}
 	if semver.Compare(ri.LibxmtpVersion, "1.1.5") >= 0 {
 		return true
 	}
