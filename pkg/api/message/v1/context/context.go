@@ -73,11 +73,15 @@ func (ri *requesterInfo) isSupportedClient() bool {
 	if os.Getenv("ENV") != "production" {
 		return true
 	}
+	normalizedVersion := ri.LibxmtpVersion
+	if normalizedVersion == "" || normalizedVersion[0] != 'v' {
+		normalizedVersion = "v" + normalizedVersion
+	}
 	// Err on the side of caution for unknown versions
-	if ri.LibxmtpVersion == "" || !semver.IsValid(ri.LibxmtpVersion) {
+	if !semver.IsValid(normalizedVersion) {
 		return true
 	}
-	if semver.Compare(ri.LibxmtpVersion, "1.1.5") >= 0 {
+	if semver.Compare(normalizedVersion, "v1.1.5") >= 0 {
 		return true
 	}
 
