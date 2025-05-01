@@ -151,6 +151,10 @@ func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, 
 		ip = "ip_unknown"
 		wa.Log.Warn("no ip found", logging.String("method", fullMethod))
 	}
+	if isAllowListedIp(ip) {
+		wa.Log.Info("allow listed ip", logging.String("ip", ip))
+		return nil
+	}
 
 	// with no wallet apply regular limits
 	var isPriority bool
@@ -235,4 +239,18 @@ func allowedToPublish(topic string, wallet types.WalletAddr) bool {
 	}
 
 	return true
+}
+
+var allowListedIps = []string{
+	"172.226.164.49",
+}
+
+func isAllowListedIp(ip string) bool {
+	for _, allowListedIp := range allowListedIps {
+		if allowListedIp == ip {
+			return true
+		}
+	}
+
+	return false
 }
