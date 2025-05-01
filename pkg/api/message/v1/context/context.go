@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -48,7 +49,7 @@ func (ri *requesterInfo) ZapFields() []zap.Field {
 		zap.String("app_version", ri.AppVersion),
 		zap.String("client", ri.ClientName),
 		zap.String("client_version", ri.ClientVersion),
-		zap.Bool("is_supported_client", ri.IsSupportedClient),
+		zap.String("is_supported_client", fmt.Sprintf("%t", ri.IsSupportedClient)),
 		zap.String("libxmtp_version", ri.LibxmtpVersion),
 	}
 }
