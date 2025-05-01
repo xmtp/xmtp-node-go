@@ -2,9 +2,11 @@ package context
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"go.uber.org/zap"
+	"golang.org/x/mod/semver"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -21,6 +23,8 @@ type requesterInfo struct {
 	ClientName    string
 	ClientVersion string
 
+	IsSupportedClient bool
+
 	LibxmtpVersion string
 }
 
@@ -33,6 +37,7 @@ func NewRequesterInfo(ctx context.Context) *requesterInfo {
 	ri.AppName, _, ri.AppVersion = parseVersionHeaderValue(md.Get(AppVersionMetadataKey))
 	ri.ClientName, _, ri.ClientVersion = parseVersionHeaderValue(md.Get(ClientVersionMetadataKey))
 	_, _, ri.LibxmtpVersion = parseVersionHeaderValue(md.Get(LibxmtpVersionMetadataKey))
+	ri.IsSupportedClient = ri.isSupportedClient()
 	md.Append("X-User-Id", "real_user_id")
 	return ri
 }
@@ -43,6 +48,7 @@ func (ri *requesterInfo) ZapFields() []zap.Field {
 		zap.String("app_version", ri.AppVersion),
 		zap.String("client", ri.ClientName),
 		zap.String("client_version", ri.ClientVersion),
+		zap.Bool("is_supported_client", ri.IsSupportedClient),
 		zap.String("libxmtp_version", ri.LibxmtpVersion),
 	}
 }
@@ -60,4 +66,20 @@ func parseVersionHeaderValue(vals []string) (name string, version string, full s
 		}
 	}
 	return
+}
+
+func (ri *requesterInfo) isSupportedClient() bool {
+	// Only version-gate on production
+	if os.Getenv("ENV") != "production" {
+		return true
+	}
+	// Err on the side of caution for unknown versions
+	if ri.LibxmtpVersion == "" || !semver.IsValid(ri.LibxmtpVersion) {
+		return true
+	}
+	if semver.Compare(ri.LibxmtpVersion, "1.1.5") >= 0 {
+		return true
+	}
+
+	return false
 }
