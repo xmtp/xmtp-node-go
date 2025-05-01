@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const IS_GATING_ENABLED = false
+const IS_GATING_ENABLED = true
 
 type GatingInterceptor struct {
 	log *zap.Logger
