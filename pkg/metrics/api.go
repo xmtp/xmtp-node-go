@@ -19,6 +19,7 @@ var (
 		"app_version",
 		"client",
 		"client_version",
+		"is_supported_client",
 		"libxmtp_version",
 	}
 	apiRequestTagKeys = append([]string{

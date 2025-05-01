@@ -107,8 +107,9 @@ func (s *Server) startGRPC() error {
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 
 	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
-	unary = append(unary, telemetryInterceptor.Unary())
-	stream = append(stream, telemetryInterceptor.Stream())
+	gatingInterceptor := NewGatingInterceptor(s.Log)
+	unary = append(unary, telemetryInterceptor.Unary(), gatingInterceptor.Unary())
+	stream = append(stream, telemetryInterceptor.Stream(), gatingInterceptor.Stream())
 
 	// Initialize nats for API subscribers.
 	s.natsServer, err = server.NewServer(&server.Options{
