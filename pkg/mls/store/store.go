@@ -71,7 +71,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 
 	addresses := []string{}
 	for _, request := range req.Requests {
-		addresses = append(addresses, request.GetAddress())
+		addresses = append(addresses, request.GetIdentifier())
 	}
 
 	addressLogEntries, err := s.queries.GetAddressLogs(ctx, addresses)
@@ -83,7 +83,7 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 
 	for index, address := range addresses {
 		resp := identity.GetInboxIdsResponse_Response{}
-		resp.Address = address
+		resp.Identifier = address
 
 		for _, logEntry := range addressLogEntries {
 			if logEntry.Address == address {
@@ -156,9 +156,9 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 		for _, new_member := range state.StateDiff.NewMembers {
 			log.Info("New member", zap.Any("member", new_member))
-			if address, ok := new_member.Kind.(*associations.MemberIdentifier_Address); ok {
+			if address, ok := new_member.Kind.(*associations.MemberIdentifier_EthereumAddress); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
-					Address:               address.Address,
+					Address:               address.EthereumAddress,
 					InboxID:               inboxId,
 					AssociationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 					RevocationSequenceID:  sql.NullInt64{Valid: false},
@@ -171,9 +171,9 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 
 		for _, removed_member := range state.StateDiff.RemovedMembers {
 			log.Info("Removed member", zap.Any("member", removed_member))
-			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_Address); ok {
+			if address, ok := removed_member.Kind.(*associations.MemberIdentifier_EthereumAddress); ok {
 				err = txQueries.RevokeAddressFromLog(ctx, queries.RevokeAddressFromLogParams{
-					Address:              address.Address,
+					Address:              address.EthereumAddress,
 					InboxID:              inboxId,
 					RevocationSequenceID: sql.NullInt64{Valid: true, Int64: sequence_id},
 				})
