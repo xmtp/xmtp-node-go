@@ -3,18 +3,14 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sync"
 
-	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go"
-	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
-	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
@@ -34,26 +30,23 @@ type Service struct {
 	store             mlsstore.MlsStore
 	validationService mlsvalidate.MLSValidationService
 
-	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error
+	dbWorker *dbWorker
 
-	nc *nats.Conn
+	subDispatcher *subscriptions.SubscriptionDispatcher
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.MlsStore, subDispatcher *subscriptions.SubscriptionDispatcher, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
-		log:                log.Named("mls/v1"),
-		store:              store,
-		validationService:  validationService,
-		publishToWakuRelay: publishToWakuRelay,
+		log:               log.Named("mls/v1"),
+		store:             store,
+		validationService: validationService,
+		subDispatcher:     subDispatcher,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-
-	// Initialize nats for subscriptions.
-	s.nc, err = nats.Connect(natsServer.ClientURL())
-	if err != nil {
+	if s.dbWorker, err = newDBWorker(s.ctx, log, s.store.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
 		return nil, err
 	}
 
@@ -68,52 +61,7 @@ func (s *Service) Close() {
 		s.ctxCancel()
 	}
 
-	if s.nc != nil {
-		s.nc.Close()
-	}
-
 	s.log.Info("closed")
-}
-
-func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
-	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
-		s.log.Info("received group message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-
-		// Build the nats subject from the topic
-		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
-		s.log.Debug("publishing to nats subject from relay", zap.String("subject", natsSubject))
-		env := envelopes.BuildEnvelope(wakuMsg)
-		envB, err := pb.Marshal(env)
-		if err != nil {
-			return err
-		}
-
-		err = s.nc.Publish(natsSubject, envB)
-		if err != nil {
-			s.log.Error("error publishing to nats", zap.Error(err))
-			return err
-		}
-	} else if topic.IsMLSV1Welcome(wakuMsg.ContentTopic) {
-		s.log.Debug("received welcome message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-
-		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
-		s.log.Debug("publishing to nats subject from relay", zap.String("subject", natsSubject))
-		env := envelopes.BuildEnvelope(wakuMsg)
-		envB, err := pb.Marshal(env)
-		if err != nil {
-			return err
-		}
-
-		err = s.nc.Publish(natsSubject, envB)
-		if err != nil {
-			s.log.Error("error publishing to nats", zap.Error(err))
-			return err
-		}
-	} else {
-		s.log.Info("received unknown mls message type from waku relay", zap.String("topic", wakuMsg.ContentTopic))
-	}
-
-	return nil
 }
 
 /*
@@ -213,7 +161,6 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 		// TODO: Separate validation errors from internal errors
 		return nil, status.Errorf(codes.InvalidArgument, "invalid group message: %s", err)
 	}
-	log.Info("validated group messages", zap.Int("count", len(validationResults)))
 
 	for i, result := range validationResults {
 		input := req.Messages[i]
@@ -240,36 +187,6 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			return nil, status.Errorf(codes.Internal, "failed to insert message: %s", err)
 		}
 
-		msgB, err := pb.Marshal(&mlsv1.GroupMessage{
-			Version: &mlsv1.GroupMessage_V1_{
-				V1: &mlsv1.GroupMessage_V1{
-					Id:         uint64(msg.ID),
-					CreatedNs:  uint64(msg.CreatedAt.UnixNano()),
-					GroupId:    msg.GroupID,
-					Data:       msg.Data,
-					SenderHmac: msgV1.SenderHmac,
-					ShouldPush: msgV1.ShouldPush,
-				},
-			},
-		})
-		if err != nil {
-			log.Error("error serializing message", zap.Error(err))
-			return nil, err
-		}
-
-		contentTopic := topic.BuildMLSV1GroupTopic(decodedGroupId)
-
-		err = s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
-			ContentTopic: contentTopic,
-			Timestamp:    msg.CreatedAt.UnixNano(),
-			Payload:      msgB,
-		})
-		if err != nil {
-			log.Error("error publishing to waku message", zap.Error(err), zap.String("contentTopic", contentTopic))
-			return nil, err
-		}
-		log.Info("published to waku relay", zap.String("contentTopic", contentTopic))
-
 		metrics.EmitMLSSentGroupMessage(ctx, log, msg)
 	}
 
@@ -289,7 +206,6 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		tracing.SpanTag(span, "client_ip", ip)
 		tracing.SpanTag(span, "message_count", len(req.Messages))
 
-		// TODO: Wrap this in a transaction so publishing is all or nothing
 		for _, input := range req.Messages {
 			insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
 			insertLogger := tracing.Link(insertSpan, log)
@@ -301,33 +217,6 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 					continue
 				}
 				return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-			}
-
-			msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
-				Version: &mlsv1.WelcomeMessage_V1_{
-					V1: &mlsv1.WelcomeMessage_V1{
-						Id:              uint64(msg.ID),
-						CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-						InstallationKey: msg.InstallationKey,
-						Data:            msg.Data,
-						HpkePublicKey:   msg.HpkePublicKey,
-					},
-				},
-			})
-			if err != nil {
-				return err
-			}
-
-			publishSpan, publishCtx := tracer.StartSpanFromContext(ctx, "publish-welcome-to-relay")
-			err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
-				ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
-				Timestamp:    msg.CreatedAt.UnixNano(),
-				Payload:      msgB,
-			})
-			publishSpan.Finish(tracing.WithError(err))
-
-			if err != nil {
-				return err
 			}
 
 			metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
@@ -358,198 +247,244 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	streamed := map[string]*mlsv1.GroupMessage{}
-	var streamingLock sync.Mutex
-	streamMessages := func(msgs []*mlsv1.GroupMessage) {
-		streamingLock.Lock()
-		defer streamingLock.Unlock()
+	var streamLock sync.Mutex
+	highWaterMarks := make(map[string]uint64)
+
+	sendToStream := func(msgs []*mlsv1.GroupMessage) {
+		streamLock.Lock()
+		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
-			if msg.GetV1() == nil {
+			groupID := string(msg.GetV1().GroupId)
+			if highWaterMarks[groupID] < msg.GetV1().Id {
+				highWaterMarks[groupID] = msg.GetV1().Id
+			} else {
 				continue
 			}
-			encodedId := fmt.Sprintf("%x", msg.GetV1().Id)
-			if _, ok := streamed[encodedId]; ok {
-				log.Debug("skipping already streamed message", zap.String("id", encodedId))
-				continue
-			}
-			err := stream.Send(msg)
-			if err != nil {
+			if err := stream.Send(msg); err != nil {
 				log.Error("error streaming group message", zap.Error(err))
 			}
-			streamed[encodedId] = msg
 		}
 	}
 
-	for _, filter := range req.Filters {
-		filter := filter
+	errChan := make(chan error, len(req.Filters))
 
-		natsSubject := buildNatsSubjectForGroupMessages(filter.GroupId)
-		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
-			msg, err := getGroupMessageFromNats(natsMsg)
+	fetchHistorical := func(filter *mlsv1.SubscribeGroupMessagesRequest_Filter) {
+		pagingInfo := &mlsv1.PagingInfo{
+			IdCursor:  filter.IdCursor,
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+		}
+
+		for {
+			select {
+			case <-stream.Context().Done():
+				return
+			case <-s.ctx.Done():
+				return
+			default:
+			}
+
+			if len(errChan) > 0 {
+				return
+			}
+
+			resp, err := s.store.QueryGroupMessagesV1(stream.Context(), &mlsv1.QueryGroupMessagesRequest{
+				GroupId:    filter.GroupId,
+				PagingInfo: pagingInfo,
+			})
+			if err != nil {
+				if err == context.Canceled {
+					return
+				}
+				log.Error("error querying for subscription cursor messages", zap.Error(err))
+				errChan <- err
+				return
+			}
+
+			sendToStream(resp.Messages)
+
+			if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+				break
+			}
+			pagingInfo = resp.PagingInfo
+		}
+	}
+
+	topicMap := make(map[string]bool)
+	for _, filter := range req.Filters {
+		topicMap[topic.BuildMLSV1GroupTopic(filter.GroupId)] = true
+	}
+
+	// Start the subscription before we start fetching historical messages
+	sub := s.subDispatcher.Subscribe(topicMap)
+	defer sub.Unsubscribe()
+
+	var wg sync.WaitGroup
+	for _, filter := range req.Filters {
+		wg.Add(1)
+		go func(filter *mlsv1.SubscribeGroupMessagesRequest_Filter) {
+			defer wg.Done()
+			fetchHistorical(filter)
+		}(filter)
+	}
+
+	// Wait for all historical messages to be fetched before returning anything from the subscription
+	wg.Wait()
+
+	var (
+		msg     *mlsv1.GroupMessage
+		err     error
+		env     *v1proto.Envelope
+		subOpen bool
+	)
+
+	for {
+		select {
+		// We received an error when pulling the historical messages
+		case err = <-errChan:
+			return err
+		// The stream is closed
+		case <-stream.Context().Done():
+			return nil
+		// The service is shutting down
+		case <-s.ctx.Done():
+			return status.Errorf(codes.Unavailable, "service is shutting down")
+		// We received a message from the subscription
+		case env, subOpen = <-sub.MessagesCh:
+			if !subOpen {
+				return status.Errorf(codes.Aborted, "caller did not read all messages fast enough")
+			}
+			msg, err = getGroupMessageFromEnvelope(env)
 			if err != nil {
 				log.Error("error parsing message", zap.Error(err))
+				continue
 			}
-			streamMessages([]*mlsv1.GroupMessage{msg})
-		})
-		if err != nil {
-			log.Error("error subscribing to group messages", zap.Error(err))
-			return err
+			sendToStream([]*mlsv1.GroupMessage{msg})
 		}
-		defer func() {
-			_ = sub.Unsubscribe()
-		}()
-
-		if filter.IdCursor > 0 {
-			go func() {
-				pagingInfo := &mlsv1.PagingInfo{
-					IdCursor:  filter.IdCursor,
-					Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
-				}
-				for {
-					select {
-					case <-stream.Context().Done():
-						return
-					case <-s.ctx.Done():
-						return
-					default:
-					}
-
-					resp, err := s.store.QueryGroupMessagesV1(stream.Context(), &mlsv1.QueryGroupMessagesRequest{
-						GroupId:    filter.GroupId,
-						PagingInfo: pagingInfo,
-					})
-					if err != nil {
-						if err == context.Canceled {
-							return
-						}
-						log.Error("error querying for subscription cursor messages", zap.Error(err))
-						return
-					}
-
-					streamMessages(resp.Messages)
-
-					if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
-						break
-					}
-					pagingInfo = resp.PagingInfo
-				}
-			}()
-		}
-	}
-
-	select {
-	case <-stream.Context().Done():
-		return nil
-	case <-s.ctx.Done():
-		return nil
 	}
 }
 
 func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRequest, stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer) error {
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
-	defer log.Info("subscription ended")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	streamed := map[string]*mlsv1.WelcomeMessage{}
-	var streamingLock sync.Mutex
-	streamMessages := func(msgs []*mlsv1.WelcomeMessage) {
-		streamingLock.Lock()
-		defer streamingLock.Unlock()
+	highWaterMarks := make(map[string]uint64)
+	var streamLock sync.Mutex
+	sendToStream := func(msgs []*mlsv1.WelcomeMessage) {
+		streamLock.Lock()
+		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
-			if msg.GetV1() == nil {
+			installationKey := string(msg.GetV1().InstallationKey)
+			if highWaterMarks[installationKey] < msg.GetV1().Id {
+				highWaterMarks[installationKey] = msg.GetV1().Id
+			} else {
 				continue
 			}
-			encodedId := fmt.Sprintf("%x", msg.GetV1().Id)
-			if _, ok := streamed[encodedId]; ok {
-				log.Debug("skipping already streamed message", zap.String("id", encodedId))
-				continue
+			if err := stream.Send(msg); err != nil {
+				log.Error("error streaming group message", zap.Error(err))
 			}
-			err := stream.Send(msg)
-			if err != nil {
-				log.Error("error streaming welcome message", zap.Error(err))
-			}
-			streamed[encodedId] = msg
 		}
 	}
 
-	for _, filter := range req.Filters {
-		filter := filter
+	errChan := make(chan error, len(req.Filters))
 
-		natsSubject := buildNatsSubjectForWelcomeMessages(filter.InstallationKey)
-		sub, err := s.nc.Subscribe(natsSubject, func(natsMsg *nats.Msg) {
-			msg, err := getWelcomeMessageFromNats(natsMsg)
+	fetchHistorical := func(filter *mlsv1.SubscribeWelcomeMessagesRequest_Filter) {
+		pagingInfo := &mlsv1.PagingInfo{
+			IdCursor:  filter.IdCursor,
+			Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+		}
+
+		for {
+			select {
+			case <-stream.Context().Done():
+				return
+			case <-s.ctx.Done():
+				return
+			default:
+			}
+
+			if len(errChan) > 0 {
+				return
+			}
+
+			resp, err := s.store.QueryWelcomeMessagesV1(stream.Context(), &mlsv1.QueryWelcomeMessagesRequest{
+				InstallationKey: filter.InstallationKey,
+				PagingInfo:      pagingInfo,
+			})
+			if err != nil {
+				if err == context.Canceled {
+					return
+				}
+				log.Error("error querying for subscription cursor messages", zap.Error(err))
+				errChan <- err
+				return
+			}
+
+			sendToStream(resp.Messages)
+
+			if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+				break
+			}
+			pagingInfo = resp.PagingInfo
+		}
+	}
+
+	topicMap := make(map[string]bool)
+	for _, filter := range req.Filters {
+		topicMap[topic.BuildMLSV1WelcomeTopic(filter.InstallationKey)] = true
+	}
+
+	// Start the subscription before we start fetching historical messages
+	sub := s.subDispatcher.Subscribe(topicMap)
+	defer sub.Unsubscribe()
+
+	var wg sync.WaitGroup
+	for _, filter := range req.Filters {
+		wg.Add(1)
+		go func(filter *mlsv1.SubscribeWelcomeMessagesRequest_Filter) {
+			defer wg.Done()
+			fetchHistorical(filter)
+		}(filter)
+	}
+
+	// Wait for all historical messages to be fetched before returning anything from the subscription
+	wg.Wait()
+
+	var (
+		msg     *mlsv1.WelcomeMessage
+		err     error
+		env     *v1proto.Envelope
+		subOpen bool
+	)
+
+	for {
+		select {
+		// We received an error when pulling the historical messages
+		case err = <-errChan:
+			return err
+		// The stream is closed
+		case <-stream.Context().Done():
+			return nil
+		// The service is shutting down
+		case <-s.ctx.Done():
+			return status.Errorf(codes.Unavailable, "service is shutting down")
+		// We received a message from the subscription
+		case env, subOpen = <-sub.MessagesCh:
+			if !subOpen {
+				return nil
+			}
+			msg, err = getWelcomeMessageFromEnvelope(env)
 			if err != nil {
 				log.Error("error parsing message", zap.Error(err))
+				continue
 			}
-			streamMessages([]*mlsv1.WelcomeMessage{msg})
-		})
-		if err != nil {
-			log.Error("error subscribing to welcome messages", zap.Error(err))
-			return err
-		}
-		defer func() {
-			_ = sub.Unsubscribe()
-		}()
-
-		if filter.IdCursor > 0 {
-			go func() {
-				pagingInfo := &mlsv1.PagingInfo{
-					IdCursor:  filter.IdCursor,
-					Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
-				}
-				for {
-					select {
-					case <-stream.Context().Done():
-						return
-					case <-s.ctx.Done():
-						return
-					default:
-					}
-
-					resp, err := s.store.QueryWelcomeMessagesV1(stream.Context(), &mlsv1.QueryWelcomeMessagesRequest{
-						InstallationKey: filter.InstallationKey,
-						PagingInfo:      pagingInfo,
-					})
-					if err != nil {
-						if err == context.Canceled {
-							return
-						}
-						log.Error("error querying for subscription cursor messages", zap.Error(err))
-						return
-					}
-
-					streamMessages(resp.Messages)
-
-					if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
-						break
-					}
-					pagingInfo = resp.PagingInfo
-				}
-			}()
+			sendToStream([]*mlsv1.WelcomeMessage{msg})
 		}
 	}
-
-	select {
-	case <-stream.Context().Done():
-		return nil
-	case <-s.ctx.Done():
-		return nil
-	}
-}
-
-func buildNatsSubjectForGroupMessages(groupId []byte) string {
-	contentTopic := topic.BuildMLSV1GroupTopic(groupId)
-	return envelopes.BuildNatsSubject(contentTopic)
-}
-
-func buildNatsSubjectForWelcomeMessages(installationId []byte) string {
-	contentTopic := topic.BuildMLSV1WelcomeTopic(installationId)
-	return envelopes.BuildNatsSubject(contentTopic)
 }
 
 func validateSendGroupMessagesRequest(req *mlsv1.SendGroupMessagesRequest) error {
@@ -605,15 +540,9 @@ func requireReadyToSend(groupId string, message []byte) error {
 	return nil
 }
 
-func getGroupMessageFromNats(natsMsg *nats.Msg) (*mlsv1.GroupMessage, error) {
-	var env v1proto.Envelope
-	err := pb.Unmarshal(natsMsg.Data, &env)
-	if err != nil {
-		return nil, err
-	}
-
+func getGroupMessageFromEnvelope(env *v1proto.Envelope) (*mlsv1.GroupMessage, error) {
 	var msg mlsv1.GroupMessage
-	err = pb.Unmarshal(env.Message, &msg)
+	err := pb.Unmarshal(env.Message, &msg)
 	if err != nil {
 		return nil, err
 	}
@@ -621,15 +550,9 @@ func getGroupMessageFromNats(natsMsg *nats.Msg) (*mlsv1.GroupMessage, error) {
 	return &msg, nil
 }
 
-func getWelcomeMessageFromNats(natsMsg *nats.Msg) (*mlsv1.WelcomeMessage, error) {
-	var env v1proto.Envelope
-	err := pb.Unmarshal(natsMsg.Data, &env)
-	if err != nil {
-		return nil, err
-	}
-
+func getWelcomeMessageFromEnvelope(env *v1proto.Envelope) (*mlsv1.WelcomeMessage, error) {
 	var msg mlsv1.WelcomeMessage
-	err = pb.Unmarshal(env.Message, &msg)
+	err := pb.Unmarshal(env.Message, &msg)
 	if err != nil {
 		return nil, err
 	}
