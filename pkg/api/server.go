@@ -12,7 +12,6 @@ import (
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/nats-io/nats-server/v2/server"
 	"github.com/pkg/errors"
 	swgui "github.com/swaggest/swgui/v3"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
@@ -22,7 +21,7 @@ import (
 	mlsv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	messagev1openapi "github.com/xmtp/xmtp-node-go/pkg/proto/openapi"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
-	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health"
@@ -62,7 +61,6 @@ type Server struct {
 	wg           sync.WaitGroup
 	ctx          context.Context
 	ctxCancel    func()
-	natsServer   *server.Server
 	wakuRelaySub *wakurelay.Subscription
 }
 
@@ -115,18 +113,6 @@ func (s *Server) startGRPC() error {
 	unary = append(unary, telemetryInterceptor.Unary(), gatingInterceptor.Unary())
 	stream = append(stream, telemetryInterceptor.Stream(), gatingInterceptor.Stream())
 
-	// Initialize nats for API subscribers.
-	s.natsServer, err = server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	if err != nil {
-		return err
-	}
-	go s.natsServer.Start()
-	if !s.natsServer.ReadyForConnections(4 * time.Second) {
-		return errors.New("nats not ready")
-	}
-
 	if s.Authn.Ratelimits {
 		limiter := s.getOrCreateRateLimiter()
 		interceptor := NewRateLimitInterceptor(limiter, s.AllowLister, s.Log)
@@ -156,7 +142,9 @@ func (s *Server) startGRPC() error {
 		return err
 	}
 
-	s.messagev1, err = messagev1.NewService(s.Log, s.Store, s.natsServer, publishToWakuRelay)
+	subDispatcher := subscriptions.NewSubscriptionDispatcher(s.Log)
+
+	s.messagev1, err = messagev1.NewService(s.Log, s.Store, subDispatcher, publishToWakuRelay)
 	if err != nil {
 		return errors.Wrap(err, "creating message service")
 	}
@@ -164,13 +152,7 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS and identity servers if a store is provided
 	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMls {
-		s.mlsv1, err = mlsv1.NewService(
-			s.Log,
-			s.MLSStore,
-			s.MLSValidator,
-			s.natsServer,
-			publishToWakuRelay,
-		)
+		s.mlsv1, err = mlsv1.NewService(s.Log, s.MLSStore, subDispatcher, s.MLSValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
@@ -198,23 +180,13 @@ func (s *Server) startGRPC() error {
 					continue
 				}
 				wakuMsg := wakuEnv.Message()
-
-				if topic.IsMLSV1(wakuMsg.ContentTopic) {
-					if s.mlsv1 != nil {
-						err := s.mlsv1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
-						if err != nil {
-							s.Log.Error(
-								"error handling waku relay message by mlsv1 service",
-								zap.Error(err),
-							)
-						}
-					}
-				} else {
-					if s.messagev1 != nil {
-						err := s.messagev1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
-						if err != nil {
-							s.Log.Error("error handling waku relay message by messagev1 service", zap.Error(err))
-						}
+				if s.messagev1 != nil {
+					err := s.messagev1.HandleIncomingWakuRelayMessage(wakuMsg)
+					if err != nil {
+						s.Log.Error(
+							"error handling waku relay message by messagev1 service",
+							zap.Error(err),
+						)
 					}
 				}
 
@@ -323,10 +295,6 @@ func (s *Server) Close() {
 	}
 	if s.mlsv1 != nil {
 		s.mlsv1.Close()
-	}
-
-	if s.natsServer != nil {
-		s.natsServer.Shutdown()
 	}
 
 	if s.httpListener != nil {
