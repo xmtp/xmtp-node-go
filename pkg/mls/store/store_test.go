@@ -359,7 +359,14 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data"), false)
+	msg, err := store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data"),
+		[]byte("sender_hmac"),
+		true,
+		true,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
@@ -370,6 +377,9 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	)
 	require.Equal(t, []byte("group"), msg.GroupID)
 	require.Equal(t, []byte("data"), msg.Data)
+	require.Equal(t, []byte("sender_hmac"), msg.SenderHmac)
+	require.True(t, msg.IsCommit.Bool)
+	require.True(t, msg.ShouldPush.Bool)
 
 	msgs, err := store.queries.GetAllGroupMessages(ctx)
 	require.NoError(t, err)
@@ -382,11 +392,25 @@ func TestInsertGroupMessage_Duplicate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data"), false)
+	msg, err := store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 
-	msg, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data"), false)
+	msg, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.Nil(t, msg)
 	require.IsType(t, &AlreadyExistsError{}, err)
 	require.True(t, IsAlreadyExistsError(err))
@@ -397,11 +421,32 @@ func TestInsertGroupMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, []byte("group"), []byte("data1"), false)
+	_, err := store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data1"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data2"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data2"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group"), []byte("data3"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group"),
+		[]byte("data3"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
 
 	msgs, err := store.queries.GetAllGroupMessages(ctx)
@@ -546,11 +591,32 @@ func TestQueryGroupMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, []byte("group1"), []byte("data1"), false)
+	_, err := store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("data1"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("data2"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group2"),
+		[]byte("data2"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("data3"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("data3"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
 
 	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
@@ -660,21 +726,77 @@ func TestQueryGroupMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertGroupMessage(ctx, []byte("group1"), []byte("content1"), false)
+	_, err := store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content1"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("content2"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group2"),
+		[]byte("content2"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content3"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content3"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group2"), []byte("content4"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group2"),
+		[]byte("content4"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content5"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content5"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content6"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content6"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content7"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content7"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
-	_, err = store.InsertGroupMessage(ctx, []byte("group1"), []byte("content8"), false)
+	_, err = store.InsertGroupMessage(
+		ctx,
+		[]byte("group1"),
+		[]byte("content8"),
+		[]byte("sender_hmac"),
+		true,
+		false,
+	)
 	require.NoError(t, err)
 
 	resp, err := store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
