@@ -115,7 +115,7 @@ WHERE
 SELECT
 	*
 FROM
-	insert_group_message(@group_id, @data, @group_id_data_hash);
+	insert_group_message_v2(@group_id, @data, @group_id_data_hash, @sender_hmac, @should_push);
 
 -- name: InsertWelcomeMessage :one
 SELECT
@@ -239,23 +239,30 @@ ON CONFLICT (id)
 		updated_at = NOW();
 
 -- name: GetOldWelcomeMessages :one
-SELECT COUNT(*)::bigint as old_message_count
-FROM welcome_messages
-WHERE created_at < NOW() - make_interval(days := @age_days);
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	welcome_messages
+WHERE
+	created_at < NOW() - make_interval(days := @age_days);
 
 -- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM welcome_messages
-    WHERE created_at < NOW() - make_interval(days := @age_days)
-    ORDER BY id
-    LIMIT 1000
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM welcome_messages wm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		welcome_messages
+	WHERE
+		created_at < NOW() - make_interval(days := @age_days)
+	ORDER BY
+		id
+	LIMIT 1000
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM welcome_messages wm USING to_delete td
 WHERE wm.id = td.id
-    RETURNING wm.id, wm.created_at;
+RETURNING
+	wm.id, wm.created_at;
 
 -- name: InsertCommitLog :one
 SELECT
