@@ -115,7 +115,7 @@ WHERE
 SELECT
 	*
 FROM
-    insert_group_message_with_is_commit(@group_id, @data, @group_id_data_hash, @is_commit);
+	insert_group_message_v3(@group_id, @data, @group_id_data_hash, @sender_hmac, @should_push, @is_commit);
 
 -- name: InsertWelcomeMessage :one
 SELECT
@@ -239,23 +239,30 @@ ON CONFLICT (id)
 		updated_at = NOW();
 
 -- name: GetOldWelcomeMessages :one
-SELECT COUNT(*)::bigint as old_message_count
-FROM welcome_messages
-WHERE created_at < NOW() - make_interval(days := @age_days);
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	welcome_messages
+WHERE
+	created_at < NOW() - make_interval(days := @age_days);
 
 -- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM welcome_messages
-    WHERE created_at < NOW() - make_interval(days := @age_days)
-    ORDER BY id
-    LIMIT @batch_size
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM welcome_messages wm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		welcome_messages
+	WHERE
+		created_at < NOW() - make_interval(days := @age_days)
+	ORDER BY
+		id
+	LIMIT @batch_size
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM welcome_messages wm USING to_delete td
 WHERE wm.id = td.id
-    RETURNING wm.id, wm.created_at;
+RETURNING
+	wm.id, wm.created_at;
 
 -- name: InsertCommitLog :one
 SELECT
@@ -264,24 +271,30 @@ FROM
 	insert_commit_log(@group_id, @encrypted_entry);
 
 -- name: CountDeletableGroupMessages :one
-SELECT COUNT(*)
-FROM group_messages
+SELECT
+	COUNT(*)
+FROM
+	group_messages
 WHERE
-    is_commit = false
-    AND
-    created_at < NOW() - make_interval(days := @age_days);
+	is_commit = FALSE
+	AND created_at < NOW() - make_interval(days := @age_days);
 
 -- name: DeleteOldGroupMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM group_messages
-    WHERE is_commit = false
-      AND created_at < NOW() - make_interval(days := @age_days)
-    ORDER BY id
-    LIMIT @batch_size
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM group_messages gm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		group_messages
+	WHERE
+		is_commit = FALSE
+		AND created_at < NOW() - make_interval(days := @age_days)
+	ORDER BY
+		id
+	LIMIT @batch_size
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM group_messages gm USING to_delete td
 WHERE gm.id = td.id
-    RETURNING gm.id, gm.created_at;
+RETURNING
+	gm.id, gm.created_at;
+
