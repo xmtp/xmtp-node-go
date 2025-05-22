@@ -107,8 +107,9 @@ func (s *Server) startGRPC() error {
 	stream := []grpc.StreamServerInterceptor{prometheus.StreamServerInterceptor}
 
 	telemetryInterceptor := NewTelemetryInterceptor(s.Log)
-	unary = append(unary, telemetryInterceptor.Unary())
-	stream = append(stream, telemetryInterceptor.Stream())
+	gatingInterceptor := NewGatingInterceptor(s.Log)
+	unary = append(unary, telemetryInterceptor.Unary(), gatingInterceptor.Unary())
+	stream = append(stream, telemetryInterceptor.Stream(), gatingInterceptor.Stream())
 
 	// Initialize nats for API subscribers.
 	s.natsServer, err = server.NewServer(&server.Options{
@@ -371,8 +372,9 @@ func preflightHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type",
 		"Accept",
 		"Authorization",
-		"X-Client-Version",
 		"X-App-Version",
+		"X-Client-Version",
+		"X-Libxmtp-Version",
 		"Baggage",
 		"DNT",
 		"Sec-CH-UA",
@@ -401,9 +403,11 @@ func allowCORS(h http.Handler) http.Handler {
 
 func incomingHeaderMatcher(key string) (string, bool) {
 	switch strings.ToLower(key) {
+	case apicontext.AppVersionMetadataKey:
+		return key, true
 	case apicontext.ClientVersionMetadataKey:
 		return key, true
-	case apicontext.AppVersionMetadataKey:
+	case apicontext.LibxmtpVersionMetadataKey:
 		return key, true
 	default:
 		return key, false
