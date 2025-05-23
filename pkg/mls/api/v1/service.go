@@ -27,7 +27,8 @@ type Service struct {
 	mlsv1.UnimplementedMlsApiServer
 
 	log               *zap.Logger
-	store             mlsstore.MlsStore
+	store             mlsstore.ReadWriteMlsStore
+	readStore         mlsstore.ReadMlsStore
 	validationService mlsvalidate.MLSValidationService
 
 	dbWorker *dbWorker
@@ -38,15 +39,16 @@ type Service struct {
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, subDispatcher *subscriptions.SubscriptionDispatcher, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.ReadWriteMlsStore, readStore mlsstore.ReadMlsStore, subDispatcher *subscriptions.SubscriptionDispatcher, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("mls/v1"),
 		store:             store,
+		readStore:         readStore,
 		validationService: validationService,
 		subDispatcher:     subDispatcher,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-	if s.dbWorker, err = newDBWorker(s.ctx, log, s.store.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
+	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
 		return nil, err
 	}
 
@@ -288,7 +290,7 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 				return
 			}
 
-			resp, err := s.store.QueryGroupMessagesV1(stream.Context(), &mlsv1.QueryGroupMessagesRequest{
+			resp, err := s.readStore.QueryGroupMessagesV1(stream.Context(), &mlsv1.QueryGroupMessagesRequest{
 				GroupId:    filter.GroupId,
 				PagingInfo: pagingInfo,
 			})
@@ -411,7 +413,7 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 				return
 			}
 
-			resp, err := s.store.QueryWelcomeMessagesV1(stream.Context(), &mlsv1.QueryWelcomeMessagesRequest{
+			resp, err := s.readStore.QueryWelcomeMessagesV1(stream.Context(), &mlsv1.QueryWelcomeMessagesRequest{
 				InstallationKey: filter.InstallationKey,
 				PagingInfo:      pagingInfo,
 			})

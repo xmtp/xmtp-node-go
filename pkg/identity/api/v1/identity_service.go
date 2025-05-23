@@ -14,14 +14,14 @@ type Service struct {
 	api.UnimplementedIdentityApiServer
 
 	log               *zap.Logger
-	store             mlsstore.MlsStore
+	store             mlsstore.ReadWriteMlsStore
 	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(log *zap.Logger, store mlsstore.ReadWriteMlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
 		store:             store,

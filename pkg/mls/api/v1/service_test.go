@@ -50,16 +50,13 @@ func mockValidateGroupMessages(m *mocks.MockMLSValidationService, groupId []byte
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mocks.MockMLSValidationService, func()) {
 	log := test.NewLog(t)
 	db, _, mlsDbCleanup := test.NewMLSDB(t)
-	store, err := mlsstore.New(ctx, mlsstore.Config{
-		Log: log,
-		DB:  db,
-	})
+	store, err := mlsstore.New(ctx, log, db)
 	require.NoError(t, err)
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 
 	subDispatcher := subscriptions.NewSubscriptionDispatcher(log)
 
-	svc, err := NewService(log, store, subDispatcher, mockMlsValidation)
+	svc, err := NewService(log, store, store, subDispatcher, mockMlsValidation)
 	require.NoError(t, err)
 
 	return svc, db, mockMlsValidation, func() {
@@ -435,7 +432,6 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		stream.EXPECT().Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
-
 	go func() {
 		err := svc.SubscribeGroupMessages(&mlsv1.SubscribeGroupMessagesRequest{
 			Filters: []*mlsv1.SubscribeGroupMessagesRequest_Filter{
