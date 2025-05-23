@@ -27,12 +27,8 @@ func NewTestStore(t *testing.T) (*Store, func()) {
 	log := test.NewLog(t)
 	db, _, dbCleanup := test.NewMLSDB(t)
 	ctx := context.Background()
-	c := Config{
-		Log: log,
-		DB:  db,
-	}
 
-	store, err := New(ctx, c)
+	store, err := New(ctx, log, db)
 	require.NoError(t, err)
 
 	return store, dbCleanup
