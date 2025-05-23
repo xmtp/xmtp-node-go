@@ -11,6 +11,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -168,11 +169,13 @@ func (w *dbWorker) listenForWelcomeMessages(ctx context.Context, startID int64) 
 				welcomeMessageProto := mlsv1.WelcomeMessage{
 					Version: &mlsv1.WelcomeMessage_V1_{
 						V1: &mlsv1.WelcomeMessage_V1{
-							Id:              uint64(welcomeMessage.ID),
-							Data:            welcomeMessage.Data,
-							CreatedNs:       uint64(welcomeMessage.CreatedAt.UnixNano()),
-							InstallationKey: welcomeMessage.InstallationKey,
-							HpkePublicKey:   welcomeMessage.HpkePublicKey,
+							Id:               uint64(welcomeMessage.ID),
+							Data:             welcomeMessage.Data,
+							CreatedNs:        uint64(welcomeMessage.CreatedAt.UnixNano()),
+							InstallationKey:  welcomeMessage.InstallationKey,
+							HpkePublicKey:    welcomeMessage.HpkePublicKey,
+							WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(welcomeMessage.WrapperAlgorithm)),
+							WelcomeMetadata:  welcomeMessage.WelcomeMetadata,
 						},
 					},
 				}

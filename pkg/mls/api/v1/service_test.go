@@ -65,16 +65,13 @@ func newTestService(
 ) (*Service, *bun.DB, *mocks.MockMLSValidationService, func()) {
 	log := test.NewLog(t)
 	db, _, mlsDbCleanup := test.NewMLSDB(t)
-	store, err := mlsstore.New(ctx, mlsstore.Config{
-		Log: log,
-		DB:  db,
-	})
+	store, err := mlsstore.New(ctx, log, db)
 	require.NoError(t, err)
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 
 	subDispatcher := subscriptions.NewSubscriptionDispatcher(log)
 
-	svc, err := NewService(log, store, subDispatcher, mockMlsValidation)
+	svc, err := NewService(log, store, store, subDispatcher, mockMlsValidation)
 	require.NoError(t, err)
 
 	return svc, db, mockMlsValidation, func() {
@@ -253,7 +250,7 @@ func TestSendGroupMessages(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := svc.store.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
+	resp, err := svc.writerStore.QueryGroupMessagesV1(ctx, &mlsv1.QueryGroupMessagesRequest{
 		GroupId: groupId,
 	})
 	require.NoError(t, err)
@@ -285,7 +282,7 @@ func TestSendWelcomeMessages(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+	resp, err := svc.writerStore.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
 		InstallationKey: installationId,
 	})
 	require.NoError(t, err)
@@ -330,7 +327,7 @@ func TestSendWelcomeMessagesConcurrent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+	resp, err := svc.writerStore.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
 		InstallationKey: installationId,
 	})
 	require.NoError(t, err)
@@ -515,7 +512,6 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
-
 	go func() {
 		err := svc.SubscribeGroupMessages(&mlsv1.SubscribeGroupMessagesRequest{
 			Filters: []*mlsv1.SubscribeGroupMessagesRequest_Filter{
@@ -879,7 +875,7 @@ func TestBatchPublishCommitLog(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the commit log entry was stored
-	resp, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+	resp, err := svc.writerStore.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
 		GroupId: groupId,
 	})
 	require.NoError(t, err)
@@ -913,14 +909,14 @@ func TestBatchPublishCommitLog_MultipleEntries(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify both commit log entries were stored
-	resp1, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+	resp1, err := svc.writerStore.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
 		GroupId: groupId1,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp1.CommitLogEntries, 1)
 	require.Equal(t, encryptedEntry1, resp1.CommitLogEntries[0].EncryptedCommitLogEntry)
 
-	resp2, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+	resp2, err := svc.writerStore.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
 		GroupId: groupId2,
 	})
 	require.NoError(t, err)

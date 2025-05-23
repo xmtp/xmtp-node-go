@@ -35,7 +35,8 @@ type Service struct {
 	mlsv1.UnimplementedMlsApiServer
 
 	log               *zap.Logger
-	store             mlsstore.MlsStore
+	writerStore       mlsstore.ReadWriteMlsStore
+	readOnlyStore     mlsstore.ReadMlsStore
 	validationService mlsvalidate.MLSValidationService
 
 	dbWorker *dbWorker
@@ -48,18 +49,20 @@ type Service struct {
 
 func NewService(
 	log *zap.Logger,
-	store mlsstore.MlsStore,
+	writerStore mlsstore.ReadWriteMlsStore,
+	readOnlyStore mlsstore.ReadMlsStore,
 	subDispatcher *subscriptions.SubscriptionDispatcher,
 	validationService mlsvalidate.MLSValidationService,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("mls/v1"),
-		store:             store,
+		writerStore:       writerStore,
+		readOnlyStore:     readOnlyStore,
 		validationService: validationService,
 		subDispatcher:     subDispatcher,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
-	if s.dbWorker, err = newDBWorker(s.ctx, log, s.store.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
+	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
 		return nil, err
 	}
 
@@ -103,7 +106,7 @@ func (s *Service) RegisterInstallation(
 	}
 
 	installationKey := results[0].InstallationKey
-	if err = s.store.CreateOrUpdateInstallation(ctx, installationKey, req.KeyPackage.KeyPackageTlsSerialized); err != nil {
+	if err = s.writerStore.CreateOrUpdateInstallation(ctx, installationKey, req.KeyPackage.KeyPackageTlsSerialized); err != nil {
 		return nil, err
 	}
 	return &mlsv1.RegisterInstallationResponse{
@@ -116,7 +119,7 @@ func (s *Service) FetchKeyPackages(
 	req *mlsv1.FetchKeyPackagesRequest,
 ) (*mlsv1.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationKeys
-	installations, err := s.store.FetchKeyPackages(ctx, ids)
+	installations, err := s.writerStore.FetchKeyPackages(ctx, ids)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to fetch key packages: %s", err)
 	}
@@ -163,7 +166,7 @@ func (s *Service) UploadKeyPackage(
 
 	installationId := validationResults[0].InstallationKey
 
-	if err = s.store.CreateOrUpdateInstallation(ctx, installationId, keyPackageBytes); err != nil {
+	if err = s.writerStore.CreateOrUpdateInstallation(ctx, installationId, keyPackageBytes); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
 
@@ -215,7 +218,7 @@ func (s *Service) SendGroupMessages(
 		}
 
 		msgV1 := input.GetV1()
-		msg, err := s.store.InsertGroupMessage(
+		msg, err := s.writerStore.InsertGroupMessage(
 			ctx,
 			decodedGroupId,
 			msgV1.Data,
@@ -262,7 +265,7 @@ func (s *Service) SendWelcomeMessages(
 						ctx,
 						"insert-welcome-message",
 					)
-					msg, err := s.store.InsertWelcomeMessage(
+					msg, err := s.writerStore.InsertWelcomeMessage(
 						insertCtx,
 						input.GetV1().InstallationKey,
 						input.GetV1().Data,
@@ -275,7 +278,7 @@ func (s *Service) SendWelcomeMessages(
 						if mlsstore.IsAlreadyExistsError(err) {
 							return nil
 						}
-						log.Error("error inserting welcome message", zap.Error(err))
+
 						return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 					}
 
@@ -298,14 +301,14 @@ func (s *Service) QueryGroupMessages(
 	ctx context.Context,
 	req *mlsv1.QueryGroupMessagesRequest,
 ) (*mlsv1.QueryGroupMessagesResponse, error) {
-	return s.store.QueryGroupMessagesV1(ctx, req)
+	return s.writerStore.QueryGroupMessagesV1(ctx, req)
 }
 
 func (s *Service) QueryWelcomeMessages(
 	ctx context.Context,
 	req *mlsv1.QueryWelcomeMessagesRequest,
 ) (*mlsv1.QueryWelcomeMessagesResponse, error) {
-	return s.store.QueryWelcomeMessagesV1(ctx, req)
+	return s.writerStore.QueryWelcomeMessagesV1(ctx, req)
 }
 
 func (s *Service) SubscribeGroupMessages(
@@ -362,7 +365,7 @@ func (s *Service) SubscribeGroupMessages(
 				return
 			}
 
-			resp, err := s.store.QueryGroupMessagesV1(
+			resp, err := s.readOnlyStore.QueryGroupMessagesV1(
 				stream.Context(),
 				&mlsv1.QueryGroupMessagesRequest{
 					GroupId:    filter.GroupId,
@@ -506,7 +509,7 @@ func (s *Service) SubscribeWelcomeMessages(
 				return
 			}
 
-			resp, err := s.store.QueryWelcomeMessagesV1(
+			resp, err := s.readOnlyStore.QueryWelcomeMessagesV1(
 				stream.Context(),
 				&mlsv1.QueryWelcomeMessagesRequest{
 					InstallationKey: filter.InstallationKey,
@@ -606,7 +609,11 @@ func (s *Service) BatchPublishCommitLog(
 			return nil, status.Error(codes.InvalidArgument, "invalid commit log entry")
 		}
 
-		inserted, err := s.store.InsertCommitLog(ctx, entry.GroupId, entry.EncryptedCommitLogEntry)
+		inserted, err := s.writerStore.InsertCommitLog(
+			ctx,
+			entry.GroupId,
+			entry.EncryptedCommitLogEntry,
+		)
 		if err != nil {
 			log.Error("error inserting commit log", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to insert commit log: %s", err)
@@ -632,7 +639,7 @@ func (s *Service) BatchQueryCommitLog(
 		if request == nil || request.GroupId == nil || len(request.GroupId) == 0 {
 			return nil, status.Error(codes.InvalidArgument, "invalid request")
 		}
-		response, err := s.store.QueryCommitLog(ctx, request)
+		response, err := s.writerStore.QueryCommitLog(ctx, request)
 		if err != nil {
 			log.Error("error querying commit log", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "failed to query commit log: %s", err)
