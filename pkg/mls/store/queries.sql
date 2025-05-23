@@ -88,7 +88,8 @@ INSERT INTO installations(id, created_at, updated_at, key_package)
 	VALUES (@id, @created_at, @updated_at, @key_package)
 ON CONFLICT (id)
 	DO UPDATE SET
-		key_package = @key_package, updated_at = @updated_at;
+		key_package = @key_package,
+		updated_at = @updated_at;
 
 -- name: GetInstallation :one
 SELECT
@@ -114,7 +115,7 @@ WHERE
 SELECT
 	*
 FROM
-	insert_group_message(@group_id, @data, @group_id_data_hash);
+	insert_group_message(@group_id, @data, @group_id_data_hash, @sender_hmac, @should_push);
 
 -- name: InsertWelcomeMessage :one
 SELECT
