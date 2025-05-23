@@ -12,15 +12,11 @@ import (
 )
 
 func TestServer_NewShutdown(t *testing.T) {
-	t.Parallel()
-
 	_, cleanup := newTestServer(t, nil)
 	defer cleanup()
 }
 
 func TestServer_StaticNodesReconnect(t *testing.T) {
-	t.Parallel()
-
 	n1, cleanup := test.NewNode(t, test.NewLog(t))
 	defer cleanup()
 	n1ID := n1.Host().ID()
