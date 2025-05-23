@@ -273,19 +273,33 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 	s.log.With(logging.MultiAddrs("listen", maddrs...)).Info("got server")
 
-	var MLSStore *mlsstore.Store
+	var mlsWriteStore mlsstore.ReadWriteMlsStore
+	var mlsReadStore mlsstore.ReadMlsStore
 	if options.MLSStore.DbConnectionString != "" {
 		if s.mlsDB, err = newBunPGXDb(options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout); err != nil {
 			return nil, errors.Wrap(err, "creating mls db")
 		}
+		readerConnectionString := options.MLSStore.DbReaderConnectionString
+		if readerConnectionString == "" {
+			s.log.Warn(
+				"no reader db connection string provided. Using the same db for reads and writes",
+			)
+			readerConnectionString = options.MLSStore.DbConnectionString
+		}
+		readerDB, err := newBunPGXDb(
+			readerConnectionString,
+			options.WaitForDB,
+			options.MLSStore.ReadTimeout,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating mls reader db")
+		}
 
 		s.log.Info("creating mls store")
-		if MLSStore, err = mlsstore.New(s.ctx, mlsstore.Config{
-			Log: s.log,
-			DB:  s.mlsDB,
-		}); err != nil {
+		if mlsWriteStore, err = mlsstore.New(s.ctx, log, s.mlsDB); err != nil {
 			return nil, errors.Wrap(err, "creating mls store")
 		}
+		mlsReadStore = mlsstore.NewReadStore(s.log, readerDB)
 	}
 
 	var MLSValidator mlsvalidate.MLSValidationService
@@ -293,7 +307,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		MLSValidator, err = mlsvalidate.NewMlsValidationService(
 			ctx,
 			options.MLSValidation,
-			MLSStore,
+			mlsWriteStore,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls validation service")
@@ -307,7 +321,8 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			Log:          s.log.Named("`api"),
 			Waku:         s.wakuNode,
 			Store:        s.store,
-			MLSStore:     MLSStore,
+			ReadMLSStore: mlsReadStore,
+			MLSStore:     mlsWriteStore,
 			AllowLister:  s.allowLister,
 			MLSValidator: MLSValidator,
 		},
