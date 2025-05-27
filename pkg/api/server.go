@@ -158,7 +158,7 @@ func (s *Server) startGRPC() error {
 
 	// Enable the MLS and identity servers if a store is provided
 	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
-		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, subDispatcher, s.Config.MLSValidator)
+		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.ReadMLSStore, subDispatcher, s.Config.MLSValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
