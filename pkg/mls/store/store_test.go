@@ -66,8 +66,8 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 			},
 			StateDiff: &associations.AssociationStateDiff{
 				NewMembers: []*associations.MemberIdentifier{{
-					Kind: &associations.MemberIdentifier_Address{
-						Address: address,
+					Kind: &associations.MemberIdentifier_EthereumAddress{
+						EthereumAddress: address,
 					},
 				}},
 			},
@@ -114,8 +114,8 @@ func TestPublishIdentityUpdateSameInboxParallel(t *testing.T) {
 			},
 			StateDiff: &associations.AssociationStateDiff{
 				NewMembers: []*associations.MemberIdentifier{{
-					Kind: &associations.MemberIdentifier_Address{
-						Address: address,
+					Kind: &associations.MemberIdentifier_EthereumAddress{
+						EthereumAddress: address,
 					},
 				}},
 			},
@@ -168,7 +168,8 @@ func TestInboxIds(t *testing.T) {
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address",
+		Identifier:     "address",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
 	})
 	req := &identity.GetInboxIdsRequest{
 		Requests: reqs,
@@ -182,7 +183,10 @@ func TestInboxIds(t *testing.T) {
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, correctInbox2, *resp.Responses[0].InboxId)
 
-	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{Address: "address2"})
+	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
+		Identifier:     "address2",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
+	})
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
@@ -207,10 +211,12 @@ func TestMultipleInboxIds(t *testing.T) {
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address_1",
+		Identifier:     "address_1",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
 	})
 	reqs = append(reqs, &identity.GetInboxIdsRequest_Request{
-		Address: "address_2",
+		Identifier:     "address_2",
+		IdentifierKind: associations.IdentifierKind_IDENTIFIER_KIND_ETHEREUM,
 	})
 	req := &identity.GetInboxIdsRequest{
 		Requests: reqs,
