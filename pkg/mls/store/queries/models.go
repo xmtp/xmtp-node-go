@@ -50,4 +50,5 @@ type WelcomeMessage struct {
 	Data                    []byte
 	HpkePublicKey           []byte
 	InstallationKeyDataHash []byte
+	WrapperAlgorithm        int16
 }
