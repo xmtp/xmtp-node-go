@@ -20,6 +20,7 @@ import (
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -346,7 +347,7 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
@@ -366,11 +367,11 @@ func TestInsertWelcomeMessage_Duplicate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
+	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 
-	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"))
+	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.Nil(t, msg)
 	require.IsType(t, &AlreadyExistsError{}, err)
 	require.True(t, IsAlreadyExistsError(err))
@@ -381,11 +382,11 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"), []byte("hpke"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"), []byte("hpke"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"), []byte("hpke"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"), []byte("hpke"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
 
 	msgs, err := store.queries.GetAllWelcomeMessages(ctx)
@@ -471,11 +472,11 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"), []byte("hpke1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"), []byte("hpke1"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"), []byte("hpke2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"), []byte("hpke2"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"), []byte("hpke3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"), []byte("hpke3"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
@@ -613,21 +614,21 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"), []byte("hpke1"))
+	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"), []byte("hpke1"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"), []byte("hpke2"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"), []byte("hpke2"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"), []byte("hpke3"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"), []byte("hpke3"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"), []byte("hpke4"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"), []byte("hpke4"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"), []byte("hpke5"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"), []byte("hpke5"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"), []byte("hpke6"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"), []byte("hpke6"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"), []byte("hpke7"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"), []byte("hpke7"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"), []byte("hpke8"))
+	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"), []byte("hpke8"), types.AlgorithmCurve25519)
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
