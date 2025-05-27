@@ -20,8 +20,6 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/multiformats/go-multiaddr v0.10.1
-	github.com/nats-io/nats-server/v2 v2.1.2
-	github.com/nats-io/nats.go v1.9.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/stretchr/testify v1.8.4
@@ -134,9 +132,6 @@ require (
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-multistream v0.4.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/nats-io/jwt v0.3.2 // indirect
-	github.com/nats-io/nkeys v0.1.3 // indirect
-	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.11.0 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
@@ -179,7 +174,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/mod v0.12.0
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect

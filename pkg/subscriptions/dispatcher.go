@@ -1,15 +1,16 @@
-package api
+package subscriptions
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/nats-io/nats.go"                                  // NATS messaging system
+	// NATS messaging system
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1" // Custom XMTP Protocol Buffers definition
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
-	"go.uber.org/zap"                     // Logging library
-	pb "google.golang.org/protobuf/proto" // Protocol Buffers for serialization
+	"go.uber.org/zap" // Logging library
+	// Protocol Buffers for serialization
 )
 
 const (
@@ -18,51 +19,37 @@ const (
 
 	// minBacklogBufferLength defines the minimal length used for backlog buffer.
 	minBacklogBufferLength = 1024
+
+	WILDCARD_TOPIC = "*"
+
+	v2TopicPrefix = "/xmtp/0/"
+)
+
+var (
+	ErrNilEnvelope = errors.New("received nil envelope")
 )
 
 // subscriptionDispatcher manages subscriptions and message dispatching.
-type subscriptionDispatcher struct {
-	natsConn      *nats.Conn                    // Connection to NATS server
-	natsSub       *nats.Subscription            // Subscription to NATS topics
+type SubscriptionDispatcher struct {
 	log           *zap.Logger                   // Logger instance
-	subscriptions map[*subscription]interface{} // Active subscriptions
+	subscriptions map[*Subscription]interface{} // Active subscriptions
 	mu            sync.Mutex                    // Mutex for concurrency control
 }
 
 // newSubscriptionDispatcher creates a new dispatcher for managing subscriptions.
-func newSubscriptionDispatcher(conn *nats.Conn, log *zap.Logger) (*subscriptionDispatcher, error) {
-	dispatcher := &subscriptionDispatcher{
-		natsConn:      conn,
+func NewSubscriptionDispatcher(log *zap.Logger) *SubscriptionDispatcher {
+	dispatcher := &SubscriptionDispatcher{
 		log:           log,
-		subscriptions: make(map[*subscription]interface{}),
+		subscriptions: make(map[*Subscription]interface{}),
 	}
 
-	// Subscribe to NATS wildcard topic and assign message handler
-	var err error
-	dispatcher.natsSub, err = conn.Subscribe(natsWildcardTopic, dispatcher.messageHandler)
-	if err != nil {
-		return nil, err
-	}
-	return dispatcher, nil
-}
-
-// Shutdown gracefully shuts down the dispatcher, unsubscribing from all topics.
-func (d *subscriptionDispatcher) Shutdown() {
-	_ = d.natsSub.Unsubscribe()
-	// the lock/unlock ensures that there is no in-process dispatching.
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.natsSub = nil
-	d.natsConn = nil
-	d.subscriptions = nil
+	return dispatcher
 }
 
 // messageHandler processes incoming messages, dispatching them to the correct subscription.
-func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
-	var env proto.Envelope
-	err := pb.Unmarshal(msg.Data, &env)
-	if err != nil {
-		d.log.Info("unmarshaling envelope", zap.Error(err))
+func (d *SubscriptionDispatcher) HandleEnvelope(env *proto.Envelope) {
+	if env == nil {
+		d.log.Warn("received nil envelope")
 		return
 	}
 
@@ -76,26 +63,18 @@ func (d *subscriptionDispatcher) messageHandler(msg *nats.Msg) {
 		}
 		if subscription.all || subscription.topics[env.ContentTopic] {
 			select {
-			case subscription.messagesCh <- &env:
+			case subscription.MessagesCh <- env:
 			default:
 				d.log.Info(fmt.Sprintf("Subscription message channel is full, is subscribeAll: %t, numTopics: %d", subscription.all, len(subscription.topics)))
 				// we got here since the message channel was full. This happens when the client cannot
 				// consume the data fast enough. In that case, we don't want to block further since it migth
 				// slow down other users. Instead, we're going to close the channel and let the
 				// consumer re-establish the connection if needed.
-				close(subscription.messagesCh)
+				close(subscription.MessagesCh)
 				delete(d.subscriptions, subscription)
 			}
 		}
 	}
-}
-
-// subscription represents a single subscription, including its message channel and topics.
-type subscription struct {
-	messagesCh chan *proto.Envelope    // Channel for receiving messages
-	topics     map[string]bool         // Map of topics to subscribe to
-	all        bool                    // Flag indicating subscription to all topics
-	dispatcher *subscriptionDispatcher // Parent dispatcher
 }
 
 // log2 calculates the base-2 logarithm of an integer using bitwise operations.
@@ -115,18 +94,19 @@ func log2(n uint) (log2 uint) {
 }
 
 // Subscribe creates a new subscription for the given topics.
-func (d *subscriptionDispatcher) Subscribe(topics map[string]bool) *subscription {
-	sub := &subscription{
+func (d *SubscriptionDispatcher) Subscribe(topics map[string]bool) *Subscription {
+	sub := &Subscription{
 		dispatcher: d,
 	}
 
 	// Determine if subscribing to all topics or specific ones
 	for topic := range topics {
-		if natsWildcardTopic == topic {
+		if WILDCARD_TOPIC == topic {
 			sub.all = true
 			break
 		}
 	}
+
 	if !sub.all {
 		sub.topics = topics
 		// use a log2(length) as a backbuffer
@@ -134,9 +114,9 @@ func (d *subscriptionDispatcher) Subscribe(topics map[string]bool) *subscription
 		if backlogBufferSize < minBacklogBufferLength {
 			backlogBufferSize = minBacklogBufferLength
 		}
-		sub.messagesCh = make(chan *proto.Envelope, backlogBufferSize)
+		sub.MessagesCh = make(chan *proto.Envelope, backlogBufferSize)
 	} else {
-		sub.messagesCh = make(chan *proto.Envelope, allTopicsBacklogLength)
+		sub.MessagesCh = make(chan *proto.Envelope, allTopicsBacklogLength)
 	}
 
 	d.mu.Lock()
@@ -145,13 +125,6 @@ func (d *subscriptionDispatcher) Subscribe(topics map[string]bool) *subscription
 	return sub
 }
 
-// Unsubscribe removes the subscription from its dispatcher.
-func (sub *subscription) Unsubscribe() {
-	sub.dispatcher.mu.Lock()
-	defer sub.dispatcher.mu.Unlock()
-	delete(sub.dispatcher.subscriptions, sub)
-}
-
 func isValidSubscribeAllTopic(contentTopic string) bool {
-	return strings.HasPrefix(contentTopic, validXMTPTopicPrefix) || topic.IsMLSV1(contentTopic)
+	return strings.HasPrefix(contentTopic, v2TopicPrefix) || topic.IsMLSV1(contentTopic)
 }
