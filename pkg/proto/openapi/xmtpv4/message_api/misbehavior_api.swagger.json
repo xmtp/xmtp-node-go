@@ -134,10 +134,6 @@
         "targetOriginator": {
           "type": "integer",
           "format": "int64"
-        },
-        "messageRetentionDays": {
-          "type": "integer",
-          "format": "int64"
         }
       },
       "title": "Wraps client envelope with payer signature"
