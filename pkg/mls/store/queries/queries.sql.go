@@ -18,7 +18,8 @@ INSERT INTO installations(id, created_at, updated_at, key_package)
 	VALUES ($1, $2, $3, $4)
 ON CONFLICT (id)
 	DO UPDATE SET
-		key_package = $4, updated_at = $3
+		key_package = $4,
+		updated_at = $3
 `
 
 type CreateOrUpdateInstallationParams struct {
@@ -128,7 +129,7 @@ func (q *Queries) GetAddressLogs(ctx context.Context, addresses []string) ([]Get
 
 const getAllGroupMessages = `-- name: GetAllGroupMessages :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 ORDER BY
@@ -150,6 +151,8 @@ func (q *Queries) GetAllGroupMessages(ctx context.Context) ([]GroupMessage, erro
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -356,19 +359,27 @@ func (q *Queries) InsertAddressLog(ctx context.Context, arg InsertAddressLogPara
 
 const insertGroupMessage = `-- name: InsertGroupMessage :one
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
-	insert_group_message($1, $2, $3)
+	insert_group_message($1, $2, $3, $4, $5)
 `
 
 type InsertGroupMessageParams struct {
 	GroupID         []byte
 	Data            []byte
 	GroupIDDataHash []byte
+	SenderHmac      []byte
+	ShouldPush      bool
 }
 
 func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessageParams) (GroupMessage, error) {
-	row := q.db.QueryRowContext(ctx, insertGroupMessage, arg.GroupID, arg.Data, arg.GroupIDDataHash)
+	row := q.db.QueryRowContext(ctx, insertGroupMessage,
+		arg.GroupID,
+		arg.Data,
+		arg.GroupIDDataHash,
+		arg.SenderHmac,
+		arg.ShouldPush,
+	)
 	var i GroupMessage
 	err := row.Scan(
 		&i.ID,
@@ -376,6 +387,8 @@ func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessage
 		&i.GroupID,
 		&i.Data,
 		&i.GroupIDDataHash,
+		&i.SenderHmac,
+		&i.ShouldPush,
 	)
 	return i, err
 }
@@ -445,7 +458,7 @@ func (q *Queries) LockInboxLog(ctx context.Context, inboxID string) error {
 
 const queryGroupMessages = `-- name: QueryGroupMessages :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -481,6 +494,8 @@ func (q *Queries) QueryGroupMessages(ctx context.Context, arg QueryGroupMessages
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -497,7 +512,7 @@ func (q *Queries) QueryGroupMessages(ctx context.Context, arg QueryGroupMessages
 
 const queryGroupMessagesWithCursorAsc = `-- name: QueryGroupMessagesWithCursorAsc :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -529,6 +544,8 @@ func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg Query
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -545,7 +562,7 @@ func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg Query
 
 const queryGroupMessagesWithCursorDesc = `-- name: QueryGroupMessagesWithCursorDesc :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -577,6 +594,8 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}

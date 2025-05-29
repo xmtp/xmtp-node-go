@@ -295,10 +295,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		msgs[i] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(i + 1),
-					CreatedNs: uint64(i + 1),
-					GroupId:   groupId,
-					Data:      []byte(fmt.Sprintf("data%d", i+1)),
+					Id:         uint64(i + 1),
+					CreatedNs:  uint64(i + 1),
+					GroupId:    groupId,
+					Data:       []byte(fmt.Sprintf("data%d", i+1)),
 					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 					ShouldPush: true,
 				},
@@ -353,7 +353,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data1"),
+					Data:       []byte("data1"),
 					SenderHmac: []byte("hmac1"),
 					ShouldPush: true,
 				},
@@ -362,7 +362,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data2"),
+					Data:       []byte("data2"),
 					SenderHmac: []byte("hmac2"),
 					ShouldPush: true,
 				},
@@ -371,7 +371,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data: []byte("data3"),
+					Data:       []byte("data3"),
 					SenderHmac: []byte("hmac3"),
 					ShouldPush: false,
 				},
@@ -407,8 +407,10 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 	stream.EXPECT().Send(mock.MatchedBy(newGroupMessageIdAndDataEqualsMatcher(&mlsv1.GroupMessage{
 		Version: &mlsv1.GroupMessage_V1_{
 			V1: &mlsv1.GroupMessage_V1{
-				Id:   3,
-				Data: []byte("data3"),
+				Id:         3,
+				Data:       []byte("data3"),
+				SenderHmac: []byte("hmac3"),
+				ShouldPush: false,
 			},
 		},
 	}).Matches)).Return(nil).Times(1)

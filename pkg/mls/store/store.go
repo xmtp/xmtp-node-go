@@ -41,7 +41,7 @@ type MlsStore interface {
 
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
-	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
+	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte, senderHmac []byte, shouldPush bool) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
@@ -265,12 +265,14 @@ func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) 
 	return s.queries.FetchKeyPackages(ctx, installationIds)
 }
 
-func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error) {
+func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte, senderHmac []byte, shouldPush bool) (*queries.GroupMessage, error) {
 	dataHash := sha256.Sum256(append(groupId, data...))
 	message, err := s.queries.InsertGroupMessage(ctx, queries.InsertGroupMessageParams{
 		GroupID:         groupId,
 		Data:            data,
 		GroupIDDataHash: dataHash[:],
+		SenderHmac:      senderHmac,
+		ShouldPush:      shouldPush,
 	})
 
 	if err != nil {
@@ -355,10 +357,12 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 		out[idx] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(msg.ID),
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupID,
-					Data:      msg.Data,
+					Id:         uint64(msg.ID),
+					CreatedNs:  uint64(msg.CreatedAt.UnixNano()),
+					GroupId:    msg.GroupID,
+					Data:       msg.Data,
+					ShouldPush: msg.ShouldPush.Bool,
+					SenderHmac: msg.SenderHmac,
 				},
 			},
 		}
