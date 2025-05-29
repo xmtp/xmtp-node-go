@@ -19,7 +19,6 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
-	messageContentsProto "github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"google.golang.org/grpc/metadata"
@@ -265,10 +264,9 @@ func TestSendWelcomeMessages(t *testing.T) {
 			{
 				Version: &mlsv1.WelcomeMessageInput_V1_{
 					V1: &mlsv1.WelcomeMessageInput_V1{
-						InstallationKey:  []byte(installationId),
-						Data:             []byte("test"),
-						HpkePublicKey:    []byte("test"),
-						WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test"),
+						HpkePublicKey:   []byte("test"),
 					},
 				},
 			},
@@ -282,7 +280,6 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
 	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
-	require.Equal(t, resp.Messages[0].GetV1().WrapperAlgorithm, messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6)
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
@@ -298,10 +295,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		msgs[i] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:         uint64(i + 1),
-					CreatedNs:  uint64(i + 1),
-					GroupId:    groupId,
-					Data:       []byte(fmt.Sprintf("data%d", i+1)),
+					Id:        uint64(i + 1),
+					CreatedNs: uint64(i + 1),
+					GroupId:   groupId,
+					Data:      []byte(fmt.Sprintf("data%d", i+1)),
 					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 					ShouldPush: true,
 				},
@@ -356,7 +353,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data:       []byte("data1"),
+					Data: []byte("data1"),
 					SenderHmac: []byte("hmac1"),
 					ShouldPush: true,
 				},
@@ -365,7 +362,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data:       []byte("data2"),
+					Data: []byte("data2"),
 					SenderHmac: []byte("hmac2"),
 					ShouldPush: true,
 				},
@@ -374,7 +371,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.GroupMessageInput_V1_{
 				V1: &mlsv1.GroupMessageInput_V1{
-					Data:       []byte("data3"),
+					Data: []byte("data3"),
 					SenderHmac: []byte("hmac3"),
 					ShouldPush: false,
 				},
@@ -462,12 +459,11 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 		msgs[i] = &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:               uint64(i + 1),
-					CreatedNs:        uint64(i + 1),
-					InstallationKey:  installationKey,
-					Data:             []byte(fmt.Sprintf("data%d", i+1)),
-					HpkePublicKey:    []byte(fmt.Sprintf("hpke%d", i+1)),
-					WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+					Id:              uint64(i + 1),
+					CreatedNs:       uint64(i + 1),
+					InstallationKey: installationKey,
+					Data:            []byte(fmt.Sprintf("data%d", i+1)),
+					HpkePublicKey:   []byte(fmt.Sprintf("hpke%d", i+1)),
 				},
 			},
 		}
@@ -520,20 +516,18 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 		{
 			Version: &mlsv1.WelcomeMessageInput_V1_{
 				V1: &mlsv1.WelcomeMessageInput_V1{
-					InstallationKey:  installationKey,
-					HpkePublicKey:    hpkePublicKey,
-					Data:             []byte("data1"),
-					WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte("data1"),
 				},
 			},
 		},
 		{
 			Version: &mlsv1.WelcomeMessageInput_V1_{
 				V1: &mlsv1.WelcomeMessageInput_V1{
-					InstallationKey:  installationKey,
-					HpkePublicKey:    hpkePublicKey,
-					Data:             []byte("data2"),
-					WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte("data2"),
 				},
 			},
 		},
@@ -560,12 +554,11 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 		msgs[i] = &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:               uint64(i + 4),
-					CreatedNs:        uint64(i + 4),
-					InstallationKey:  installationKey,
-					HpkePublicKey:    hpkePublicKey,
-					Data:             []byte(fmt.Sprintf("data%d", i+4)),
-					WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+					Id:              uint64(i + 4),
+					CreatedNs:       uint64(i + 4),
+					InstallationKey: installationKey,
+					HpkePublicKey:   hpkePublicKey,
+					Data:            []byte(fmt.Sprintf("data%d", i+4)),
 				},
 			},
 		}
@@ -577,11 +570,10 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 	stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
 		Version: &mlsv1.WelcomeMessage_V1_{
 			V1: &mlsv1.WelcomeMessage_V1{
-				Id:               3,
-				InstallationKey:  installationKey,
-				HpkePublicKey:    hpkePublicKey,
-				Data:             []byte("data3"),
-				WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+				Id:              3,
+				InstallationKey: installationKey,
+				HpkePublicKey:   hpkePublicKey,
+				Data:            []byte("data3"),
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
