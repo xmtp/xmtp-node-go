@@ -18,8 +18,7 @@ INSERT INTO installations(id, created_at, updated_at, key_package)
 	VALUES ($1, $2, $3, $4)
 ON CONFLICT (id)
 	DO UPDATE SET
-		key_package = $4,
-		updated_at = $3
+		key_package = $4, updated_at = $3
 `
 
 type CreateOrUpdateInstallationParams struct {
@@ -209,7 +208,7 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]GetAll
 
 const getAllWelcomeMessages = `-- name: GetAllWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 ORDER BY
@@ -232,7 +231,6 @@ func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, 
 			&i.Data,
 			&i.HpkePublicKey,
 			&i.InstallationKeyDataHash,
-			&i.WrapperAlgorithm,
 		); err != nil {
 			return nil, err
 		}
@@ -404,9 +402,9 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
-	insert_welcome_message_v2($1, $2, $3, $4, $5)
+	insert_welcome_message($1, $2, $3, $4)
 `
 
 type InsertWelcomeMessageParams struct {
@@ -414,7 +412,6 @@ type InsertWelcomeMessageParams struct {
 	Data                    []byte
 	InstallationKeyDataHash []byte
 	HpkePublicKey           []byte
-	WrapperAlgorithm        int16
 }
 
 func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMessageParams) (WelcomeMessage, error) {
@@ -423,7 +420,6 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		arg.Data,
 		arg.InstallationKeyDataHash,
 		arg.HpkePublicKey,
-		arg.WrapperAlgorithm,
 	)
 	var i WelcomeMessage
 	err := row.Scan(
@@ -433,7 +429,6 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		&i.Data,
 		&i.HpkePublicKey,
 		&i.InstallationKeyDataHash,
-		&i.WrapperAlgorithm,
 	)
 	return i, err
 }
@@ -598,7 +593,7 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 
 const queryWelcomeMessages = `-- name: QueryWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -635,7 +630,6 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 			&i.Data,
 			&i.HpkePublicKey,
 			&i.InstallationKeyDataHash,
-			&i.WrapperAlgorithm,
 		); err != nil {
 			return nil, err
 		}
@@ -652,7 +646,7 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 
 const queryWelcomeMessagesWithCursorAsc = `-- name: QueryWelcomeMessagesWithCursorAsc :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -685,7 +679,6 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 			&i.Data,
 			&i.HpkePublicKey,
 			&i.InstallationKeyDataHash,
-			&i.WrapperAlgorithm,
 		); err != nil {
 			return nil, err
 		}
@@ -702,7 +695,7 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 
 const queryWelcomeMessagesWithCursorDesc = `-- name: QueryWelcomeMessagesWithCursorDesc :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash
 FROM
 	welcome_messages
 WHERE
@@ -735,7 +728,6 @@ func (q *Queries) QueryWelcomeMessagesWithCursorDesc(ctx context.Context, arg Qu
 			&i.Data,
 			&i.HpkePublicKey,
 			&i.InstallationKeyDataHash,
-			&i.WrapperAlgorithm,
 		); err != nil {
 			return nil, err
 		}
