@@ -33,17 +33,17 @@ jobs:
           echo Successfully pushed $IMAGE_TO_DEPLOY
           echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
 
-      # - name: Deploy (dev)
-      #   uses: xmtp-labs/terraform-deployer@v1
-      #   timeout-minutes: 45
-      #   with:
-      #     timeout: 45m
-      #     terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
-      #     terraform-org: xmtp
-      #     terraform-workspace: dev
-      #     variable-name: xmtp_node_image
-      #     variable-value: ${{ steps.push.outputs.docker_image }}
-      #     variable-value-required-prefix: "xmtp/node-go@sha256:"
+      - name: Deploy (dev)
+        uses: xmtp-labs/terraform-deployer@v1
+        timeout-minutes: 45
+        with:
+          timeout: 45m
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: dev
+          variable-name: xmtp_node_image
+          variable-value: ${{ steps.push.outputs.docker_image }}
+          variable-value-required-prefix: "xmtp/node-go@sha256:"
 
       - name: Deploy (production)
         uses: xmtp-labs/terraform-deployer@v1
