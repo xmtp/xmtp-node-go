@@ -20,3 +20,5 @@ bin/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+.mise.toml
