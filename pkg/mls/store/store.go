@@ -42,7 +42,7 @@ type MlsStore interface {
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, groupRefreshStateCursor int64) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -283,13 +283,14 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []b
 	return &message, nil
 }
 
-func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte) (*queries.WelcomeMessage, error) {
+func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, groupRefreshStateCursor int64) (*queries.WelcomeMessage, error) {
 	dataHash := sha256.Sum256(append(installationId, data...))
 	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
 		InstallationKey:         installationId,
 		Data:                    data,
 		InstallationKeyDataHash: dataHash[:],
 		HpkePublicKey:           hpkePublicKey,
+		GroupRefreshStateCursor: groupRefreshStateCursor,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
