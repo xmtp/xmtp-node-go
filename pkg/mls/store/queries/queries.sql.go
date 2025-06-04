@@ -412,6 +412,7 @@ type InsertWelcomeMessageParams struct {
 	Data                    []byte
 	InstallationKeyDataHash []byte
 	HpkePublicKey           []byte
+	GroupRefreshStateCursor int64
 }
 
 func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMessageParams) (WelcomeMessage, error) {
@@ -420,6 +421,7 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		arg.Data,
 		arg.InstallationKeyDataHash,
 		arg.HpkePublicKey,
+		arg.GroupRefreshStateCursor,
 	)
 	var i WelcomeMessage
 	err := row.Scan(
