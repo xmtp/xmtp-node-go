@@ -22,7 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	PayerApi_PublishClientEnvelopes_FullMethodName = "/xmtp.xmtpv4.payer_api.PayerApi/PublishClientEnvelopes"
-	PayerApi_GetReaderNode_FullMethodName          = "/xmtp.xmtpv4.payer_api.PayerApi/GetReaderNode"
 )
 
 // PayerApiClient is the client API for PayerApi service.
@@ -31,7 +30,6 @@ const (
 type PayerApiClient interface {
 	// Publish envelope
 	PublishClientEnvelopes(ctx context.Context, in *PublishClientEnvelopesRequest, opts ...grpc.CallOption) (*PublishClientEnvelopesResponse, error)
-	GetReaderNode(ctx context.Context, in *GetReaderNodeRequest, opts ...grpc.CallOption) (*GetReaderNodeResponse, error)
 }
 
 type payerApiClient struct {
@@ -51,22 +49,12 @@ func (c *payerApiClient) PublishClientEnvelopes(ctx context.Context, in *Publish
 	return out, nil
 }
 
-func (c *payerApiClient) GetReaderNode(ctx context.Context, in *GetReaderNodeRequest, opts ...grpc.CallOption) (*GetReaderNodeResponse, error) {
-	out := new(GetReaderNodeResponse)
-	err := c.cc.Invoke(ctx, PayerApi_GetReaderNode_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // PayerApiServer is the server API for PayerApi service.
 // All implementations must embed UnimplementedPayerApiServer
 // for forward compatibility
 type PayerApiServer interface {
 	// Publish envelope
 	PublishClientEnvelopes(context.Context, *PublishClientEnvelopesRequest) (*PublishClientEnvelopesResponse, error)
-	GetReaderNode(context.Context, *GetReaderNodeRequest) (*GetReaderNodeResponse, error)
 	mustEmbedUnimplementedPayerApiServer()
 }
 
@@ -76,9 +64,6 @@ type UnimplementedPayerApiServer struct {
 
 func (UnimplementedPayerApiServer) PublishClientEnvelopes(context.Context, *PublishClientEnvelopesRequest) (*PublishClientEnvelopesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PublishClientEnvelopes not implemented")
-}
-func (UnimplementedPayerApiServer) GetReaderNode(context.Context, *GetReaderNodeRequest) (*GetReaderNodeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetReaderNode not implemented")
 }
 func (UnimplementedPayerApiServer) mustEmbedUnimplementedPayerApiServer() {}
 
@@ -111,24 +96,6 @@ func _PayerApi_PublishClientEnvelopes_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PayerApi_GetReaderNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetReaderNodeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PayerApiServer).GetReaderNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PayerApi_GetReaderNode_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PayerApiServer).GetReaderNode(ctx, req.(*GetReaderNodeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // PayerApi_ServiceDesc is the grpc.ServiceDesc for PayerApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -139,10 +106,6 @@ var PayerApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PublishClientEnvelopes",
 			Handler:    _PayerApi_PublishClientEnvelopes_Handler,
-		},
-		{
-			MethodName: "GetReaderNode",
-			Handler:    _PayerApi_GetReaderNode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
