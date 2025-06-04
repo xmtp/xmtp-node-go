@@ -306,11 +306,12 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 			msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
 				Version: &mlsv1.WelcomeMessage_V1_{
 					V1: &mlsv1.WelcomeMessage_V1{
-						Id:              uint64(msg.ID),
-						CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-						InstallationKey: msg.InstallationKey,
-						Data:            msg.Data,
-						HpkePublicKey:   msg.HpkePublicKey,
+						Id:                      uint64(msg.ID),
+						CreatedNs:               uint64(msg.CreatedAt.UnixNano()),
+						InstallationKey:         msg.InstallationKey,
+						Data:                    msg.Data,
+						HpkePublicKey:           msg.HpkePublicKey,
+						GroupRefreshStateCursor: input.GetV1().GroupRefreshStateCursor,
 					},
 				},
 			})
