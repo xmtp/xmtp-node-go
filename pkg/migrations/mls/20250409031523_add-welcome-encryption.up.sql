@@ -12,13 +12,6 @@ ALTER TABLE welcome_messages
 	ALTER COLUMN wrapper_algorithm SET DEFAULT 0;
 
 --bun:split
--- Set all the existing rows to the default value
-UPDATE
-	welcome_messages
-SET
-	wrapper_algorithm = 0;
-
---bun:split
 -- Make the column non-nullable
 ALTER TABLE welcome_messages
 	ALTER COLUMN wrapper_algorithm SET NOT NULL;

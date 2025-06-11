@@ -295,7 +295,13 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 			insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
 			insertLogger := tracing.Link(insertSpan, log)
 			insertLogger.Info("inserting welcome message", zap.String("client_ip", ip), zap.Int("message_length", len(input.GetV1().Data)))
-			msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm))
+
+			wrapperAlgorithm := types.WrapperAlgorithm(0)
+			if v1 := input.GetV1(); v1 != nil {
+				wrapperAlgorithm = types.WrapperAlgorithmFromProto(v1.WrapperAlgorithm)
+			}
+
+			msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, wrapperAlgorithm)
 			insertSpan.Finish(tracing.WithError(err))
 			if err != nil {
 				if mlsstore.IsAlreadyExistsError(err) {
