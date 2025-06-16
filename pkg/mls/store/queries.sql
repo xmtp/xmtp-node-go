@@ -88,7 +88,8 @@ INSERT INTO installations(id, created_at, updated_at, key_package)
 	VALUES (@id, @created_at, @updated_at, @key_package)
 ON CONFLICT (id)
 	DO UPDATE SET
-		key_package = @key_package, updated_at = @updated_at;
+		key_package = @key_package,
+		updated_at = @updated_at;
 
 -- name: GetInstallation :one
 SELECT
@@ -120,7 +121,7 @@ FROM
 SELECT
 	*
 FROM
-	insert_welcome_message(@installation_key, @data, @installation_key_data_hash, @hpke_public_key);
+	insert_welcome_message_v2(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm);
 
 -- name: GetAllGroupMessages :many
 SELECT

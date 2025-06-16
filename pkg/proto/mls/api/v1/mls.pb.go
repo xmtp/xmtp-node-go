@@ -1252,16 +1252,16 @@ func (x *SubscribeWelcomeMessagesRequest) GetFilters() []*SubscribeWelcomeMessag
 
 // Version 1 of the WelcomeMessage format
 type WelcomeMessage_V1 struct {
-	state                   protoimpl.MessageState                    `protogen:"open.v1"`
-	Id                      uint64                                    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	CreatedNs               uint64                                    `protobuf:"varint,2,opt,name=created_ns,json=createdNs,proto3" json:"created_ns,omitempty"`
-	InstallationKey         []byte                                    `protobuf:"bytes,3,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
-	Data                    []byte                                    `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
-	HpkePublicKey           []byte                                    `protobuf:"bytes,5,opt,name=hpke_public_key,json=hpkePublicKey,proto3" json:"hpke_public_key,omitempty"`
-	WrapperAlgorithm        message_contents1.WelcomeWrapperAlgorithm `protobuf:"varint,6,opt,name=wrapper_algorithm,json=wrapperAlgorithm,proto3,enum=xmtp.mls.message_contents.WelcomeWrapperAlgorithm" json:"wrapper_algorithm,omitempty"`
-	GroupRefreshStateCursor uint64                                    `protobuf:"varint,7,opt,name=group_refresh_state_cursor,json=groupRefreshStateCursor,proto3" json:"group_refresh_state_cursor,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state            protoimpl.MessageState                    `protogen:"open.v1"`
+	Id               uint64                                    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	CreatedNs        uint64                                    `protobuf:"varint,2,opt,name=created_ns,json=createdNs,proto3" json:"created_ns,omitempty"`
+	InstallationKey  []byte                                    `protobuf:"bytes,3,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
+	Data             []byte                                    `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+	HpkePublicKey    []byte                                    `protobuf:"bytes,5,opt,name=hpke_public_key,json=hpkePublicKey,proto3" json:"hpke_public_key,omitempty"`
+	WrapperAlgorithm message_contents1.WelcomeWrapperAlgorithm `protobuf:"varint,6,opt,name=wrapper_algorithm,json=wrapperAlgorithm,proto3,enum=xmtp.mls.message_contents.WelcomeWrapperAlgorithm" json:"wrapper_algorithm,omitempty"`
+	MessageCursor    uint64                                    `protobuf:"varint,7,opt,name=message_cursor,json=messageCursor,proto3" json:"message_cursor,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *WelcomeMessage_V1) Reset() {
@@ -1336,23 +1336,23 @@ func (x *WelcomeMessage_V1) GetWrapperAlgorithm() message_contents1.WelcomeWrapp
 	return message_contents1.WelcomeWrapperAlgorithm(0)
 }
 
-func (x *WelcomeMessage_V1) GetGroupRefreshStateCursor() uint64 {
+func (x *WelcomeMessage_V1) GetMessageCursor() uint64 {
 	if x != nil {
-		return x.GroupRefreshStateCursor
+		return x.MessageCursor
 	}
 	return 0
 }
 
 // Version 1 of the WelcomeMessageInput format
 type WelcomeMessageInput_V1 struct {
-	state                   protoimpl.MessageState                    `protogen:"open.v1"`
-	InstallationKey         []byte                                    `protobuf:"bytes,1,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
-	Data                    []byte                                    `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	HpkePublicKey           []byte                                    `protobuf:"bytes,3,opt,name=hpke_public_key,json=hpkePublicKey,proto3" json:"hpke_public_key,omitempty"`
-	WrapperAlgorithm        message_contents1.WelcomeWrapperAlgorithm `protobuf:"varint,4,opt,name=wrapper_algorithm,json=wrapperAlgorithm,proto3,enum=xmtp.mls.message_contents.WelcomeWrapperAlgorithm" json:"wrapper_algorithm,omitempty"`
-	GroupRefreshStateCursor uint64                                    `protobuf:"varint,5,opt,name=group_refresh_state_cursor,json=groupRefreshStateCursor,proto3" json:"group_refresh_state_cursor,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state            protoimpl.MessageState                    `protogen:"open.v1"`
+	InstallationKey  []byte                                    `protobuf:"bytes,1,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
+	Data             []byte                                    `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	HpkePublicKey    []byte                                    `protobuf:"bytes,3,opt,name=hpke_public_key,json=hpkePublicKey,proto3" json:"hpke_public_key,omitempty"`
+	WrapperAlgorithm message_contents1.WelcomeWrapperAlgorithm `protobuf:"varint,4,opt,name=wrapper_algorithm,json=wrapperAlgorithm,proto3,enum=xmtp.mls.message_contents.WelcomeWrapperAlgorithm" json:"wrapper_algorithm,omitempty"`
+	MessageCursor    uint64                                    `protobuf:"varint,5,opt,name=message_cursor,json=messageCursor,proto3" json:"message_cursor,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *WelcomeMessageInput_V1) Reset() {
@@ -1413,9 +1413,9 @@ func (x *WelcomeMessageInput_V1) GetWrapperAlgorithm() message_contents1.Welcome
 	return message_contents1.WelcomeWrapperAlgorithm(0)
 }
 
-func (x *WelcomeMessageInput_V1) GetGroupRefreshStateCursor() uint64 {
+func (x *WelcomeMessageInput_V1) GetMessageCursor() uint64 {
 	if x != nil {
-		return x.GroupRefreshStateCursor
+		return x.MessageCursor
 	}
 	return 0
 }
@@ -1957,9 +1957,9 @@ var File_mls_api_v1_mls_proto protoreflect.FileDescriptor
 
 const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\n" +
-	"\x14mls/api/v1/mls.proto\x12\x0fxmtp.mls.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a message_contents/signature.proto\x1a-mls/message_contents/wrapper_encryption.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x8c\x03\n" +
+	"\x14mls/api/v1/mls.proto\x12\x0fxmtp.mls.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a message_contents/signature.proto\x1a-mls/message_contents/wrapper_encryption.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xf6\x02\n" +
 	"\x0eWelcomeMessage\x124\n" +
-	"\x02v1\x18\x01 \x01(\v2\".xmtp.mls.api.v1.WelcomeMessage.V1H\x00R\x02v1\x1a\xb8\x02\n" +
+	"\x02v1\x18\x01 \x01(\v2\".xmtp.mls.api.v1.WelcomeMessage.V1H\x00R\x02v1\x1a\xa2\x02\n" +
 	"\x02V1\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
@@ -1967,17 +1967,17 @@ const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\x10installation_key\x18\x03 \x01(\fR\x0finstallationKey\x12\x12\n" +
 	"\x04data\x18\x04 \x01(\fR\x04data\x12&\n" +
 	"\x0fhpke_public_key\x18\x05 \x01(\fR\rhpkePublicKey\x12_\n" +
-	"\x11wrapper_algorithm\x18\x06 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12;\n" +
-	"\x1agroup_refresh_state_cursor\x18\a \x01(\x04R\x17groupRefreshStateCursorB\t\n" +
-	"\aversion\"\xe7\x02\n" +
+	"\x11wrapper_algorithm\x18\x06 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12%\n" +
+	"\x0emessage_cursor\x18\a \x01(\x04R\rmessageCursorB\t\n" +
+	"\aversion\"\xd1\x02\n" +
 	"\x13WelcomeMessageInput\x129\n" +
-	"\x02v1\x18\x01 \x01(\v2'.xmtp.mls.api.v1.WelcomeMessageInput.V1H\x00R\x02v1\x1a\x89\x02\n" +
+	"\x02v1\x18\x01 \x01(\v2'.xmtp.mls.api.v1.WelcomeMessageInput.V1H\x00R\x02v1\x1a\xf3\x01\n" +
 	"\x02V1\x12)\n" +
 	"\x10installation_key\x18\x01 \x01(\fR\x0finstallationKey\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12&\n" +
 	"\x0fhpke_public_key\x18\x03 \x01(\fR\rhpkePublicKey\x12_\n" +
-	"\x11wrapper_algorithm\x18\x04 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12;\n" +
-	"\x1agroup_refresh_state_cursor\x18\x05 \x01(\x04R\x17groupRefreshStateCursorB\t\n" +
+	"\x11wrapper_algorithm\x18\x04 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12%\n" +
+	"\x0emessage_cursor\x18\x05 \x01(\x04R\rmessageCursorB\t\n" +
 	"\aversion\"\xf4\x01\n" +
 	"\fGroupMessage\x122\n" +
 	"\x02v1\x18\x01 \x01(\v2 .xmtp.mls.api.v1.GroupMessage.V1H\x00R\x02v1\x1a\xa4\x01\n" +

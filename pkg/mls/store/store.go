@@ -16,6 +16,7 @@ import (
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -42,7 +43,7 @@ type MlsStore interface {
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, groupRefreshStateCursor int64) (*queries.WelcomeMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, messageCursor int64) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -283,14 +284,23 @@ func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []b
 	return &message, nil
 }
 
-func (s *Store) InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, groupRefreshStateCursor int64) (*queries.WelcomeMessage, error) {
+func (s *Store) InsertWelcomeMessage(
+	ctx context.Context,
+	installationId []byte,
+	data []byte,
+	hpkePublicKey []byte,
+	wrapperAlgorithm types.WrapperAlgorithm,
+	messageCursor int64,
+) (*queries.WelcomeMessage, error) {
+
 	dataHash := sha256.Sum256(append(installationId, data...))
 	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
 		InstallationKey:         installationId,
 		Data:                    data,
 		InstallationKeyDataHash: dataHash[:],
 		HpkePublicKey:           hpkePublicKey,
-		GroupRefreshStateCursor: groupRefreshStateCursor,
+		WrapperAlgorithm:        int16(wrapperAlgorithm),
+		MessageCursor:           messageCursor,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
@@ -438,11 +448,13 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		out[idx] = &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              uint64(msg.ID),
-					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-					Data:            msg.Data,
-					InstallationKey: msg.InstallationKey,
-					HpkePublicKey:   msg.HpkePublicKey,
+					Id:               uint64(msg.ID),
+					CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
+					Data:             msg.Data,
+					InstallationKey:  msg.InstallationKey,
+					HpkePublicKey:    msg.HpkePublicKey,
+					WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(msg.WrapperAlgorithm)),
+					MessageCursor:    uint64(msg.MessageCursor),
 				},
 			},
 		}

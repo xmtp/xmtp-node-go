@@ -50,5 +50,6 @@ type WelcomeMessage struct {
 	Data                    []byte
 	HpkePublicKey           []byte
 	InstallationKeyDataHash []byte
-	GroupRefreshStateCursor int64
+	WrapperAlgorithm        int16
+	MessageCursor           int64
 }
