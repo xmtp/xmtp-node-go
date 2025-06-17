@@ -407,7 +407,7 @@ const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 SELECT
 	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, message_cursor
 FROM
-	insert_welcome_message_v2($1, $2, $3, $4, $5)
+	insert_welcome_message_v3($1, $2, $3, $4, $5, $6)
 `
 
 type InsertWelcomeMessageParams struct {
