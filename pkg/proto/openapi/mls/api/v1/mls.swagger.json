@@ -891,10 +891,6 @@
         },
         "wrapperAlgorithm": {
           "$ref": "#/definitions/message_contentsWelcomeWrapperAlgorithm"
-        },
-        "messageCursor": {
-          "type": "string",
-          "format": "uint64"
         }
       },
       "title": "Version 1 of the WelcomeMessageInput format"
@@ -924,10 +920,6 @@
         },
         "wrapperAlgorithm": {
           "$ref": "#/definitions/message_contentsWelcomeWrapperAlgorithm"
-        },
-        "messageCursor": {
-          "type": "string",
-          "format": "uint64"
         }
       },
       "title": "Version 1 of the WelcomeMessage format"
