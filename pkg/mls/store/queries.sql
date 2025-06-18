@@ -121,7 +121,7 @@ FROM
 SELECT
 	*
 FROM
-	insert_welcome_message_v2(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm);
+	insert_welcome_message_v3(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm, @message_cursor);
 
 -- name: GetAllGroupMessages :many
 SELECT
@@ -225,4 +225,3 @@ INSERT INTO inboxes(id)
 ON CONFLICT (id)
 	DO UPDATE SET
 		updated_at = NOW();
-
