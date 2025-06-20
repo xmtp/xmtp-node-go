@@ -99,20 +99,6 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 	})
 }
 
-func testGRPC(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	server, cleanup := newTestServer(t)
-	defer cleanup()
-
-	c, err := messageclient.NewGRPCClient(ctx, server.dialGRPC)
-	require.NoError(t, err)
-
-	f(t, c, server)
-}
-
 func withAuth(t testing.TB, ctx context.Context) context.Context {
 	ctx, _ = withAuthWithDetails(t, ctx, time.Now())
 	return ctx
