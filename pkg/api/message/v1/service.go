@@ -126,37 +126,7 @@ func (s *Service) HandleIncomingWakuRelayMessage(msg *wakupb.WakuMessage) error 
 }
 
 func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
-	for _, env := range req.Envelopes {
-		log := s.log.Named("publish").With(zap.String("content_topic", env.ContentTopic))
-		log.Debug("received message")
-
-		if len(env.ContentTopic) > MaxContentTopicNameSize {
-			return nil, status.Error(codes.InvalidArgument, "topic length too big")
-		}
-
-		if len(env.Message) > MaxMessageSize {
-			return nil, status.Error(codes.InvalidArgument, "message too big")
-		}
-
-		if !topic.IsEphemeral(env.ContentTopic) {
-			_, err := s.store.InsertMessage(env)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-		}
-
-		err := s.publishToWakuRelay(ctx, &wakupb.WakuMessage{
-			ContentTopic: env.ContentTopic,
-			Timestamp:    int64(env.TimestampNs),
-			Payload:      env.Message,
-		})
-		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
-
-		metrics.EmitPublishedEnvelope(ctx, log, env)
-	}
-	return &proto.PublishResponse{}, nil
+	return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V2 is no longer available. Please upgrade your client to XMTP V3. Read more here: https://docs.xmtp.org/upgrade-from-legacy-V2")
 }
 
 func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {

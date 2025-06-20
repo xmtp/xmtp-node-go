@@ -1,5 +1,0 @@
-#!/bin/bash
-set -e
-. dev/e2e/docker/env
-
-docker_compose "$@"
