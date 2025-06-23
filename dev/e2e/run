@@ -1,7 +1,0 @@
-#!/usr/bin/env sh
-set -e
-
-export XMTPD_E2E_ENV="${1:-local}"
-export E2E="yes"
-
-go run cmd/xmtpd-e2e/main.go
