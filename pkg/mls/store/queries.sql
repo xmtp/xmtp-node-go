@@ -219,9 +219,28 @@ ORDER BY
 	id DESC
 LIMIT @numrows;
 
+-- name: QueryCommitLog :many
+SELECT
+	*
+FROM
+	commit_log
+WHERE
+	group_id = @group_id
+	AND id > @cursor
+ORDER BY
+	id ASC
+LIMIT @numrows;
+
 -- name: TouchInbox :exec
 INSERT INTO inboxes(id)
 	VALUES (decode(@inbox_id, 'hex'))
 ON CONFLICT (id)
 	DO UPDATE SET
 		updated_at = NOW();
+
+-- name: InsertCommitLog :one
+SELECT
+	*
+FROM
+	insert_commit_log(@group_id, @encrypted_entry);
+
