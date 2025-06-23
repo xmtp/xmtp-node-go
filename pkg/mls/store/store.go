@@ -16,6 +16,7 @@ import (
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
@@ -46,6 +47,8 @@ type MlsStore interface {
 	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, welcomeMetadata []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
+	QueryCommitLog(ctx context.Context, query *mlsv1.QueryCommitLogRequest) (*mlsv1.QueryCommitLogResponse, error)
+	InsertCommitLog(ctx context.Context, groupId []byte, encrypted_entry []byte) (queries.CommitLog, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -470,6 +473,58 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		Messages:   out,
 		PagingInfo: pagingInfo,
 	}, nil
+}
+
+func (s *Store) QueryCommitLog(ctx context.Context, req *mlsv1.QueryCommitLogRequest) (*mlsv1.QueryCommitLogResponse, error) {
+	if len(req.GetGroupId()) == 0 {
+		return nil, errors.New("group is required")
+	}
+	if req.GetPagingInfo().GetDirection() == mlsv1.SortDirection_SORT_DIRECTION_DESCENDING {
+		return nil, errors.New("descending direction is not supported")
+	}
+	pageSize := int32(req.GetPagingInfo().GetLimit())
+	if pageSize <= 0 || pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	idCursor := int64(req.GetPagingInfo().GetIdCursor())
+
+	entries, err := s.queries.QueryCommitLog(ctx, queries.QueryCommitLogParams{
+		GroupID: req.GroupId,
+		Cursor:  idCursor,
+		Numrows: pageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*message_contents.CommitLogEntry, len(entries))
+	for idx, entry := range entries {
+		out[idx] = &message_contents.CommitLogEntry{
+			SequenceId:              uint64(entry.ID),
+			EncryptedCommitLogEntry: entry.EncryptedEntry,
+		}
+	}
+
+	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING}
+	// It is strange behavior, but we must follow the semantics of other queries in v3 - only setting the IdCursor
+	// to a non-zero value if we have a full page of results
+	if len(entries) >= int(pageSize) {
+		lastEntry := entries[len(entries)-1]
+		pagingInfo.IdCursor = uint64(lastEntry.ID)
+	}
+
+	return &mlsv1.QueryCommitLogResponse{
+		GroupId:          req.GroupId,
+		CommitLogEntries: out,
+		PagingInfo:       pagingInfo,
+	}, nil
+}
+
+func (s *Store) InsertCommitLog(ctx context.Context, groupId []byte, encrypted_entry []byte) (queries.CommitLog, error) {
+	return s.queries.InsertCommitLog(ctx, queries.InsertCommitLogParams{
+		GroupID:        groupId,
+		EncryptedEntry: encrypted_entry,
+	})
 }
 
 func (s *Store) migrate(ctx context.Context) error {
