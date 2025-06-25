@@ -3,9 +3,12 @@ on:
   push:
     branches:
       - main
+      - dev
 jobs:
   deploy:
-    concurrency: main
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -28,7 +31,11 @@ jobs:
       - name: Push
         id: push
         run: |
-          export DOCKER_IMAGE_TAG=latest
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            export DOCKER_IMAGE_TAG=latest
+          else
+            export DOCKER_IMAGE_TAG=dev
+          fi
           IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
@@ -36,6 +43,7 @@ jobs:
       - name: Deploy (dev)
         uses: xmtp-labs/terraform-deployer@v1
         timeout-minutes: 45
+        if: github.ref == 'refs/heads/dev'
         with:
           timeout: 45m
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
@@ -48,6 +56,7 @@ jobs:
       - name: Deploy (production)
         uses: xmtp-labs/terraform-deployer@v1
         timeout-minutes: 45
+        if: github.ref == 'refs/heads/main'
         with:
           timeout: 45m
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
