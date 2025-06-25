@@ -286,6 +286,57 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
+func TestSendWelcomeMessagesConcurrent(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationId := []byte(test.RandomString(32))
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{
+			{
+				Version: &mlsv1.WelcomeMessageInput_V1_{
+					V1: &mlsv1.WelcomeMessageInput_V1{
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test1"),
+						HpkePublicKey:   []byte("test1"),
+					},
+				},
+			},
+			{
+				Version: &mlsv1.WelcomeMessageInput_V1_{
+					V1: &mlsv1.WelcomeMessageInput_V1{
+						InstallationKey: []byte(installationId),
+						Data:            []byte("test2"),
+						HpkePublicKey:   []byte("test2"),
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: installationId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Messages, 2)
+
+	hasMessage1 := false
+	hasMessage2 := false
+	for _, msg := range resp.Messages {
+		if bytes.Equal(msg.GetV1().Data, []byte("test1")) {
+			hasMessage1 = true
+		}
+		if bytes.Equal(msg.GetV1().Data, []byte("test2")) {
+			hasMessage2 = true
+		}
+	}
+	require.True(t, hasMessage1, "should have message with data 'test1'")
+	require.True(t, hasMessage2, "should have message with data 'test2'")
+}
+
 func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
