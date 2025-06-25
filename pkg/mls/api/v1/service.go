@@ -301,7 +301,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 				input.GetV1().GetData(),
 				input.GetV1().GetHpkePublicKey(),
 				types.WrapperAlgorithmFromProto(input.GetV1().GetWrapperAlgorithm()),
-				int64(input.GetV1().GetMessageCursor()))
+				input.GetV1().GetWelcomeMetadata())
 
 			insertSpan.Finish(tracing.WithError(err))
 			if err != nil {

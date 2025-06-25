@@ -43,7 +43,7 @@ type MlsStore interface {
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, messageCursor int64) (*queries.WelcomeMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, welcomeMetadata []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -454,7 +454,7 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 					InstallationKey:  msg.InstallationKey,
 					HpkePublicKey:    msg.HpkePublicKey,
 					WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(msg.WrapperAlgorithm)),
-					MessageCursor:    uint64(msg.MessageCursor),
+					WelcomeMetadata:  msg.MessageMetadata,
 				},
 			},
 		}

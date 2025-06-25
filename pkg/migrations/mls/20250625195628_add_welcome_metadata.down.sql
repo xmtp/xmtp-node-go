@@ -3,7 +3,7 @@ SET
 
 --bun:split
 ALTER TABLE welcome_messages
-DROP COLUMN message_metadata;
+DROP COLUMN welcome_metadata;
 
 --bun:split
 DROP FUNCTION IF EXISTS insert_welcome_message_v3;
