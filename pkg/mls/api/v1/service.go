@@ -320,7 +320,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 						Data:             msg.Data,
 						HpkePublicKey:    msg.HpkePublicKey,
 						WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
-						MessageCursor:    uint64(msg.MessageCursor),
+						WelcomeMetadata:  msg.WelcomeMetadata,
 					},
 				},
 			})

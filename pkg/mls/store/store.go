@@ -454,7 +454,7 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 					InstallationKey:  msg.InstallationKey,
 					HpkePublicKey:    msg.HpkePublicKey,
 					WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(msg.WrapperAlgorithm)),
-					WelcomeMetadata:  msg.MessageMetadata,
+					WelcomeMetadata:  msg.WelcomeMetadata,
 				},
 			},
 		}
