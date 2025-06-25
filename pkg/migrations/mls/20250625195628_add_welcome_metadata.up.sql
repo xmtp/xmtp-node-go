@@ -7,7 +7,7 @@ DROP COLUMN message_cursor;
 
 --bun:split
 ALTER TABLE welcome_messages
-ADD COLUMN welcome_metadata BYTEA NOT NULL DEFAULT ''::bytea;
+ADD COLUMN welcome_metadata BYTEA;
 
 --bun:split
 CREATE OR REPLACE FUNCTION insert_welcome_message_v4(

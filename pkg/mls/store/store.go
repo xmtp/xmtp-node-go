@@ -290,7 +290,7 @@ func (s *Store) InsertWelcomeMessage(
 	data []byte,
 	hpkePublicKey []byte,
 	wrapperAlgorithm types.WrapperAlgorithm,
-	messageCursor int64,
+	welcomeMetadata []byte,
 ) (*queries.WelcomeMessage, error) {
 
 	dataHash := sha256.Sum256(append(installationId, data...))
@@ -300,7 +300,7 @@ func (s *Store) InsertWelcomeMessage(
 		InstallationKeyDataHash: dataHash[:],
 		HpkePublicKey:           hpkePublicKey,
 		WrapperAlgorithm:        int16(wrapperAlgorithm),
-		MessageCursor:           messageCursor,
+		WelcomeMetadata:         welcomeMetadata,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
