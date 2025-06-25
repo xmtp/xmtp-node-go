@@ -1,9 +1,9 @@
-SET statement_timeout = 0;
+SET
+    statement_timeout = 0;
 
 --bun:split
-
-SELECT 1
+ALTER TABLE welcome_messages
+DROP COLUMN message_metadata;
 
 --bun:split
-
-SELECT 2
+DROP FUNCTION IF EXISTS insert_welcome_message_v3;
