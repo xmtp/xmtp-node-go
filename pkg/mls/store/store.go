@@ -43,7 +43,7 @@ type MlsStore interface {
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
 	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
 	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm) (*queries.WelcomeMessage, error)
+	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, welcomeMetadata []byte) (*queries.WelcomeMessage, error)
 	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
 	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
 }
@@ -290,7 +290,9 @@ func (s *Store) InsertWelcomeMessage(
 	data []byte,
 	hpkePublicKey []byte,
 	wrapperAlgorithm types.WrapperAlgorithm,
+	welcomeMetadata []byte,
 ) (*queries.WelcomeMessage, error) {
+
 	dataHash := sha256.Sum256(append(installationId, data...))
 	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
 		InstallationKey:         installationId,
@@ -298,6 +300,7 @@ func (s *Store) InsertWelcomeMessage(
 		InstallationKeyDataHash: dataHash[:],
 		HpkePublicKey:           hpkePublicKey,
 		WrapperAlgorithm:        int16(wrapperAlgorithm),
+		WelcomeMetadata:         welcomeMetadata,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
@@ -451,6 +454,7 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 					InstallationKey:  msg.InstallationKey,
 					HpkePublicKey:    msg.HpkePublicKey,
 					WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(msg.WrapperAlgorithm)),
+					WelcomeMetadata:  msg.WelcomeMetadata,
 				},
 			},
 		}
