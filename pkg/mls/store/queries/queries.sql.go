@@ -407,7 +407,7 @@ const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 SELECT
 	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
 FROM
-	insert_welcome_message_v3($1, $2, $3, $4, $5, $6)
+	insert_welcome_message_v4($1, $2, $3, $4, $5, $6)
 `
 
 type InsertWelcomeMessageParams struct {
@@ -416,7 +416,7 @@ type InsertWelcomeMessageParams struct {
 	InstallationKeyDataHash []byte
 	HpkePublicKey           []byte
 	WrapperAlgorithm        int16
-	MessageCursor           int64
+	WelcomeMetadata         []byte
 }
 
 func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMessageParams) (WelcomeMessage, error) {
@@ -426,7 +426,7 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		arg.InstallationKeyDataHash,
 		arg.HpkePublicKey,
 		arg.WrapperAlgorithm,
-		arg.MessageCursor,
+		arg.WelcomeMetadata,
 	)
 	var i WelcomeMessage
 	err := row.Scan(

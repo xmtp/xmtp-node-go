@@ -10,7 +10,7 @@ ALTER TABLE welcome_messages
 ADD COLUMN welcome_metadata BYTEA NOT NULL DEFAULT ''::bytea;
 
 --bun:split
-CREATE OR REPLACE FUNCTION insert_welcome_message_v3(
+CREATE OR REPLACE FUNCTION insert_welcome_message_v4(
         installation_key BYTEA,
         data BYTEA,
         installation_key_data_hash BYTEA,

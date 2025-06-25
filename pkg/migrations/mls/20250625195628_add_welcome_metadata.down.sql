@@ -6,4 +6,4 @@ ALTER TABLE welcome_messages
 DROP COLUMN welcome_metadata;
 
 --bun:split
-DROP FUNCTION IF EXISTS insert_welcome_message_v3;
+DROP FUNCTION IF EXISTS insert_welcome_message_v4;

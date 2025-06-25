@@ -121,7 +121,7 @@ FROM
 SELECT
 	*
 FROM
-	insert_welcome_message_v3(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm, @message_cursor);
+	insert_welcome_message_v4(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm, @welcome_metadata);
 
 -- name: GetAllGroupMessages :many
 SELECT
