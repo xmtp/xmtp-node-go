@@ -351,13 +351,10 @@
     "envelopesAuthenticatedData": {
       "type": "object",
       "properties": {
-        "targetOriginator": {
-          "type": "integer",
-          "format": "int64"
-        },
         "targetTopic": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "title": "Do NOT reuse tag 1 — previously used by target_originator"
         },
         "dependsOn": {
           "$ref": "#/definitions/xmtpv4envelopesCursor"
@@ -404,6 +401,18 @@
         }
       }
     },
+    "envelopesNodeSignature": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/associationsRecoverableEcdsaSignature"
+        }
+      }
+    },
     "envelopesOriginatorEnvelope": {
       "type": "object",
       "properties": {
@@ -439,6 +448,11 @@
           "format": "uint64",
           "title": "The sequence_id that the report ends at [inclusive]"
         },
+        "endMinuteSinceEpoch": {
+          "type": "integer",
+          "format": "int64",
+          "title": "The end timestamp of the report"
+        },
         "payersMerkleRoot": {
           "type": "string",
           "format": "byte",
@@ -464,7 +478,7 @@
           "title": "The ID of the report, determined by hashing the report contents"
         },
         "signature": {
-          "$ref": "#/definitions/associationsRecoverableEcdsaSignature",
+          "$ref": "#/definitions/envelopesNodeSignature",
           "title": "The signature of the attester"
         }
       },
@@ -664,9 +678,9 @@
         "wrapperAlgorithm": {
           "$ref": "#/definitions/message_contentsWelcomeWrapperAlgorithm"
         },
-        "messageCursor": {
+        "welcomeMetadata": {
           "type": "string",
-          "format": "uint64"
+          "format": "byte"
         }
       },
       "title": "Version 1 of the WelcomeMessageInput format"
