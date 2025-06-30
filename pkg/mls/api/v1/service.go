@@ -292,7 +292,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 			input := input
 			g.Go(func() error {
 				insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
-				msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm))
+				msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm), input.GetV1().GetWelcomeMetadata())
 				insertSpan.Finish(tracing.WithError(err))
 				if err != nil {
 					if mlsstore.IsAlreadyExistsError(err) {
@@ -310,6 +310,7 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 							Data:             msg.Data,
 							HpkePublicKey:    msg.HpkePublicKey,
 							WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
+							WelcomeMetadata:  msg.WelcomeMetadata,
 						},
 					},
 				})
