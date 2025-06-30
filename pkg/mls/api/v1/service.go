@@ -18,8 +18,8 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
-	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -283,60 +283,60 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 		return nil, err
 	}
 
-	// TODO: Remove after debugging is done
-	ip := utils.ClientIPFromContext(ctx)
-
 	err = tracing.Wrap(ctx, log, "send-welcome-messages", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
-		tracing.SpanTag(span, "client_ip", ip)
 		tracing.SpanTag(span, "message_count", len(req.Messages))
 
-		// TODO: Wrap this in a transaction so publishing is all or nothing
+		g, ctx := errgroup.WithContext(ctx)
+
 		for _, input := range req.Messages {
-			insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
-			insertLogger := tracing.Link(insertSpan, log)
-			insertLogger.Info("inserting welcome message", zap.String("client_ip", ip), zap.Int("message_length", len(input.GetV1().Data)))
-			msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm), input.GetV1().GetWelcomeMetadata())
-			insertSpan.Finish(tracing.WithError(err))
-			if err != nil {
-				if mlsstore.IsAlreadyExistsError(err) {
-					continue
+			input := input
+			g.Go(func() error {
+				insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
+				msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm), input.GetV1().GetWelcomeMetadata())
+				insertSpan.Finish(tracing.WithError(err))
+				if err != nil {
+					if mlsstore.IsAlreadyExistsError(err) {
+						return nil
+					}
+					return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 				}
-				return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-			}
 
-			msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
-				Version: &mlsv1.WelcomeMessage_V1_{
-					V1: &mlsv1.WelcomeMessage_V1{
-						Id:               uint64(msg.ID),
-						CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
-						InstallationKey:  msg.InstallationKey,
-						Data:             msg.Data,
-						HpkePublicKey:    msg.HpkePublicKey,
-						WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
-						WelcomeMetadata:  msg.WelcomeMetadata,
+				msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
+					Version: &mlsv1.WelcomeMessage_V1_{
+						V1: &mlsv1.WelcomeMessage_V1{
+							Id:               uint64(msg.ID),
+							CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
+							InstallationKey:  msg.InstallationKey,
+							Data:             msg.Data,
+							HpkePublicKey:    msg.HpkePublicKey,
+							WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
+							WelcomeMetadata:  msg.WelcomeMetadata,
+						},
 					},
-				},
+				})
+				if err != nil {
+					return err
+				}
+
+				publishSpan, publishCtx := tracer.StartSpanFromContext(ctx, "publish-welcome-to-relay")
+				err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
+					ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
+					Timestamp:    msg.CreatedAt.UnixNano(),
+					Payload:      msgB,
+				})
+				publishSpan.Finish(tracing.WithError(err))
+
+				if err != nil {
+					return err
+				}
+
+				metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
+
+				return nil
 			})
-			if err != nil {
-				return err
-			}
-
-			publishSpan, publishCtx := tracer.StartSpanFromContext(ctx, "publish-welcome-to-relay")
-			err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
-				ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
-				Timestamp:    msg.CreatedAt.UnixNano(),
-				Payload:      msgB,
-			})
-			publishSpan.Finish(tracing.WithError(err))
-
-			if err != nil {
-				return err
-			}
-
-			metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
 		}
 
-		return nil
+		return g.Wait()
 	})
 
 	if err != nil {
