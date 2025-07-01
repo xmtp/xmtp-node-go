@@ -3,8 +3,11 @@ set -e
 
 go generate ./...
 
+# Generate SQLC queries
+./dev/sqlc
 # Generate mocks
 mockery
+# Generate protobuf definitions
 rm -rf pkg/proto/**/*.pb.go pkg/proto/**/*.pb.gw.go pkg/proto/**/*.swagger.json
 if ! buf generate https://github.com/xmtp/proto.git#branch=main,subdir=proto; then
     echo "Failed to generate protobuf definitions"
