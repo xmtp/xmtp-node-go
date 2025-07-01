@@ -49,32 +49,33 @@ type PruneConfig struct {
 }
 
 type PruneOptions struct {
-	LogLevel string `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
-	//nolint:staticcheck
-	LogEncoding string                `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	Log         LogOptions            `group:"Logging Options"`
 	PruneConfig PruneConfig           `group:"Prune Options"     namespace:"prune"`
 	MLSStore    mlsstore.StoreOptions `group:"MLS Options" namespace:"mls-store"`
 	Version     bool                  `long:"version" description:"Output binary version and exit"`
 }
 
+type LogOptions struct {
+	LogLevel string `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
+	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
+	//nolint:staticcheck
+	LogEncoding string `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+}
+
 // Options contains all the available features and settings that can be
 // configured via flags when executing go-waku as a service.
 type Options struct {
-	Port        int      `short:"p" long:"port" description:"Libp2p TCP listening port (0 for random)" default:"60000"`
-	Address     string   `long:"address" description:"Listening address" default:"0.0.0.0"`
-	EnableWS    bool     `long:"ws" description:"Enable websockets support"`
-	WSPort      int      `long:"ws-port" description:"Libp2p TCP listening port for websocket connection (0 for random)" default:"60001"`
-	WSAddress   string   `long:"ws-address" description:"Listening address for websocket connections" default:"0.0.0.0"`
-	GenerateKey bool     `long:"generate-key" description:"Generate private key file at path specified in --key-file"`
-	NodeKey     string   `long:"nodekey" description:"P2P node private key as hex. Can also be set with GOWAKU-NODEKEY env variable (default random)"`
-	KeyFile     string   `long:"key-file" description:"Path to a file containing the private key for the P2P node" default:"./nodekey"`
-	Overwrite   bool     `long:"overwrite" description:"When generating a keyfile, overwrite the nodekey file if it already exists"`
-	StaticNodes []string `long:"static-node" description:"Multiaddr of peer to directly connect with. Option may be repeated"`
-	KeepAlive   int      `long:"keep-alive" default:"20" description:"Interval in seconds for pinging peers to keep the connection alive."`
-	LogLevel    string   `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
-	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
-	//nolint:staticcheck
-	LogEncoding            string        `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	Port                   int           `short:"p" long:"port" description:"Libp2p TCP listening port (0 for random)" default:"60000"`
+	Address                string        `long:"address" description:"Listening address" default:"0.0.0.0"`
+	EnableWS               bool          `long:"ws" description:"Enable websockets support"`
+	WSPort                 int           `long:"ws-port" description:"Libp2p TCP listening port for websocket connection (0 for random)" default:"60001"`
+	WSAddress              string        `long:"ws-address" description:"Listening address for websocket connections" default:"0.0.0.0"`
+	GenerateKey            bool          `long:"generate-key" description:"Generate private key file at path specified in --key-file"`
+	NodeKey                string        `long:"nodekey" description:"P2P node private key as hex. Can also be set with GOWAKU-NODEKEY env variable (default random)"`
+	KeyFile                string        `long:"key-file" description:"Path to a file containing the private key for the P2P node" default:"./nodekey"`
+	Overwrite              bool          `long:"overwrite" description:"When generating a keyfile, overwrite the nodekey file if it already exists"`
+	StaticNodes            []string      `long:"static-node" description:"Multiaddr of peer to directly connect with. Option may be repeated"`
+	KeepAlive              int           `long:"keep-alive" default:"20" description:"Interval in seconds for pinging peers to keep the connection alive."`
 	CreateMessageMigration string        `long:"create-message-migration" default:"" description:"Create a migration. Must provide a name"`
 	CreateAuthzMigration   string        `long:"create-authz-migration" default:"" description:"Create a migration for the auth db. Must provide a name"`
 	CreateMlsMigration     string        `long:"create-mls-migration" default:"" description:"Create a migration for the mls db. Must provide a name"`
@@ -82,6 +83,8 @@ type Options struct {
 	Version                bool          `long:"version" description:"Output binary version and exit"`
 	GoProfiling            bool          `long:"go-profiling" description:"Enable Go profiling"`
 	MetricsPeriod          time.Duration `long:"metrics-period" description:"Polling period for server status metrics" default:"30s"`
+
+	Log LogOptions `group:"Logging Options"`
 
 	API           api.Options                      `group:"API Options" namespace:"api"`
 	Authz         AuthzOptions                     `group:"Authz Options"`

@@ -36,6 +36,6 @@ jobs:
           else
             export DOCKER_IMAGE_TAG=dev
           fi
-          IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build-prune)
+          IMAGE_TO_DEPLOY=xmtp/xmtp-prune-mls@$(dev/docker/build-prune)
           echo Successfully pushed $IMAGE_TO_DEPLOY
           echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT

@@ -11,9 +11,6 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/xmtp/xmtp-node-go/pkg/prune"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
 	_ "net/http/pprof"
 )
 
@@ -43,7 +40,7 @@ func main() {
 
 	ctx := context.Background()
 
-	logger, _, err := buildLogger(options.LogEncoding)
+	logger, _, err := server.BuildLogger(options.Log, "prune")
 	if err != nil {
 		fatal("Could not build logger: %s", err)
 	}
@@ -70,40 +67,6 @@ func addEnvVars() {
 
 func fatal(msg string, args ...any) {
 	log.Fatalf(msg, args...)
-}
-
-func buildLogger(encoding string) (*zap.Logger, *zap.Config, error) {
-	atom := zap.NewAtomicLevel()
-	level := zapcore.InfoLevel
-	err := level.Set(options.LogLevel)
-	if err != nil {
-		return nil, nil, err
-	}
-	atom.SetLevel(level)
-
-	cfg := zap.Config{
-		Encoding:         encoding,
-		Level:            atom,
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			MessageKey:   "message",
-			LevelKey:     "level",
-			EncodeLevel:  zapcore.CapitalLevelEncoder,
-			TimeKey:      "time",
-			EncodeTime:   zapcore.ISO8601TimeEncoder,
-			NameKey:      "caller",
-			EncodeCaller: zapcore.ShortCallerEncoder,
-		},
-	}
-	log, err := cfg.Build()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	log = log.Named("prune")
-
-	return log, &cfg, nil
 }
 
 func ValidatePruneOptions(options server.PruneOptions) error {
