@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+MLS_DB_DSN="postgres://postgres:xmtp@localhost:7654/postgres?sslmode=disable"
+
+go run cmd/prune/main.go \
+    --mls-store.db-connection-string "${MLS_DB_DSN}" \
+    "$@"

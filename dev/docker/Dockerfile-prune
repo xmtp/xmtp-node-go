@@ -1,0 +1,31 @@
+# BUILD IMAGE --------------------------------------------------------
+ARG GO_VERSION=unknown
+FROM golang:${GO_VERSION}-alpine as builder
+
+# Get build tools and required header files
+RUN apk add --no-cache build-base
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+RUN go build -tags="gowaku_no_rln" -o bin/xmtpd-prune cmd/prune/main.go
+
+# ACTUAL IMAGE -------------------------------------------------------
+
+FROM alpine:3.12
+
+LABEL maintainer="eng@ephemerahq.com"
+LABEL source="https://github.com/xmtp/xmtp-node-go"
+LABEL description="XMTPD V3 Prune"
+
+# color, nocolor, json
+ENV GOLOG_LOG_FMT=nocolor
+
+COPY --from=builder /app/bin/xmtpd-prune /usr/bin/
+
+ENTRYPOINT ["/usr/bin/xmtpd-prune"]

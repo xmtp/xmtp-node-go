@@ -43,6 +43,19 @@ type AuthzOptions struct {
 	WriteTimeout       time.Duration `long:"authz-write-timeout" description:"Timeout for writing to the database" default:"10s"`
 }
 
+type PruneConfig struct {
+	MaxCycles int  `long:"max-prune-cycles" description:"Maximum pruning cycles" default:"10"`
+	DryRun    bool `long:"dry-run"          description:"Dry run mode"`
+}
+
+type PruneOptions struct {
+	LogLevel string `short:"l" long:"log-level" description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
+	//nolint:staticcheck
+	LogEncoding string                `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
+	PruneConfig PruneConfig           `group:"Prune Options"     namespace:"prune"`
+	MLSStore    mlsstore.StoreOptions `group:"MLS Options" namespace:"mls-store"`
+}
+
 // Options contains all the available features and settings that can be
 // configured via flags when executing go-waku as a service.
 type Options struct {
