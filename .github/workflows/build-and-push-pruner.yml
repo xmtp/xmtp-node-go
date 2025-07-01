@@ -1,0 +1,41 @@
+name: Build and push Pruner
+on:
+  push:
+    branches:
+      - main
+      - dev
+jobs:
+  deploy:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: xmtpeng
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Git Checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+
+      - name: Push
+        id: push
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            export DOCKER_IMAGE_TAG=latest
+          else
+            export DOCKER_IMAGE_TAG=dev
+          fi
+          IMAGE_TO_DEPLOY=xmtp/node-go@$(dev/docker/build-prune)
+          echo Successfully pushed $IMAGE_TO_DEPLOY
+          echo "docker_image=${IMAGE_TO_DEPLOY}" >> $GITHUB_OUTPUT
