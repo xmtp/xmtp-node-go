@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	logger, logCfg, err := buildLogger(options)
+	logger, logCfg, err := server.BuildLogger(options.Log, "xmtpd")
 	if err != nil {
 		fatal("Could not build logger: %s", err)
 	}
@@ -188,38 +188,4 @@ func main() {
 
 func fatal(msg string, args ...any) {
 	log.Fatalf(msg, args...)
-}
-
-func buildLogger(options server.Options) (*zap.Logger, *zap.Config, error) {
-	atom := zap.NewAtomicLevel()
-	level := zapcore.InfoLevel
-	err := level.Set(options.LogLevel)
-	if err != nil {
-		return nil, nil, err
-	}
-	atom.SetLevel(level)
-
-	cfg := zap.Config{
-		Encoding:         options.LogEncoding,
-		Level:            atom,
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			MessageKey:   "message",
-			LevelKey:     "level",
-			EncodeLevel:  zapcore.CapitalLevelEncoder,
-			TimeKey:      "time",
-			EncodeTime:   zapcore.ISO8601TimeEncoder,
-			NameKey:      "caller",
-			EncodeCaller: zapcore.ShortCallerEncoder,
-		},
-	}
-	logger, err := cfg.Build()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logger = logger.Named("xmtpd")
-
-	return logger, &cfg, nil
 }

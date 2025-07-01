@@ -142,7 +142,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	level, err := zapcore.ParseLevel(options.LogLevel)
+	level, err := zapcore.ParseLevel(options.Log.LogLevel)
 	if err != nil {
 		return nil, errors.Wrap(err, "parsing log level")
 	}

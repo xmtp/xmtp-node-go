@@ -13,7 +13,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
-func newPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, error) {
+func NewPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, error) {
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
@@ -27,22 +27,30 @@ func newPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, e
 	}
 	db := stdlib.OpenDBFromPool(dbpool)
 
-	waitUntil := time.Now().Add(waitForDB)
-
-	err = db.Ping()
-	for err != nil && time.Now().Before(waitUntil) {
-		time.Sleep(3 * time.Second)
-		err = db.Ping()
+	err = WaitUntilDBReady(context.Background(), dbpool, waitForDB)
+	if err != nil {
+		return nil, err
 	}
 
 	return db, nil
 }
 
 func newBunPGXDb(dsn string, waitForDB, statementTimeout time.Duration) (*bun.DB, error) {
-	pgxDb, err := newPGXDB(dsn, waitForDB, statementTimeout)
+	pgxDb, err := NewPGXDB(dsn, waitForDB, statementTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	return bun.NewDB(pgxDb, pgdialect.New()), nil
+}
+
+func WaitUntilDBReady(ctx context.Context, db *pgxpool.Pool, waitTime time.Duration) error {
+	pingCtx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+
+	err := db.Ping(pingCtx)
+	if err != nil {
+		return fmt.Errorf("database is not ready within %s: %w", waitTime, err)
+	}
+	return nil
 }
