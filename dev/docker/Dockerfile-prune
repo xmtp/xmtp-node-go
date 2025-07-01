@@ -13,15 +13,18 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -tags="gowaku_no_rln" -o bin/xmtpd-prune cmd/prune/main.go
+RUN go build -tags="gowaku_no_rln" -ldflags="-X 'main.Commit=$GIT_COMMIT'" -o bin/xmtpd-prune cmd/prune/main.go
 
 # ACTUAL IMAGE -------------------------------------------------------
 
 FROM alpine:3.12
 
+ARG GIT_COMMIT=unknown
+
 LABEL maintainer="eng@ephemerahq.com"
 LABEL source="https://github.com/xmtp/xmtp-node-go"
-LABEL description="XMTPD V3 Prune"
+LABEL description="XMTPD Prune MLS"
+LABEL commit=$GIT_COMMIT
 
 # color, nocolor, json
 ENV GOLOG_LOG_FMT=nocolor

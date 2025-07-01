@@ -54,6 +54,7 @@ type PruneOptions struct {
 	LogEncoding string                `long:"log-encoding" description:"Log encoding format. Either console or json" choice:"console" choice:"json" default:"console"`
 	PruneConfig PruneConfig           `group:"Prune Options"     namespace:"prune"`
 	MLSStore    mlsstore.StoreOptions `group:"MLS Options" namespace:"mls-store"`
+	Version     bool                  `long:"version" description:"Output binary version and exit"`
 }
 
 // Options contains all the available features and settings that can be

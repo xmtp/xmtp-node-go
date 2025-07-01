@@ -1,5 +1,7 @@
 #!/bin/bash
 set -e
+
+# shellcheck source=dev/docker/env
 . dev/docker/env
 
 docker_compose build

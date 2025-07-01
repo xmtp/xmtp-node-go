@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +29,13 @@ func main() {
 		return
 	}
 
+	addEnvVars()
+
+	if options.Version {
+		fmt.Printf("Version: %s", Commit)
+		return
+	}
+
 	err := ValidatePruneOptions(options)
 	if err != nil {
 		fatal("Invalid prune options: %s", err)
@@ -43,7 +48,7 @@ func main() {
 		fatal("Could not build logger: %s", err)
 	}
 
-	dbInstance, err := newPGXDB(options.MLSStore.DbConnectionString, 30*time.Second, options.MLSStore.ReadTimeout)
+	dbInstance, err := server.NewPGXDB(options.MLSStore.DbConnectionString, 30*time.Second, options.MLSStore.ReadTimeout)
 	if err != nil {
 		fatal("Could not open db: %s", err)
 	}
@@ -54,6 +59,12 @@ func main() {
 	err = pruneExecutor.Run()
 	if err != nil {
 		fatal("Could not execute prune: %s", err)
+	}
+}
+
+func addEnvVars() {
+	if connStr, hasConnstr := os.LookupEnv("MLS_DB_CONNECTION_STRING"); hasConnstr {
+		options.MLSStore.DbConnectionString = connStr
 	}
 }
 
@@ -93,31 +104,6 @@ func buildLogger(encoding string) (*zap.Logger, *zap.Config, error) {
 	log = log.Named("prune")
 
 	return log, &cfg, nil
-}
-
-func newPGXDB(dsn string, waitForDB, statementTimeout time.Duration) (*sql.DB, error) {
-	config, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	config.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(statementTimeout.Milliseconds())
-
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)
-	if err != nil {
-		return nil, err
-	}
-	db := stdlib.OpenDBFromPool(dbpool)
-
-	waitUntil := time.Now().Add(waitForDB)
-
-	err = db.Ping()
-	for err != nil && time.Now().Before(waitUntil) {
-		time.Sleep(3 * time.Second)
-		err = db.Ping()
-	}
-
-	return db, nil
 }
 
 func ValidatePruneOptions(options server.PruneOptions) error {

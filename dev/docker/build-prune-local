@@ -2,7 +2,7 @@
 set -e
 
 DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-dev}"
-DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/prune-v3}"
+DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME:-xmtp/xmtp-prune-mls}"
 GIT_COMMIT="$(git rev-parse HEAD)"
 GO_VERSION="$(go list -f "{{.GoVersion}}" -m)"
 
