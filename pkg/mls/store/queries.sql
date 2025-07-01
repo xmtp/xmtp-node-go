@@ -225,3 +225,22 @@ INSERT INTO inboxes(id)
 ON CONFLICT (id)
 	DO UPDATE SET
 		updated_at = NOW();
+
+-- name: GetOldWelcomeMessages :one
+SELECT COUNT(*)::bigint as old_message_count
+FROM welcome_messages
+WHERE created_at < NOW() - make_interval(days := @age_days);
+
+-- name: DeleteOldWelcomeMessagesBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM welcome_messages
+    WHERE created_at < NOW() - make_interval(days := @age_days)
+    ORDER BY id
+    LIMIT 1000
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM welcome_messages wm
+    USING to_delete td
+WHERE wm.id = td.id
+    RETURNING wm.id, wm.created_at;
