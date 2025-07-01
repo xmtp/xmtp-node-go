@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/ethereum/go-ethereum v1.10.26
-	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
@@ -33,7 +32,6 @@ require (
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
 	github.com/yoheimuta/protolint v0.39.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/sync v0.3.0
 	google.golang.org/genproto v0.0.0-20230223222841-637eb2293923
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.31.0
@@ -45,6 +43,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	golang.org/x/sync v0.3.0 // indirect
 )
 
 require (
@@ -179,7 +178,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/mod v0.12.0
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
