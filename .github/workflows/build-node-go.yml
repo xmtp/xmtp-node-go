@@ -86,23 +86,22 @@ jobs:
         id: set_xmtpd_digest
         run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
 
-# TODO(mkysel): figure out deploy once we are ready
-#  deploy:
-#    name: Deploy new images to infra
-#    runs-on: ubuntu-latest
-#    needs: push_to_registry
-#    if: github.ref == 'refs/heads/main'
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v4
-#      - name: Deploy Testnet
-#        uses: xmtp-labs/terraform-deployer@v1
-#        timeout-minutes: 45
-#        with:
-#          timeout: 45m
-#          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
-#          terraform-org: xmtp
-#          terraform-workspace: testnet-staging
-#          variable-name: xmtpd_server_docker_image
-#          variable-value: "ghcr.io/xmtp/xmtpd@${{ needs.push_to_registry.outputs.xmtpd_digest }}"
-#          variable-value-required-prefix: "ghcr.io/xmtp/xmtpd@sha256:"
+  deploy:
+    name: Deploy new images to infra
+    runs-on: ubuntu-latest
+    needs: push_to_registry
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Deploy Dev
+        uses: xmtp-labs/terraform-deployer@v1
+        timeout-minutes: 45
+        with:
+          timeout: 45m
+          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+          terraform-org: xmtp
+          terraform-workspace: dev
+          variable-name: xmtp_node_image
+          variable-value: "ghcr.io/xmtp/node-go@${{ needs.push_to_registry.outputs.xmtpd_digest }}"
+          variable-value-required-prefix: "ghcr.io/xmtp/node-go@sha256:"
