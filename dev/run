@@ -13,11 +13,12 @@ go run \
     --metrics \
     --metrics-period 5s \
     --store.enable \
+    --api.enable-mls \
     --store.db-connection-string "${MESSAGE_DB_DSN}" \
     --store.reader-db-connection-string "${MESSAGE_DB_DSN}" \
     --store.metrics-period 5s \
     --mls-store.db-connection-string "${MLS_DB_DSN}" \
-    --mls-validation.grpc-address=validation:50051 \
+    --mls-validation.grpc-address=localhost:60051 \
     --authz-db-connection-string "${AUTHZ_DB_DSN}" \
     --go-profiling \
     "$@"
