@@ -35,23 +35,25 @@ func (e *Executor) Run() error {
 	start := time.Now()
 
 	pruners := []Pruner{
-		&WelcomePruner{querier: querier},
+		&WelcomePruner{log: e.log, querier: querier},
 	}
 
-	var deletableCount = int64(0)
-	for _, pruner := range pruners {
-		prunerCount, err := pruner.Count(e.ctx)
-		if err != nil {
-			return err
+	if e.config.CountDeletable {
+		var deletableCount = int64(0)
+		for _, pruner := range pruners {
+			prunerCount, err := pruner.Count(e.ctx)
+			if err != nil {
+				return err
+			}
+			deletableCount += prunerCount
 		}
-		deletableCount += prunerCount
-	}
 
-	e.log.Info("Count of envelopes eligible for pruning", zap.Int64("count", deletableCount))
+		e.log.Info("Count of envelopes eligible for pruning", zap.Int64("count", deletableCount))
 
-	if deletableCount == 0 {
-		e.log.Info("No envelopes found for pruning")
-		return nil
+		if deletableCount == 0 {
+			e.log.Info("No envelopes found for pruning")
+			return nil
+		}
 	}
 
 	if e.config.DryRun {
