@@ -1,4 +1,10 @@
 services:
+  validation:
+    image: ghcr.io/xmtp/mls-validation-service:main
+    platform: linux/amd64
+    ports:
+      - 60051:50051
+
   message-db:
     image: postgres:13
     environment:
