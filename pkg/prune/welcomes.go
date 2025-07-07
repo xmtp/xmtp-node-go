@@ -3,6 +3,7 @@ package prune
 import (
 	"context"
 	"errors"
+
 	"github.com/lib/pq"
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"go.uber.org/zap"
