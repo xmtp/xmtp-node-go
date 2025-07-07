@@ -60,6 +60,7 @@ type MlsStore interface {
 		ctx context.Context,
 		groupId []byte,
 		data []byte,
+		isCommit bool,
 	) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(
 		ctx context.Context,
@@ -87,6 +88,8 @@ type MlsStore interface {
 		encrypted_entry []byte,
 	) (queries.CommitLog, error)
 }
+
+var _ MlsStore = (*Store)(nil)
 
 func New(ctx context.Context, config Config) (*Store, error) {
 	if config.now == nil {
@@ -326,12 +329,14 @@ func (s *Store) InsertGroupMessage(
 	ctx context.Context,
 	groupId []byte,
 	data []byte,
+	isCommit bool,
 ) (*queries.GroupMessage, error) {
 	dataHash := sha256.Sum256(append(groupId, data...))
 	message, err := s.queries.InsertGroupMessage(ctx, queries.InsertGroupMessageParams{
 		GroupID:         groupId,
 		Data:            data,
 		GroupIDDataHash: dataHash[:],
+		IsCommit:        isCommit,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {

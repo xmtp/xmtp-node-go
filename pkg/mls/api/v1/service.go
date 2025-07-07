@@ -272,7 +272,7 @@ func (s *Service) SendGroupMessages(
 		}
 
 		msgV1 := input.GetV1()
-		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, msgV1.Data)
+		msg, err := s.store.InsertGroupMessage(ctx, decodedGroupId, msgV1.Data, result.IsCommit)
 		if err != nil {
 			log.Warn("error inserting message", zap.Error(err))
 			if mlsstore.IsAlreadyExistsError(err) {
