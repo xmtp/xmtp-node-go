@@ -49,6 +49,11 @@ func (e *Executor) Run() error {
 
 	e.log.Info("Count of envelopes eligible for pruning", zap.Int64("count", deletableCount))
 
+	if deletableCount == 0 {
+		e.log.Info("No envelopes found for pruning")
+		return nil
+	}
+
 	if e.config.DryRun {
 		e.log.Info("Dry run mode enabled. Nothing to do")
 		return nil
