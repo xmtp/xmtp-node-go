@@ -17,7 +17,9 @@ type CacheingTransactionHistoryFetcher struct {
 	cache   *lru.TwoQueueCache
 }
 
-func NewCacheingTransactionHistoryFetcher(fetcher TransactionHistoryFetcher) TransactionHistoryFetcher {
+func NewCacheingTransactionHistoryFetcher(
+	fetcher TransactionHistoryFetcher,
+) TransactionHistoryFetcher {
 	c := new(CacheingTransactionHistoryFetcher)
 	c.fetcher = fetcher
 	// We can safely swallow this error, since the only case it will blow up is if size == 0
@@ -26,7 +28,10 @@ func NewCacheingTransactionHistoryFetcher(fetcher TransactionHistoryFetcher) Tra
 	return c
 }
 
-func (f *CacheingTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddress string) (res TransactionHistoryResult, err error) {
+func (f *CacheingTransactionHistoryFetcher) Fetch(
+	ctx context.Context,
+	walletAddress string,
+) (res TransactionHistoryResult, err error) {
 	if val, ok := f.cache.Get(walletAddress); ok {
 		return val.(TransactionHistoryResult), nil
 	}
@@ -45,7 +50,11 @@ type RetryTransactionHistoryFetcher struct {
 	retrySleepTime time.Duration
 }
 
-func NewRetryTransactionHistoryFetcher(fetcher TransactionHistoryFetcher, numRetries int, retrySleepTime time.Duration) TransactionHistoryFetcher {
+func NewRetryTransactionHistoryFetcher(
+	fetcher TransactionHistoryFetcher,
+	numRetries int,
+	retrySleepTime time.Duration,
+) TransactionHistoryFetcher {
 	res := new(RetryTransactionHistoryFetcher)
 	res.fetcher = fetcher
 	res.numRetries = numRetries
@@ -54,7 +63,10 @@ func NewRetryTransactionHistoryFetcher(fetcher TransactionHistoryFetcher, numRet
 	return res
 }
 
-func (f *RetryTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddress string) (res TransactionHistoryResult, err error) {
+func (f *RetryTransactionHistoryFetcher) Fetch(
+	ctx context.Context,
+	walletAddress string,
+) (res TransactionHistoryResult, err error) {
 	for i := 0; i < f.numRetries; i++ {
 		select {
 		case <-ctx.Done():

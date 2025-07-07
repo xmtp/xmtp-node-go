@@ -105,7 +105,11 @@ func (rl *TokenBucketRateLimiter) getLimit(limitType LimitType) *Limit {
 }
 
 // Will return the entry, with items filled based on the time since last access
-func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket string, isPriority bool) *Entry {
+func (rl *TokenBucketRateLimiter) fillAndReturnEntry(
+	limitType LimitType,
+	bucket string,
+	isPriority bool,
+) *Entry {
 	limit := rl.getLimit(limitType)
 	multiplier := uint16(1)
 	if isPriority {
@@ -126,7 +130,12 @@ func (rl *TokenBucketRateLimiter) fillAndReturnEntry(limitType LimitType, bucket
 }
 
 // The Spend function takes a bucket and a boolean asserting whether to apply the PRIORITY or the REGULAR rate limits.
-func (rl *TokenBucketRateLimiter) Spend(limitType LimitType, bucket string, cost uint16, isPriority bool) error {
+func (rl *TokenBucketRateLimiter) Spend(
+	limitType LimitType,
+	bucket string,
+	cost uint16,
+	isPriority bool,
+) error {
 	entry := rl.fillAndReturnEntry(limitType, bucket, isPriority)
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
@@ -143,7 +152,10 @@ func (rl *TokenBucketRateLimiter) Spend(limitType LimitType, bucket string, cost
 	}
 
 	entry.tokens = entry.tokens - cost
-	log.Debug("Spend allowed. bucket is under threshold", zap.Int("tokens_remaining", int(entry.tokens)))
+	log.Debug(
+		"Spend allowed. bucket is under threshold",
+		zap.Int("tokens_remaining", int(entry.tokens)),
+	)
 	return nil
 }
 

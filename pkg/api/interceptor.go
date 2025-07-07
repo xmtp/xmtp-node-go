@@ -109,7 +109,11 @@ func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, er
 		return "", status.Error(codes.Unauthenticated, "invalid authorization header")
 	}
 	if scheme := strings.TrimSpace(words[0]); scheme != "Bearer" {
-		return "", status.Errorf(codes.Unauthenticated, "unrecognized authorization scheme %s", scheme)
+		return "", status.Errorf(
+			codes.Unauthenticated,
+			"unrecognized authorization scheme %s",
+			scheme,
+		)
 	}
 	token, err := decodeAuthToken(strings.TrimSpace(words[1]))
 	if err != nil {
@@ -123,7 +127,11 @@ func (wa *WalletAuthorizer) getWallet(ctx context.Context) (types.WalletAddr, er
 	return wallet, nil
 }
 
-func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wallet types.WalletAddr) error {
+func (wa *WalletAuthorizer) authorize(
+	ctx context.Context,
+	req interface{},
+	wallet types.WalletAddr,
+) error {
 	if pub, isPublish := req.(*messagev1.PublishRequest); isPublish {
 		for _, env := range pub.Envelopes {
 			if !wa.privilegedAddresses[wallet] && !allowedToPublish(env.ContentTopic, wallet) {
@@ -140,7 +148,12 @@ func (wa *WalletAuthorizer) authorize(ctx context.Context, req interface{}, wall
 	return nil
 }
 
-func (wa *WalletAuthorizer) applyLimits(ctx context.Context, fullMethod string, req interface{}, wallet types.WalletAddr) error {
+func (wa *WalletAuthorizer) applyLimits(
+	ctx context.Context,
+	fullMethod string,
+	req interface{},
+	wallet types.WalletAddr,
+) error {
 	// * for limit exhaustion return status.Errorf(codes.ResourceExhausted, ...)
 	// * for other authorization failure return status.Errorf(codes.PermissionDenied, ...)
 	_, method := splitMethodName(fullMethod)

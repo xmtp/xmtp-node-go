@@ -71,7 +71,11 @@ func CreateHost(ctx context.Context, log *zap.Logger) (host.Host, error) {
 		}
 		l, err := net.ListenTCP("tcp", addr)
 		if err != nil {
-			log.Error("unable to listen on addr %q: %v", zap.String("ipaddr", addr.String()), zap.Error(err))
+			log.Error(
+				"unable to listen on addr %q: %v",
+				zap.String("ipaddr", addr.String()),
+				zap.Error(err),
+			)
 			err := l.Close()
 			if err != nil {
 				return nil, err
@@ -96,7 +100,6 @@ func CreateHost(ctx context.Context, log *zap.Logger) (host.Host, error) {
 }
 
 func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, error) {
-
 	libP2pHost, err := CreateHost(ctx, log)
 	if err != nil {
 		return nil, err
@@ -105,7 +108,15 @@ func CreateNode(ctx context.Context, log *zap.Logger) (*XmtpAuthentication, erro
 	return NewXmtpAuthentication(ctx, libP2pHost, log), nil
 }
 
-func ClientAuth(ctx context.Context, log *zap.Logger, h host.Host, peerId types.PeerId, dest multiaddr.Multiaddr, protoId protocol.ID, serializedRequest string) (bool, error) {
+func ClientAuth(
+	ctx context.Context,
+	log *zap.Logger,
+	h host.Host,
+	peerId types.PeerId,
+	dest multiaddr.Multiaddr,
+	protoId protocol.ID,
+	serializedRequest string,
+) (bool, error) {
 	h.Peerstore().AddAddr(peerId.Raw(), dest, peerstore.PermanentAddrTTL)
 
 	err := h.Connect(ctx, h.Peerstore().PeerInfo(peerId.Raw()))
@@ -173,14 +184,21 @@ func TestRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		dest := node.h.Addrs()[0]
 
-		didSucceed, err := ClientAuth(ctx, log.Named("MockClient"), client, types.PeerId(node.h.ID()), dest, ClientAuthnID_v1_0_0, sampleAuthReq002.reqBytes)
+		didSucceed, err := ClientAuth(
+			ctx,
+			log.Named("MockClient"),
+			client,
+			types.PeerId(node.h.ID()),
+			dest,
+			ClientAuthnID_v1_0_0,
+			sampleAuthReq002.reqBytes,
+		)
 		require.NoError(t, err)
 		require.False(t, didSucceed)
 
 		cancel()
 	}()
 	<-ctx.Done()
-
 }
 
 func TestV1_Nominal(t *testing.T) {
@@ -198,7 +216,12 @@ func TestV1_Nominal(t *testing.T) {
 	authData, err := unpackAuthData(req.AuthDataBytes)
 	require.NoError(t, err)
 
-	require.Equal(t, expectedWalletAddr, types.WalletAddr(authData.WalletAddr), "bad deserialized wallet address")
+	require.Equal(
+		t,
+		expectedWalletAddr,
+		types.WalletAddr(authData.WalletAddr),
+		"bad deserialized wallet address",
+	)
 	require.Equal(t, expectedPeerId, types.PeerId(authData.PeerId), "bad deserialized peerID")
 
 	peerId, walletAddr, err := validateRequest(ctx, log, req, expectedPeerId)
@@ -206,7 +229,6 @@ func TestV1_Nominal(t *testing.T) {
 
 	require.Equal(t, expectedWalletAddr, walletAddr, "wallet address mismatch")
 	require.Equal(t, expectedPeerId, peerId, "peerID mismatch")
-
 }
 
 func TestV1_BadAuthSig(t *testing.T) {

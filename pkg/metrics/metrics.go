@@ -20,7 +20,13 @@ type Server struct {
 	http net.Listener
 }
 
-func NewMetricsServer(ctx context.Context, address string, port int, log *zap.Logger, reg *prometheus.Registry) (*Server, error) {
+func NewMetricsServer(
+	ctx context.Context,
+	address string,
+	port int,
+	log *zap.Logger,
+	reg *prometheus.Registry,
+) (*Server, error) {
 	s := &Server{
 		ctx: ctx,
 		log: log.Named("metrics"),

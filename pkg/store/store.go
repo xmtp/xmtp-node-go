@@ -66,7 +66,12 @@ func (s *Store) start() error {
 		return err
 	}
 
-	tracing.GoPanicWrap(s.ctx, &s.wg, "store-status-metrics", func(ctx context.Context) { s.metricsLoop(ctx) })
+	tracing.GoPanicWrap(
+		s.ctx,
+		&s.wg,
+		"store-status-metrics",
+		func(ctx context.Context) { s.metricsLoop(ctx) },
+	)
 	s.log.Info("Store protocol started")
 
 	// Start cleaner
@@ -104,26 +109,35 @@ func (s *Store) metricsLoop(ctx context.Context) {
 
 func (s *Store) InsertMessage(env *messagev1.Envelope) (bool, error) {
 	var stored bool
-	err := tracing.Wrap(s.ctx, s.log, "storing message", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
-		tracing.SpanResource(span, "store")
-		tracing.SpanType(span, "db")
-		err := s.insertMessage(env, s.now().UnixNano())
-		if err != nil {
-			tracing.SpanTag(span, "stored", false)
-			if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
-				s.log.Debug("storing message", zap.Error(err))
-				return nil
+	err := tracing.Wrap(
+		s.ctx,
+		s.log,
+		"storing message",
+		func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
+			tracing.SpanResource(span, "store")
+			tracing.SpanType(span, "db")
+			err := s.insertMessage(env, s.now().UnixNano())
+			if err != nil {
+				tracing.SpanTag(span, "stored", false)
+				if err, ok := err.(pgdriver.Error); ok && err.IntegrityViolation() {
+					s.log.Debug("storing message", zap.Error(err))
+					return nil
+				}
+				s.log.Error("storing message", zap.Error(err))
+				span.Finish(tracing.WithError(err))
+				return err
 			}
-			s.log.Error("storing message", zap.Error(err))
-			span.Finish(tracing.WithError(err))
-			return err
-		}
-		stored = true
-		s.log.Debug("message stored", zap.String("content_topic", env.ContentTopic), logging.Time("sent", int64(env.TimestampNs)))
-		tracing.SpanTag(span, "stored", true)
-		tracing.SpanTag(span, "content_topic", env.ContentTopic)
-		return nil
-	})
+			stored = true
+			s.log.Debug(
+				"message stored",
+				zap.String("content_topic", env.ContentTopic),
+				logging.Time("sent", int64(env.TimestampNs)),
+			)
+			tracing.SpanTag(span, "stored", true)
+			tracing.SpanTag(span, "content_topic", env.ContentTopic)
+			return nil
+		},
+	)
 	return stored, err
 }
 
@@ -131,7 +145,17 @@ func (s *Store) insertMessage(env *messagev1.Envelope, receiverTimestamp int64) 
 	digest := computeDigest(env)
 	shouldExpire := !isXMTP(env.ContentTopic)
 	sql := "INSERT INTO message (id, receiverTimestamp, senderTimestamp, contentTopic, pubsubTopic, payload, version, should_expire) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
-	_, err := s.config.DB.Exec(sql, digest, receiverTimestamp, env.TimestampNs, env.ContentTopic, "", env.Message, 0, shouldExpire)
+	_, err := s.config.DB.Exec(
+		sql,
+		digest,
+		receiverTimestamp,
+		env.TimestampNs,
+		env.ContentTopic,
+		"",
+		env.Message,
+		0,
+		shouldExpire,
+	)
 	return err
 }
 

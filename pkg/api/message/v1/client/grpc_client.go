@@ -11,7 +11,10 @@ type grpcClient struct {
 	grpc messagev1.MessageApiClient
 }
 
-func NewGRPCClient(ctx context.Context, dialFn func(context.Context) (*grpc.ClientConn, error)) (*grpcClient, error) {
+func NewGRPCClient(
+	ctx context.Context,
+	dialFn func(context.Context) (*grpc.ClientConn, error),
+) (*grpcClient, error) {
 	conn, err := dialFn(ctx)
 	if err != nil {
 		return nil, err
@@ -38,7 +41,10 @@ func (c *grpcClient) Subscribe(ctx context.Context, r *messagev1.SubscribeReques
 	}, nil
 }
 
-func (c *grpcClient) Subscribe2(ctx context.Context, r *messagev1.SubscribeRequest) (Subscribe2Stream, error) {
+func (c *grpcClient) Subscribe2(
+	ctx context.Context,
+	r *messagev1.SubscribeRequest,
+) (Subscribe2Stream, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	stream, err := c.grpc.Subscribe2(ctx)
 	if err != nil {
@@ -72,14 +78,23 @@ func (c *grpcClient) SubscribeAll(ctx context.Context) (Stream, error) {
 	}, nil
 }
 
-func (c *grpcClient) Publish(ctx context.Context, r *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
+func (c *grpcClient) Publish(
+	ctx context.Context,
+	r *messagev1.PublishRequest,
+) (*messagev1.PublishResponse, error) {
 	return c.grpc.Publish(ctx, r)
 }
 
-func (c *grpcClient) Query(ctx context.Context, q *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+func (c *grpcClient) Query(
+	ctx context.Context,
+	q *messagev1.QueryRequest,
+) (*messagev1.QueryResponse, error) {
 	return c.grpc.Query(ctx, q)
 }
 
-func (c *grpcClient) BatchQuery(ctx context.Context, q *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+func (c *grpcClient) BatchQuery(
+	ctx context.Context,
+	q *messagev1.BatchQueryRequest,
+) (*messagev1.BatchQueryResponse, error) {
 	return c.grpc.BatchQuery(ctx, q)
 }

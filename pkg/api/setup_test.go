@@ -71,7 +71,11 @@ func newTestStore(t testing.TB, log *zap.Logger) (*store.Store, func()) {
 	}
 }
 
-func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messageclient.Client, *Server)) {
+func testGRPCAndHTTP(
+	t *testing.T,
+	ctx context.Context,
+	f func(*testing.T, messageclient.Client, *Server),
+) {
 	t.Run("grpc", func(t *testing.T) {
 		t.Parallel()
 
@@ -94,7 +98,9 @@ func testGRPCAndHTTP(t *testing.T, ctx context.Context, f func(*testing.T, messa
 
 		log := test.NewLog(t)
 		client := messageclient.NewHTTPClient(log, server.httpListenAddr(), "", "")
-		defer client.Close()
+		defer func() {
+			_ = client.Close()
+		}()
 		f(t, client, server)
 	})
 }
@@ -129,7 +135,11 @@ func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
 }
 
-func withAuthWithDetails(t testing.TB, ctx context.Context, when time.Time) (context.Context, *v1.AuthData) {
+func withAuthWithDetails(
+	t testing.TB,
+	ctx context.Context,
+	when time.Time,
+) (context.Context, *v1.AuthData) {
 	token, data, err := generateV2AuthToken(when)
 	require.NoError(t, err)
 	et, err := EncodeAuthToken(token)

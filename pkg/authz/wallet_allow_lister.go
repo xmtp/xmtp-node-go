@@ -102,7 +102,11 @@ func (d *DatabaseWalletAllowLister) Allow(ctx context.Context, walletAddress str
 	return d.Apply(ctx, walletAddress, Allowed)
 }
 
-func (d *DatabaseWalletAllowLister) Apply(ctx context.Context, walletAddress string, permission Permission) error {
+func (d *DatabaseWalletAllowLister) Apply(
+	ctx context.Context,
+	walletAddress string,
+	permission Permission,
+) error {
 	walletAddress = strings.ToLower(walletAddress)
 	d.permissionsLock.Lock()
 	defer d.permissionsLock.Unlock()
@@ -132,7 +136,12 @@ func (d *DatabaseWalletAllowLister) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	tracing.GoPanicWrap(ctx, &d.wg, "authz-change-listener", func(_ context.Context) { d.listenForChanges() })
+	tracing.GoPanicWrap(
+		ctx,
+		&d.wg,
+		"authz-change-listener",
+		func(_ context.Context) { d.listenForChanges() },
+	)
 
 	d.log.Info("started")
 	return nil
@@ -156,7 +165,10 @@ func (d *DatabaseWalletAllowLister) loadPermissions() error {
 	}
 	d.permissions = newPermissionMap
 
-	d.log.Debug("Updated allow/deny lists from the database", zap.Int("num_values", len(newPermissionMap)))
+	d.log.Debug(
+		"Updated allow/deny lists from the database",
+		zap.Int("num_values", len(newPermissionMap)),
+	)
 
 	return nil
 }

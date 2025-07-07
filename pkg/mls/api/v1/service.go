@@ -50,7 +50,13 @@ type Service struct {
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(
+	log *zap.Logger,
+	store mlsstore.MlsStore,
+	validationService mlsvalidate.MLSValidationService,
+	natsServer *server.Server,
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error,
+) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("mls/v1"),
 		store:              store,
@@ -85,7 +91,10 @@ func (s *Service) Close() {
 
 func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) error {
 	if topic.IsMLSV1Group(wakuMsg.ContentTopic) {
-		s.log.Info("received group message from waku relay", zap.String("topic", wakuMsg.ContentTopic))
+		s.log.Info(
+			"received group message from waku relay",
+			zap.String("topic", wakuMsg.ContentTopic),
+		)
 
 		// Build the nats subject from the topic
 		natsSubject := envelopes.BuildNatsSubject(wakuMsg.ContentTopic)
@@ -129,12 +138,18 @@ func (s *Service) HandleIncomingWakuRelayMessage(wakuMsg *wakupb.WakuMessage) er
 DEPRECATED: Use UploadKeyPackage instead
 *
 */
-func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterInstallationRequest) (*mlsv1.RegisterInstallationResponse, error) {
+func (s *Service) RegisterInstallation(
+	ctx context.Context,
+	req *mlsv1.RegisterInstallationRequest,
+) (*mlsv1.RegisterInstallationResponse, error) {
 	if err := validateRegisterInstallationRequest(req); err != nil {
 		return nil, err
 	}
 
-	results, err := s.validationService.ValidateInboxIdKeyPackages(ctx, [][]byte{req.KeyPackage.KeyPackageTlsSerialized})
+	results, err := s.validationService.ValidateInboxIdKeyPackages(
+		ctx,
+		[][]byte{req.KeyPackage.KeyPackageTlsSerialized},
+	)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
@@ -152,7 +167,10 @@ func (s *Service) RegisterInstallation(ctx context.Context, req *mlsv1.RegisterI
 	}, nil
 }
 
-func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPackagesRequest) (*mlsv1.FetchKeyPackagesResponse, error) {
+func (s *Service) FetchKeyPackages(
+	ctx context.Context,
+	req *mlsv1.FetchKeyPackagesRequest,
+) (*mlsv1.FetchKeyPackagesResponse, error) {
 	ids := req.InstallationKeys
 	installations, err := s.store.FetchKeyPackages(ctx, ids)
 	if err != nil {
@@ -181,14 +199,20 @@ func (s *Service) FetchKeyPackages(ctx context.Context, req *mlsv1.FetchKeyPacka
 	}, nil
 }
 
-func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPackageRequest) (res *emptypb.Empty, err error) {
+func (s *Service) UploadKeyPackage(
+	ctx context.Context,
+	req *mlsv1.UploadKeyPackageRequest,
+) (res *emptypb.Empty, err error) {
 	if err = validateUploadKeyPackageRequest(req); err != nil {
 		return nil, err
 	}
 	// Extract the key packages from the request
 	keyPackageBytes := req.KeyPackage.KeyPackageTlsSerialized
 
-	validationResults, err := s.validationService.ValidateInboxIdKeyPackages(ctx, [][]byte{keyPackageBytes})
+	validationResults, err := s.validationService.ValidateInboxIdKeyPackages(
+		ctx,
+		[][]byte{keyPackageBytes},
+	)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %s", err)
 	}
@@ -202,15 +226,24 @@ func (s *Service) UploadKeyPackage(ctx context.Context, req *mlsv1.UploadKeyPack
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) RevokeInstallation(ctx context.Context, req *mlsv1.RevokeInstallationRequest) (*emptypb.Empty, error) {
+func (s *Service) RevokeInstallation(
+	ctx context.Context,
+	req *mlsv1.RevokeInstallationRequest,
+) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "unimplemented")
 }
 
-func (s *Service) GetIdentityUpdates(ctx context.Context, req *mlsv1.GetIdentityUpdatesRequest) (res *mlsv1.GetIdentityUpdatesResponse, err error) {
+func (s *Service) GetIdentityUpdates(
+	ctx context.Context,
+	req *mlsv1.GetIdentityUpdatesRequest,
+) (res *mlsv1.GetIdentityUpdatesResponse, err error) {
 	return nil, status.Error(codes.Unimplemented, "unimplemented")
 }
 
-func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMessagesRequest) (res *emptypb.Empty, err error) {
+func (s *Service) SendGroupMessages(
+	ctx context.Context,
+	req *mlsv1.SendGroupMessagesRequest,
+) (res *emptypb.Empty, err error) {
 	log := s.log.Named("send-group-messages")
 	if err = validateSendGroupMessagesRequest(req); err != nil {
 		return nil, err
@@ -273,7 +306,11 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 			Payload:      msgB,
 		})
 		if err != nil {
-			log.Error("error publishing to waku message", zap.Error(err), zap.String("contentTopic", contentTopic))
+			log.Error(
+				"error publishing to waku message",
+				zap.Error(err),
+				zap.String("contentTopic", contentTopic),
+			)
 			return nil, err
 		}
 		log.Info("published to waku relay", zap.String("contentTopic", contentTopic))
@@ -284,68 +321,88 @@ func (s *Service) SendGroupMessages(ctx context.Context, req *mlsv1.SendGroupMes
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcomeMessagesRequest) (res *emptypb.Empty, err error) {
+func (s *Service) SendWelcomeMessages(
+	ctx context.Context,
+	req *mlsv1.SendWelcomeMessagesRequest,
+) (res *emptypb.Empty, err error) {
 	log := s.log.Named("send-welcome-messages")
 	if err = validateSendWelcomeMessagesRequest(req); err != nil {
 		return nil, err
 	}
 
-	err = tracing.Wrap(ctx, log, "send-welcome-messages", func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
-		tracing.SpanTag(span, "message_count", len(req.Messages))
+	err = tracing.Wrap(
+		ctx,
+		log,
+		"send-welcome-messages",
+		func(ctx context.Context, log *zap.Logger, span tracing.Span) error {
+			tracing.SpanTag(span, "message_count", len(req.Messages))
 
-		g, ctx := errgroup.WithContext(ctx)
+			g, ctx := errgroup.WithContext(ctx)
 
-		for _, input := range req.Messages {
-			input := input
-			g.Go(func() error {
-				insertSpan, insertCtx := tracer.StartSpanFromContext(ctx, "insert-welcome-message")
-				msg, err := s.store.InsertWelcomeMessage(insertCtx, input.GetV1().InstallationKey, input.GetV1().Data, input.GetV1().HpkePublicKey, types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm), input.GetV1().GetWelcomeMetadata())
-				insertSpan.Finish(tracing.WithError(err))
-				if err != nil {
-					if mlsstore.IsAlreadyExistsError(err) {
-						return nil
+			for _, input := range req.Messages {
+				input := input
+				g.Go(func() error {
+					insertSpan, insertCtx := tracer.StartSpanFromContext(
+						ctx,
+						"insert-welcome-message",
+					)
+					msg, err := s.store.InsertWelcomeMessage(
+						insertCtx,
+						input.GetV1().InstallationKey,
+						input.GetV1().Data,
+						input.GetV1().HpkePublicKey,
+						types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm),
+						input.GetV1().GetWelcomeMetadata(),
+					)
+					insertSpan.Finish(tracing.WithError(err))
+					if err != nil {
+						if mlsstore.IsAlreadyExistsError(err) {
+							return nil
+						}
+						return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 					}
-					return status.Errorf(codes.Internal, "failed to insert message: %s", err)
-				}
 
-				msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
-					Version: &mlsv1.WelcomeMessage_V1_{
-						V1: &mlsv1.WelcomeMessage_V1{
-							Id:               uint64(msg.ID),
-							CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
-							InstallationKey:  msg.InstallationKey,
-							Data:             msg.Data,
-							HpkePublicKey:    msg.HpkePublicKey,
-							WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
-							WelcomeMetadata:  msg.WelcomeMetadata,
+					msgB, err := pb.Marshal(&mlsv1.WelcomeMessage{
+						Version: &mlsv1.WelcomeMessage_V1_{
+							V1: &mlsv1.WelcomeMessage_V1{
+								Id:               uint64(msg.ID),
+								CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
+								InstallationKey:  msg.InstallationKey,
+								Data:             msg.Data,
+								HpkePublicKey:    msg.HpkePublicKey,
+								WrapperAlgorithm: input.GetV1().WrapperAlgorithm,
+								WelcomeMetadata:  msg.WelcomeMetadata,
+							},
 						},
-					},
+					})
+					if err != nil {
+						return err
+					}
+
+					publishSpan, publishCtx := tracer.StartSpanFromContext(
+						ctx,
+						"publish-welcome-to-relay",
+					)
+					err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
+						ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
+						Timestamp:    msg.CreatedAt.UnixNano(),
+						Payload:      msgB,
+					})
+					publishSpan.Finish(tracing.WithError(err))
+
+					if err != nil {
+						return err
+					}
+
+					metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
+
+					return nil
 				})
-				if err != nil {
-					return err
-				}
+			}
 
-				publishSpan, publishCtx := tracer.StartSpanFromContext(ctx, "publish-welcome-to-relay")
-				err = s.publishToWakuRelay(publishCtx, &wakupb.WakuMessage{
-					ContentTopic: topic.BuildMLSV1WelcomeTopic(input.GetV1().InstallationKey),
-					Timestamp:    msg.CreatedAt.UnixNano(),
-					Payload:      msgB,
-				})
-				publishSpan.Finish(tracing.WithError(err))
-
-				if err != nil {
-					return err
-				}
-
-				metrics.EmitMLSSentWelcomeMessage(ctx, log, msg)
-
-				return nil
-			})
-		}
-
-		return g.Wait()
-	})
-
+			return g.Wait()
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -353,15 +410,24 @@ func (s *Service) SendWelcomeMessages(ctx context.Context, req *mlsv1.SendWelcom
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) QueryGroupMessages(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
+func (s *Service) QueryGroupMessages(
+	ctx context.Context,
+	req *mlsv1.QueryGroupMessagesRequest,
+) (*mlsv1.QueryGroupMessagesResponse, error) {
 	return s.store.QueryGroupMessagesV1(ctx, req)
 }
 
-func (s *Service) QueryWelcomeMessages(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
+func (s *Service) QueryWelcomeMessages(
+	ctx context.Context,
+	req *mlsv1.QueryWelcomeMessagesRequest,
+) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	return s.store.QueryWelcomeMessagesV1(ctx, req)
 }
 
-func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesRequest, stream mlsv1.MlsApi_SubscribeGroupMessagesServer) error {
+func (s *Service) SubscribeGroupMessages(
+	req *mlsv1.SubscribeGroupMessagesRequest,
+	stream mlsv1.MlsApi_SubscribeGroupMessagesServer,
+) error {
 	log := s.log.Named("subscribe-group-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
@@ -425,10 +491,13 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 					default:
 					}
 
-					resp, err := s.store.QueryGroupMessagesV1(stream.Context(), &mlsv1.QueryGroupMessagesRequest{
-						GroupId:    filter.GroupId,
-						PagingInfo: pagingInfo,
-					})
+					resp, err := s.store.QueryGroupMessagesV1(
+						stream.Context(),
+						&mlsv1.QueryGroupMessagesRequest{
+							GroupId:    filter.GroupId,
+							PagingInfo: pagingInfo,
+						},
+					)
 					if err != nil {
 						if err == context.Canceled {
 							return
@@ -439,7 +508,8 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 
 					streamMessages(resp.Messages)
 
-					if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+					if len(resp.Messages) == 0 || resp.PagingInfo == nil ||
+						resp.PagingInfo.IdCursor == 0 {
 						break
 					}
 					pagingInfo = resp.PagingInfo
@@ -456,7 +526,10 @@ func (s *Service) SubscribeGroupMessages(req *mlsv1.SubscribeGroupMessagesReques
 	}
 }
 
-func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRequest, stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer) error {
+func (s *Service) SubscribeWelcomeMessages(
+	req *mlsv1.SubscribeWelcomeMessagesRequest,
+	stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer,
+) error {
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
 	defer log.Info("subscription ended")
@@ -521,10 +594,13 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 					default:
 					}
 
-					resp, err := s.store.QueryWelcomeMessagesV1(stream.Context(), &mlsv1.QueryWelcomeMessagesRequest{
-						InstallationKey: filter.InstallationKey,
-						PagingInfo:      pagingInfo,
-					})
+					resp, err := s.store.QueryWelcomeMessagesV1(
+						stream.Context(),
+						&mlsv1.QueryWelcomeMessagesRequest{
+							InstallationKey: filter.InstallationKey,
+							PagingInfo:      pagingInfo,
+						},
+					)
 					if err != nil {
 						if err == context.Canceled {
 							return
@@ -535,7 +611,8 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 
 					streamMessages(resp.Messages)
 
-					if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+					if len(resp.Messages) == 0 || resp.PagingInfo == nil ||
+						resp.PagingInfo.IdCursor == 0 {
 						break
 					}
 					pagingInfo = resp.PagingInfo
@@ -552,7 +629,10 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 	}
 }
 
-func (s *Service) BatchPublishCommitLog(ctx context.Context, req *mlsv1.BatchPublishCommitLogRequest) (*emptypb.Empty, error) {
+func (s *Service) BatchPublishCommitLog(
+	ctx context.Context,
+	req *mlsv1.BatchPublishCommitLogRequest,
+) (*emptypb.Empty, error) {
 	log := s.log.Named("batch-publish-commit-log")
 	if err := validateBatchPublishCommitLogRequest(req); err != nil {
 		return nil, err
@@ -577,7 +657,10 @@ func (s *Service) BatchPublishCommitLog(ctx context.Context, req *mlsv1.BatchPub
 	return &emptypb.Empty{}, nil
 }
 
-func (s *Service) BatchQueryCommitLog(ctx context.Context, req *mlsv1.BatchQueryCommitLogRequest) (*mlsv1.BatchQueryCommitLogResponse, error) {
+func (s *Service) BatchQueryCommitLog(
+	ctx context.Context,
+	req *mlsv1.BatchQueryCommitLogRequest,
+) (*mlsv1.BatchQueryCommitLogResponse, error) {
 	log := s.log.Named("batch-query-commit-log")
 	if err := validateBatchQueryCommitLogRequest(req); err != nil {
 		return nil, err
@@ -658,7 +741,11 @@ func validateBatchPublishCommitLogRequest(req *mlsv1.BatchPublishCommitLogReques
 		return status.Error(codes.InvalidArgument, "no log entries to publish")
 	}
 	if len(req.Requests) > maxBatchInserts {
-		return status.Errorf(codes.InvalidArgument, "cannot exceed %d inserts in single batch", maxBatchInserts)
+		return status.Errorf(
+			codes.InvalidArgument,
+			"cannot exceed %d inserts in single batch",
+			maxBatchInserts,
+		)
 	}
 	return nil
 }
@@ -668,7 +755,11 @@ func validateBatchQueryCommitLogRequest(req *mlsv1.BatchQueryCommitLogRequest) e
 		return status.Error(codes.InvalidArgument, "no requests to query")
 	}
 	if len(req.Requests) > maxBatchQueries {
-		return status.Errorf(codes.InvalidArgument, "cannot exceed %d queries in single batch", maxBatchQueries)
+		return status.Errorf(
+			codes.InvalidArgument,
+			"cannot exceed %d queries in single batch",
+			maxBatchQueries,
+		)
 	}
 	return nil
 }

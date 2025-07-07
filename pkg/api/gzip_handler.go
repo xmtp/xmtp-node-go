@@ -21,7 +21,8 @@ func gzipWrapper(handler http.Handler) http.Handler {
 		// Check that path ends in /query or /batch-query
 		// since clients still accept gzip encoding for /subscribe which is problematic
 		// some discussion: https://github.com/typelevel/fs2/issues/1831
-		if !strings.HasSuffix(r.URL.Path, "/query") && !strings.HasSuffix(r.URL.Path, "/batch-query") {
+		if !strings.HasSuffix(r.URL.Path, "/query") &&
+			!strings.HasSuffix(r.URL.Path, "/batch-query") {
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -32,7 +33,9 @@ func gzipWrapper(handler http.Handler) http.Handler {
 		}
 		w.Header().Set("Content-Encoding", "gzip")
 		gz := gzip.NewWriter(w)
-		defer gz.Close()
+		defer func() {
+			_ = gz.Close()
+		}()
 		gzw := gzipResponseWriter{Writer: gz, ResponseWriter: w}
 		handler.ServeHTTP(gzw, r)
 	})

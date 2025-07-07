@@ -73,7 +73,12 @@ type Service struct {
 	subDispatcher *subscriptionDispatcher
 }
 
-func NewService(log *zap.Logger, store *store.Store, natsServer *server.Server, publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error) (s *Service, err error) {
+func NewService(
+	log *zap.Logger,
+	store *store.Store,
+	natsServer *server.Server,
+	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error,
+) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("message/v1"),
 		store:              store,
@@ -125,11 +130,20 @@ func (s *Service) HandleIncomingWakuRelayMessage(msg *wakupb.WakuMessage) error 
 	return nil
 }
 
-func (s *Service) Publish(ctx context.Context, req *proto.PublishRequest) (*proto.PublishResponse, error) {
-	return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V2 is no longer available. Please upgrade your client to XMTP V3. Read more here: https://docs.xmtp.org/upgrade-from-legacy-V2")
+func (s *Service) Publish(
+	ctx context.Context,
+	req *proto.PublishRequest,
+) (*proto.PublishResponse, error) {
+	return nil, status.Errorf(
+		codes.Unavailable,
+		"publishing to XMTP V2 is no longer available. Please upgrade your client to XMTP V3. Read more here: https://docs.xmtp.org/upgrade-from-legacy-V2",
+	)
 }
 
-func (s *Service) Subscribe(req *proto.SubscribeRequest, stream proto.MessageApi_SubscribeServer) error {
+func (s *Service) Subscribe(
+	req *proto.SubscribeRequest,
+	stream proto.MessageApi_SubscribeServer,
+) error {
 	log := s.log.Named("subscribe").With(zap.Strings("content_topics", req.ContentTopics))
 	log.Debug("started")
 	defer log.Debug("stopped")
@@ -282,7 +296,10 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 	}
 }
 
-func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.MessageApi_SubscribeAllServer) error {
+func (s *Service) SubscribeAll(
+	req *proto.SubscribeAllRequest,
+	stream proto.MessageApi_SubscribeAllServer,
+) error {
 	ip := utils.ClientIPFromContext(stream.Context())
 	log := s.log.Named("subscribeAll").With(zap.String("client_ip", ip))
 	log.Info("started")
@@ -295,7 +312,10 @@ func (s *Service) SubscribeAll(req *proto.SubscribeAllRequest, stream proto.Mess
 	}, stream)
 }
 
-func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.QueryResponse, error) {
+func (s *Service) Query(
+	ctx context.Context,
+	req *proto.QueryRequest,
+) (*proto.QueryResponse, error) {
 	log := s.log.Named("query")
 	numContentTopics := len(req.ContentTopics)
 	if numContentTopics < 200 {
@@ -321,24 +341,39 @@ func (s *Service) Query(ctx context.Context, req *proto.QueryRequest) (*proto.Qu
 	if req.PagingInfo != nil && req.PagingInfo.Cursor != nil {
 		cursor := req.PagingInfo.Cursor.GetIndex()
 		if cursor != nil && cursor.SenderTimeNs == 0 && cursor.Digest == nil {
-			log.Info("query with partial cursor", zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)), zap.Any("cursor_digest", cursor.Digest))
+			log.Info(
+				"query with partial cursor",
+				zap.Int("cursor_timestamp", int(cursor.SenderTimeNs)),
+				zap.Any("cursor_digest", cursor.Digest),
+			)
 		}
 	}
 
 	if req.PagingInfo != nil && int(req.PagingInfo.Limit) > getMaxRows(req.ContentTopics) {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d rows per query", maxRowsPerQuery)
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"cannot exceed %d rows per query",
+			maxRowsPerQuery,
+		)
 	}
 
 	return s.store.Query(req)
 }
 
-func (s *Service) BatchQuery(ctx context.Context, req *proto.BatchQueryRequest) (*proto.BatchQueryResponse, error) {
+func (s *Service) BatchQuery(
+	ctx context.Context,
+	req *proto.BatchQueryRequest,
+) (*proto.BatchQueryResponse, error) {
 	log := s.log.Named("batchQuery")
 	log.Debug("batch query", zap.Int("num_queries", len(req.Requests)))
 
 	// NOTE: in our implementation, we implicitly limit batch size to 50 requests (maxQueriesPerBatch = 50)
 	if len(req.Requests) > maxQueriesPerBatch {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot exceed %d requests in single batch", maxQueriesPerBatch)
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"cannot exceed %d requests in single batch",
+			maxQueriesPerBatch,
+		)
 	}
 
 	// calculate the total number of topics being requested in this batch request.

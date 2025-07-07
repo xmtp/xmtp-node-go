@@ -39,7 +39,11 @@ func TestAlchemyRequestSuccess(t *testing.T) {
 		  ]
 		}
 	}`
-	httpmock.RegisterResponder("POST", ALCHEMY_MOCK_URL, httpmock.NewStringResponder(200, mockResponse))
+	httpmock.RegisterResponder(
+		"POST",
+		ALCHEMY_MOCK_URL,
+		httpmock.NewStringResponder(200, mockResponse),
+	)
 
 	fetcher := newFetcher()
 	res, err := fetcher.Fetch(context.Background(), "0xDADBOD")
@@ -61,7 +65,11 @@ func TestAlchemyRequestNoTransactions(t *testing.T) {
 		}
 	  }
 	`
-	httpmock.RegisterResponder("POST", ALCHEMY_MOCK_URL, httpmock.NewStringResponder(200, mockResponse))
+	httpmock.RegisterResponder(
+		"POST",
+		ALCHEMY_MOCK_URL,
+		httpmock.NewStringResponder(200, mockResponse),
+	)
 
 	fetcher := newFetcher()
 	res, err := fetcher.Fetch(context.Background(), "0xDADBOD")

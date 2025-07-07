@@ -26,27 +26,41 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func mockValidateInboxIdKeyPackages(m *mocks.MockMLSValidationService, installationId []byte, inboxId string) *mocks.MockMLSValidationService_ValidateInboxIdKeyPackages_Call {
-	return m.EXPECT().ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).Return([]mlsvalidate.InboxIdValidationResult{
-		{
-			InstallationKey: installationId,
-			Credential: &identity.MlsCredential{
-				InboxId: inboxId,
+func mockValidateInboxIdKeyPackages(
+	m *mocks.MockMLSValidationService,
+	installationId []byte,
+	inboxId string,
+) *mocks.MockMLSValidationService_ValidateInboxIdKeyPackages_Call {
+	return m.EXPECT().
+		ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).
+		Return([]mlsvalidate.InboxIdValidationResult{
+			{
+				InstallationKey: installationId,
+				Credential: &identity.MlsCredential{
+					InboxId: inboxId,
+				},
+				Expiration: 0,
 			},
-			Expiration: 0,
-		},
-	}, nil)
+		}, nil)
 }
 
-func mockValidateGroupMessages(m *mocks.MockMLSValidationService, groupId []byte) *mocks.MockMLSValidationService_ValidateGroupMessages_Call {
-	return m.EXPECT().ValidateGroupMessages(mock.Anything, mock.Anything).Return([]mlsvalidate.GroupMessageValidationResult{
-		{
-			GroupId: fmt.Sprintf("%x", groupId),
-		},
-	}, nil)
+func mockValidateGroupMessages(
+	m *mocks.MockMLSValidationService,
+	groupId []byte,
+) *mocks.MockMLSValidationService_ValidateGroupMessages_Call {
+	return m.EXPECT().
+		ValidateGroupMessages(mock.Anything, mock.Anything).
+		Return([]mlsvalidate.GroupMessageValidationResult{
+			{
+				GroupId: fmt.Sprintf("%x", groupId),
+			},
+		}, nil)
 }
 
-func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mocks.MockMLSValidationService, func()) {
+func newTestService(
+	t *testing.T,
+	ctx context.Context,
+) (*Service, *bun.DB, *mocks.MockMLSValidationService, func()) {
 	log := test.NewLog(t)
 	db, _, mlsDbCleanup := test.NewMLSDB(t)
 	store, err := mlsstore.New(ctx, mlsstore.Config{
@@ -64,9 +78,15 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, *mock
 		t.Fail()
 	}
 
-	svc, err := NewService(log, store, mockMlsValidation, natsServer, func(ctx context.Context, wm *wakupb.WakuMessage) error {
-		return nil
-	})
+	svc, err := NewService(
+		log,
+		store,
+		mockMlsValidation,
+		natsServer,
+		func(ctx context.Context, wm *wakupb.WakuMessage) error {
+			return nil
+		},
+	)
 	require.NoError(t, err)
 
 	return svc, db, mockMlsValidation, func() {
@@ -108,7 +128,9 @@ func TestRegisterInstallationError(t *testing.T) {
 	svc, _, mlsValidationService, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
-	mlsValidationService.EXPECT().ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).Return(nil, errors.New("error validating"))
+	mlsValidationService.EXPECT().
+		ValidateInboxIdKeyPackages(mock.Anything, mock.Anything).
+		Return(nil, errors.New("error validating"))
 
 	res, err := svc.RegisterInstallation(ctx, &mlsv1.RegisterInstallationRequest{
 		KeyPackage: &mlsv1.KeyPackageUpload{
@@ -282,7 +304,11 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
 	require.Equal(t, resp.Messages[0].GetV1().Data, []byte("test"))
-	require.Equal(t, resp.Messages[0].GetV1().WrapperAlgorithm, messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6)
+	require.Equal(
+		t,
+		resp.Messages[0].GetV1().WrapperAlgorithm,
+		messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+	)
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
@@ -363,7 +389,10 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	stream := mocks.NewMockMlsApi_SubscribeGroupMessagesServer(t)
 	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
+		stream.EXPECT().
+			Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).
+			Return(nil).
+			Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -467,7 +496,10 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 		},
 	}).Matches)).Return(nil).Times(1)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
+		stream.EXPECT().
+			Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).
+			Return(nil).
+			Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -527,7 +559,10 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 	stream := mocks.NewMockMlsApi_SubscribeWelcomeMessagesServer(t)
 	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
+		stream.EXPECT().
+			Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).
+			Return(nil).
+			Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -625,19 +660,25 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 	// Set up expectations of streaming the 11 messages from cursor.
 	stream := mocks.NewMockMlsApi_SubscribeWelcomeMessagesServer(t)
 	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
-	stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
-		Version: &mlsv1.WelcomeMessage_V1_{
-			V1: &mlsv1.WelcomeMessage_V1{
-				Id:               3,
-				InstallationKey:  installationKey,
-				HpkePublicKey:    hpkePublicKey,
-				Data:             []byte("data3"),
-				WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+	stream.EXPECT().
+		Send(mock.MatchedBy(newWelcomeMessageEqualsMatcherWithoutTimestamp(&mlsv1.WelcomeMessage{
+			Version: &mlsv1.WelcomeMessage_V1_{
+				V1: &mlsv1.WelcomeMessage_V1{
+					Id:               3,
+					InstallationKey:  installationKey,
+					HpkePublicKey:    hpkePublicKey,
+					Data:             []byte("data3"),
+					WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+				},
 			},
-		},
-	}).Matches)).Return(nil).Times(1)
+		}).Matches)).
+		Return(nil).
+		Times(1)
 	for _, msg := range msgs {
-		stream.EXPECT().Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).Return(nil).Times(1)
+		stream.EXPECT().
+			Send(mock.MatchedBy(newWelcomeMessageEqualsMatcher(msg).Matches)).
+			Return(nil).
+			Times(1)
 	}
 	stream.EXPECT().Context().Return(ctx)
 
@@ -683,7 +724,6 @@ func (m *groupMessageEqualsMatcher) Matches(obj interface{}) bool {
 	return proto.Equal(m.obj, obj.(*mlsv1.GroupMessage)) &&
 		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac) &&
 		m.obj.GetV1().ShouldPush == obj.(*mlsv1.GroupMessage).GetV1().ShouldPush
-
 }
 
 func (m *groupMessageEqualsMatcher) String() string {
@@ -694,7 +734,9 @@ type groupMessageIdAndDataEqualsMatcher struct {
 	obj *mlsv1.GroupMessage
 }
 
-func newGroupMessageIdAndDataEqualsMatcher(obj *mlsv1.GroupMessage) *groupMessageIdAndDataEqualsMatcher {
+func newGroupMessageIdAndDataEqualsMatcher(
+	obj *mlsv1.GroupMessage,
+) *groupMessageIdAndDataEqualsMatcher {
 	return &groupMessageIdAndDataEqualsMatcher{obj}
 }
 
@@ -729,14 +771,22 @@ type welcomeMessageEqualsMatcherWithoutTimestamp struct {
 	obj *mlsv1.WelcomeMessage
 }
 
-func newWelcomeMessageEqualsMatcherWithoutTimestamp(obj *mlsv1.WelcomeMessage) *welcomeMessageEqualsMatcherWithoutTimestamp {
+func newWelcomeMessageEqualsMatcherWithoutTimestamp(
+	obj *mlsv1.WelcomeMessage,
+) *welcomeMessageEqualsMatcherWithoutTimestamp {
 	return &welcomeMessageEqualsMatcherWithoutTimestamp{obj}
 }
 
 func (m *welcomeMessageEqualsMatcherWithoutTimestamp) Matches(obj interface{}) bool {
 	return m.obj.GetV1().Id == obj.(*mlsv1.WelcomeMessage).GetV1().Id &&
-		bytes.Equal(m.obj.GetV1().InstallationKey, obj.(*mlsv1.WelcomeMessage).GetV1().InstallationKey) &&
-		bytes.Equal(m.obj.GetV1().HpkePublicKey, obj.(*mlsv1.WelcomeMessage).GetV1().HpkePublicKey) &&
+		bytes.Equal(
+			m.obj.GetV1().InstallationKey,
+			obj.(*mlsv1.WelcomeMessage).GetV1().InstallationKey,
+		) &&
+		bytes.Equal(
+			m.obj.GetV1().HpkePublicKey,
+			obj.(*mlsv1.WelcomeMessage).GetV1().HpkePublicKey,
+		) &&
 		bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.WelcomeMessage).GetV1().Data)
 }
 
@@ -744,7 +794,11 @@ func (m *welcomeMessageEqualsMatcherWithoutTimestamp) String() string {
 	return m.obj.String()
 }
 
-func assertExpectationsWithTimeout(t *testing.T, mockObj *mock.Mock, timeout, interval time.Duration) {
+func assertExpectationsWithTimeout(
+	t *testing.T,
+	mockObj *mock.Mock,
+	timeout, interval time.Duration,
+) {
 	timeoutChan := time.After(timeout)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -975,7 +1029,11 @@ func TestBatchQueryCommitLog_WithPaging(t *testing.T) {
 	require.NotNil(t, resp.Responses[0].PagingInfo)
 	require.Equal(t, uint32(3), resp.Responses[0].PagingInfo.Limit)
 	require.Equal(t, uint64(3), resp.Responses[0].PagingInfo.IdCursor)
-	require.Equal(t, mlsv1.SortDirection_SORT_DIRECTION_ASCENDING, resp.Responses[0].PagingInfo.Direction)
+	require.Equal(
+		t,
+		mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+		resp.Responses[0].PagingInfo.Direction,
+	)
 
 	// Query next page
 	resp2, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{

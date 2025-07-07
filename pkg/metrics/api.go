@@ -52,7 +52,12 @@ var apiRequestsDuration = prometheus.NewHistogramVec(
 	apiRequestTagKeys,
 )
 
-func EmitAPIRequest(ctx context.Context, log *zap.Logger, fields []zapcore.Field, duration time.Duration) {
+func EmitAPIRequest(
+	ctx context.Context,
+	log *zap.Logger,
+	fields []zapcore.Field,
+	duration time.Duration,
+) {
 	labels := prometheus.Labels{}
 	for _, field := range fields {
 		if !apiRequestTagKeysByName[field.Key] {
@@ -121,7 +126,9 @@ var queryDuration = prometheus.NewHistogramVec(
 		Help:    "Duration of API query (ms)",
 		Buckets: []float64{1, 10, 100, 1000, 10000, 100000},
 	},
-	append([]string{topicCategoryTag, queryErrorTag, queryParametersTag}, appClientVersionTagKeys...),
+	append(
+		[]string{topicCategoryTag, queryErrorTag, queryParametersTag},
+		appClientVersionTagKeys...),
 )
 
 var queryResultLength = prometheus.NewHistogramVec(
@@ -130,10 +137,18 @@ var queryResultLength = prometheus.NewHistogramVec(
 		Help:    "Number of events returned by an API query",
 		Buckets: []float64{1, 10, 100, 1000, 10000, 100000},
 	},
-	append([]string{topicCategoryTag, queryErrorTag, queryParametersTag}, appClientVersionTagKeys...),
+	append(
+		[]string{topicCategoryTag, queryErrorTag, queryParametersTag},
+		appClientVersionTagKeys...),
 )
 
-func EmitQuery(ctx context.Context, req *proto.QueryRequest, results int, err error, duration time.Duration) {
+func EmitQuery(
+	ctx context.Context,
+	req *proto.QueryRequest,
+	results int,
+	err error,
+	duration time.Duration,
+) {
 	labels := prometheus.Labels{}
 	if len(req.ContentTopics) > 0 {
 		labels[topicCategoryTag] = topic.Category(req.ContentTopics[0])

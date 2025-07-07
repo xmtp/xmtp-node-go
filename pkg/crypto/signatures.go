@@ -16,11 +16,13 @@ var (
 	ErrInvalidPubkey                = errors.New("invalid public key")
 )
 
-type Message []byte
-type PrivateKey *[32]byte
-type PublicKey *[65]byte
-type Signature *[64]byte
-type SignatureBytes []byte
+type (
+	Message        []byte
+	PrivateKey     *[32]byte
+	PublicKey      *[65]byte
+	Signature      *[64]byte
+	SignatureBytes []byte
+)
 
 // GenerateKey generates a Secp256k1 key pair.
 func GenerateKeyPair() (pri PrivateKey, pub PublicKey, err error) {
@@ -73,8 +75,11 @@ func EtherHash(msg Message) []byte {
 
 // RecoverWalletAddress calculates the WalletAddress of the identity which was used to sign the given message. A value
 // is always returned and needs to verified before it can be trusted.
-func RecoverWalletAddress(msg Message, signature Signature, recovery uint8) (wallet types.WalletAddr, err error) {
-
+func RecoverWalletAddress(
+	msg Message,
+	signature Signature,
+	recovery uint8,
+) (wallet types.WalletAddr, err error) {
 	digest := EtherHash(msg)
 	signatureBytes := append(bytesFromSig(signature), recovery)
 

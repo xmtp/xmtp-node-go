@@ -19,7 +19,8 @@ var topicCategoryByPrefix = map[string]string{
 }
 
 func IsEphemeral(contentTopic string) bool {
-	return Category(contentTopic) == "v2-conversation-ephemeral" || Category(contentTopic) == "v1-conversation-ephemeral"
+	return Category(contentTopic) == "v2-conversation-ephemeral" ||
+		Category(contentTopic) == "v1-conversation-ephemeral"
 }
 
 func IsUserPreferences(contentTopic string) bool {

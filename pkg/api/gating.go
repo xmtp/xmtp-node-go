@@ -31,7 +31,10 @@ func (ti *GatingInterceptor) Unary() grpc.UnaryServerInterceptor {
 	) (interface{}, error) {
 		ri := apicontext.NewRequesterInfo(ctx)
 		if IS_GATING_ENABLED && !ri.IsSupportedClient {
-			return nil, status.Errorf(codes.Unimplemented, "unsupported libxmtp version "+ri.LibxmtpVersion)
+			return nil, status.Errorf(
+				codes.Unimplemented,
+				"unsupported libxmtp version "+ri.LibxmtpVersion,
+			)
 		}
 		res, err := handler(ctx, req)
 		return res, err
@@ -47,7 +50,10 @@ func (ti *GatingInterceptor) Stream() grpc.StreamServerInterceptor {
 	) error {
 		ri := apicontext.NewRequesterInfo(stream.Context())
 		if IS_GATING_ENABLED && !ri.IsSupportedClient {
-			return status.Errorf(codes.Unimplemented, "unsupported libxmtp version "+ri.LibxmtpVersion)
+			return status.Errorf(
+				codes.Unimplemented,
+				"unsupported libxmtp version "+ri.LibxmtpVersion,
+			)
 		}
 		err := handler(srv, stream)
 		return err

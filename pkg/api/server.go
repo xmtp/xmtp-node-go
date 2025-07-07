@@ -44,9 +44,7 @@ const (
 	authorizationMetadataKey = "authorization"
 )
 
-var (
-	prometheusOnce sync.Once
-)
+var prometheusOnce sync.Once
 
 type Server struct {
 	*Config
@@ -95,7 +93,10 @@ func (s *Server) startGRPC() error {
 	var err error
 
 	grpcListener, err := net.Listen("tcp", addrString(s.GRPCAddress, s.GRPCPort))
-	s.grpcListener = &proxyproto.Listener{Listener: grpcListener, ReadHeaderTimeout: 10 * time.Second}
+	s.grpcListener = &proxyproto.Listener{
+		Listener:          grpcListener,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	if err != nil {
 		return errors.Wrap(err, "creating grpc listener")
 	}
@@ -123,7 +124,7 @@ func (s *Server) startGRPC() error {
 		return errors.New("nats not ready")
 	}
 
-	if s.Config.Authn.Enable {
+	if s.Authn.Enable {
 		limiter := ratelimiter.NewTokenBucketRateLimiter(s.ctx, s.Log)
 		// Expire buckets after 1 hour of inactivity,
 		// sweep for expired buckets every 10 minutes.
@@ -131,9 +132,9 @@ func (s *Server) startGRPC() error {
 		// maximum (limit max / limit rate) minutes.
 		go limiter.Janitor(10*time.Minute, 1*time.Hour)
 		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
-			AuthnOptions: s.Config.Authn,
+			AuthnOptions: s.Authn,
 			Limiter:      limiter,
-			AllowLister:  s.Config.AllowLister,
+			AllowLister:  s.AllowLister,
 			Log:          s.Log.Named("authn"),
 		})
 		unary = append(unary, s.authorizer.Unary())
@@ -151,7 +152,7 @@ func (s *Server) startGRPC() error {
 			PermitWithoutStream: true,
 			MinTime:             15 * time.Second,
 		}),
-		grpc.MaxRecvMsgSize(s.Config.Options.MaxMsgSize),
+		grpc.MaxRecvMsgSize(s.MaxMsgSize),
 	}
 	grpcServer := grpc.NewServer(options...)
 	healthcheck := health.NewServer()
@@ -169,14 +170,20 @@ func (s *Server) startGRPC() error {
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
 
 	// Enable the MLS and identity servers if a store is provided
-	if s.Config.MLSStore != nil && s.Config.MLSValidator != nil && s.Config.EnableMls {
-		s.mlsv1, err = mlsv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator, s.natsServer, publishToWakuRelay)
+	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMls {
+		s.mlsv1, err = mlsv1.NewService(
+			s.Log,
+			s.MLSStore,
+			s.MLSValidator,
+			s.natsServer,
+			publishToWakuRelay,
+		)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
 		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
 
-		s.identityv1, err = identityv1.NewService(s.Log, s.Config.MLSStore, s.Config.MLSValidator)
+		s.identityv1, err = identityv1.NewService(s.Log, s.MLSStore, s.MLSValidator)
 		if err != nil {
 			return errors.Wrap(err, "creating identity service")
 		}
@@ -203,7 +210,10 @@ func (s *Server) startGRPC() error {
 					if s.mlsv1 != nil {
 						err := s.mlsv1.HandleIncomingWakuRelayMessage(wakuEnv.Message())
 						if err != nil {
-							s.Log.Error("error handling waku relay message by mlsv1 service", zap.Error(err))
+							s.Log.Error(
+								"error handling waku relay message by mlsv1 service",
+								zap.Error(err),
+							)
 						}
 					}
 				} else {
@@ -266,7 +276,7 @@ func (s *Server) startHTTP() error {
 		return errors.Wrap(err, "registering message handler")
 	}
 
-	if s.Config.MLSStore != nil && s.Config.EnableMls {
+	if s.MLSStore != nil && s.EnableMls {
 		err = mlsv1pb.RegisterMlsApiHandler(s.ctx, gwmux, conn)
 		if err != nil {
 			return errors.Wrap(err, "registering mls handler")
@@ -354,7 +364,7 @@ func (s *Server) dialGRPC(ctx context.Context) (*grpc.ClientConn, error) {
 		dialAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(s.Config.Options.MaxMsgSize),
+			grpc.MaxCallRecvMsgSize(s.MaxMsgSize),
 		),
 	)
 }

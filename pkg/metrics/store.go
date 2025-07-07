@@ -25,11 +25,13 @@ func EmitStoredMessages(ctx context.Context, db *sql.DB, logger *zap.Logger) {
 }
 
 func messageCountEstimate(db *sql.DB) (count int64, err error) {
-	rows, err := db.Query("SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = 'public.message'::regclass")
+	rows, err := db.Query(
+		"SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = 'public.message'::regclass",
+	)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return 0, fmt.Errorf("count has no rows")
 	}
