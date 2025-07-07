@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	log, logCfg, err := buildLogger(options)
+	logger, logCfg, err := buildLogger(options)
 	if err != nil {
 		fatal("Could not build logger: %s", err)
 	}
@@ -65,7 +65,7 @@ func main() {
 		go func() {
 			err := http.ListenAndServe("0.0.0.0:6060", nil)
 			if err != nil {
-				log.Error("serving profiler", zap.Error(err))
+				logger.Error("serving profiler", zap.Error(err))
 			}
 		}()
 	}
@@ -75,39 +75,41 @@ func main() {
 		return
 	}
 
+	logger.Info(fmt.Sprintf("Version: %s", Commit))
+
 	if options.GenerateKey {
 		if err := server.WritePrivateKeyToFile(options.KeyFile, options.Overwrite); err != nil {
-			log.Fatal("writing private key file", zap.Error(err))
+			logger.Fatal("writing private key file", zap.Error(err))
 		}
 		return
 	}
 
 	if options.CreateMessageMigration != "" && options.Store.DbConnectionString != "" {
 		if err := server.CreateMessageMigration(options.CreateMessageMigration, options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns); err != nil {
-			log.Fatal("creating message db migration", zap.Error(err))
+			logger.Fatal("creating message db migration", zap.Error(err))
 		}
 		return
 	}
 
 	if options.CreateAuthzMigration != "" && options.Authz.DbConnectionString != "" {
 		if err := server.CreateAuthzMigration(options.CreateAuthzMigration, options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns); err != nil {
-			log.Fatal("creating authz db migration", zap.Error(err))
+			logger.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return
 	}
 
 	if options.CreateMlsMigration != "" && options.MLSStore.DbConnectionString != "" {
 		if err := server.CreateMlsMigration(options.CreateMlsMigration, options.MLSStore.DbConnectionString, options.WaitForDB, options.MLSStore.ReadTimeout, options.MLSStore.WriteTimeout, options.Store.MaxOpenConns); err != nil {
-			log.Fatal("creating authz db migration", zap.Error(err))
+			logger.Fatal("creating authz db migration", zap.Error(err))
 		}
 		return
 	}
 
 	if options.Tracing.Enable {
-		log.Info("starting tracer")
+		logger.Info("starting tracer")
 		tracing.Start(Commit, utils.Logger())
 		defer func() {
-			log.Info("stopping tracer")
+			logger.Info("stopping tracer")
 			tracing.Stop()
 		}()
 	}
@@ -136,7 +138,7 @@ func main() {
 			profiler.WithVersion(Commit),
 			profiler.WithProfileTypes(ptypes...),
 		); err != nil {
-			log.Fatal("starting profiler", zap.Error(err))
+			logger.Fatal("starting profiler", zap.Error(err))
 		}
 		defer profiler.Stop()
 	}
@@ -145,9 +147,9 @@ func main() {
 	var wg sync.WaitGroup
 	doneC := make(chan bool, 1)
 	tracing.GoPanicWrap(ctx, &wg, "main", func(ctx context.Context) {
-		s, err := server.New(ctx, log, options)
+		s, err := server.New(ctx, logger, options)
 		if err != nil {
-			log.Fatal("initializing server", zap.Error(err))
+			logger.Fatal("initializing server", zap.Error(err))
 		}
 		s.WaitForShutdown()
 		doneC <- true
@@ -158,7 +160,7 @@ func main() {
 	signal.Notify(sigToggleC, syscall.SIGUSR1)
 	go func() {
 		for range sigToggleC {
-			log.Info("toggling debug level")
+			logger.Info("toggling debug level")
 			newLevel := zapcore.DebugLevel
 			if logCfg.Level.Enabled(zapcore.DebugLevel) {
 				newLevel = zapcore.InfoLevel
@@ -176,7 +178,7 @@ func main() {
 	)
 	select {
 	case sig := <-sigC:
-		log.Info("ending on signal", zap.String("signal", sig.String()))
+		logger.Info("ending on signal", zap.String("signal", sig.String()))
 	case <-doneC:
 	}
 
@@ -212,12 +214,12 @@ func buildLogger(options server.Options) (*zap.Logger, *zap.Config, error) {
 			EncodeCaller: zapcore.ShortCallerEncoder,
 		},
 	}
-	log, err := cfg.Build()
+	logger, err := cfg.Build()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	log = log.Named("xmtpd")
+	logger = logger.Named("xmtpd")
 
-	return log, &cfg, nil
+	return logger, &cfg, nil
 }
