@@ -53,3 +53,26 @@ func EmitMLSSentWelcomeMessage(ctx context.Context, log *zap.Logger, msg *querie
 	mlsSentWelcomeMessageSize.With(labels).Observe(float64(len(msg.Data)))
 	mlsSentWelcomeMessageCount.With(labels).Inc()
 }
+
+var mlsCommitLogEntrySize = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "mls_commit_log_entry_size",
+		Help:    "Size of a published commit log entry in bytes",
+		Buckets: []float64{100, 1000, 10000, 100000},
+	},
+	appClientVersionTagKeys,
+)
+
+var mlsCommitLogEntryCount = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "mls_commit_log_entry_count",
+		Help: "Count of published commit log entries",
+	},
+	appClientVersionTagKeys,
+)
+
+func EmitMLSPublishedCommitLogEntry(ctx context.Context, log *zap.Logger, entry *queries.CommitLog) {
+	labels := contextLabels(ctx)
+	mlsCommitLogEntrySize.With(labels).Observe(float64(len(entry.EncryptedEntry)))
+	mlsCommitLogEntryCount.With(labels).Inc()
+}
