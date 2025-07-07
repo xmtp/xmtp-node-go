@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -37,6 +38,49 @@ func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUp
 		arg.KeyPackage,
 	)
 	return err
+}
+
+const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM welcome_messages
+    WHERE created_at < NOW() - make_interval(days := $1)
+    ORDER BY id
+    LIMIT 1000
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM welcome_messages wm
+    USING to_delete td
+WHERE wm.id = td.id
+    RETURNING wm.id, wm.created_at
+`
+
+type DeleteOldWelcomeMessagesBatchRow struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) DeleteOldWelcomeMessagesBatch(ctx context.Context, ageDays int32) ([]DeleteOldWelcomeMessagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldWelcomeMessagesBatch, ageDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeleteOldWelcomeMessagesBatchRow
+	for rows.Next() {
+		var i DeleteOldWelcomeMessagesBatchRow
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const fetchKeyPackages = `-- name: FetchKeyPackages :many
@@ -324,6 +368,19 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 		&i.KeyPackage,
 	)
 	return i, err
+}
+
+const getOldWelcomeMessages = `-- name: GetOldWelcomeMessages :one
+SELECT COUNT(*)::bigint as old_message_count
+FROM welcome_messages
+WHERE created_at < NOW() - make_interval(days := $1)
+`
+
+func (q *Queries) GetOldWelcomeMessages(ctx context.Context, ageDays int32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOldWelcomeMessages, ageDays)
+	var old_message_count int64
+	err := row.Scan(&old_message_count)
+	return old_message_count, err
 }
 
 const insertAddressLog = `-- name: InsertAddressLog :one
