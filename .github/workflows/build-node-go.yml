@@ -15,7 +15,7 @@ jobs:
   push_to_registry:
     strategy:
       matrix:
-        image: ["node-go"]
+        image: ["node-go", "xmtp-prune-mls"]
     name: Push Docker Images to GitHub Packages
     runs-on: ubuntu-latest
     permissions:
@@ -62,6 +62,8 @@ jobs:
         run: |
           if [[ "${{ matrix.image }}" == "node-go" ]]; then
           echo "dockerfile=Dockerfile" >> $GITHUB_OUTPUT
+          elif [[ "${{ matrix.image }}" == "xmtp-prune-mls" ]]; then
+          echo "dockerfile=Dockerfile-prune" >> $GITHUB_OUTPUT
           else
           echo "Unknown image: ${{ matrix.image }}"
           exit 1
