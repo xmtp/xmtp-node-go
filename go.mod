@@ -32,6 +32,7 @@ require (
 	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
 	github.com/yoheimuta/protolint v0.39.0
 	go.uber.org/zap v1.24.0
+	golang.org/x/sync v0.3.0
 	google.golang.org/genproto v0.0.0-20230223222841-637eb2293923
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.31.0
@@ -43,7 +44,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	golang.org/x/sync v0.3.0 // indirect
 )
 
 require (
