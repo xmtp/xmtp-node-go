@@ -1,0 +1,105 @@
+name: Build XMTP Node-go images
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - rel/**
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  push_to_registry:
+    strategy:
+      matrix:
+        image: ["node-go"]
+    name: Push Docker Images to GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKER_METADATA_PR_HEAD_SHA: true
+    outputs:
+      xmtpd_digest: ${{ steps.set_xmtpd_digest.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Git describe
+        id: ghd
+        uses: proudust/gh-describe@v2
+
+      - name: Get Go version from go.mod
+        id: goversion
+        run: |
+          echo "go_version=$(go list -f '{{.GoVersion}}' -m)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/xmtp/${{ matrix.image }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha
+      - name: Set up Docker image file based on the matrix variable
+        id: set_dockerfile
+        run: |
+          if [[ "${{ matrix.image }}" == "node-go" ]]; then
+          echo "dockerfile=Dockerfile" >> $GITHUB_OUTPUT
+          else
+          echo "Unknown image: ${{ matrix.image }}"
+          exit 1
+          fi
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        id: push
+        with:
+          context: .
+          file: ./dev/docker/${{ steps.set_dockerfile.outputs.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ steps.ghd.outputs.describe }}
+            GO_VERSION=${{ steps.goversion.outputs.go_version }}
+
+      - name: Set xmtpd digest output
+        if: ${{ matrix.image == 'node-go' }}
+        id: set_xmtpd_digest
+        run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
+
+# TODO(mkysel): figure out deploy once we are ready
+#  deploy:
+#    name: Deploy new images to infra
+#    runs-on: ubuntu-latest
+#    needs: push_to_registry
+#    if: github.ref == 'refs/heads/main'
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#      - name: Deploy Testnet
+#        uses: xmtp-labs/terraform-deployer@v1
+#        timeout-minutes: 45
+#        with:
+#          timeout: 45m
+#          terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
+#          terraform-org: xmtp
+#          terraform-workspace: testnet-staging
+#          variable-name: xmtpd_server_docker_image
+#          variable-value: "ghcr.io/xmtp/xmtpd@${{ needs.push_to_registry.outputs.xmtpd_digest }}"
+#          variable-value-required-prefix: "ghcr.io/xmtp/xmtpd@sha256:"
