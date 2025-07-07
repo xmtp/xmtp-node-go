@@ -28,6 +28,13 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
+const (
+	// Defines the maximum number of requests we can support per batch.
+	// Note: because the client must be aware of these limits, decreasing these values would be a breaking change.
+	maxBatchInserts = 10
+	maxBatchQueries = 20
+)
+
 type Service struct {
 	mlsv1.UnimplementedMlsApiServer
 
@@ -545,6 +552,54 @@ func (s *Service) SubscribeWelcomeMessages(req *mlsv1.SubscribeWelcomeMessagesRe
 	}
 }
 
+func (s *Service) BatchPublishCommitLog(ctx context.Context, req *mlsv1.BatchPublishCommitLogRequest) (*emptypb.Empty, error) {
+	log := s.log.Named("batch-publish-commit-log")
+	if err := validateBatchPublishCommitLogRequest(req); err != nil {
+		return nil, err
+	}
+
+	for _, entry := range req.Requests {
+		if entry == nil ||
+			entry.GroupId == nil || len(entry.GroupId) == 0 ||
+			entry.EncryptedCommitLogEntry == nil || len(entry.EncryptedCommitLogEntry) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid commit log entry")
+		}
+
+		inserted, err := s.store.InsertCommitLog(ctx, entry.GroupId, entry.EncryptedCommitLogEntry)
+		if err != nil {
+			log.Error("error inserting commit log", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to insert commit log: %s", err)
+		}
+
+		metrics.EmitMLSPublishedCommitLogEntry(ctx, log, &inserted)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Service) BatchQueryCommitLog(ctx context.Context, req *mlsv1.BatchQueryCommitLogRequest) (*mlsv1.BatchQueryCommitLogResponse, error) {
+	log := s.log.Named("batch-query-commit-log")
+	if err := validateBatchQueryCommitLogRequest(req); err != nil {
+		return nil, err
+	}
+
+	out := make([]*mlsv1.QueryCommitLogResponse, len(req.Requests))
+	for idx, request := range req.Requests {
+		if request == nil || request.GroupId == nil || len(request.GroupId) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid request")
+		}
+		response, err := s.store.QueryCommitLog(ctx, request)
+		if err != nil {
+			log.Error("error querying commit log", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to query commit log: %s", err)
+		}
+		out[idx] = response
+	}
+	return &mlsv1.BatchQueryCommitLogResponse{
+		Responses: out,
+	}, nil
+}
+
 func buildNatsSubjectForGroupMessages(groupId []byte) string {
 	contentTopic := topic.BuildMLSV1GroupTopic(groupId)
 	return envelopes.BuildNatsSubject(contentTopic)
@@ -594,6 +649,26 @@ func validateRegisterInstallationRequest(req *mlsv1.RegisterInstallationRequest)
 func validateUploadKeyPackageRequest(req *mlsv1.UploadKeyPackageRequest) error {
 	if req == nil || req.KeyPackage == nil {
 		return status.Error(codes.InvalidArgument, "no key package")
+	}
+	return nil
+}
+
+func validateBatchPublishCommitLogRequest(req *mlsv1.BatchPublishCommitLogRequest) error {
+	if req == nil || len(req.Requests) == 0 {
+		return status.Error(codes.InvalidArgument, "no log entries to publish")
+	}
+	if len(req.Requests) > maxBatchInserts {
+		return status.Errorf(codes.InvalidArgument, "cannot exceed %d inserts in single batch", maxBatchInserts)
+	}
+	return nil
+}
+
+func validateBatchQueryCommitLogRequest(req *mlsv1.BatchQueryCommitLogRequest) error {
+	if req == nil || len(req.Requests) == 0 {
+		return status.Error(codes.InvalidArgument, "no requests to query")
+	}
+	if len(req.Requests) > maxBatchQueries {
+		return status.Errorf(codes.InvalidArgument, "cannot exceed %d queries in single batch", maxBatchQueries)
 	}
 	return nil
 }

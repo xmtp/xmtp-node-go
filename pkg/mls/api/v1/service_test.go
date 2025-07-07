@@ -763,3 +763,285 @@ func assertExpectationsWithTimeout(t *testing.T, mockObj *mock.Mock, timeout, in
 		}
 	}
 }
+
+func TestBatchPublishCommitLog(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+	encryptedEntry := []byte(test.RandomString(64))
+
+	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Verify the commit log entry was stored
+	resp, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+		GroupId: groupId,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.CommitLogEntries, 1)
+	require.Equal(t, encryptedEntry, resp.CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, uint64(1), resp.CommitLogEntries[0].SequenceId)
+}
+
+func TestBatchPublishCommitLog_MultipleEntries(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId1 := []byte(test.RandomString(32))
+	groupId2 := []byte(test.RandomString(32))
+	encryptedEntry1 := []byte(test.RandomString(64))
+	encryptedEntry2 := []byte(test.RandomString(64))
+
+	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 groupId1,
+				EncryptedCommitLogEntry: encryptedEntry1,
+			},
+			{
+				GroupId:                 groupId2,
+				EncryptedCommitLogEntry: encryptedEntry2,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Verify both commit log entries were stored
+	resp1, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+		GroupId: groupId1,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp1.CommitLogEntries, 1)
+	require.Equal(t, encryptedEntry1, resp1.CommitLogEntries[0].EncryptedCommitLogEntry)
+
+	resp2, err := svc.store.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
+		GroupId: groupId2,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp2.CommitLogEntries, 1)
+	require.Equal(t, encryptedEntry2, resp2.CommitLogEntries[0].EncryptedCommitLogEntry)
+}
+
+func TestBatchPublishCommitLog_InvalidRequest(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	// Test with nil entry
+	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{nil},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid commit log entry")
+
+	// Test with empty group ID
+	_, err = svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 []byte{},
+				EncryptedCommitLogEntry: []byte("test"),
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid commit log entry")
+
+	// Test with empty encrypted entry
+	_, err = svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 []byte("test"),
+				EncryptedCommitLogEntry: []byte{},
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid commit log entry")
+}
+
+func TestBatchQueryCommitLog(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId1 := []byte(test.RandomString(32))
+	groupId2 := []byte(test.RandomString(32))
+	encryptedEntry1 := []byte(test.RandomString(64))
+	encryptedEntry2 := []byte(test.RandomString(64))
+
+	// Insert commit log entries
+	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 groupId1,
+				EncryptedCommitLogEntry: encryptedEntry1,
+			},
+			{
+				GroupId:                 groupId2,
+				EncryptedCommitLogEntry: encryptedEntry2,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Query both groups
+	resp, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: groupId1,
+			},
+			{
+				GroupId: groupId2,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Responses, 2)
+
+	// Verify first group response
+	require.Equal(t, groupId1, resp.Responses[0].GroupId)
+	require.Len(t, resp.Responses[0].CommitLogEntries, 1)
+	require.Equal(t, encryptedEntry1, resp.Responses[0].CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, uint64(1), resp.Responses[0].CommitLogEntries[0].SequenceId)
+
+	// Verify second group response
+	require.Equal(t, groupId2, resp.Responses[1].GroupId)
+	require.Len(t, resp.Responses[1].CommitLogEntries, 1)
+	require.Equal(t, encryptedEntry2, resp.Responses[1].CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, uint64(2), resp.Responses[1].CommitLogEntries[0].SequenceId)
+}
+
+func TestBatchQueryCommitLog_WithPaging(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+	encryptedEntry := []byte("entry")
+
+	// Insert 5 commit log entries
+	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
+		Requests: []*mlsv1.PublishCommitLogRequest{
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+			{
+				GroupId:                 groupId,
+				EncryptedCommitLogEntry: encryptedEntry,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Query with limit
+	resp, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: groupId,
+				PagingInfo: &mlsv1.PagingInfo{
+					Limit: 3,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Responses, 1)
+	require.Len(t, resp.Responses[0].CommitLogEntries, 3)
+
+	// Verify paging info
+	require.NotNil(t, resp.Responses[0].PagingInfo)
+	require.Equal(t, uint32(3), resp.Responses[0].PagingInfo.Limit)
+	require.Equal(t, uint64(3), resp.Responses[0].PagingInfo.IdCursor)
+	require.Equal(t, mlsv1.SortDirection_SORT_DIRECTION_ASCENDING, resp.Responses[0].PagingInfo.Direction)
+
+	// Query next page
+	resp2, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: groupId,
+				PagingInfo: &mlsv1.PagingInfo{
+					Limit:    3,
+					IdCursor: resp.Responses[0].PagingInfo.IdCursor,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp2.Responses, 1)
+	require.Len(t, resp2.Responses[0].CommitLogEntries, 2) // Remaining 2 entries
+}
+
+func TestBatchQueryCommitLog_EmptyGroup(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	unknownGroupId := []byte(test.RandomString(32))
+
+	resp, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: unknownGroupId,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Responses, 1)
+	require.Equal(t, unknownGroupId, resp.Responses[0].GroupId)
+	require.Len(t, resp.Responses[0].CommitLogEntries, 0)
+}
+
+func TestBatchQueryCommitLog_Error(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	resp, err := svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: []byte{},
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid request")
+	require.Nil(t, resp)
+
+	groupId := []byte(test.RandomString(32))
+	resp, err = svc.BatchQueryCommitLog(ctx, &mlsv1.BatchQueryCommitLogRequest{
+		Requests: []*mlsv1.QueryCommitLogRequest{
+			{
+				GroupId: groupId,
+				PagingInfo: &mlsv1.PagingInfo{
+					Direction: mlsv1.SortDirection_SORT_DIRECTION_DESCENDING,
+				},
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "descending direction is not supported")
+	require.Nil(t, resp)
+}
