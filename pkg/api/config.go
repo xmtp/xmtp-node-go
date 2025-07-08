@@ -21,13 +21,13 @@ var (
 )
 
 type Options struct {
-	GRPCAddress string       `long:"grpc-address" description:"API GRPC listening address" default:"0.0.0.0"`
-	GRPCPort    uint         `long:"grpc-port" description:"API GRPC listening port" default:"5556"`
-	HTTPAddress string       `long:"http-address" description:"API HTTP listening address" default:"0.0.0.0"`
-	HTTPPort    uint         `long:"http-port" description:"API HTTP listening port" default:"5555"`
-	Authn       AuthnOptions `group:"API Authentication Options" namespace:"authn"`
+	GRPCAddress string       `long:"grpc-address" description:"API GRPC listening address"               default:"0.0.0.0"`
+	GRPCPort    uint         `long:"grpc-port"    description:"API GRPC listening port"                  default:"5556"`
+	HTTPAddress string       `long:"http-address" description:"API HTTP listening address"               default:"0.0.0.0"`
+	HTTPPort    uint         `long:"http-port"    description:"API HTTP listening port"                  default:"5555"`
+	Authn       AuthnOptions `                                                                                              group:"API Authentication Options" namespace:"authn"`
 	MaxMsgSize  int          `long:"max-msg-size" description:"Max message size in bytes (default 50MB)" default:"52428800"`
-	EnableMls   bool         `long:"enable-mls" description:"Enable the MLS server"`
+	EnableMls   bool         `long:"enable-mls"   description:"Enable the MLS server"`
 }
 
 type Config struct {
@@ -50,7 +50,7 @@ type AuthnOptions struct {
 		Authenticated requests will be permitted according to the rules of the request type,
 		(i.e. you can't publish into other wallets' contact and private topics).
 	*/
-	Enable bool `long:"enable" description:"require client authentication via wallet tokens"`
+	Enable bool `long:"enable"             description:"require client authentication via wallet tokens"`
 	/*
 		Ratelimits enables request rate limiting.
 
@@ -64,7 +64,7 @@ type AuthnOptions struct {
 		i.e. a predefined multiple the configured limit.
 		Priority wallets get separate IP buckets from regular wallets.
 	*/
-	Ratelimits bool `long:"ratelimits" description:"apply rate limits per client IP address"`
+	Ratelimits bool `long:"ratelimits"         description:"apply rate limits per client IP address"`
 	/*
 		Allowlists enables wallet allow lists.
 
@@ -72,7 +72,7 @@ type AuthnOptions struct {
 		for wallets that are set as Denied in the allow list.
 		Wallets that are explicitly Allowed will get priority rate limits if Ratelimits is true.
 	*/
-	AllowLists          bool     `long:"allowlists" description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
+	AllowLists          bool     `long:"allowlists"         description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
 	PrivilegedAddresses []string `long:"privileged-address" description:"allow this address to publish into other user's topics"`
 }
 

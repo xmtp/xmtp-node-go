@@ -31,10 +31,10 @@ func NewDB(t testing.TB) (*sql.DB, string, func()) {
 	dsn = localTestDBDSNPrefix + "/" + dbName + localTestDBDSNSuffix
 	db := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	return db, dsn, func() {
-		db.Close()
+		_ = db.Close()
 		_, err = ctlDB.Exec("DROP DATABASE " + dbName)
 		require.NoError(t, err)
-		ctlDB.Close()
+		_ = ctlDB.Close()
 	}
 }
 
@@ -52,10 +52,10 @@ func NewPGXDB(t testing.TB) (*sql.DB, string, func()) {
 	require.NoError(t, err)
 	db := stdlib.OpenDB(*config2)
 	return db, dsn, func() {
-		db.Close()
+		_ = db.Close()
 		_, err = ctlDB.Exec("DROP DATABASE " + dbName)
 		require.NoError(t, err)
-		ctlDB.Close()
+		_ = ctlDB.Close()
 	}
 }
 

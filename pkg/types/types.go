@@ -9,8 +9,10 @@ var (
 	PeerIdLength                = 46
 )
 
-type WalletAddr string
-type PeerId peer.ID
+type (
+	WalletAddr string
+	PeerId     peer.ID
+)
 
 func (walletAddr WalletAddr) String() string {
 	return string(walletAddr)

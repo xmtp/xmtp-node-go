@@ -27,7 +27,11 @@ func Connect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode, protoco
 	require.NoError(t, err)
 
 	if len(protocols) > 0 {
-		_, err = n1.AddPeer(n2.ListenAddresses()[0], peerstore.Static, n1.Relay().PubSub().GetTopics(), protocols...)
+		_, err = n1.AddPeer(
+			n2.ListenAddresses()[0],
+			peerstore.Static,
+			n1.Relay().PubSub().GetTopics(),
+			protocols...)
 		require.NoError(t, err)
 	}
 
@@ -66,7 +70,11 @@ func Disconnect(t *testing.T, n1 *wakunode.WakuNode, n2 *wakunode.WakuNode) {
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
-func NewNode(t testing.TB, log *zap.Logger, opts ...wakunode.WakuNodeOption) (*wakunode.WakuNode, func()) {
+func NewNode(
+	t testing.TB,
+	log *zap.Logger,
+	opts ...wakunode.WakuNodeOption,
+) (*wakunode.WakuNode, func()) {
 	hostAddr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:0")
 	prvKey := NewPrivateKey(t)
 	ctx := context.Background()
@@ -89,7 +97,10 @@ func NewNode(t testing.TB, log *zap.Logger, opts ...wakunode.WakuNodeOption) (*w
 }
 
 func NewPeer(t *testing.T) host.Host {
-	host, err := libp2p.New(libp2p.DefaultTransports, libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	host, err := libp2p.New(
+		libp2p.DefaultTransports,
+		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
+	)
 	require.NoError(t, err)
 	return host
 }

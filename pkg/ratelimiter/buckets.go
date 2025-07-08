@@ -23,7 +23,12 @@ func NewBuckets(log *zap.Logger, name string) *Buckets {
 	}
 }
 
-func (b *Buckets) getAndRefill(bucket string, limit *Limit, multiplier uint16, createIfMissing bool) *Entry {
+func (b *Buckets) getAndRefill(
+	bucket string,
+	limit *Limit,
+	multiplier uint16,
+	createIfMissing bool,
+) *Entry {
 	// The locking strategy is adapted from the following blog post: https://misfra.me/optimizing-concurrent-map-access-in-go/
 	b.mutex.RLock()
 	currentVal, exists := b.buckets[bucket]

@@ -41,7 +41,9 @@ func newHTTPStream(log *zap.Logger, reqFn func() (*http.Response, error)) (*http
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			defer resp.Body.Close()
+			defer func() {
+				_ = resp.Body.Close()
+			}()
 			body, err := io.ReadAll(resp.Body)
 			if err == nil {
 				err = fmt.Errorf("%s: %s", resp.Status, string(body))

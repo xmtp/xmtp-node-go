@@ -23,7 +23,10 @@ func NewMockFetcher() *MockFetcher {
 	return new(MockFetcher)
 }
 
-func (m *MockFetcher) Fetch(ctx context.Context, walletAddress string) (res TransactionHistoryResult, err error) {
+func (m *MockFetcher) Fetch(
+	ctx context.Context,
+	walletAddress string,
+) (res TransactionHistoryResult, err error) {
 	m.NumFetches += 1
 	if walletAddress == SUCCESS_WALLET_ADDRESS {
 		return AlchemyTokenDataResult{hasTransactions: true}, nil

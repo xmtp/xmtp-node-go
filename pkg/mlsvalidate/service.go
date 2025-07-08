@@ -32,7 +32,7 @@ type GroupMessageValidationResult struct {
 
 type AssociationStateResult struct {
 	AssociationState *associations.AssociationState     `protobuf:"bytes,1,opt,name=association_state,json=associationState,proto3" json:"association_state,omitempty"`
-	StateDiff        *associations.AssociationStateDiff `protobuf:"bytes,2,opt,name=state_diff,json=stateDiff,proto3" json:"state_diff,omitempty"`
+	StateDiff        *associations.AssociationStateDiff `protobuf:"bytes,2,opt,name=state_diff,json=stateDiff,proto3"               json:"state_diff,omitempty"`
 }
 
 type IdentityInput struct {
@@ -41,14 +41,30 @@ type IdentityInput struct {
 }
 
 type MLSValidationService interface {
-	ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]InboxIdValidationResult, error)
-	ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error)
-	GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error)
-	VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error)
+	ValidateInboxIdKeyPackages(
+		ctx context.Context,
+		keyPackages [][]byte,
+	) ([]InboxIdValidationResult, error)
+	ValidateGroupMessages(
+		ctx context.Context,
+		groupMessages []*mlsv1.GroupMessageInput,
+	) ([]GroupMessageValidationResult, error)
+	GetAssociationState(
+		ctx context.Context,
+		oldUpdates []*associations.IdentityUpdate,
+		newUpdates []*associations.IdentityUpdate,
+	) (*AssociationStateResult, error)
+	VerifySmartContractWalletSignatures(
+		ctx context.Context,
+		req *identity.VerifySmartContractWalletSignaturesRequest,
+	) (*identity.VerifySmartContractWalletSignaturesResponse, error)
 }
 
 type IdentityStore interface {
-	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
+	GetInboxLogs(
+		ctx context.Context,
+		req *identity.GetIdentityUpdatesRequest,
+	) (*identity.GetIdentityUpdatesResponse, error)
 }
 
 type MLSValidationServiceImpl struct {
@@ -61,8 +77,16 @@ type InboxIdKeyPackage struct {
 	InstallationPublicKey []byte
 }
 
-func NewMlsValidationService(ctx context.Context, options MLSValidationOptions, identityStore IdentityStore) (*MLSValidationServiceImpl, error) {
-	conn, err := grpc.DialContext(ctx, options.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewMlsValidationService(
+	ctx context.Context,
+	options MLSValidationOptions,
+	identityStore IdentityStore,
+) (*MLSValidationServiceImpl, error) {
+	conn, err := grpc.DialContext(
+		ctx,
+		options.GRPCAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +96,11 @@ func NewMlsValidationService(ctx context.Context, options MLSValidationOptions, 
 	}, nil
 }
 
-func (s *MLSValidationServiceImpl) GetAssociationState(ctx context.Context, oldUpdates []*associations.IdentityUpdate, newUpdates []*associations.IdentityUpdate) (*AssociationStateResult, error) {
+func (s *MLSValidationServiceImpl) GetAssociationState(
+	ctx context.Context,
+	oldUpdates []*associations.IdentityUpdate,
+	newUpdates []*associations.IdentityUpdate,
+) (*AssociationStateResult, error) {
 	req := &svc.GetAssociationStateRequest{
 		OldUpdates: oldUpdates,
 		NewUpdates: newUpdates,
@@ -87,7 +115,10 @@ func (s *MLSValidationServiceImpl) GetAssociationState(ctx context.Context, oldU
 	}, nil
 }
 
-func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Context, keyPackages [][]byte) ([]InboxIdValidationResult, error) {
+func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(
+	ctx context.Context,
+	keyPackages [][]byte,
+) ([]InboxIdValidationResult, error) {
 	req := makeValidateKeyPackageRequest(keyPackages, true)
 
 	response, err := s.grpcClient.ValidateInboxIdKeyPackages(ctx, req)
@@ -109,7 +140,10 @@ func (s *MLSValidationServiceImpl) ValidateInboxIdKeyPackages(ctx context.Contex
 	return out, nil
 }
 
-func makeValidateKeyPackageRequest(keyPackageBytes [][]byte, isInboxIdCredential bool) *svc.ValidateKeyPackagesRequest {
+func makeValidateKeyPackageRequest(
+	keyPackageBytes [][]byte,
+	isInboxIdCredential bool,
+) *svc.ValidateKeyPackagesRequest {
 	keyPackageRequests := make([]*svc.ValidateKeyPackagesRequest_KeyPackage, len(keyPackageBytes))
 	for i, keyPackage := range keyPackageBytes {
 		keyPackageRequests[i] = &svc.ValidateKeyPackagesRequest_KeyPackage{
@@ -122,7 +156,10 @@ func makeValidateKeyPackageRequest(keyPackageBytes [][]byte, isInboxIdCredential
 	}
 }
 
-func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, groupMessages []*mlsv1.GroupMessageInput) ([]GroupMessageValidationResult, error) {
+func (s *MLSValidationServiceImpl) ValidateGroupMessages(
+	ctx context.Context,
+	groupMessages []*mlsv1.GroupMessageInput,
+) ([]GroupMessageValidationResult, error) {
 	req := makeValidateGroupMessagesRequest(groupMessages)
 
 	response, err := s.grpcClient.ValidateGroupMessages(ctx, req)
@@ -143,8 +180,13 @@ func (s *MLSValidationServiceImpl) ValidateGroupMessages(ctx context.Context, gr
 	return out, nil
 }
 
-func makeValidateGroupMessagesRequest(groupMessages []*mlsv1.GroupMessageInput) *svc.ValidateGroupMessagesRequest {
-	groupMessageRequests := make([]*svc.ValidateGroupMessagesRequest_GroupMessage, len(groupMessages))
+func makeValidateGroupMessagesRequest(
+	groupMessages []*mlsv1.GroupMessageInput,
+) *svc.ValidateGroupMessagesRequest {
+	groupMessageRequests := make(
+		[]*svc.ValidateGroupMessagesRequest_GroupMessage,
+		len(groupMessages),
+	)
 	for i, groupMessage := range groupMessages {
 		groupMessageRequests[i] = &svc.ValidateGroupMessagesRequest_GroupMessage{
 			GroupMessageBytesTlsSerialized: groupMessage.GetV1().Data,
@@ -155,6 +197,9 @@ func makeValidateGroupMessagesRequest(groupMessages []*mlsv1.GroupMessageInput) 
 	}
 }
 
-func (s *MLSValidationServiceImpl) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
+func (s *MLSValidationServiceImpl) VerifySmartContractWalletSignatures(
+	ctx context.Context,
+	req *identity.VerifySmartContractWalletSignaturesRequest,
+) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
 	return s.grpcClient.VerifySmartContractWalletSignatures(ctx, req)
 }

@@ -15,7 +15,9 @@ func (s *Store) Query(query *messagev1.QueryRequest) (res *messagev1.QueryRespon
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	return buildResponse(rows, query)
 }
@@ -56,13 +58,23 @@ func buildSqlQuery(query *messagev1.QueryRequest) (querySql string, args []inter
 	switch direction {
 	case messagev1.SortDirection_SORT_DIRECTION_ASCENDING:
 		if index.SenderTimeNs != 0 && index.Digest != nil {
-			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", index.SenderTimeNs), sb2.GreaterThan("id", index.Digest)))
+			sb2.Where(
+				sb2.And(
+					sb2.Equal("senderTimestamp", index.SenderTimeNs),
+					sb2.GreaterThan("id", index.Digest),
+				),
+			)
 		} else if index.Digest != nil {
 			sb2.Where(sb2.GreaterThan("id", index.Digest))
 		}
 	case messagev1.SortDirection_SORT_DIRECTION_DESCENDING:
 		if index.SenderTimeNs != 0 && index.Digest != nil {
-			sb2.Where(sb2.And(sb2.Equal("senderTimestamp", index.SenderTimeNs), sb2.LessThan("id", index.Digest)))
+			sb2.Where(
+				sb2.And(
+					sb2.Equal("senderTimestamp", index.SenderTimeNs),
+					sb2.LessThan("id", index.Digest),
+				),
+			)
 		} else if index.Digest != nil {
 			sb2.Where(sb2.LessThan("id", index.Digest))
 		}
@@ -87,7 +99,8 @@ func buildSqlQuery(query *messagev1.QueryRequest) (querySql string, args []inter
 func buildSqlQueryWithoutCursor(query *messagev1.QueryRequest) *sqlBuilder.SelectBuilder {
 	sb := sqlBuilder.PostgreSQL.NewSelectBuilder()
 
-	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").From("message")
+	sb.Select("id, receivertimestamp, sendertimestamp, contenttopic, pubsubtopic, payload, version").
+		From("message")
 
 	if len(query.ContentTopics) > 0 {
 		sb.Where(sb.In("contentTopic", sqlBuilder.Flatten(query.ContentTopics)...))
@@ -116,7 +129,8 @@ func buildSqlQueryWithoutCursor(query *messagev1.QueryRequest) *sqlBuilder.Selec
 }
 
 func getDirection(pagingInfo *messagev1.PagingInfo) (direction messagev1.SortDirection) {
-	if pagingInfo == nil || pagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
+	if pagingInfo == nil ||
+		pagingInfo.Direction == messagev1.SortDirection_SORT_DIRECTION_UNSPECIFIED {
 		direction = messagev1.SortDirection_SORT_DIRECTION_DESCENDING
 	} else {
 		direction = pagingInfo.Direction
@@ -140,7 +154,10 @@ func addSort(sb *sqlBuilder.SelectBuilder, direction messagev1.SortDirection) {
 	}
 }
 
-func buildResponse(rows *sql.Rows, query *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+func buildResponse(
+	rows *sql.Rows,
+	query *messagev1.QueryRequest,
+) (*messagev1.QueryResponse, error) {
 	envs, err := rowsToEnvelopes(rows)
 	if err != nil {
 		return nil, err
@@ -158,7 +175,10 @@ func buildResponse(rows *sql.Rows, query *messagev1.QueryRequest) (*messagev1.Qu
 
 // Builds the paging info based on the response.
 // Clients may be relying on this behaviour to know when to stop paginating
-func buildPagingInfo(envs []*messagev1.Envelope, pagingInfo *messagev1.PagingInfo) (*messagev1.PagingInfo, error) {
+func buildPagingInfo(
+	envs []*messagev1.Envelope,
+	pagingInfo *messagev1.PagingInfo,
+) (*messagev1.PagingInfo, error) {
 	currentPageSize := getPageSize(pagingInfo)
 	newPageSize := minOf(currentPageSize, maxPageSize)
 	direction := getDirection(pagingInfo)
@@ -212,7 +232,7 @@ func getPageSize(pagingInfo *messagev1.PagingInfo) int {
 }
 
 func rowsToEnvelopes(rows *sql.Rows) ([]*messagev1.Envelope, error) {
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*messagev1.Envelope
 	for rows.Next() {
@@ -222,7 +242,15 @@ func rowsToEnvelopes(rows *sql.Rows) ([]*messagev1.Envelope, error) {
 		var pubsubTopic string
 		var env messagev1.Envelope
 
-		err := rows.Scan(&id, &receiverTimestamp, &env.TimestampNs, &env.ContentTopic, &pubsubTopic, &env.Message, &version)
+		err := rows.Scan(
+			&id,
+			&receiverTimestamp,
+			&env.TimestampNs,
+			&env.ContentTopic,
+			&pubsubTopic,
+			&env.Message,
+			&version,
+		)
 		if err != nil {
 			return nil, err
 		}

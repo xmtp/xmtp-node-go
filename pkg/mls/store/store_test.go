@@ -10,23 +10,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
+
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
-	test "github.com/xmtp/xmtp-node-go/pkg/testing"
-	testutils "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"go.uber.org/zap"
 )
 
 func NewTestStore(t *testing.T) (*Store, func()) {
-	log := test.NewLog(t)
-	db, _, dbCleanup := test.NewMLSDB(t)
+	log := testutils.NewLog(t)
+	db, _, dbCleanup := testutils.NewMLSDB(t)
 	ctx := context.Background()
 	c := Config{
 		Log: log,
@@ -53,27 +53,29 @@ func TestPublishIdentityUpdateParallel(t *testing.T) {
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 
 	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
-	mockMlsValidation.EXPECT().GetAssociationState(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
-		inboxId := updates[0].InboxId
-		address, ok := inboxes[inboxId]
+	mockMlsValidation.EXPECT().
+		GetAssociationState(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, _ []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+			inboxId := updates[0].InboxId
+			address, ok := inboxes[inboxId]
 
-		if !ok {
-			return nil, errors.New("inbox id not found")
-		}
+			if !ok {
+				return nil, errors.New("inbox id not found")
+			}
 
-		return &mlsvalidate.AssociationStateResult{
-			AssociationState: &associations.AssociationState{
-				InboxId: inboxId,
-			},
-			StateDiff: &associations.AssociationStateDiff{
-				NewMembers: []*associations.MemberIdentifier{{
-					Kind: &associations.MemberIdentifier_EthereumAddress{
-						EthereumAddress: address,
-					},
-				}},
-			},
-		}, nil
-	})
+			return &mlsvalidate.AssociationStateResult{
+				AssociationState: &associations.AssociationState{
+					InboxId: inboxId,
+				},
+				StateDiff: &associations.AssociationStateDiff{
+					NewMembers: []*associations.MemberIdentifier{{
+						Kind: &associations.MemberIdentifier_EthereumAddress{
+							EthereumAddress: address,
+						},
+					}},
+				},
+			}, nil
+		})
 
 	var wg sync.WaitGroup
 	for inboxId := range inboxes {
@@ -104,24 +106,26 @@ func TestPublishIdentityUpdateSameInboxParallel(t *testing.T) {
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)
 
 	// For each inbox_id in the map, return an AssociationStateDiff that adds the corresponding address
-	mockMlsValidation.EXPECT().GetAssociationState(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, oldUpdates []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
-		if len(oldUpdates) > 0 {
-			return nil, errors.New("old updates should be empty")
-		}
+	mockMlsValidation.EXPECT().
+		GetAssociationState(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, oldUpdates []*associations.IdentityUpdate, updates []*associations.IdentityUpdate) (*mlsvalidate.AssociationStateResult, error) {
+			if len(oldUpdates) > 0 {
+				return nil, errors.New("old updates should be empty")
+			}
 
-		return &mlsvalidate.AssociationStateResult{
-			AssociationState: &associations.AssociationState{
-				InboxId: inboxId,
-			},
-			StateDiff: &associations.AssociationStateDiff{
-				NewMembers: []*associations.MemberIdentifier{{
-					Kind: &associations.MemberIdentifier_EthereumAddress{
-						EthereumAddress: address,
-					},
-				}},
-			},
-		}, nil
-	})
+			return &mlsvalidate.AssociationStateResult{
+				AssociationState: &associations.AssociationState{
+					InboxId: inboxId,
+				},
+				StateDiff: &associations.AssociationStateDiff{
+					NewMembers: []*associations.MemberIdentifier{{
+						Kind: &associations.MemberIdentifier_EthereumAddress{
+							EthereumAddress: address,
+						},
+					}},
+				},
+			}, nil
+		})
 
 	var wg sync.WaitGroup
 	numErrors := int32(0)
@@ -158,13 +162,45 @@ func TestInboxIds(t *testing.T) {
 	correctInbox := testutils.RandomInboxId()
 	correctInbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address",
+			InboxID:               inbox1,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address",
+			InboxID:               inbox1,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address",
+			InboxID:               inbox1,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 3},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address",
+			InboxID:               correctInbox,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 4},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -179,7 +215,15 @@ func TestInboxIds(t *testing.T) {
 
 	require.Equal(t, correctInbox, *resp.Responses[0].InboxId)
 
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address", InboxID: correctInbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address",
+			InboxID:               correctInbox2,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 5},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, correctInbox2, *resp.Responses[0].InboxId)
@@ -191,7 +235,15 @@ func TestInboxIds(t *testing.T) {
 	req = &identity.GetInboxIdsRequest{
 		Requests: reqs,
 	}
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address2",
+			InboxID:               inbox2,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 8},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
 	resp, _ = store.GetInboxIds(context.Background(), req)
 	require.Equal(t, inbox2, *resp.Responses[1].InboxId)
@@ -205,9 +257,25 @@ func TestMultipleInboxIds(t *testing.T) {
 	inbox1 := testutils.RandomInboxId()
 	inbox2 := testutils.RandomInboxId()
 
-	_, err := store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_1", InboxID: inbox1, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err := store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address_1",
+			InboxID:               inbox1,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 1},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
-	_, err = store.queries.InsertAddressLog(ctx, queries.InsertAddressLogParams{Address: "address_2", InboxID: inbox2, AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2}, RevocationSequenceID: sql.NullInt64{Valid: false}})
+	_, err = store.queries.InsertAddressLog(
+		ctx,
+		queries.InsertAddressLogParams{
+			Address:               "address_2",
+			InboxID:               inbox2,
+			AssociationSequenceID: sql.NullInt64{Valid: true, Int64: 2},
+			RevocationSequenceID:  sql.NullInt64{Valid: false},
+		},
+	)
 	require.NoError(t, err)
 
 	reqs := make([]*identity.GetInboxIdsRequest_Request, 0)
@@ -232,9 +300,9 @@ func TestCreateInstallation(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomBytes(32)
+	installationId := testutils.RandomBytes(32)
 
-	err := store.CreateOrUpdateInstallation(ctx, installationId, test.RandomBytes(32))
+	err := store.CreateOrUpdateInstallation(ctx, installationId, testutils.RandomBytes(32))
 	require.NoError(t, err)
 
 	installationFromDb, err := store.queries.GetInstallation(ctx, installationId)
@@ -247,15 +315,15 @@ func TestUpdateKeyPackage(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomBytes(32)
-	keyPackage := test.RandomBytes(32)
+	installationId := testutils.RandomBytes(32)
+	keyPackage := testutils.RandomBytes(32)
 
 	err := store.CreateOrUpdateInstallation(ctx, installationId, keyPackage)
 	require.NoError(t, err)
 	afterCreate, err := store.queries.GetInstallation(ctx, installationId)
 	require.NoError(t, err)
 
-	keyPackage2 := test.RandomBytes(32)
+	keyPackage2 := testutils.RandomBytes(32)
 	err = store.CreateOrUpdateInstallation(ctx, installationId, keyPackage2)
 	require.NoError(t, err)
 
@@ -272,8 +340,8 @@ func TestConsumeLastResortKeyPackage(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	installationId := test.RandomBytes(32)
-	keyPackage := test.RandomBytes(32)
+	installationId := testutils.RandomBytes(32)
+	keyPackage := testutils.RandomBytes(32)
 
 	err := store.CreateOrUpdateInstallation(ctx, installationId, keyPackage)
 	require.NoError(t, err)
@@ -296,7 +364,10 @@ func TestInsertGroupMessage_Single(t *testing.T) {
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
 	store.log.Info("Created at", zap.Time("created_at", msg.CreatedAt))
-	require.True(t, msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started))
+	require.True(
+		t,
+		msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started),
+	)
 	require.Equal(t, []byte("group"), msg.GroupID)
 	require.Equal(t, []byte("data"), msg.Data)
 
@@ -347,11 +418,21 @@ func TestInsertWelcomeMessage_Single(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519, []byte("metadata"))
+	msg, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.Equal(t, int64(1), msg.ID)
-	require.True(t, msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started))
+	require.True(
+		t,
+		msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started),
+	)
 	require.Equal(t, []byte("installation"), msg.InstallationKey)
 	require.Equal(t, []byte("data"), msg.Data)
 	require.Equal(t, []byte("hpke"), msg.HpkePublicKey)
@@ -368,11 +449,25 @@ func TestInsertWelcomeMessage_Duplicate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	msg, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519, []byte("welcome_metadata"))
+	msg, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("welcome_metadata"),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 
-	msg, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data"), []byte("hpke"), types.AlgorithmCurve25519, []byte("welcome_metadata"))
+	msg, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("welcome_metadata"),
+	)
 	require.Nil(t, msg)
 	require.IsType(t, &AlreadyExistsError{}, err)
 	require.True(t, IsAlreadyExistsError(err))
@@ -383,11 +478,32 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data1"), []byte("hpke"), types.AlgorithmCurve25519, []byte("1"))
+	_, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data1"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("1"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data2"), []byte("hpke"), types.AlgorithmCurve25519, []byte("2"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data2"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("2"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation"), []byte("data3"), []byte("hpke"), types.AlgorithmCurve25519, []byte("3"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation"),
+		[]byte("data3"),
+		[]byte("hpke"),
+		types.AlgorithmCurve25519,
+		[]byte("3"),
+	)
 	require.NoError(t, err)
 
 	msgs, err := store.queries.GetAllWelcomeMessages(ctx)
@@ -476,11 +592,32 @@ func TestQueryWelcomeMessagesV1_Filter(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data1"), []byte("hpke1"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("data1"),
+		[]byte("hpke1"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("data2"), []byte("hpke2"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation2"),
+		[]byte("data2"),
+		[]byte("hpke2"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("data3"), []byte("hpke3"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("data3"),
+		[]byte("hpke3"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
@@ -618,21 +755,77 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, err := store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content1"), []byte("hpke1"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content1"),
+		[]byte("hpke1"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content2"), []byte("hpke2"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation2"),
+		[]byte("content2"),
+		[]byte("hpke2"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content3"), []byte("hpke3"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content3"),
+		[]byte("hpke3"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation2"), []byte("content4"), []byte("hpke4"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation2"),
+		[]byte("content4"),
+		[]byte("hpke4"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content5"), []byte("hpke5"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content5"),
+		[]byte("hpke5"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content6"), []byte("hpke6"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content6"),
+		[]byte("hpke6"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content7"), []byte("hpke7"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content7"),
+		[]byte("hpke7"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
-	_, err = store.InsertWelcomeMessage(ctx, []byte("installation1"), []byte("content8"), []byte("hpke8"), types.AlgorithmCurve25519, []byte("metadata"))
+	_, err = store.InsertWelcomeMessage(
+		ctx,
+		[]byte("installation1"),
+		[]byte("content8"),
+		[]byte("hpke8"),
+		types.AlgorithmCurve25519,
+		[]byte("metadata"),
+	)
 	require.NoError(t, err)
 
 	resp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{

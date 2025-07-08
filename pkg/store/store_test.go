@@ -8,15 +8,15 @@ import (
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 )
 
-type testStoreOption func(c *Config)
+type TestStoreOption func(c *Config)
 
-func WithCleaner(opts CleanerOptions) testStoreOption {
+func WithCleaner(opts CleanerOptions) TestStoreOption {
 	return func(c *Config) {
-		c.Options.Cleaner = opts
+		c.Cleaner = opts
 	}
 }
 
-func newTestStore(t *testing.T, opts ...testStoreOption) (*Store, func()) {
+func newTestStore(t *testing.T, opts ...TestStoreOption) (*Store, func()) {
 	log := test.NewLog(t)
 	db, _, dbCleanup := test.NewDB(t)
 

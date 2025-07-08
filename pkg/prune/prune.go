@@ -3,10 +3,11 @@ package prune
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/server"
 	"go.uber.org/zap"
-	"time"
 )
 
 type Executor struct {
@@ -39,7 +40,7 @@ func (e *Executor) Run() error {
 	}
 
 	if e.config.CountDeletable {
-		var deletableCount = int64(0)
+		deletableCount := int64(0)
 		for _, pruner := range pruners {
 			prunerCount, err := pruner.Count(e.ctx)
 			if err != nil {
@@ -61,7 +62,7 @@ func (e *Executor) Run() error {
 		return nil
 	}
 
-	var totalDeletionCount = 0
+	totalDeletionCount := 0
 
 	cyclesCompleted := 0
 

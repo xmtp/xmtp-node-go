@@ -24,13 +24,13 @@ type Config struct {
 }
 
 type Options struct {
-	Enable                   bool          `long:"enable" description:"Enable store"`
-	DbConnectionString       string        `long:"db-connection-string" description:"A Postgres database connection string"`
+	Enable                   bool          `long:"enable"                      description:"Enable store"`
+	DbConnectionString       string        `long:"db-connection-string"        description:"A Postgres database connection string"`
 	DbReaderConnectionString string        `long:"reader-db-connection-string" description:"A Postgres database reader connection string"`
-	ReadTimeout              time.Duration `long:"db-read-timeout" description:"Timeout for reading from the database" default:"10s"`
-	WriteTimeout             time.Duration `long:"db-write-timeout" description:"Timeout for writing to the database" default:"10s"`
-	MaxOpenConns             int           `long:"max-open-conns" description:"Maximum number of open connections" default:"80"`
-	MetricsPeriod            time.Duration `long:"metrics-period" description:"Polling period for store metrics" default:"30s"`
+	ReadTimeout              time.Duration `long:"db-read-timeout"             description:"Timeout for reading from the database"        default:"10s"`
+	WriteTimeout             time.Duration `long:"db-write-timeout"            description:"Timeout for writing to the database"          default:"10s"`
+	MaxOpenConns             int           `long:"max-open-conns"              description:"Maximum number of open connections"           default:"80"`
+	MetricsPeriod            time.Duration `long:"metrics-period"              description:"Polling period for store metrics"             default:"30s"`
 
 	Cleaner CleanerOptions `group:"DB Cleaner Options" namespace:"cleaner"`
 }

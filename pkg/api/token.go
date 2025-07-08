@@ -50,7 +50,10 @@ func generateV2AuthToken(createdAt time.Time) (*messagev1.Token, *messagev1.Auth
 	return BuildV2AuthToken(v2WalletKey, v2IdentityKey, createdAt)
 }
 
-func BuildV2AuthToken(v2WalletKey, v2IdentityKey *ecdsa.PrivateKey, createdAt time.Time) (*messagev1.Token, *messagev1.AuthData, error) {
+func BuildV2AuthToken(
+	v2WalletKey, v2IdentityKey *ecdsa.PrivateKey,
+	createdAt time.Time,
+) (*messagev1.Token, *messagev1.AuthData, error) {
 	walletPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2WalletKey))
 	walletPublicKey := crypto.PublicKey(ethcrypto.FromECDSAPub(&v2WalletKey.PublicKey))
 	identityPrivateKey := crypto.PrivateKey(ethcrypto.FromECDSA(v2IdentityKey))
@@ -66,7 +69,10 @@ func BuildV2AuthToken(v2WalletKey, v2IdentityKey *ecdsa.PrivateKey, createdAt ti
 	}
 
 	// The wallet signs the identity public key.
-	keySig, keyRec, err := crypto.SignDigest(walletPrivateKey, crypto.EtherHash(createIdentitySignRequest(key)))
+	keySig, keyRec, err := crypto.SignDigest(
+		walletPrivateKey,
+		crypto.EtherHash(createIdentitySignRequest(key)),
+	)
 	key.Signature = &envelope.Signature{
 		Union: &envelope.Signature_WalletEcdsaCompact{
 			WalletEcdsaCompact: &envelope.Signature_WalletECDSACompact{

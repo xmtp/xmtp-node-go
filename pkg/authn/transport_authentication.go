@@ -64,7 +64,11 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 
 	if isAuthenticated {
 		// TODO: Save PeerId to walletAddress map
-		log.Warn("PeerWalletMap not implemented", logging.HostID("AuthenticatedPeerID", authenticatedPeerId.Raw()), logging.WalletAddressLabelled("AuthenticatedWalletAddr", authenticatedWalletAddr))
+		log.Warn(
+			"PeerWalletMap not implemented",
+			logging.HostID("AuthenticatedPeerID", authenticatedPeerId.Raw()),
+			logging.WalletAddressLabelled("AuthenticatedWalletAddr", authenticatedWalletAddr),
+		)
 	}
 
 	errStr := ""
@@ -79,11 +83,18 @@ func (xmtpAuth *XmtpAuthentication) onRequest(stream network.Stream) {
 		return
 	}
 
-	log.Info("Auth Result", zap.Bool("isAuthenticated", isAuthenticated), logging.WalletAddressLabelled("walletAddr", authenticatedWalletAddr))
-
+	log.Info(
+		"Auth Result",
+		zap.Bool("isAuthenticated", isAuthenticated),
+		logging.WalletAddressLabelled("walletAddr", authenticatedWalletAddr),
+	)
 }
 
-func handleRequest(ctx context.Context, log *zap.Logger, stream network.Stream) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func handleRequest(
+	ctx context.Context,
+	log *zap.Logger,
+	stream network.Stream,
+) (peer types.PeerId, wallet types.WalletAddr, err error) {
 	authRequest, err := readAuthRequest(stream)
 	if err != nil {
 		log.Error("reading request", zap.Error(err))
@@ -113,16 +124,30 @@ func handleRequest(ctx context.Context, log *zap.Logger, stream network.Stream) 
 	return suppliedPeerId, walletAddr, err
 }
 
-func validateRequest(ctx context.Context, log *zap.Logger, request *V1ClientAuthRequest, connectingPeerId types.PeerId) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func validateRequest(
+	ctx context.Context,
+	log *zap.Logger,
+	request *V1ClientAuthRequest,
+	connectingPeerId types.PeerId,
+) (peer types.PeerId, wallet types.WalletAddr, err error) {
 	// Validate WalletSignature
-	recoveredWalletAddress, err := recoverWalletAddress(request.IdentityKeyBytes, request.WalletSignature.GetEcdsaCompact())
+	recoveredWalletAddress, err := recoverWalletAddress(
+		request.IdentityKeyBytes,
+		request.WalletSignature.GetEcdsaCompact(),
+	)
 	if err != nil {
 		log.Error("verifying wallet signature", zap.Error(err))
 		return peer, wallet, err
 	}
 
 	// Validate AuthSignature
-	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(ctx, log, request.IdentityKeyBytes, request.AuthDataBytes, request.AuthSignature.GetEcdsaCompact())
+	suppliedPeerId, suppliedWalletAddress, err := verifyAuthSignature(
+		ctx,
+		log,
+		request.IdentityKeyBytes,
+		request.AuthDataBytes,
+		request.AuthSignature.GetEcdsaCompact(),
+	)
 	if err != nil {
 		log.Error("verifying authn signature", zap.Error(err))
 		return peer, wallet, err
@@ -130,13 +155,22 @@ func validateRequest(ctx context.Context, log *zap.Logger, request *V1ClientAuth
 
 	// To protect against spoofing, ensure the walletAddresses match in both signatures
 	if recoveredWalletAddress != suppliedWalletAddress {
-		log.Error("wallet address mismatch", zap.Error(err), logging.WalletAddressLabelled("recovered", recoveredWalletAddress), logging.WalletAddressLabelled("supplied", suppliedWalletAddress))
+		log.Error(
+			"wallet address mismatch",
+			zap.Error(err),
+			logging.WalletAddressLabelled("recovered", recoveredWalletAddress),
+			logging.WalletAddressLabelled("supplied", suppliedWalletAddress),
+		)
 		return peer, wallet, ErrWalletMismatch
 	}
 
 	// To protect against spoofing, ensure the AuthRequest originated from the same peerID that was authenticated.
 	if connectingPeerId != suppliedPeerId {
-		log.Error("peerId Mismatch", zap.Error(err), logging.HostID("supplied", suppliedPeerId.Raw()))
+		log.Error(
+			"peerId Mismatch",
+			zap.Error(err),
+			logging.HostID("supplied", suppliedPeerId.Raw()),
+		)
 		return peer, wallet, ErrWrongPeerId
 	}
 
@@ -144,7 +178,12 @@ func validateRequest(ctx context.Context, log *zap.Logger, request *V1ClientAuth
 }
 
 func CreateIdentitySignRequest(identityBytes []byte) crypto.Message {
-	return []byte(fmt.Sprintf("XMTP : Create Identity\n%s\n\nFor more info: https://xmtp.org/signatures/", hex.EncodeToString(identityBytes)))
+	return []byte(
+		fmt.Sprintf(
+			"XMTP : Create Identity\n%s\n\nFor more info: https://xmtp.org/signatures/",
+			hex.EncodeToString(identityBytes),
+		),
+	)
 }
 
 func unpackAuthData(authDataBytes []byte) (*AuthData, error) {
@@ -154,8 +193,10 @@ func unpackAuthData(authDataBytes []byte) (*AuthData, error) {
 	return authData, err
 }
 
-func recoverWalletAddress(identityKeyBytes []byte, signature *Signature_ECDSACompact) (wallet types.WalletAddr, err error) {
-
+func recoverWalletAddress(
+	identityKeyBytes []byte,
+	signature *Signature_ECDSACompact,
+) (wallet types.WalletAddr, err error) {
 	isrBytes := CreateIdentitySignRequest(identityKeyBytes)
 
 	sig, err := crypto.SignatureFromBytes(signature.GetBytes())
@@ -165,7 +206,13 @@ func recoverWalletAddress(identityKeyBytes []byte, signature *Signature_ECDSACom
 	return crypto.RecoverWalletAddress(isrBytes, sig, uint8(signature.GetRecovery()))
 }
 
-func verifyAuthSignature(ctx context.Context, log *zap.Logger, identityKeyBytes []byte, authDataBytes []byte, authSig *Signature_ECDSACompact) (peer types.PeerId, wallet types.WalletAddr, err error) {
+func verifyAuthSignature(
+	ctx context.Context,
+	log *zap.Logger,
+	identityKeyBytes []byte,
+	authDataBytes []byte,
+	authSig *Signature_ECDSACompact,
+) (peer types.PeerId, wallet types.WalletAddr, err error) {
 	pubKey := &PublicKey{}
 	err = proto.Unmarshal(identityKeyBytes, pubKey)
 	if err != nil {
@@ -199,7 +246,6 @@ func verifyAuthSignature(ctx context.Context, log *zap.Logger, identityKeyBytes 
 
 // validateResults ensures the resulting data objects are sound and properly constructed
 func validateResults(peerId types.PeerId, addr types.WalletAddr) error {
-
 	if !peerId.IsValid() {
 		return ErrInvalidPeerId
 	}

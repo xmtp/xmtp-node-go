@@ -72,7 +72,10 @@ type AlchemyTokenDataResult struct {
 }
 
 // Return a new instance of the AlchemyTransactionHistoryFetcher
-func NewAlchemyTransactionHistoryFetcher(apiUrl string, log *zap.Logger) *AlchemyTransactionHistoryFetcher {
+func NewAlchemyTransactionHistoryFetcher(
+	apiUrl string,
+	log *zap.Logger,
+) *AlchemyTransactionHistoryFetcher {
 	fetcher := new(AlchemyTransactionHistoryFetcher)
 	fetcher.log = log
 	fetcher.apiUrl = apiUrl
@@ -85,8 +88,14 @@ func NewAlchemyTransactionHistoryFetcher(apiUrl string, log *zap.Logger) *Alchem
 
 // Fetch in parallel transactions to and from the wallet address
 // Question: is it really necessary to have to AND from. Seems impossible to have a transaction from a wallet without a transaction to the wallet
-func (fetcher AlchemyTransactionHistoryFetcher) Fetch(ctx context.Context, walletAddress string) (res TransactionHistoryResult, err error) {
-	fetcher.log.Info("Fetching Alchemy data for wallet", zap.String("wallet_address", walletAddress))
+func (fetcher AlchemyTransactionHistoryFetcher) Fetch(
+	ctx context.Context,
+	walletAddress string,
+) (res TransactionHistoryResult, err error) {
+	fetcher.log.Info(
+		"Fetching Alchemy data for wallet",
+		zap.String("wallet_address", walletAddress),
+	)
 	var response AlchemyResult
 	response, err = fetcher.alchemyRequest(ctx, walletAddress, From)
 	if err != nil {
@@ -95,18 +104,31 @@ func (fetcher AlchemyTransactionHistoryFetcher) Fetch(ctx context.Context, walle
 	}
 	hasTransactions := verifyTransactions(response)
 	res = AlchemyTokenDataResult{hasTransactions: hasTransactions}
-	fetcher.log.Info("Got Alchemy data for wallet", zap.String("wallet_address", walletAddress), zap.Bool("has_transactions", hasTransactions))
+	fetcher.log.Info(
+		"Got Alchemy data for wallet",
+		zap.String("wallet_address", walletAddress),
+		zap.Bool("has_transactions", hasTransactions),
+	)
 	return res, err
 }
 
-func (fetcher AlchemyTransactionHistoryFetcher) alchemyRequest(ctx context.Context, walletAddress string, direction AssetTransferDirection) (res AlchemyResult, err error) {
+func (fetcher AlchemyTransactionHistoryFetcher) alchemyRequest(
+	ctx context.Context,
+	walletAddress string,
+	direction AssetTransferDirection,
+) (res AlchemyResult, err error) {
 	transferRequest := buildGetAssetTransfersRequest(walletAddress, direction)
 	requestPayload, err := json.Marshal(transferRequest)
 	if err != nil {
 		return res, err
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, fetcher.apiUrl, bytes.NewBuffer(requestPayload))
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		fetcher.apiUrl,
+		bytes.NewBuffer(requestPayload),
+	)
 	if err != nil {
 		return res, err
 	}
@@ -116,7 +138,9 @@ func (fetcher AlchemyTransactionHistoryFetcher) alchemyRequest(ctx context.Conte
 	if err != nil {
 		return res, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -143,7 +167,10 @@ func (r AlchemyTokenDataResult) HasTransactions() bool {
 	return r.hasTransactions
 }
 
-func buildGetAssetTransfersRequest(walletAddress string, direction AssetTransferDirection) GetAssetTransfersRequest {
+func buildGetAssetTransfersRequest(
+	walletAddress string,
+	direction AssetTransferDirection,
+) GetAssetTransfersRequest {
 	param := GetAssetTransferParam{
 		// Need to set an early FromBlock as the default behaviour is to search latest -> latest apparently
 		FromBlock: "0x1",

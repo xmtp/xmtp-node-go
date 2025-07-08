@@ -95,14 +95,26 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	promReg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	promReg.MustRegister(collectors.NewGoCollector())
 	if options.Metrics.Enable {
-		s.metricsServer, err = metrics.NewMetricsServer(s.ctx, options.Metrics.Address, options.Metrics.Port, s.log, promReg)
+		s.metricsServer, err = metrics.NewMetricsServer(
+			s.ctx,
+			options.Metrics.Address,
+			options.Metrics.Port,
+			s.log,
+			promReg,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "initializing metrics server")
 		}
 	}
 
 	if options.Authz.DbConnectionString != "" {
-		db, err := createBunDB(options.Authz.DbConnectionString, options.WaitForDB, options.Authz.ReadTimeout, options.Authz.WriteTimeout, options.Store.MaxOpenConns)
+		db, err := createBunDB(
+			options.Authz.DbConnectionString,
+			options.WaitForDB,
+			options.Authz.ReadTimeout,
+			options.Authz.WriteTimeout,
+			options.Store.MaxOpenConns,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating authz db")
 		}
@@ -114,18 +126,36 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Store.Enable {
-		s.db, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
+		s.db, err = createDB(
+			options.Store.DbConnectionString,
+			options.WaitForDB,
+			options.Store.ReadTimeout,
+			options.Store.WriteTimeout,
+			options.Store.MaxOpenConns,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating db")
 		}
 		s.log.Info("created db")
 
-		s.readerDB, err = createDB(options.Store.DbReaderConnectionString, options.WaitForDB, options.Store.ReadTimeout, options.Store.WriteTimeout, options.Store.MaxOpenConns)
+		s.readerDB, err = createDB(
+			options.Store.DbReaderConnectionString,
+			options.WaitForDB,
+			options.Store.ReadTimeout,
+			options.Store.WriteTimeout,
+			options.Store.MaxOpenConns,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating reader db")
 		}
 
-		s.cleanerDB, err = createDB(options.Store.DbConnectionString, options.WaitForDB, options.Store.Cleaner.ReadTimeout, options.Store.Cleaner.WriteTimeout, options.Store.MaxOpenConns)
+		s.cleanerDB, err = createDB(
+			options.Store.DbConnectionString,
+			options.WaitForDB,
+			options.Store.Cleaner.ReadTimeout,
+			options.Store.Cleaner.WriteTimeout,
+			options.Store.MaxOpenConns,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating cleaner db")
 		}
@@ -160,7 +190,10 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	libp2pOpts := node.DefaultLibP2POptions
-	libp2pOpts = append(libp2pOpts, libp2p.NATPortMap()) // Attempt to open ports using uPNP for NATed hosts.
+	libp2pOpts = append(
+		libp2pOpts,
+		libp2p.NATPortMap(),
+	) // Attempt to open ports using uPNP for NATed hosts.
 
 	wakuOpts = append(wakuOpts, node.WithLibP2POptions(libp2pOpts...))
 
@@ -184,8 +217,15 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 			}
 			directPeers = append(directPeers, *pi)
 		}
-		wakurelayopts = append(wakurelayopts, pubsub.WithPeerExchange(true), pubsub.WithDirectPeers(directPeers))
-		wakuOpts = append(wakuOpts, node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...))
+		wakurelayopts = append(
+			wakurelayopts,
+			pubsub.WithPeerExchange(true),
+			pubsub.WithDirectPeers(directPeers),
+		)
+		wakuOpts = append(
+			wakuOpts,
+			node.WithWakuRelayAndMinPeers(options.Relay.MinRelayPeersToPublish, wakurelayopts...),
+		)
 	}
 
 	s.wakuNode, err = node.New(wakuOpts...)
@@ -194,7 +234,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if options.Metrics.Enable {
-		tracing.GoPanicWrap(s.ctx, &s.wg, "status metrics", func(_ context.Context) { s.statusMetricsLoop(options) })
+		tracing.GoPanicWrap(
+			s.ctx,
+			&s.wg,
+			"status metrics",
+			func(_ context.Context) { s.statusMetricsLoop(options) },
+		)
 	}
 
 	err = s.wakuNode.Start(ctx)
@@ -221,7 +266,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	tracing.GoPanicWrap(s.ctx, &s.wg, "static-nodes-connect-loop", func(_ context.Context) { s.staticNodesConnectLoop(options.StaticNodes) })
+	tracing.GoPanicWrap(
+		s.ctx,
+		&s.wg,
+		"static-nodes-connect-loop",
+		func(_ context.Context) { s.staticNodesConnectLoop(options.StaticNodes) },
+	)
 
 	maddrs, err := s.wakuNode.Host().Network().InterfaceListenAddresses()
 	if err != nil {
@@ -246,7 +296,11 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 
 	var MLSValidator mlsvalidate.MLSValidationService
 	if options.MLSValidation.GRPCAddress != "" {
-		MLSValidator, err = mlsvalidate.NewMlsValidationService(ctx, options.MLSValidation, MLSStore)
+		MLSValidator, err = mlsvalidate.NewMlsValidationService(
+			ctx,
+			options.MLSValidation,
+			MLSStore,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating mls validation service")
 		}
@@ -291,19 +345,19 @@ func (s *Server) Shutdown() {
 
 	// Close the DBs and store.
 	if s.db != nil {
-		s.db.Close()
+		_ = s.db.Close()
 	}
 	if s.readerDB != nil {
-		s.readerDB.Close()
+		_ = s.readerDB.Close()
 	}
 	if s.cleanerDB != nil {
-		s.cleanerDB.Close()
+		_ = s.cleanerDB.Close()
 	}
 	if s.store != nil {
 		s.store.Close()
 	}
 	if s.mlsDB != nil {
-		s.mlsDB.Close()
+		_ = s.mlsDB.Close()
 	}
 
 	// Close metrics server.
@@ -322,7 +376,6 @@ func (s *Server) Shutdown() {
 	s.cancel()
 	s.wg.Wait()
 	s.log.Info("shutdown complete")
-
 }
 
 func (s *Server) staticNodesConnectLoop(staticNodes []string) {
@@ -460,7 +513,7 @@ func WritePrivateKeyToFile(path string, overwrite bool) error {
 		return err
 	}
 
-	return os.WriteFile(path, output, 0600)
+	return os.WriteFile(path, output, 0o600)
 }
 
 func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
@@ -495,7 +548,11 @@ func getPrivKey(options Options) (*ecdsa.PrivateKey, error) {
 	return prvKey, nil
 }
 
-func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+func CreateMessageMigration(
+	migrationName, dbConnectionString string,
+	waitForDb, readTimeout, writeTimeout time.Duration,
+	maxOpenConns int,
+) error {
 	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return err
@@ -509,7 +566,11 @@ func CreateMessageMigration(migrationName, dbConnectionString string, waitForDb,
 	return err
 }
 
-func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+func CreateAuthzMigration(
+	migrationName, dbConnectionString string,
+	waitForDb, readTimeout, writeTimeout time.Duration,
+	maxOpenConns int,
+) error {
 	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return err
@@ -523,7 +584,11 @@ func CreateAuthzMigration(migrationName, dbConnectionString string, waitForDb, r
 	return err
 }
 
-func CreateMlsMigration(migrationName, dbConnectionString string, waitForDb, readTimeout, writeTimeout time.Duration, maxOpenConns int) error {
+func CreateMlsMigration(
+	migrationName, dbConnectionString string,
+	waitForDb, readTimeout, writeTimeout time.Duration,
+	maxOpenConns int,
+) error {
 	db, err := createBunDB(dbConnectionString, waitForDb, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return err
@@ -537,7 +602,11 @@ func CreateMlsMigration(migrationName, dbConnectionString string, waitForDb, rea
 	return err
 }
 
-func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, maxOpenConns int) (*bun.DB, error) {
+func createBunDB(
+	dsn string,
+	waitForDB, readTimeout, writeTimeout time.Duration,
+	maxOpenConns int,
+) (*bun.DB, error) {
 	db, err := createDB(dsn, waitForDB, readTimeout, writeTimeout, maxOpenConns)
 	if err != nil {
 		return nil, err
@@ -545,7 +614,11 @@ func createBunDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration,
 	return bun.NewDB(db, pgdialect.New()), nil
 }
 
-func createDB(dsn string, waitForDB, readTimeout, writeTimeout time.Duration, maxOpenConns int) (*sql.DB, error) {
+func createDB(
+	dsn string,
+	waitForDB, readTimeout, writeTimeout time.Duration,
+	maxOpenConns int,
+) (*sql.DB, error) {
 	db := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithDSN(dsn),
 		pgdriver.WithReadTimeout(readTimeout),

@@ -7,13 +7,13 @@ import (
 )
 
 type CleanerOptions struct {
-	Enable        bool          `long:"enable" description:"Enable DB cleaner"`
-	ActivePeriod  time.Duration `long:"active-period" description:"Time between successive runs of the cleaner when the last run was a full batch" default:"5s"`
+	Enable        bool          `long:"enable"         description:"Enable DB cleaner"`
+	ActivePeriod  time.Duration `long:"active-period"  description:"Time between successive runs of the cleaner when the last run was a full batch"     default:"5s"`
 	PassivePeriod time.Duration `long:"passive-period" description:"Time between successive runs of the cleaner when the last run was not a full batch" default:"5m"`
-	RetentionDays int           `long:"retention-days" description:"Number of days in the past that messages must be before being deleted" default:"1"`
-	BatchSize     int           `long:"batch-size" description:"Batch size of messages to be deleted in one iteration" default:"50000"`
-	ReadTimeout   time.Duration `long:"read-timeout" description:"Timeout for reading from the database" default:"60s"`
-	WriteTimeout  time.Duration `long:"write-timeout" description:"Timeout for writing to the database" default:"60s"`
+	RetentionDays int           `long:"retention-days" description:"Number of days in the past that messages must be before being deleted"              default:"1"`
+	BatchSize     int           `long:"batch-size"     description:"Batch size of messages to be deleted in one iteration"                              default:"50000"`
+	ReadTimeout   time.Duration `long:"read-timeout"   description:"Timeout for reading from the database"                                              default:"60s"`
+	WriteTimeout  time.Duration `long:"write-timeout"  description:"Timeout for writing to the database"                                                default:"60s"`
 }
 
 func (s *Store) cleanerLoop() {
@@ -27,7 +27,11 @@ func (s *Store) cleanerLoop() {
 		default:
 			count, err := s.deleteNonXMTPMessagesBatch(log)
 			if err != nil {
-				log.Error("error deleting non-xmtp messages", zap.Error(err), zap.Duration("duration", time.Since(started)))
+				log.Error(
+					"error deleting non-xmtp messages",
+					zap.Error(err),
+					zap.Duration("duration", time.Since(started)),
+				)
 			}
 			if count >= int64(s.config.Cleaner.BatchSize-10) {
 				time.Sleep(s.config.Cleaner.ActivePeriod)
@@ -40,14 +44,22 @@ func (s *Store) cleanerLoop() {
 
 func (s *Store) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 	started := time.Now().UTC()
-	timestampThreshold := time.Now().UTC().Add(time.Duration(s.config.Cleaner.RetentionDays) * -1 * 24 * time.Hour).UnixNano()
+	timestampThreshold := time.Now().
+		UTC().
+		Add(time.Duration(s.config.Cleaner.RetentionDays) * -1 * 24 * time.Hour).
+		UnixNano()
 	whereClause := "receivertimestamp < $1 AND should_expire IS TRUE"
 
-	rows, err := s.config.CleanerDB.Query("SELECT COUNT(1) FROM message WHERE "+whereClause, timestampThreshold)
+	rows, err := s.config.CleanerDB.Query(
+		"SELECT COUNT(1) FROM message WHERE "+whereClause,
+		timestampThreshold,
+	)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	if !rows.Next() {
 		return 0, nil
 	}
@@ -82,7 +94,11 @@ func (s *Store) deleteNonXMTPMessagesBatch(log *zap.Logger) (int64, error) {
 		return 0, err
 	}
 
-	log.Info("non-xmtp messages cleaner", zap.Int64("deleted", count), zap.Duration("duration", time.Since(started)))
+	log.Info(
+		"non-xmtp messages cleaner",
+		zap.Int64("deleted", count),
+		zap.Duration("duration", time.Since(started)),
+	)
 
 	return count, nil
 }

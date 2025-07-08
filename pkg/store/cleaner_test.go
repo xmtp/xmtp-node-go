@@ -118,7 +118,12 @@ func TestStore_Cleaner(t *testing.T) {
 	}
 }
 
-func expectQueryMessagesEventually(t *testing.T, s *Store, query *messagev1.QueryRequest, expectedMsgs []*messagev1.Envelope) []*messagev1.Envelope {
+func expectQueryMessagesEventually(
+	t *testing.T,
+	s *Store,
+	query *messagev1.QueryRequest,
+	expectedMsgs []*messagev1.Envelope,
+) []*messagev1.Envelope {
 	t.Helper()
 	var msgs []*messagev1.Envelope
 	require.Eventually(t, func() bool {

@@ -33,22 +33,59 @@ type Store struct {
 }
 
 type IdentityStore interface {
-	PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error)
-	GetInboxLogs(ctx context.Context, req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error)
-	GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error)
+	PublishIdentityUpdate(
+		ctx context.Context,
+		req *identity.PublishIdentityUpdateRequest,
+		validationService mlsvalidate.MLSValidationService,
+	) (*identity.PublishIdentityUpdateResponse, error)
+	GetInboxLogs(
+		ctx context.Context,
+		req *identity.GetIdentityUpdatesRequest,
+	) (*identity.GetIdentityUpdatesResponse, error)
+	GetInboxIds(
+		ctx context.Context,
+		req *identity.GetInboxIdsRequest,
+	) (*identity.GetInboxIdsResponse, error)
 }
 
 type MlsStore interface {
 	IdentityStore
 
 	CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error
-	FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error)
-	InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error)
-	InsertWelcomeMessage(ctx context.Context, installationId []byte, data []byte, hpkePublicKey []byte, algorithm types.WrapperAlgorithm, welcomeMetadata []byte) (*queries.WelcomeMessage, error)
-	QueryGroupMessagesV1(ctx context.Context, query *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error)
-	QueryWelcomeMessagesV1(ctx context.Context, query *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error)
-	QueryCommitLog(ctx context.Context, query *mlsv1.QueryCommitLogRequest) (*mlsv1.QueryCommitLogResponse, error)
-	InsertCommitLog(ctx context.Context, groupId []byte, encrypted_entry []byte) (queries.CommitLog, error)
+	FetchKeyPackages(
+		ctx context.Context,
+		installationIds [][]byte,
+	) ([]queries.FetchKeyPackagesRow, error)
+	InsertGroupMessage(
+		ctx context.Context,
+		groupId []byte,
+		data []byte,
+	) (*queries.GroupMessage, error)
+	InsertWelcomeMessage(
+		ctx context.Context,
+		installationId []byte,
+		data []byte,
+		hpkePublicKey []byte,
+		algorithm types.WrapperAlgorithm,
+		welcomeMetadata []byte,
+	) (*queries.WelcomeMessage, error)
+	QueryGroupMessagesV1(
+		ctx context.Context,
+		query *mlsv1.QueryGroupMessagesRequest,
+	) (*mlsv1.QueryGroupMessagesResponse, error)
+	QueryWelcomeMessagesV1(
+		ctx context.Context,
+		query *mlsv1.QueryWelcomeMessagesRequest,
+	) (*mlsv1.QueryWelcomeMessagesResponse, error)
+	QueryCommitLog(
+		ctx context.Context,
+		query *mlsv1.QueryCommitLogRequest,
+	) (*mlsv1.QueryCommitLogResponse, error)
+	InsertCommitLog(
+		ctx context.Context,
+		groupId []byte,
+		encrypted_entry []byte,
+	) (queries.CommitLog, error)
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -71,8 +108,10 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsRequest) (*identity.GetInboxIdsResponse, error) {
-
+func (s *Store) GetInboxIds(
+	ctx context.Context,
+	req *identity.GetInboxIdsRequest,
+) (*identity.GetInboxIdsResponse, error) {
 	addresses := []string{}
 	for _, request := range req.Requests {
 		addresses = append(addresses, request.GetIdentifier())
@@ -103,7 +142,11 @@ func (s *Store) GetInboxIds(ctx context.Context, req *identity.GetInboxIdsReques
 	}, nil
 }
 
-func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.PublishIdentityUpdateRequest, validationService mlsvalidate.MLSValidationService) (*identity.PublishIdentityUpdateResponse, error) {
+func (s *Store) PublishIdentityUpdate(
+	ctx context.Context,
+	req *identity.PublishIdentityUpdateRequest,
+	validationService mlsvalidate.MLSValidationService,
+) (*identity.PublishIdentityUpdateResponse, error) {
 	newUpdate := req.GetIdentityUpdate()
 	if newUpdate == nil {
 		return nil, errors.New("IdentityUpdate is required")
@@ -200,7 +243,10 @@ func (s *Store) PublishIdentityUpdate(ctx context.Context, req *identity.Publish
 	return &identity.PublishIdentityUpdateResponse{}, nil
 }
 
-func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdentityUpdatesRequest) (*identity.GetIdentityUpdatesResponse, error) {
+func (s *Store) GetInboxLogs(
+	ctx context.Context,
+	batched_req *identity.GetIdentityUpdatesRequest,
+) (*identity.GetIdentityUpdatesResponse, error) {
 	reqs := batched_req.GetRequests()
 
 	filters := make(queries.InboxLogFilterList, len(reqs))
@@ -254,7 +300,11 @@ func (s *Store) GetInboxLogs(ctx context.Context, batched_req *identity.GetIdent
 }
 
 // Creates the installation and last resort key package
-func (s *Store) CreateOrUpdateInstallation(ctx context.Context, installationId []byte, keyPackage []byte) error {
+func (s *Store) CreateOrUpdateInstallation(
+	ctx context.Context,
+	installationId []byte,
+	keyPackage []byte,
+) error {
 	now := nowNs()
 
 	return s.queries.CreateOrUpdateInstallation(ctx, queries.CreateOrUpdateInstallationParams{
@@ -265,18 +315,24 @@ func (s *Store) CreateOrUpdateInstallation(ctx context.Context, installationId [
 	})
 }
 
-func (s *Store) FetchKeyPackages(ctx context.Context, installationIds [][]byte) ([]queries.FetchKeyPackagesRow, error) {
+func (s *Store) FetchKeyPackages(
+	ctx context.Context,
+	installationIds [][]byte,
+) ([]queries.FetchKeyPackagesRow, error) {
 	return s.queries.FetchKeyPackages(ctx, installationIds)
 }
 
-func (s *Store) InsertGroupMessage(ctx context.Context, groupId []byte, data []byte) (*queries.GroupMessage, error) {
+func (s *Store) InsertGroupMessage(
+	ctx context.Context,
+	groupId []byte,
+	data []byte,
+) (*queries.GroupMessage, error) {
 	dataHash := sha256.Sum256(append(groupId, data...))
 	message, err := s.queries.InsertGroupMessage(ctx, queries.InsertGroupMessageParams{
 		GroupID:         groupId,
 		Data:            data,
 		GroupIDDataHash: dataHash[:],
 	})
-
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
@@ -295,7 +351,6 @@ func (s *Store) InsertWelcomeMessage(
 	wrapperAlgorithm types.WrapperAlgorithm,
 	welcomeMetadata []byte,
 ) (*queries.WelcomeMessage, error) {
-
 	dataHash := sha256.Sum256(append(installationId, data...))
 	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
 		InstallationKey:         installationId,
@@ -315,7 +370,10 @@ func (s *Store) InsertWelcomeMessage(
 	return &message, nil
 }
 
-func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupMessagesRequest) (*mlsv1.QueryGroupMessagesResponse, error) {
+func (s *Store) QueryGroupMessagesV1(
+	ctx context.Context,
+	req *mlsv1.QueryGroupMessagesRequest,
+) (*mlsv1.QueryGroupMessagesResponse, error) {
 	if len(req.GroupId) == 0 {
 		return nil, errors.New("group is required")
 	}
@@ -326,7 +384,8 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 	var messages []queries.GroupMessage
 	pageSize := int32(maxPageSize)
 
-	if req.PagingInfo != nil && req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+	if req.PagingInfo != nil &&
+		req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
 		sortDesc = false
 	}
 
@@ -340,11 +399,14 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 
 	if idCursor > 0 {
 		if sortDesc {
-			messages, err = s.queries.QueryGroupMessagesWithCursorDesc(ctx, queries.QueryGroupMessagesWithCursorDescParams{
-				GroupID: req.GroupId,
-				Cursor:  idCursor,
-				Numrows: pageSize,
-			})
+			messages, err = s.queries.QueryGroupMessagesWithCursorDesc(
+				ctx,
+				queries.QueryGroupMessagesWithCursorDescParams{
+					GroupID: req.GroupId,
+					Cursor:  idCursor,
+					Numrows: pageSize,
+				},
+			)
 		} else {
 			messages, err = s.queries.QueryGroupMessagesWithCursorAsc(ctx, queries.QueryGroupMessagesWithCursorAscParams{
 				GroupID: req.GroupId,
@@ -395,7 +457,10 @@ func (s *Store) QueryGroupMessagesV1(ctx context.Context, req *mlsv1.QueryGroupM
 	}, nil
 }
 
-func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelcomeMessagesRequest) (*mlsv1.QueryWelcomeMessagesResponse, error) {
+func (s *Store) QueryWelcomeMessagesV1(
+	ctx context.Context,
+	req *mlsv1.QueryWelcomeMessagesRequest,
+) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	if len(req.InstallationKey) == 0 {
 		return nil, errors.New("installation is required")
 	}
@@ -407,7 +472,8 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 	var err error
 	var messages []queries.WelcomeMessage
 
-	if req.PagingInfo != nil && req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
+	if req.PagingInfo != nil &&
+		req.PagingInfo.Direction == mlsv1.SortDirection_SORT_DIRECTION_ASCENDING {
 		sortDesc = false
 		direction = mlsv1.SortDirection_SORT_DIRECTION_ASCENDING
 	}
@@ -422,11 +488,14 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 
 	if idCursor > 0 {
 		if sortDesc {
-			messages, err = s.queries.QueryWelcomeMessagesWithCursorDesc(ctx, queries.QueryWelcomeMessagesWithCursorDescParams{
-				InstallationKey: req.InstallationKey,
-				Cursor:          idCursor,
-				Numrows:         pageSize,
-			})
+			messages, err = s.queries.QueryWelcomeMessagesWithCursorDesc(
+				ctx,
+				queries.QueryWelcomeMessagesWithCursorDescParams{
+					InstallationKey: req.InstallationKey,
+					Cursor:          idCursor,
+					Numrows:         pageSize,
+				},
+			)
 		} else {
 			messages, err = s.queries.QueryWelcomeMessagesWithCursorAsc(ctx, queries.QueryWelcomeMessagesWithCursorAscParams{
 				InstallationKey: req.InstallationKey,
@@ -451,13 +520,15 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 		out[idx] = &mlsv1.WelcomeMessage{
 			Version: &mlsv1.WelcomeMessage_V1_{
 				V1: &mlsv1.WelcomeMessage_V1{
-					Id:               uint64(msg.ID),
-					CreatedNs:        uint64(msg.CreatedAt.UnixNano()),
-					Data:             msg.Data,
-					InstallationKey:  msg.InstallationKey,
-					HpkePublicKey:    msg.HpkePublicKey,
-					WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(msg.WrapperAlgorithm)),
-					WelcomeMetadata:  msg.WelcomeMetadata,
+					Id:              uint64(msg.ID),
+					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+					Data:            msg.Data,
+					InstallationKey: msg.InstallationKey,
+					HpkePublicKey:   msg.HpkePublicKey,
+					WrapperAlgorithm: types.WrapperAlgorithmToProto(
+						types.WrapperAlgorithm(msg.WrapperAlgorithm),
+					),
+					WelcomeMetadata: msg.WelcomeMetadata,
 				},
 			},
 		}
@@ -475,7 +546,10 @@ func (s *Store) QueryWelcomeMessagesV1(ctx context.Context, req *mlsv1.QueryWelc
 	}, nil
 }
 
-func (s *Store) QueryCommitLog(ctx context.Context, req *mlsv1.QueryCommitLogRequest) (*mlsv1.QueryCommitLogResponse, error) {
+func (s *Store) QueryCommitLog(
+	ctx context.Context,
+	req *mlsv1.QueryCommitLogRequest,
+) (*mlsv1.QueryCommitLogResponse, error) {
 	if len(req.GetGroupId()) == 0 {
 		return nil, errors.New("group is required")
 	}
@@ -505,7 +579,11 @@ func (s *Store) QueryCommitLog(ctx context.Context, req *mlsv1.QueryCommitLogReq
 		}
 	}
 
-	pagingInfo := &mlsv1.PagingInfo{Limit: uint32(pageSize), IdCursor: 0, Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING}
+	pagingInfo := &mlsv1.PagingInfo{
+		Limit:     uint32(pageSize),
+		IdCursor:  0,
+		Direction: mlsv1.SortDirection_SORT_DIRECTION_ASCENDING,
+	}
 	// It is strange behavior, but we must follow the semantics of other queries in v3 - only setting the IdCursor
 	// to a non-zero value if we have a full page of results
 	if len(entries) >= int(pageSize) {
@@ -520,7 +598,11 @@ func (s *Store) QueryCommitLog(ctx context.Context, req *mlsv1.QueryCommitLogReq
 	}, nil
 }
 
-func (s *Store) InsertCommitLog(ctx context.Context, groupId []byte, encrypted_entry []byte) (queries.CommitLog, error) {
+func (s *Store) InsertCommitLog(
+	ctx context.Context,
+	groupId []byte,
+	encrypted_entry []byte,
+) (queries.CommitLog, error) {
 	return s.queries.InsertCommitLog(ctx, queries.InsertCommitLogParams{
 		GroupID:        groupId,
 		EncryptedEntry: encrypted_entry,
@@ -597,7 +679,9 @@ func IsAlreadyExistsError(err error) bool {
 }
 
 func (s *Store) RunInTx(
-	ctx context.Context, opts *sql.TxOptions, fn func(ctx context.Context, txQueries *queries.Queries) error,
+	ctx context.Context,
+	opts *sql.TxOptions,
+	fn func(ctx context.Context, txQueries *queries.Queries) error,
 ) error {
 	tx, err := s.db.DB.BeginTx(ctx, opts)
 	if err != nil {
@@ -620,7 +704,11 @@ func (s *Store) RunInTx(
 	return tx.Commit()
 }
 
-func (s *Store) RunInRepeatableReadTx(ctx context.Context, numRetries int, fn func(ctx context.Context, txQueries *queries.Queries) error) error {
+func (s *Store) RunInRepeatableReadTx(
+	ctx context.Context,
+	numRetries int,
+	fn func(ctx context.Context, txQueries *queries.Queries) error,
+) error {
 	var err error
 	for i := 0; i < numRetries; i++ {
 		select {

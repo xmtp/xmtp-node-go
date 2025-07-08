@@ -30,7 +30,12 @@ const (
 	appVersionHeaderKey    = "x-app-version"
 )
 
-func NewHTTPClient(log *zap.Logger, serverAddr string, gitCommit string, appVersion string) *httpClient {
+func NewHTTPClient(
+	log *zap.Logger,
+	serverAddr string,
+	gitCommit string,
+	appVersion string,
+) *httpClient {
 	version := "xmtp-go/"
 	if len(gitCommit) > 0 {
 		version += gitCommit[:7]
@@ -52,7 +57,10 @@ func (c *httpClient) Close() error {
 	return nil
 }
 
-func (c *httpClient) Publish(ctx context.Context, req *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
+func (c *httpClient) Publish(
+	ctx context.Context,
+	req *messagev1.PublishRequest,
+) (*messagev1.PublishResponse, error) {
 	res, err := c.rawPublish(ctx, req)
 	if err != nil {
 		return nil, err
@@ -60,7 +68,10 @@ func (c *httpClient) Publish(ctx context.Context, req *messagev1.PublishRequest)
 	return res, nil
 }
 
-func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequest) (Stream, error) {
+func (c *httpClient) Subscribe(
+	ctx context.Context,
+	req *messagev1.SubscribeRequest,
+) (Stream, error) {
 	stream, err := newHTTPStream(c.log, func() (*http.Response, error) {
 		return c.post(ctx, "/message/v1/subscribe", req)
 	})
@@ -70,7 +81,10 @@ func (c *httpClient) Subscribe(ctx context.Context, req *messagev1.SubscribeRequ
 	return stream, nil
 }
 
-func (c *httpClient) Subscribe2(ctx context.Context, req *messagev1.SubscribeRequest) (Subscribe2Stream, error) {
+func (c *httpClient) Subscribe2(
+	ctx context.Context,
+	req *messagev1.SubscribeRequest,
+) (Subscribe2Stream, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -85,7 +99,10 @@ func (c *httpClient) SubscribeAll(ctx context.Context) (Stream, error) {
 	return stream, nil
 }
 
-func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+func (c *httpClient) Query(
+	ctx context.Context,
+	req *messagev1.QueryRequest,
+) (*messagev1.QueryResponse, error) {
 	res, err := c.rawQuery(ctx, req)
 	if err != nil {
 		return nil, err
@@ -93,7 +110,10 @@ func (c *httpClient) Query(ctx context.Context, req *messagev1.QueryRequest) (*m
 	return res, nil
 }
 
-func (c *httpClient) BatchQuery(ctx context.Context, req *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+func (c *httpClient) BatchQuery(
+	ctx context.Context,
+	req *messagev1.BatchQueryRequest,
+) (*messagev1.BatchQueryResponse, error) {
 	res, err := c.rawBatchQuery(ctx, req)
 	if err != nil {
 		return nil, err
@@ -101,13 +121,18 @@ func (c *httpClient) BatchQuery(ctx context.Context, req *messagev1.BatchQueryRe
 	return res, nil
 }
 
-func (c *httpClient) rawPublish(ctx context.Context, req *messagev1.PublishRequest) (*messagev1.PublishResponse, error) {
+func (c *httpClient) rawPublish(
+	ctx context.Context,
+	req *messagev1.PublishRequest,
+) (*messagev1.PublishResponse, error) {
 	var res messagev1.PublishResponse
 	resp, err := c.post(ctx, "/message/v1/publish", req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -122,13 +147,18 @@ func (c *httpClient) rawPublish(ctx context.Context, req *messagev1.PublishReque
 	return &res, nil
 }
 
-func (c *httpClient) rawQuery(ctx context.Context, req *messagev1.QueryRequest) (*messagev1.QueryResponse, error) {
+func (c *httpClient) rawQuery(
+	ctx context.Context,
+	req *messagev1.QueryRequest,
+) (*messagev1.QueryResponse, error) {
 	var res messagev1.QueryResponse
 	resp, err := c.post(ctx, "/message/v1/query", req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -143,13 +173,18 @@ func (c *httpClient) rawQuery(ctx context.Context, req *messagev1.QueryRequest) 
 	return &res, nil
 }
 
-func (c *httpClient) rawBatchQuery(ctx context.Context, req *messagev1.BatchQueryRequest) (*messagev1.BatchQueryResponse, error) {
+func (c *httpClient) rawBatchQuery(
+	ctx context.Context,
+	req *messagev1.BatchQueryRequest,
+) (*messagev1.BatchQueryResponse, error) {
 	var res messagev1.BatchQueryResponse
 	resp, err := c.post(ctx, "/message/v1/batch-query", req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -164,7 +199,11 @@ func (c *httpClient) rawBatchQuery(ctx context.Context, req *messagev1.BatchQuer
 	return &res, nil
 }
 
-func (c *httpClient) post(ctx context.Context, path string, req interface{}) (*http.Response, error) {
+func (c *httpClient) post(
+	ctx context.Context,
+	path string,
+	req interface{},
+) (*http.Response, error) {
 	var reqJSON []byte
 	var err error
 	switch req := req.(type) {

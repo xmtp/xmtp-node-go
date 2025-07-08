@@ -5,13 +5,12 @@ import (
 
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
-	api "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
-	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
+	identityV1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	api.UnimplementedIdentityApiServer
+	identityV1.UnimplementedIdentityApiServer
 
 	log               *zap.Logger
 	store             mlsstore.MlsStore
@@ -21,7 +20,11 @@ type Service struct {
 	ctxCancel func()
 }
 
-func NewService(log *zap.Logger, store mlsstore.MlsStore, validationService mlsvalidate.MLSValidationService) (s *Service, err error) {
+func NewService(
+	log *zap.Logger,
+	store mlsstore.MlsStore,
+	validationService mlsvalidate.MLSValidationService,
+) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
 		store:             store,
@@ -76,11 +79,17 @@ Start transaction (SERIALIZABLE isolation level)
 
 End transaction
 */
-func (s *Service) PublishIdentityUpdate(ctx context.Context, req *api.PublishIdentityUpdateRequest) (*api.PublishIdentityUpdateResponse, error) {
+func (s *Service) PublishIdentityUpdate(
+	ctx context.Context,
+	req *identityV1.PublishIdentityUpdateRequest,
+) (*identityV1.PublishIdentityUpdateResponse, error) {
 	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
 }
 
-func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUpdatesRequest) (*api.GetIdentityUpdatesResponse, error) {
+func (s *Service) GetIdentityUpdates(
+	ctx context.Context,
+	req *identityV1.GetIdentityUpdatesRequest,
+) (*identityV1.GetIdentityUpdatesResponse, error) {
 	/*
 		Algorithm for each request:
 		1. Query the inbox_log table for the inbox_id, ordering by sequence_id
@@ -89,7 +98,10 @@ func (s *Service) GetIdentityUpdates(ctx context.Context, req *api.GetIdentityUp
 	return s.store.GetInboxLogs(ctx, req)
 }
 
-func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) (*api.GetInboxIdsResponse, error) {
+func (s *Service) GetInboxIds(
+	ctx context.Context,
+	req *identityV1.GetInboxIdsRequest,
+) (*identityV1.GetInboxIdsResponse, error) {
 	/*
 		Algorithm for each request:
 		1. Query the address_log table for the largest association_sequence_id
@@ -99,6 +111,9 @@ func (s *Service) GetInboxIds(ctx context.Context, req *api.GetInboxIdsRequest) 
 	return s.store.GetInboxIds(ctx, req)
 }
 
-func (s *Service) VerifySmartContractWalletSignatures(ctx context.Context, req *identity.VerifySmartContractWalletSignaturesRequest) (*identity.VerifySmartContractWalletSignaturesResponse, error) {
+func (s *Service) VerifySmartContractWalletSignatures(
+	ctx context.Context,
+	req *identityV1.VerifySmartContractWalletSignaturesRequest,
+) (*identityV1.VerifySmartContractWalletSignaturesResponse, error) {
 	return s.validationService.VerifySmartContractWalletSignatures(ctx, req)
 }

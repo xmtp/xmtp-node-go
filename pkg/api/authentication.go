@@ -29,7 +29,12 @@ var (
 	ErrMissingIdentityKey       = errors.New("missing identity key")
 )
 
-func validateToken(ctx context.Context, log *zap.Logger, token *messagev1.Token, now time.Time) (wallet types.WalletAddr, err error) {
+func validateToken(
+	ctx context.Context,
+	log *zap.Logger,
+	token *messagev1.Token,
+	now time.Time,
+) (wallet types.WalletAddr, err error) {
 	// Validate IdentityKey signature.
 	pubKey := token.IdentityKey
 	recoveredWalletAddress, err := recoverWalletAddress(ctx, pubKey)
@@ -74,7 +79,10 @@ func createIdentitySignRequest(identityKey *envelope.PublicKey) crypto.Message {
 	))
 }
 
-func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) (wallet types.WalletAddr, err error) {
+func recoverWalletAddress(
+	ctx context.Context,
+	identityKey *envelope.PublicKey,
+) (wallet types.WalletAddr, err error) {
 	if identityKey == nil {
 		return wallet, ErrMissingIdentityKey
 	}
@@ -104,7 +112,12 @@ func recoverWalletAddress(ctx context.Context, identityKey *envelope.PublicKey) 
 	}
 }
 
-func verifyAuthSignature(ctx context.Context, pubKey *envelope.PublicKey, authDataBytes []byte, authSig *envelope.Signature) (data *messagev1.AuthData, err error) {
+func verifyAuthSignature(
+	ctx context.Context,
+	pubKey *envelope.PublicKey,
+	authDataBytes []byte,
+	authSig *envelope.Signature,
+) (data *messagev1.AuthData, err error) {
 	if authDataBytes == nil {
 		return nil, ErrMissingAuthData
 	}

@@ -45,7 +45,11 @@ func main() {
 		fatal("Could not build logger: %s", err)
 	}
 
-	dbInstance, err := server.NewPGXDB(options.MLSStore.DbConnectionString, 30*time.Second, options.MLSStore.ReadTimeout)
+	dbInstance, err := server.NewPGXDB(
+		options.MLSStore.DbConnectionString,
+		30*time.Second,
+		options.MLSStore.ReadTimeout,
+	)
 	if err != nil {
 		fatal("Could not open db: %s", err)
 	}

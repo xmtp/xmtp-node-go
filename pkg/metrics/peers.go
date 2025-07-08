@@ -41,7 +41,11 @@ func EmitPeersByProtocol(ctx context.Context, host host.Host) {
 	}
 }
 
-func EmitBootstrapPeersConnected(ctx context.Context, host host.Host, bootstrapPeers map[peer.ID]bool) {
+func EmitBootstrapPeersConnected(
+	ctx context.Context,
+	host host.Host,
+	bootstrapPeers map[peer.ID]bool,
+) {
 	var bootstrapPeersFound int
 	for _, peer := range host.Network().Peers() {
 		if bootstrapPeers[peer] {

@@ -26,7 +26,9 @@ func Test_HTTPNotFound(t *testing.T) {
 	client := http.Client{Timeout: time.Second * 2}
 	resp, err := client.Post(server.httpListenAddr()+"/not-found", "application/json", nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	err = json.Unmarshal(body, &rootRes)
@@ -48,7 +50,9 @@ func Test_HTTPRootPath(t *testing.T) {
 	client := http.Client{Timeout: time.Second * 2}
 	resp, err := client.Post(server.httpListenAddr(), "", nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NotEmpty(t, body)
@@ -63,7 +67,11 @@ func Test_QueryNoTopics(t *testing.T) {
 		grpcErr, ok := status.FromError(err)
 		if ok {
 			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
-			require.EqualError(t, err, `rpc error: code = InvalidArgument desc = content topics required`)
+			require.EqualError(
+				t,
+				err,
+				`rpc error: code = InvalidArgument desc = content topics required`,
+			)
 		} else {
 			require.Regexp(t, `400 Bad Request: {"code\":3,\s?"message":"content topics required",\s?"details":\[\]}`, err.Error())
 		}
@@ -83,7 +91,11 @@ func Test_QueryTooManyRows(t *testing.T) {
 		grpcErr, ok := status.FromError(err)
 		if ok {
 			require.Equal(t, codes.InvalidArgument, grpcErr.Code())
-			require.EqualError(t, err, `rpc error: code = InvalidArgument desc = cannot exceed 100 rows per query`)
+			require.EqualError(
+				t,
+				err,
+				`rpc error: code = InvalidArgument desc = cannot exceed 100 rows per query`,
+			)
 		} else {
 			require.Regexp(t, `400 Bad Request: {"code\":3,\s?"message":"cannot exceed 100 rows per query",\s?"details":\[\]}`, err.Error())
 		}
@@ -110,7 +122,9 @@ func Test_Subscribe_ContextTimeout(t *testing.T) {
 			ContentTopics: []string{"topic"},
 		})
 		require.NoError(t, err)
-		defer stream.Close()
+		defer func() {
+			_ = stream.Close()
+		}()
 		time.Sleep(100 * time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
@@ -127,7 +141,9 @@ func Test_Subscribe_ContextCancel(t *testing.T) {
 			ContentTopics: []string{"topic"},
 		})
 		require.NoError(t, err)
-		defer stream.Close()
+		defer func() {
+			_ = stream.Close()
+		}()
 		time.Sleep(100 * time.Millisecond)
 
 		ctx, cancel := context.WithCancel(ctx)

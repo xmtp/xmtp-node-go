@@ -53,7 +53,12 @@ func (ti *TelemetryInterceptor) Stream() grpc.StreamServerInterceptor {
 	}
 }
 
-func (ti *TelemetryInterceptor) record(ctx context.Context, fullMethod string, duration time.Duration, err error) {
+func (ti *TelemetryInterceptor) record(
+	ctx context.Context,
+	fullMethod string,
+	duration time.Duration,
+	err error,
+) {
 	serviceName, methodName := splitMethodName(fullMethod)
 	ri := apicontext.NewRequesterInfo(ctx)
 	fields := append(
