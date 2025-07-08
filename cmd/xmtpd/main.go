@@ -53,6 +53,11 @@ func main() {
 		return
 	}
 
+	err := server.ValidateOptions(&options)
+	if err != nil {
+		fatal("Invalid options: %s", err)
+	}
+
 	logger, logCfg, err := server.BuildLogger(options.Log, "xmtpd")
 	if err != nil {
 		fatal("Could not build logger: %s", err)
