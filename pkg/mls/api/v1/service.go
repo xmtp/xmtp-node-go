@@ -359,6 +359,7 @@ func (s *Service) SendWelcomeMessages(
 						if mlsstore.IsAlreadyExistsError(err) {
 							return nil
 						}
+						log.Error("error inserting welcome message", zap.Error(err))
 						return status.Errorf(codes.Internal, "failed to insert message: %s", err)
 					}
 
@@ -376,6 +377,7 @@ func (s *Service) SendWelcomeMessages(
 						},
 					})
 					if err != nil {
+						log.Error("error publishing welcome to waku relay", zap.Error(err))
 						return err
 					}
 
