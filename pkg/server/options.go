@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/api"
@@ -57,10 +58,8 @@ type PruneOptions struct {
 }
 
 type LogOptions struct {
-	LogLevel string `short:"l" long:"log-level"    description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
-	// StaticCheck doesn't like duplicate params, but this is the only way to implement choice params
-	//nolint:staticcheck
-	LogEncoding string `          long:"log-encoding" description:"Log encoding format. Either console or json"                                                                                  default:"console" choice:"console"`
+	LogLevel    string `short:"l" long:"log-level"    description:"Define the logging level, supported strings are: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL, and their lower-case forms." default:"INFO"`
+	LogEncoding string `          long:"log-encoding" description:"Log encoding format. Either console or json"                                                                                  default:"console"`
 }
 
 // Options contains all the available features and settings that can be
@@ -96,4 +95,12 @@ type Options struct {
 	Profiling     ProfilingOptions                 `group:"DD APM Profiling Options" namespace:"profiling"`
 	MLSStore      mlsstore.StoreOptions            `group:"MLS Options"              namespace:"mls-store"`
 	MLSValidation mlsvalidate.MLSValidationOptions `group:"MLS Validation Options"   namespace:"mls-validation"`
+}
+
+func ValidateOptions(options *Options) error {
+	if options.Log.LogEncoding != "json" && options.Log.LogEncoding != "console" {
+		return fmt.Errorf("invalid log encoding: %s", options.Log.LogEncoding)
+	}
+
+	return nil
 }
