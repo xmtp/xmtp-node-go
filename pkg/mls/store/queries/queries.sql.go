@@ -42,17 +42,21 @@ func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUp
 
 const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM welcome_messages
-    WHERE created_at < NOW() - make_interval(days := $1)
-    ORDER BY id
-    LIMIT 1000
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM welcome_messages wm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		welcome_messages
+	WHERE
+		created_at < NOW() - make_interval(days := $1)
+	ORDER BY
+		id
+	LIMIT 1000
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM welcome_messages wm USING to_delete td
 WHERE wm.id = td.id
-    RETURNING wm.id, wm.created_at
+RETURNING
+	wm.id, wm.created_at
 `
 
 type DeleteOldWelcomeMessagesBatchRow struct {
@@ -173,7 +177,7 @@ func (q *Queries) GetAddressLogs(ctx context.Context, addresses []string) ([]Get
 
 const getAllGroupMessages = `-- name: GetAllGroupMessages :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 ORDER BY
@@ -195,6 +199,8 @@ func (q *Queries) GetAllGroupMessages(ctx context.Context) ([]GroupMessage, erro
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -371,9 +377,12 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 }
 
 const getOldWelcomeMessages = `-- name: GetOldWelcomeMessages :one
-SELECT COUNT(*)::bigint as old_message_count
-FROM welcome_messages
-WHERE created_at < NOW() - make_interval(days := $1)
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	welcome_messages
+WHERE
+	created_at < NOW() - make_interval(days := $1)
 `
 
 func (q *Queries) GetOldWelcomeMessages(ctx context.Context, ageDays int32) (int64, error) {
@@ -440,19 +449,27 @@ func (q *Queries) InsertCommitLog(ctx context.Context, arg InsertCommitLogParams
 
 const insertGroupMessage = `-- name: InsertGroupMessage :one
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
-	insert_group_message($1, $2, $3)
+	insert_group_message_v2($1, $2, $3, $4, $5)
 `
 
 type InsertGroupMessageParams struct {
 	GroupID         []byte
 	Data            []byte
 	GroupIDDataHash []byte
+	SenderHmac      []byte
+	ShouldPush      bool
 }
 
 func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessageParams) (GroupMessage, error) {
-	row := q.db.QueryRowContext(ctx, insertGroupMessage, arg.GroupID, arg.Data, arg.GroupIDDataHash)
+	row := q.db.QueryRowContext(ctx, insertGroupMessage,
+		arg.GroupID,
+		arg.Data,
+		arg.GroupIDDataHash,
+		arg.SenderHmac,
+		arg.ShouldPush,
+	)
 	var i GroupMessage
 	err := row.Scan(
 		&i.ID,
@@ -460,6 +477,8 @@ func (q *Queries) InsertGroupMessage(ctx context.Context, arg InsertGroupMessage
 		&i.GroupID,
 		&i.Data,
 		&i.GroupIDDataHash,
+		&i.SenderHmac,
+		&i.ShouldPush,
 	)
 	return i, err
 }
@@ -582,7 +601,7 @@ func (q *Queries) QueryCommitLog(ctx context.Context, arg QueryCommitLogParams) 
 
 const queryGroupMessages = `-- name: QueryGroupMessages :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -618,6 +637,8 @@ func (q *Queries) QueryGroupMessages(ctx context.Context, arg QueryGroupMessages
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -634,7 +655,7 @@ func (q *Queries) QueryGroupMessages(ctx context.Context, arg QueryGroupMessages
 
 const queryGroupMessagesWithCursorAsc = `-- name: QueryGroupMessagesWithCursorAsc :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -666,6 +687,8 @@ func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg Query
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}
@@ -682,7 +705,7 @@ func (q *Queries) QueryGroupMessagesWithCursorAsc(ctx context.Context, arg Query
 
 const queryGroupMessagesWithCursorDesc = `-- name: QueryGroupMessagesWithCursorDesc :many
 SELECT
-	id, created_at, group_id, data, group_id_data_hash
+	id, created_at, group_id, data, group_id_data_hash, sender_hmac, should_push
 FROM
 	group_messages
 WHERE
@@ -714,6 +737,8 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 			&i.GroupID,
 			&i.Data,
 			&i.GroupIDDataHash,
+			&i.SenderHmac,
+			&i.ShouldPush,
 		); err != nil {
 			return nil, err
 		}

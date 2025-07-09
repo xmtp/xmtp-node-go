@@ -60,6 +60,8 @@ type MlsStore interface {
 		ctx context.Context,
 		groupId []byte,
 		data []byte,
+		senderHmac []byte,
+		shouldPush bool,
 	) (*queries.GroupMessage, error)
 	InsertWelcomeMessage(
 		ctx context.Context,
@@ -326,12 +328,16 @@ func (s *Store) InsertGroupMessage(
 	ctx context.Context,
 	groupId []byte,
 	data []byte,
+	senderHmac []byte,
+	shouldPush bool,
 ) (*queries.GroupMessage, error) {
 	dataHash := sha256.Sum256(append(groupId, data...))
 	message, err := s.queries.InsertGroupMessage(ctx, queries.InsertGroupMessageParams{
 		GroupID:         groupId,
 		Data:            data,
 		GroupIDDataHash: dataHash[:],
+		SenderHmac:      senderHmac,
+		ShouldPush:      shouldPush,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
@@ -431,10 +437,12 @@ func (s *Store) QueryGroupMessagesV1(
 		out[idx] = &mlsv1.GroupMessage{
 			Version: &mlsv1.GroupMessage_V1_{
 				V1: &mlsv1.GroupMessage_V1{
-					Id:        uint64(msg.ID),
-					CreatedNs: uint64(msg.CreatedAt.UnixNano()),
-					GroupId:   msg.GroupID,
-					Data:      msg.Data,
+					Id:         uint64(msg.ID),
+					CreatedNs:  uint64(msg.CreatedAt.UnixNano()),
+					GroupId:    msg.GroupID,
+					Data:       msg.Data,
+					ShouldPush: msg.ShouldPush.Bool,
+					SenderHmac: msg.SenderHmac,
 				},
 			},
 		}
