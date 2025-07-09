@@ -32,7 +32,7 @@ type Options struct {
 
 type Config struct {
 	Options
-	AllowLister  authz.WalletAllowLister
+	AllowLister  authz.AllowList
 	Waku         *wakunode.WakuNode
 	Log          *zap.Logger
 	Store        *store.Store
@@ -43,15 +43,8 @@ type Config struct {
 
 // AuthnOptions bundle command line options associated with the authn package.
 type AuthnOptions struct {
-	/*
-		Enable is the master switch for the authentication module.
-		If it is false then the other options in this group are ignored.
-
-		The module enforces authentication for requests that require it (currently Publish only).
-		Authenticated requests will be permitted according to the rules of the request type,
-		(i.e. you can't publish into other wallets' contact and private topics).
-	*/
-	Enable bool `long:"enable"             description:"require client authentication via wallet tokens"`
+	// DEPRECATED: This option is no longer used and will be removed in a future release
+	Enable bool `long:"enable"     description:"require client authentication via wallet tokens"`
 	/*
 		Ratelimits enables request rate limiting.
 
@@ -61,27 +54,21 @@ type AuthnOptions struct {
 		Requests cost 1 token by default, except Publish requests cost the number of Envelopes carried
 		and BatchQuery requests cost the number of queries carried.
 		The limits depend on request type, e.g. Publish requests get lower limits than other types of request.
-		If Allowlists is also true then requests with Bearer tokens from wallets explicitly Allowed get priority,
-		i.e. a predefined multiple the configured limit.
-		Priority wallets get separate IP buckets from regular wallets.
 	*/
-	Ratelimits bool `long:"ratelimits"         description:"apply rate limits per client IP address"`
+	Ratelimits bool `long:"ratelimits" description:"apply rate limits per client IP address"`
 	/*
-		Allowlists enables wallet allow lists.
+		Allowlists enables IP allow lists.
 
-		All requests that require authentication (currently Publish only) will be rejected
-		for wallets that are set as Denied in the allow list.
 		Wallets that are explicitly Allowed will get priority rate limits if Ratelimits is true.
 	*/
-	AllowLists          bool     `long:"allowlists"         description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
-	PrivilegedAddresses []string `long:"privileged-address" description:"allow this address to publish into other user's topics"`
+	AllowLists bool `long:"allowlists" description:"apply higher limits for allow listed wallets (requires authz and ratelimits)"`
 }
 
 // Config bundles Options and other parameters needed to set up an authorizer.
 type AuthnConfig struct {
 	AuthnOptions
 	Limiter     ratelimiter.RateLimiter
-	AllowLister authz.WalletAllowLister
+	AllowLister authz.AllowList
 	Log         *zap.Logger
 }
 

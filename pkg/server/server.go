@@ -57,7 +57,7 @@ type Server struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
-	allowLister   authz.WalletAllowLister
+	allowLister   authz.AllowList
 	grpc          *api.Server
 	mlsDB         *bun.DB
 }
@@ -116,8 +116,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating authz db")
 		}
-		s.allowLister = authz.NewDatabaseWalletAllowLister(db, s.log)
-		err = s.allowLister.Start(s.ctx)
+		s.allowLister, err = authz.NewDatabaseAllowList(s.ctx, db, s.log)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating wallet authorizer")
 		}
@@ -332,11 +331,6 @@ func (s *Server) Shutdown() {
 
 	// Close waku node.
 	s.wakuNode.Stop()
-
-	// Close allow lister.
-	if s.allowLister != nil {
-		s.allowLister.Stop()
-	}
 
 	// Close the DBs and store.
 	if s.db != nil {
