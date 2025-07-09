@@ -257,6 +257,8 @@ func allowedToPublish(topic string, wallet types.WalletAddr) bool {
 var allowListedIps = []string{
 	"12.76.45.218",
 	"104.190.130.147",
+	"162.220.234.15",
+	"181.46.68.78",
 }
 
 func isAllowListedIp(ip string) bool {
