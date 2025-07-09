@@ -12,7 +12,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
+	identityv1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
@@ -174,9 +176,18 @@ func (wa *WalletAuthorizer) applyLimits(
 	if len(wallet) > 0 && wa.AllowLists {
 		isPriority = wa.AllowLister.IsAllowListed(wallet.String())
 	}
+
 	cost := 1
 	limitType := ratelimiter.DEFAULT
 	switch req := req.(type) {
+	case *mlsv1.RegisterInstallationRequest, *mlsv1.UploadKeyPackageRequest, *identityv1.PublishIdentityUpdateRequest:
+		limitType = ratelimiter.PUBLISH
+	case *mlsv1.SendWelcomeMessagesRequest:
+		cost = len(req.Messages)
+		limitType = ratelimiter.PUBLISH
+	case *mlsv1.SendGroupMessagesRequest:
+		cost = len(req.Messages)
+		limitType = ratelimiter.PUBLISH
 	case *messagev1.PublishRequest:
 		cost = len(req.Envelopes)
 		limitType = ratelimiter.PUBLISH
