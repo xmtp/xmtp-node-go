@@ -7,6 +7,6 @@ if [[ $(gofmt -l .) ]]; then
     echo "gofmt errors, run 'gofmt -w .' and commit"
 fi 
 
-golangci-lint --config dev/.golangci.yaml run ./...
+golangci-lint --config .golangci.yaml run ./...
 
 protolint .

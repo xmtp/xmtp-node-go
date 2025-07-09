@@ -30,7 +30,6 @@ import (
 	"github.com/waku-org/go-waku/waku/v2/protocol/relay"
 	"github.com/waku-org/go-waku/waku/v2/utils"
 	"github.com/xmtp/xmtp-node-go/pkg/api"
-	"github.com/xmtp/xmtp-node-go/pkg/authn"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/crypto"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
@@ -59,7 +58,6 @@ type Server struct {
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	allowLister   authz.WalletAllowLister
-	authenticator *authn.XmtpAuthentication
 	grpc          *api.Server
 	mlsDB         *bun.DB
 }
@@ -246,9 +244,6 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "starting waku node")
 	}
-
-	s.authenticator = authn.NewXmtpAuthentication(s.ctx, s.wakuNode.Host(), s.log)
-	s.authenticator.Start()
 
 	if len(options.Relay.Topics) == 0 {
 		options.Relay.Topics = []string{string(relay.DefaultWakuTopic)}
