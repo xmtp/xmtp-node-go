@@ -16,3 +16,10 @@ packages:
     interfaces:
       MLSValidationService:
         config:
+  github.com/xmtp/xmtp-node-go/pkg/authz:
+    config:
+      dir: ./pkg/mocks
+      outpkg: mocks
+    interfaces:
+      AllowList:
+        config:
