@@ -38,6 +38,7 @@ type Config struct {
 	Store        *store.Store
 	MLSStore     mlsstore.MlsStore
 	MLSValidator mlsvalidate.MLSValidationService
+	RateLimiter  ratelimiter.RateLimiter
 }
 
 // AuthnOptions bundle command line options associated with the authn package.

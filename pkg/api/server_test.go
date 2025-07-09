@@ -59,7 +59,7 @@ func Test_HTTPRootPath(t *testing.T) {
 }
 
 func Test_QueryNoTopics(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{},
@@ -80,7 +80,7 @@ func Test_QueryNoTopics(t *testing.T) {
 }
 
 func Test_QueryTooManyRows(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"foo"},
@@ -104,7 +104,7 @@ func Test_QueryTooManyRows(t *testing.T) {
 }
 
 func Test_QueryNonExistentTopic(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, _ *Server) {
 		queryRes, err := client.Query(ctx, &messageV1.QueryRequest{
 			ContentTopics: []string{"does-not-exist"},
@@ -116,7 +116,7 @@ func Test_QueryNonExistentTopic(t *testing.T) {
 }
 
 func Test_Subscribe_ContextTimeout(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
@@ -135,7 +135,7 @@ func Test_Subscribe_ContextTimeout(t *testing.T) {
 }
 
 func Test_Subscribe_ContextCancel(t *testing.T) {
-	ctx := withAuth(t, context.Background())
+	ctx := context.Background()
 	testGRPCAndHTTP(t, ctx, func(t *testing.T, client messageclient.Client, server *Server) {
 		stream, err := client.Subscribe(ctx, &messageV1.SubscribeRequest{
 			ContentTopics: []string{"topic"},
