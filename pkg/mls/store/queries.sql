@@ -270,3 +270,41 @@ SELECT
 FROM
 	insert_commit_log(@group_id, @encrypted_entry);
 
+-- name: GetAllGroupMessagesWithCursor :many
+SELECT
+	*
+FROM
+	group_messages
+WHERE
+	id > @cursor
+ORDER BY
+	id ASC
+LIMIT @numrows;
+
+-- name: GetAllWelcomeMessagesWithCursor :many
+SELECT
+	*
+FROM
+	welcome_messages
+WHERE
+	id > @cursor
+ORDER BY
+	id ASC
+LIMIT @numrows;
+
+-- name: GetLatestGroupMessageID :one
+SELECT
+	COALESCE((
+		SELECT
+			max(id)
+		FROM group_messages), 0)::BIGINT
+LIMIT 1;
+
+-- name: GetLatestWelcomeMessageID :one
+SELECT
+	COALESCE((
+		SELECT
+			max(id)
+		FROM welcome_messages), 0)::BIGINT
+LIMIT 1;
+

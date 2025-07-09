@@ -88,6 +88,7 @@ type MlsStore interface {
 		groupId []byte,
 		encrypted_entry []byte,
 	) (queries.CommitLog, error)
+	Queries() *queries.Queries
 }
 
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -108,6 +109,10 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Store) Queries() *queries.Queries {
+	return s.queries
 }
 
 func (s *Store) GetInboxIds(
