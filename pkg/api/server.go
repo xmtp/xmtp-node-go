@@ -129,7 +129,7 @@ func (s *Server) startGRPC() error {
 
 	if s.Authn.Ratelimits {
 		limiter := s.getOrCreateRateLimiter()
-		interceptor := NewRateLimitInterceptor(limiter, s.Log)
+		interceptor := NewRateLimitInterceptor(limiter, s.AllowLister, s.Log)
 		unary = append(unary, interceptor.Unary())
 		stream = append(stream, interceptor.Stream())
 	}

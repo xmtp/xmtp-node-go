@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -13,6 +14,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/xmtp/xmtp-node-go/pkg/authz"
+	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	identityv1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -46,6 +49,12 @@ func NewMockRateLimiter() *MockRateLimiter {
 	return &MockRateLimiter{
 		spendCalls: make([]SpendCall, 0),
 	}
+}
+
+func mockAllowListUnknown(t *testing.T) *mocks.MockAllowList {
+	allowList := mocks.NewMockAllowList(t)
+	allowList.EXPECT().GetPermission(mock.Anything).Maybe().Return(authz.Unspecified)
+	return allowList
 }
 
 func (m *MockRateLimiter) Spend(
@@ -98,7 +107,7 @@ func (m *MockRateLimiter) SetShouldFail(shouldFail bool, err error) {
 func TestRateLimitInterceptor_RequestTypesAndCosts(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	testCases := []struct {
 		name          string
@@ -228,36 +237,80 @@ func TestRateLimitInterceptor_RequestTypesAndCosts(t *testing.T) {
 func TestRateLimitInterceptor_AllowlistedIPs(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	mockAllowList := mocks.NewMockAllowList(t)
 
-	allowlistedIPs := []string{"12.76.45.218", "104.190.130.147"}
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowList, logger)
+	cases := []struct {
+		ip         string
+		permission authz.Permission
+	}{
+		{
+			ip:         "12.76.45.218",
+			permission: authz.AllowAll,
+		},
+		{
+			ip:         "104.190.130.147",
+			permission: authz.Priority,
+		},
+		{
+			ip:         "1.1.1.1",
+			permission: authz.Denied,
+		},
+		{
+			ip:         "2.2.2.2",
+			permission: authz.Unspecified,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(
+			fmt.Sprintf("IP: %s. Permission: %s", testCase.ip, testCase.permission.String()),
+			func(t *testing.T) {
+				mockLimiter.Reset()
+				mockAllowList.EXPECT().
+					GetPermission(testCase.ip).
+					Return(testCase.permission)
 
-	for _, ip := range allowlistedIPs {
-		t.Run(fmt.Sprintf("allowlisted IP %s", ip), func(t *testing.T) {
-			mockLimiter.Reset()
+				// Create a context with an allowlisted IP
+				ctx := contextWithClientIP(testCase.ip)
 
-			// Create a context with an allowlisted IP
-			ctx := contextWithClientIP(ip)
+				// Test with a default request
+				err := interceptor.applyLimits(
+					ctx,
+					"/TestService/TestMethod",
+					&messagev1.QueryRequest{},
+				)
+				// If the IP is deny listed, we should return an error
+				if testCase.permission == authz.Denied {
+					require.Error(t, err)
+					require.Equal(t, codes.PermissionDenied, status.Code(err))
+					return
+				}
+				require.NoError(t, err)
 
-			// Test with a default request
-			err := interceptor.applyLimits(
-				ctx,
-				"/TestService/TestMethod",
-				&messagev1.QueryRequest{},
-			)
-			require.NoError(t, err)
-
-			// Should not have any spend calls since allowlisted IPs are not rate limited
-			calls := mockLimiter.GetSpendCalls()
-			require.Len(t, calls, 0)
-		})
+				// Allowlisted IPs should be in the priority bucket
+				calls := mockLimiter.GetSpendCalls()
+				for _, call := range calls {
+					if testCase.permission == authz.Priority {
+						require.True(t, call.IsPriority)
+					} else {
+						require.False(t, call.IsPriority)
+					}
+				}
+			},
+		)
 	}
 }
 
 func TestRateLimitInterceptor_PriorityBuckets(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+
+	allowAllIP := "12.76.45.218"
+	allowList := mocks.NewMockAllowList(t)
+	allowList.EXPECT().GetPermission(allowAllIP).Maybe().Return(authz.AllowAll)
+	allowList.EXPECT().GetPermission(mock.Anything).Maybe().Return(authz.Unspecified)
+
+	interceptor := NewRateLimitInterceptor(mockLimiter, allowList, logger)
 
 	testCases := []struct {
 		name             string
@@ -282,7 +335,7 @@ func TestRateLimitInterceptor_PriorityBuckets(t *testing.T) {
 		},
 		{
 			name:             "allowlisted IP should not be rate limited",
-			ip:               "12.76.45.218",
+			ip:               allowAllIP,
 			request:          &messagev1.QueryRequest{},
 			expectedBucket:   "",
 			expectedPriority: false,
@@ -316,7 +369,7 @@ func TestRateLimitInterceptor_PriorityBuckets(t *testing.T) {
 func TestRateLimitInterceptor_NoIPAddress(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	ctx := context.Background()
 	// Don't set any IP address
@@ -335,7 +388,7 @@ func TestRateLimitInterceptor_NoIPAddress(t *testing.T) {
 func TestRateLimitInterceptor_RateLimitExceeded(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	expectedError := fmt.Errorf("rate limit exceeded")
 	mockLimiter.SetShouldFail(true, expectedError)
@@ -354,7 +407,7 @@ func TestRateLimitInterceptor_RateLimitExceeded(t *testing.T) {
 func TestRateLimitInterceptor_UnaryInterceptor(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return "success", nil
@@ -379,7 +432,7 @@ func TestRateLimitInterceptor_UnaryInterceptor(t *testing.T) {
 func TestRateLimitInterceptor_StreamInterceptor(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	handler := func(srv interface{}, stream grpc.ServerStream) error {
 		return nil
@@ -405,7 +458,7 @@ func TestRateLimitInterceptor_StreamInterceptor(t *testing.T) {
 func TestRateLimitInterceptor_StreamInterceptorWithRateLimit(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	expectedError := fmt.Errorf("rate limit exceeded")
 	mockLimiter.SetShouldFail(true, expectedError)
@@ -434,7 +487,7 @@ func TestRateLimitInterceptor_StreamInterceptorWithRateLimit(t *testing.T) {
 func TestRateLimitInterceptor_CostCalculation(t *testing.T) {
 	logger := zap.NewNop()
 	mockLimiter := NewMockRateLimiter()
-	interceptor := NewRateLimitInterceptor(mockLimiter, logger)
+	interceptor := NewRateLimitInterceptor(mockLimiter, mockAllowListUnknown(t), logger)
 
 	testCases := []struct {
 		name         string
@@ -483,27 +536,6 @@ func TestRateLimitInterceptor_CostCalculation(t *testing.T) {
 			calls := mockLimiter.GetSpendCalls()
 			require.Len(t, calls, 1)
 			require.Equal(t, tc.expectedCost, calls[0].Cost)
-		})
-	}
-}
-
-func TestRateLimitInterceptor_IsAllowListedIp(t *testing.T) {
-	testCases := []struct {
-		ip       string
-		expected bool
-	}{
-		{"12.76.45.218", true},
-		{"104.190.130.147", true},
-		{"192.168.1.1", false},
-		{"127.0.0.1", false},
-		{"10.0.0.1", false},
-		{"", false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.ip, func(t *testing.T) {
-			result := isAllowListedIp(tc.ip)
-			require.Equal(t, tc.expected, result)
 		})
 	}
 }

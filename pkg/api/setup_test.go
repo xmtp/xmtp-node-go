@@ -17,10 +17,12 @@ const (
 )
 
 func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
+	ctx, cancel := context.WithCancel(context.Background())
 	waku, wakuCleanup := test.NewNode(t, log)
 	store, storeCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
-	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
+	allowLister, err := authz.NewDatabaseAllowList(ctx, authzDB, log)
+	require.NoError(t, err)
 	s, err := New(&Config{
 		Options: Options{
 			GRPCAddress: "localhost",
@@ -40,6 +42,7 @@ func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
 	})
 	require.NoError(t, err)
 	return s, func() {
+		cancel()
 		s.Close()
 		wakuCleanup()
 		authzDBCleanup()

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/xmtp/xmtp-node-go/pkg/authz"
 	"github.com/xmtp/xmtp-node-go/pkg/logging"
 	identityv1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
@@ -17,15 +18,17 @@ import (
 )
 
 type RateLimitInterceptor struct {
-	limiter ratelimiter.RateLimiter
-	log     *zap.Logger
+	limiter     ratelimiter.RateLimiter
+	ipAllowList authz.AllowList
+	log         *zap.Logger
 }
 
 func NewRateLimitInterceptor(
 	limiter ratelimiter.RateLimiter,
+	ipAllowList authz.AllowList,
 	log *zap.Logger,
 ) *RateLimitInterceptor {
-	return &RateLimitInterceptor{limiter: limiter, log: log}
+	return &RateLimitInterceptor{limiter: limiter, ipAllowList: ipAllowList, log: log}
 }
 
 func (rli *RateLimitInterceptor) Unary() grpc.UnaryServerInterceptor {
@@ -71,12 +74,21 @@ func (rli *RateLimitInterceptor) applyLimits(
 		ip = "ip_unknown"
 		rli.log.Warn("no ip found", logging.String("method", fullMethod))
 	}
-	if isAllowListedIp(ip) {
-		rli.log.Info("allow listed ip", logging.String("ip", ip))
-		return nil
+
+	permissions := rli.ipAllowList.GetPermission(ip)
+
+	isPriority := permissions == authz.Priority
+	isDenied := permissions == authz.Denied
+	isAllowAll := permissions == authz.AllowAll
+
+	if isDenied {
+		// Debatable whether we want to return a message this clear or something more ambiguous
+		return status.Error(codes.PermissionDenied, "request blocked")
 	}
 
-	isPriority := false
+	if isAllowAll {
+		return nil
+	}
 
 	cost := 1
 	limitType := ratelimiter.DEFAULT
@@ -96,7 +108,6 @@ func (rli *RateLimitInterceptor) applyLimits(
 		cost = len(req.Requests)
 	}
 
-	// TODO:(nm) add priority IP address flag from the database
 	var bucket string
 	if isPriority {
 		bucket = "P" + ip + string(limitType)
@@ -116,21 +127,4 @@ func (rli *RateLimitInterceptor) applyLimits(
 	}
 
 	return nil
-}
-
-var allowListedIps = []string{
-	"12.76.45.218",
-	"104.190.130.147",
-	"162.220.234.15",
-	"181.46.68.78",
-}
-
-func isAllowListedIp(ip string) bool {
-	for _, allowListedIp := range allowListedIps {
-		if allowListedIp == ip {
-			return true
-		}
-	}
-
-	return false
 }
