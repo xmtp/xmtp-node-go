@@ -22,6 +22,3 @@ RETURN QUERY
 END;
 $$
 LANGUAGE plpgsql;
-
--- once backfill is complete, this index can be dropped
-CREATE INDEX idx_groups_id_is_commit ON group_messages (id, is_commit);
