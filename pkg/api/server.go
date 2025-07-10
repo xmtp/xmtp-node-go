@@ -41,7 +41,12 @@ import (
 )
 
 const (
-	authorizationMetadataKey = "authorization"
+	// Expire buckets after 1 hour of inactivity,
+	// sweep for expired buckets every 10 minutes.
+	// Note: entry expiration should be at least some multiple of
+	// maximum (limit max / limit rate) minutes.
+	RATE_LIMITER_SWEEP_INTERVAL = 10 * time.Minute
+	RATE_LIMITER_EXPIRES_AFTER  = 1 * time.Hour
 )
 
 var prometheusOnce sync.Once
@@ -59,8 +64,6 @@ type Server struct {
 	ctxCancel    func()
 	natsServer   *server.Server
 	wakuRelaySub *wakurelay.Subscription
-
-	authorizer *WalletAuthorizer
 }
 
 func New(config *Config) (*Server, error) {
@@ -124,21 +127,11 @@ func (s *Server) startGRPC() error {
 		return errors.New("nats not ready")
 	}
 
-	if s.Authn.Enable {
-		limiter := ratelimiter.NewTokenBucketRateLimiter(s.ctx, s.Log)
-		// Expire buckets after 1 hour of inactivity,
-		// sweep for expired buckets every 10 minutes.
-		// Note: entry expiration should be at least some multiple of
-		// maximum (limit max / limit rate) minutes.
-		go limiter.Janitor(10*time.Minute, 1*time.Hour)
-		s.authorizer = NewWalletAuthorizer(&AuthnConfig{
-			AuthnOptions: s.Authn,
-			Limiter:      limiter,
-			AllowLister:  s.AllowLister,
-			Log:          s.Log.Named("authn"),
-		})
-		unary = append(unary, s.authorizer.Unary())
-		stream = append(stream, s.authorizer.Stream())
+	if s.Authn.Ratelimits {
+		limiter := s.getOrCreateRateLimiter()
+		interceptor := NewRateLimitInterceptor(limiter, s.AllowLister, s.Log)
+		unary = append(unary, interceptor.Unary())
+		stream = append(stream, interceptor.Stream())
 	}
 
 	options := []grpc.ServerOption{
@@ -354,6 +347,15 @@ func (s *Server) Close() {
 
 	s.wg.Wait()
 	s.Log.Info("closed")
+}
+
+func (s *Server) getOrCreateRateLimiter() ratelimiter.RateLimiter {
+	if s.RateLimiter != nil {
+		return s.RateLimiter
+	}
+	limiter := ratelimiter.NewTokenBucketRateLimiter(s.ctx, s.Log)
+	go limiter.Janitor(RATE_LIMITER_SWEEP_INTERVAL, RATE_LIMITER_EXPIRES_AFTER)
+	return limiter
 }
 
 func (s *Server) dialGRPC(ctx context.Context) (*grpc.ClientConn, error) {

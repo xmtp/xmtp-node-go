@@ -3,16 +3,13 @@ package api
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	messageclient "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/client"
 	"github.com/xmtp/xmtp-node-go/pkg/authz"
-	v1 "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -20,10 +17,12 @@ const (
 )
 
 func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
+	ctx, cancel := context.WithCancel(context.Background())
 	waku, wakuCleanup := test.NewNode(t, log)
 	store, storeCleanup := newTestStore(t, log)
 	authzDB, _, authzDBCleanup := test.NewAuthzDB(t)
-	allowLister := authz.NewDatabaseWalletAllowLister(authzDB, log)
+	allowLister, err := authz.NewDatabaseAllowList(ctx, authzDB, log)
+	require.NoError(t, err)
 	s, err := New(&Config{
 		Options: Options{
 			GRPCAddress: "localhost",
@@ -43,6 +42,7 @@ func newTestServerWithLog(t testing.TB, log *zap.Logger) (*Server, func()) {
 	})
 	require.NoError(t, err)
 	return s, func() {
+		cancel()
 		s.Close()
 		wakuCleanup()
 		authzDBCleanup()
@@ -103,46 +103,4 @@ func testGRPCAndHTTP(
 		}()
 		f(t, client, server)
 	})
-}
-
-func withAuth(t testing.TB, ctx context.Context) context.Context {
-	ctx, _ = withAuthWithDetails(t, ctx, time.Now())
-	return ctx
-}
-
-func withExpiredAuth(t *testing.T, ctx context.Context) context.Context {
-	ctx, _ = withAuthWithDetails(t, ctx, time.Now().Add(-24*time.Hour))
-	return ctx
-}
-
-func withMissingAuthData(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := generateV2AuthToken(time.Now())
-	require.NoError(t, err)
-	token.AuthDataBytes = nil
-	token.AuthDataSignature = nil
-	et, err := EncodeAuthToken(token)
-	require.NoError(t, err)
-	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
-}
-
-// Test possible malicious behavior of the client.
-func withMissingIdentityKey(t *testing.T, ctx context.Context) context.Context {
-	token, _, err := generateV2AuthToken(time.Now())
-	require.NoError(t, err)
-	token.IdentityKey = nil
-	et, err := EncodeAuthToken(token)
-	require.NoError(t, err)
-	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et)
-}
-
-func withAuthWithDetails(
-	t testing.TB,
-	ctx context.Context,
-	when time.Time,
-) (context.Context, *v1.AuthData) {
-	token, data, err := generateV2AuthToken(when)
-	require.NoError(t, err)
-	et, err := EncodeAuthToken(token)
-	require.NoError(t, err)
-	return metadata.AppendToOutgoingContext(ctx, authorizationMetadataKey, "Bearer "+et), data
 }
