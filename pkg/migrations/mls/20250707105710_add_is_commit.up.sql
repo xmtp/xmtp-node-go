@@ -1,6 +1,6 @@
 ALTER TABLE group_messages ADD COLUMN is_commit BOOLEAN DEFAULT NULL;
 
-CREATE OR REPLACE FUNCTION insert_group_message(
+CREATE OR REPLACE FUNCTION insert_group_message_with_is_commit(
 	group_id BYTEA,
 	data BYTEA,
 	group_id_data_hash BYTEA,

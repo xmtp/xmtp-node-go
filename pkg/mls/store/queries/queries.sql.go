@@ -443,7 +443,7 @@ const insertGroupMessage = `-- name: InsertGroupMessage :one
 SELECT
 	id, created_at, group_id, data, group_id_data_hash, is_commit
 FROM
-	insert_group_message($1, $2, $3, $4)
+    insert_group_message_with_is_commit($1, $2, $3, $4)
 `
 
 type InsertGroupMessageParams struct {

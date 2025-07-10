@@ -115,7 +115,7 @@ WHERE
 SELECT
 	*
 FROM
-	insert_group_message(@group_id, @data, @group_id_data_hash, @is_commit);
+    insert_group_message_with_is_commit(@group_id, @data, @group_id_data_hash, @is_commit);
 
 -- name: InsertWelcomeMessage :one
 SELECT
