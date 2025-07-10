@@ -88,6 +88,65 @@ func (_c *MockMLSValidationService_GetAssociationState_Call) RunAndReturn(run fu
 	return _c
 }
 
+// ValidateGroupMessage provides a mock function with given fields: ctx, groupMessagePayload
+func (_m *MockMLSValidationService) ValidateGroupMessage(ctx context.Context, groupMessagePayload []byte) ([]mlsvalidate.GroupMessageValidationResult, error) {
+	ret := _m.Called(ctx, groupMessagePayload)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ValidateGroupMessage")
+	}
+
+	var r0 []mlsvalidate.GroupMessageValidationResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []byte) ([]mlsvalidate.GroupMessageValidationResult, error)); ok {
+		return rf(ctx, groupMessagePayload)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []byte) []mlsvalidate.GroupMessageValidationResult); ok {
+		r0 = rf(ctx, groupMessagePayload)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]mlsvalidate.GroupMessageValidationResult)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
+		r1 = rf(ctx, groupMessagePayload)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockMLSValidationService_ValidateGroupMessage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ValidateGroupMessage'
+type MockMLSValidationService_ValidateGroupMessage_Call struct {
+	*mock.Call
+}
+
+// ValidateGroupMessage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - groupMessagePayload []byte
+func (_e *MockMLSValidationService_Expecter) ValidateGroupMessage(ctx interface{}, groupMessagePayload interface{}) *MockMLSValidationService_ValidateGroupMessage_Call {
+	return &MockMLSValidationService_ValidateGroupMessage_Call{Call: _e.mock.On("ValidateGroupMessage", ctx, groupMessagePayload)}
+}
+
+func (_c *MockMLSValidationService_ValidateGroupMessage_Call) Run(run func(ctx context.Context, groupMessagePayload []byte)) *MockMLSValidationService_ValidateGroupMessage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockMLSValidationService_ValidateGroupMessage_Call) Return(_a0 []mlsvalidate.GroupMessageValidationResult, _a1 error) *MockMLSValidationService_ValidateGroupMessage_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMLSValidationService_ValidateGroupMessage_Call) RunAndReturn(run func(context.Context, []byte) ([]mlsvalidate.GroupMessageValidationResult, error)) *MockMLSValidationService_ValidateGroupMessage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ValidateGroupMessages provides a mock function with given fields: ctx, groupMessages
 func (_m *MockMLSValidationService) ValidateGroupMessages(ctx context.Context, groupMessages []*apiv1.GroupMessageInput) ([]mlsvalidate.GroupMessageValidationResult, error) {
 	ret := _m.Called(ctx, groupMessages)
