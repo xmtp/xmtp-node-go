@@ -4,15 +4,12 @@ go 1.20
 
 require (
 	github.com/ethereum/go-ethereum v1.10.26
-	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2
 	github.com/hashicorp/go-retryablehttp v0.7.0
-	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/huandu/go-sqlbuilder v1.13.0
 	github.com/jackc/pgx/v5 v5.5.5
-	github.com/jarcoal/httpmock v1.2.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/libp2p/go-libp2p v0.29.2
@@ -29,7 +26,6 @@ require (
 	github.com/uptrace/bun/dialect/pgdialect v1.1.16
 	github.com/uptrace/bun/driver/pgdriver v1.1.16
 	github.com/waku-org/go-waku v0.8.0
-	github.com/xmtp/go-msgio v0.2.1-0.20220510223757-25a701b79cd3
 	github.com/yoheimuta/protolint v0.39.0
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
@@ -41,6 +37,8 @@ require (
 
 require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
