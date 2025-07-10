@@ -998,7 +998,7 @@ func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFro
 }
 
 const selectEnvelopesForIsCommitBackfill = `-- name: SelectEnvelopesForIsCommitBackfill :many
-SELECT id, data FROM group_messages WHERE is_commit IS NULL FOR UPDATE SKIP LOCKED
+SELECT id, data FROM group_messages WHERE is_commit IS NULL LIMIT 100
 `
 
 type SelectEnvelopesForIsCommitBackfillRow struct {
