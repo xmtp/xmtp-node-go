@@ -998,7 +998,16 @@ func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFro
 }
 
 const selectEnvelopesForIsCommitBackfill = `-- name: SelectEnvelopesForIsCommitBackfill :many
-SELECT id, data FROM group_messages WHERE is_commit IS NULL FOR UPDATE SKIP LOCKED LIMIT 100
+SELECT
+    id, data
+FROM
+    group_messages
+WHERE
+    is_commit
+        IS NULL
+ORDER BY id ASC
+FOR UPDATE SKIP LOCKED
+LIMIT 100
 `
 
 type SelectEnvelopesForIsCommitBackfillRow struct {
@@ -1043,7 +1052,12 @@ func (q *Queries) TouchInbox(ctx context.Context, inboxID string) error {
 }
 
 const updateIsCommitStatus = `-- name: UpdateIsCommitStatus :exec
-UPDATE group_messages SET is_commit = $1 WHERE id = $2
+UPDATE
+    group_messages
+SET
+    is_commit = $1
+WHERE
+    id = $2
 `
 
 type UpdateIsCommitStatusParams struct {

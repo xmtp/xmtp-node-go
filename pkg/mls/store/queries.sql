@@ -286,9 +286,22 @@ DELETE FROM group_messages gm
 WHERE gm.id = td.id
     RETURNING gm.id, gm.created_at;
 
-
 -- name: SelectEnvelopesForIsCommitBackfill :many
-SELECT id, data FROM group_messages WHERE is_commit IS NULL FOR UPDATE SKIP LOCKED LIMIT 100;
+SELECT
+    id, data
+FROM
+    group_messages
+WHERE
+    is_commit
+        IS NULL
+ORDER BY id ASC
+    FOR UPDATE SKIP LOCKED
+LIMIT 100;
 
 -- name: UpdateIsCommitStatus :exec
-UPDATE group_messages SET is_commit = @is_commit WHERE id = @id;
+UPDATE
+    group_messages
+SET
+    is_commit = @is_commit
+WHERE
+    id = @id;
