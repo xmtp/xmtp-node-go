@@ -302,7 +302,12 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 	}
 
 	if MLSStore != nil && MLSValidator != nil {
-		s.backfiller = mlsstore.NewIsCommitBackfiller(ctx, s.mlsDB.DB, s.log.Named("`backfiller"), MLSValidator)
+		s.backfiller = mlsstore.NewIsCommitBackfiller(
+			ctx,
+			s.mlsDB.DB,
+			s.log.Named("`backfiller"),
+			MLSValidator,
+		)
 		s.backfiller.Run()
 	}
 

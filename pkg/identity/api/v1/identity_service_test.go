@@ -91,6 +91,13 @@ func (m *mockedMLSValidationService) ValidateGroupMessages(
 	return nil, nil
 }
 
+func (m *mockedMLSValidationService) ValidateGroupMessagePayloads(
+	ctx context.Context,
+	groupMessagePayloads [][]byte,
+) ([]mlsvalidate.GroupMessageValidationResult, error) {
+	return nil, nil
+}
+
 func (m *mockedMLSValidationService) ValidateInboxIdKeyPackages(
 	ctx context.Context,
 	keyPackages [][]byte,
