@@ -131,7 +131,7 @@ func (b *IsCommitBackfiller) Run() {
 					}
 
 					for _, msg := range classified {
-						b.log.Info("Updating is_commit status", zap.Int64("id", msg.ID), zap.Bool("is_commit", msg.IsCommit))
+						b.log.Debug("Updating is_commit status", zap.Int64("id", msg.ID), zap.Bool("is_commit", msg.IsCommit))
 						err = querier.UpdateIsCommitStatus(ctx, queries.UpdateIsCommitStatusParams{IsCommit: sql.NullBool{Bool: msg.IsCommit, Valid: true}, ID: msg.ID})
 						if err != nil {
 							b.log.Error("UpdateIsCommitStatus error", zap.Error(err))

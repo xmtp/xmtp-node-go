@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_group_messages_is_commit_null_id_asc;
