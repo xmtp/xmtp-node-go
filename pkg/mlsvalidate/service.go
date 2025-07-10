@@ -50,9 +50,9 @@ type MLSValidationService interface {
 		ctx context.Context,
 		groupMessages []*mlsv1.GroupMessageInput,
 	) ([]GroupMessageValidationResult, error)
-	ValidateGroupMessage(
+	ValidateGroupMessagePayloads(
 		ctx context.Context,
-		groupMessagePayload []byte,
+		groupMessagePayloads [][]byte,
 	) ([]GroupMessageValidationResult, error)
 	GetAssociationState(
 		ctx context.Context,
@@ -186,17 +186,19 @@ func (s *MLSValidationServiceImpl) ValidateGroupMessages(
 	return out, nil
 }
 
-func (s *MLSValidationServiceImpl) ValidateGroupMessage(
+func (s *MLSValidationServiceImpl) ValidateGroupMessagePayloads(
 	ctx context.Context,
-	groupMessagePayload []byte,
+	groupMessagePayloads [][]byte,
 ) ([]GroupMessageValidationResult, error) {
 	groupMessageRequests := make(
 		[]*svc.ValidateGroupMessagesRequest_GroupMessage,
-		1,
+		len(groupMessagePayloads),
 	)
 
-	groupMessageRequests[0] = &svc.ValidateGroupMessagesRequest_GroupMessage{
-		GroupMessageBytesTlsSerialized: groupMessagePayload,
+	for i, payload := range groupMessagePayloads {
+		groupMessageRequests[i] = &svc.ValidateGroupMessagesRequest_GroupMessage{
+			GroupMessageBytesTlsSerialized: payload,
+		}
 	}
 
 	req := &svc.ValidateGroupMessagesRequest{

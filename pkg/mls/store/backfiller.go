@@ -31,8 +31,6 @@ type IsCommitBackfiller struct {
 	log               *zap.Logger
 	WG                sync.WaitGroup
 	validationService mlsvalidate.MLSValidationService
-	ReadCh            chan BackfillGroupMessage
-	ClassifyCh        chan BackfillGroupMessage
 	cancel            context.CancelFunc
 }
 
@@ -46,112 +44,109 @@ func NewIsCommitBackfiller(ctx context.Context, db *sql.DB,
 		ctx:               ctx,
 		DB:                db,
 		log:               log,
-		ReadCh:            make(chan BackfillGroupMessage, 100),
-		ClassifyCh:        make(chan BackfillGroupMessage, 100),
 		validationService: validationService,
 		cancel:            cancel,
 	}
 }
 
-// readFromDB pulls batches from the database
-func (b *IsCommitBackfiller) readFromDB() {
-	defer close(b.ReadCh)
-	querier := queries.New(b.DB)
-
-	for {
-		select {
-		case <-b.ctx.Done():
-			return
-		default:
-			ids, err := querier.SelectEnvelopesForIsCommitBackfill(b.ctx)
-			if err != nil {
-				b.log.Error("SelectEnvelopesForIsCommitBackfill error", zap.Error(err))
-				time.Sleep(60 * time.Second)
-				continue
-			}
-
-			if len(ids) == 0 {
-				b.log.Info("No messages to classify")
-				time.Sleep(60 * time.Second)
-				continue
-			}
-
-			for _, msg := range ids {
-				msg := BackfillGroupMessage{ID: msg.ID, Data: msg.Data}
-				b.ReadCh <- msg
-			}
-
-		}
+func (b *IsCommitBackfiller) RunInTx(
+	ctx context.Context,
+	opts *sql.TxOptions,
+	fn func(ctx context.Context, txQueries *queries.Queries) error,
+) error {
+	tx, err := b.DB.BeginTx(ctx, opts)
+	if err != nil {
+		return err
 	}
+
+	var done bool
+
+	defer func() {
+		if !done {
+			_ = tx.Rollback()
+		}
+	}()
+
+	q := queries.New(tx)
+
+	if err := fn(ctx, q); err != nil {
+		return err
+	}
+
+	done = true
+	return tx.Commit()
 }
 
-// classifyMessages uses external service to determine isCommit
-func (b *IsCommitBackfiller) classifyMessages() {
-	defer close(b.ClassifyCh)
-	for {
-		select {
-		case <-b.ctx.Done():
-			return
-		case msg, ok := <-b.ReadCh:
-			if !ok {
-				return
-			}
-			classified, err := b.classifyMessage(&msg)
-			if err != nil {
-				b.log.Error("classifyMessage error", zap.Error(err))
-				continue
-			}
-			b.ClassifyCh <- *classified
-		}
+func (b *IsCommitBackfiller) classifyMessages(messages []BackfillGroupMessage) ([]BackfillGroupMessage, error) {
+	payloads := make([][]byte, len(messages))
+	for i, msg := range messages {
+		payloads[i] = msg.Data
 	}
-}
 
-func (b *IsCommitBackfiller) classifyMessage(original *BackfillGroupMessage) (*BackfillGroupMessage, error) {
-	validationResults, err := b.validationService.ValidateGroupMessage(b.ctx, original.Data)
+	validationResults, err := b.validationService.ValidateGroupMessagePayloads(b.ctx, payloads)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to validate group message: %v", err)
 	}
 
-	result := validationResults[0]
-
-	original.IsCommit = result.IsCommit
-	return original, nil
-}
-
-// writeBack updates the DB
-func (b *IsCommitBackfiller) writeBack() {
-	querier := queries.New(b.DB)
-	for {
-		select {
-		case <-b.ctx.Done():
-			return
-		case msg, ok := <-b.ClassifyCh:
-			if !ok {
-				return
-			}
-			err := querier.UpdateIsCommitStatus(b.ctx, queries.UpdateIsCommitStatusParams{IsCommit: sql.NullBool{Bool: msg.IsCommit, Valid: true}, ID: msg.ID})
-			if err != nil {
-				b.log.Error("UpdateIsCommitStatus error", zap.Error(err))
-				continue
-			}
-		}
+	for i, result := range validationResults {
+		messages[i].IsCommit = result.IsCommit
 	}
+
+	return messages, nil
 }
 
 // Run orchestrates the pipeline
 func (b *IsCommitBackfiller) Run() {
-	b.WG.Add(3)
+	b.WG.Add(1)
 	go func() {
 		defer b.WG.Done()
-		b.readFromDB()
-	}()
-	go func() {
-		defer b.WG.Done()
-		b.classifyMessages()
-	}()
-	go func() {
-		defer b.WG.Done()
-		b.writeBack()
+		for {
+			select {
+			case <-b.ctx.Done():
+				return
+			default:
+
+				err := b.RunInTx(b.ctx, nil, func(ctx context.Context, querier *queries.Queries) error {
+					ids, err := querier.SelectEnvelopesForIsCommitBackfill(ctx)
+					if err != nil {
+						b.log.Error("SelectEnvelopesForIsCommitBackfill error", zap.Error(err))
+						return err
+					}
+
+					if len(ids) == 0 {
+						b.log.Info("No messages to classify")
+						time.Sleep(1 * time.Minute)
+						return nil
+					}
+
+					convertedMsgs := make([]BackfillGroupMessage, len(ids))
+					for i, msg := range ids {
+						convertedMsgs[i] = BackfillGroupMessage{ID: msg.ID, Data: msg.Data}
+					}
+
+					classified, err := b.classifyMessages(convertedMsgs)
+					if err != nil {
+						b.log.Error("classifyMessages error", zap.Error(err))
+						return err
+					}
+
+					for _, msg := range classified {
+						b.log.Info("Updating is_commit status", zap.Int64("id", msg.ID), zap.Bool("is_commit", msg.IsCommit))
+						err = querier.UpdateIsCommitStatus(ctx, queries.UpdateIsCommitStatusParams{IsCommit: sql.NullBool{Bool: msg.IsCommit, Valid: true}, ID: msg.ID})
+						if err != nil {
+							b.log.Error("UpdateIsCommitStatus error", zap.Error(err))
+							continue
+						}
+					}
+					return nil
+				})
+				if err != nil {
+					b.log.Error("RunInTx error", zap.Error(err))
+					continue
+				}
+
+			}
+		}
 	}()
 }
 
