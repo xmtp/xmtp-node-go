@@ -29,6 +29,14 @@ You must have the _exact_ go version listed in `go.mod` - you can verify this by
 
 1. `dev/start`
 
+### Lint your files
+
+1. `dev/lint`
+
+### Fix formatting issues
+
+1. `golangci-lint --config .golangci.yaml run --fix ./...`
+
 ### Create a migration for the message database
 
 1. `dev/migrate-message $MIGRATION_NAME`
