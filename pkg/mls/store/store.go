@@ -8,17 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xmtp/xmtp-node-go/pkg/utils"
+
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	migrations "github.com/xmtp/xmtp-node-go/pkg/migrations/mls"
-	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
+	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/types"
-	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -683,32 +684,6 @@ func IsAlreadyExistsError(err error) bool {
 	return ok
 }
 
-func (s *Store) RunInTx(
-	ctx context.Context,
-	opts *sql.TxOptions,
-	fn func(ctx context.Context, txQueries *queries.Queries) error,
-) error {
-	tx, err := s.db.DB.BeginTx(ctx, opts)
-	if err != nil {
-		return err
-	}
-
-	var done bool
-
-	defer func() {
-		if !done {
-			_ = tx.Rollback()
-		}
-	}()
-
-	if err := fn(ctx, s.queries.WithTx(tx)); err != nil {
-		return err
-	}
-
-	done = true
-	return tx.Commit()
-}
-
 func (s *Store) RunInRepeatableReadTx(
 	ctx context.Context,
 	numRetries int,
@@ -720,7 +695,7 @@ func (s *Store) RunInRepeatableReadTx(
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			err = s.RunInTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead}, fn)
+			err = RunInTx(ctx, s.db.DB, &sql.TxOptions{Isolation: sql.LevelRepeatableRead}, fn)
 			if err == nil {
 				return nil
 			}

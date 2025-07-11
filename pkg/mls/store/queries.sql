@@ -263,3 +263,23 @@ SELECT
 FROM
 	insert_commit_log(@group_id, @encrypted_entry);
 
+
+-- name: SelectEnvelopesForIsCommitBackfill :many
+SELECT
+    id, data
+FROM
+    group_messages
+WHERE
+    is_commit
+        IS NULL
+ORDER BY id ASC
+FOR UPDATE SKIP LOCKED
+LIMIT 100;
+
+-- name: UpdateIsCommitStatus :exec
+UPDATE
+    group_messages
+SET
+    is_commit = @is_commit
+WHERE
+    id = @id;
