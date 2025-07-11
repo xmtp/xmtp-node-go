@@ -36,6 +36,7 @@ func (e *Executor) Run() error {
 	start := time.Now()
 
 	pruners := []Pruner{
+		NewWelcomePruner(e.log, querier, e.config.BatchSize),
 		&WelcomePruner{log: e.log, querier: querier},
 	}
 
