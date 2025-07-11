@@ -305,7 +305,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		s.backfiller = mlsstore.NewIsCommitBackfiller(
 			ctx,
 			s.mlsDB.DB,
-			s.log.Named("`backfiller"),
+			s.log.Named("backfiller"),
 			MLSValidator,
 		)
 		s.backfiller.Run()
