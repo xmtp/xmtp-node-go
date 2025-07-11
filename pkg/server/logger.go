@@ -20,13 +20,14 @@ func BuildLogger(options LogOptions, named string) (*zap.Logger, *zap.Config, er
 		OutputPaths:      []string{"stdout"},
 		ErrorOutputPaths: []string{"stderr"},
 		EncoderConfig: zapcore.EncoderConfig{
-			MessageKey:   "message",
-			LevelKey:     "level",
-			EncodeLevel:  zapcore.CapitalLevelEncoder,
-			TimeKey:      "time",
-			EncodeTime:   zapcore.ISO8601TimeEncoder,
-			NameKey:      "caller",
-			EncodeCaller: zapcore.ShortCallerEncoder,
+			MessageKey:     "message",
+			LevelKey:       "level",
+			EncodeLevel:    zapcore.CapitalLevelEncoder,
+			TimeKey:        "time",
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			NameKey:        "caller",
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
 		},
 	}
 	log, err := cfg.Build()
