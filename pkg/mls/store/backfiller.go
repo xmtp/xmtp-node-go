@@ -103,7 +103,7 @@ func (b *IsCommitBackfiller) Run() {
 			case <-b.ctx.Done():
 				return
 			default:
-
+				foundMessages := true
 				err := RunInTx(
 					b.ctx,
 					b.DB,
@@ -120,7 +120,7 @@ func (b *IsCommitBackfiller) Run() {
 
 						if len(ids) == 0 {
 							b.log.Info("No messages to classify")
-							time.Sleep(1 * time.Minute)
+							foundMessages = false
 							return nil
 						}
 
@@ -162,9 +162,9 @@ func (b *IsCommitBackfiller) Run() {
 				)
 				if err != nil {
 					b.log.Error("Failed to execute is_commit backfill cycle", zap.Error(err))
-					continue
+				} else if !foundMessages {
+					time.Sleep(1 * time.Minute)
 				}
-
 			}
 		}
 	}()
