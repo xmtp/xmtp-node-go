@@ -14,6 +14,22 @@ import (
 	"github.com/lib/pq"
 )
 
+const countDeletableGroupMessages = `-- name: CountDeletableGroupMessages :one
+SELECT COUNT(*)
+FROM group_messages
+WHERE
+    is_commit = false
+    AND
+    created_at < NOW() - make_interval(days := $1)
+`
+
+func (q *Queries) CountDeletableGroupMessages(ctx context.Context, ageDays int32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countDeletableGroupMessages, ageDays)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createOrUpdateInstallation = `-- name: CreateOrUpdateInstallation :exec
 INSERT INTO installations(id, created_at, updated_at, key_package)
 	VALUES ($1, $2, $3, $4)
@@ -38,6 +54,55 @@ func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUp
 		arg.KeyPackage,
 	)
 	return err
+}
+
+const deleteOldGroupMessagesBatch = `-- name: DeleteOldGroupMessagesBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM group_messages
+    WHERE is_commit = false
+      AND created_at < NOW() - make_interval(days := $1)
+    ORDER BY id
+    LIMIT $2
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM group_messages gm
+    USING to_delete td
+WHERE gm.id = td.id
+    RETURNING gm.id, gm.created_at
+`
+
+type DeleteOldGroupMessagesBatchParams struct {
+	AgeDays   int32
+	BatchSize int32
+}
+
+type DeleteOldGroupMessagesBatchRow struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) DeleteOldGroupMessagesBatch(ctx context.Context, arg DeleteOldGroupMessagesBatchParams) ([]DeleteOldGroupMessagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldGroupMessagesBatch, arg.AgeDays, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeleteOldGroupMessagesBatchRow
+	for rows.Next() {
+		var i DeleteOldGroupMessagesBatchRow
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many

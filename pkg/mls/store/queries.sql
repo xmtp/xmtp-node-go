@@ -263,3 +263,25 @@ SELECT
 FROM
 	insert_commit_log(@group_id, @encrypted_entry);
 
+-- name: CountDeletableGroupMessages :one
+SELECT COUNT(*)
+FROM group_messages
+WHERE
+    is_commit = false
+    AND
+    created_at < NOW() - make_interval(days := @age_days);
+
+-- name: DeleteOldGroupMessagesBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM group_messages
+    WHERE is_commit = false
+      AND created_at < NOW() - make_interval(days := @age_days)
+    ORDER BY id
+    LIMIT @batch_size
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM group_messages gm
+    USING to_delete td
+WHERE gm.id = td.id
+    RETURNING gm.id, gm.created_at;
