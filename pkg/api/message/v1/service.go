@@ -6,8 +6,6 @@ import (
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go"
 	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	"github.com/xmtp/xmtp-node-go/pkg/envelopes"
@@ -15,19 +13,16 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	"github.com/xmtp/xmtp-node-go/pkg/store"
+	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	pb "google.golang.org/protobuf/proto"
 )
 
 const (
-	validXMTPTopicPrefix = "/xmtp/0/"
-	natsWildcardTopic    = "*"
-
 	MaxContentTopicNameSize = 300
 
 	// 1048576 - 300 - 62 = 1048214
@@ -68,33 +63,23 @@ type Service struct {
 	ctxCancel func()
 	wg        sync.WaitGroup
 
-	nc *nats.Conn
-
-	subDispatcher *subscriptionDispatcher
+	subDispatcher *subscriptions.SubscriptionDispatcher
 }
 
 func NewService(
 	log *zap.Logger,
 	store *store.Store,
-	natsServer *server.Server,
+	subDispatcher *subscriptions.SubscriptionDispatcher,
 	publishToWakuRelay func(context.Context, *wakupb.WakuMessage) error,
 ) (s *Service, err error) {
 	s = &Service{
 		log:                log.Named("message/v1"),
 		store:              store,
 		publishToWakuRelay: publishToWakuRelay,
+		subDispatcher:      subDispatcher,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
-	s.nc, err = nats.Connect(natsServer.ClientURL())
-	if err != nil {
-		return nil, err
-	}
-
-	s.subDispatcher, err = newSubscriptionDispatcher(s.nc, s.log)
-	if err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
@@ -104,11 +89,6 @@ func (s *Service) Close() {
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
-	s.subDispatcher.Shutdown()
-
-	if s.nc != nil {
-		s.nc.Close()
-	}
 
 	s.wg.Wait()
 	s.log.Info("closed")
@@ -116,16 +96,7 @@ func (s *Service) Close() {
 
 func (s *Service) HandleIncomingWakuRelayMessage(msg *wakupb.WakuMessage) error {
 	env := envelopes.BuildEnvelope(msg)
-
-	envB, err := pb.Marshal(env)
-	if err != nil {
-		return err
-	}
-
-	err = s.nc.Publish(envelopes.BuildNatsSubject(env.ContentTopic), envB)
-	if err != nil {
-		return err
-	}
+	s.subDispatcher.HandleEnvelope(env)
 
 	return nil
 }
@@ -170,7 +141,7 @@ func (s *Service) Subscribe(
 	var streamLock sync.Mutex
 	for exit := false; !exit; {
 		select {
-		case msg, open := <-sub.messagesCh:
+		case msg, open := <-sub.MessagesCh:
 			if open {
 				func() {
 					streamLock.Lock()
@@ -233,7 +204,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 
 	var streamLock sync.Mutex
 	subscribedTopicCount := 0
-	var currentSubscription *subscription
+	var currentSubscription *subscriptions.Subscription
 	defer func() {
 		if currentSubscription != nil {
 			currentSubscription.Unsubscribe()
@@ -275,7 +246,7 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				metrics.EmitSubscriptionChange(stream.Context(), log, len(topics)-subscribedTopicCount)
 			}
 			subscribedTopicCount = len(topics)
-			subscriptionChannel = nextSubscription.messagesCh
+			subscriptionChannel = nextSubscription.MessagesCh
 			currentSubscription = nextSubscription
 		case msg, open := <-subscriptionChannel:
 			if open {
@@ -308,7 +279,7 @@ func (s *Service) SubscribeAll(
 	// Subscribe to all nats subjects via wildcard
 	// https://docs.nats.io/nats-concepts/subjects#wildcards
 	return s.Subscribe(&proto.SubscribeRequest{
-		ContentTopics: []string{natsWildcardTopic},
+		ContentTopics: []string{subscriptions.WILDCARD_TOPIC},
 	}, stream)
 }
 
