@@ -37,7 +37,7 @@ func (e *Executor) Run() error {
 
 	pruners := []Pruner{
 		NewWelcomePruner(e.log, querier, e.config.BatchSize),
-		&GroupMessagesPruner{log: e.log, querier: querier},
+		NewGroupMessagesPruner(e.log, querier, e.config.BatchSize),
 	}
 
 	if e.config.CountDeletable {

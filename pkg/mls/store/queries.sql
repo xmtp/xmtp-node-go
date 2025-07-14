@@ -278,7 +278,7 @@ WITH to_delete AS (
     WHERE is_commit = false
       AND created_at < NOW() - make_interval(days := @age_days)
     ORDER BY id
-    LIMIT 1000
+    LIMIT @batch_size
     FOR UPDATE SKIP LOCKED
             )
 DELETE FROM group_messages gm

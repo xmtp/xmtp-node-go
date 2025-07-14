@@ -63,7 +63,7 @@ WITH to_delete AS (
     WHERE is_commit = false
       AND created_at < NOW() - make_interval(days := $1)
     ORDER BY id
-    LIMIT 1000
+    LIMIT $2
     FOR UPDATE SKIP LOCKED
             )
 DELETE FROM group_messages gm
@@ -72,13 +72,18 @@ WHERE gm.id = td.id
     RETURNING gm.id, gm.created_at
 `
 
+type DeleteOldGroupMessagesBatchParams struct {
+	AgeDays   int32
+	BatchSize int32
+}
+
 type DeleteOldGroupMessagesBatchRow struct {
 	ID        int64
 	CreatedAt time.Time
 }
 
-func (q *Queries) DeleteOldGroupMessagesBatch(ctx context.Context, ageDays int32) ([]DeleteOldGroupMessagesBatchRow, error) {
-	rows, err := q.db.QueryContext(ctx, deleteOldGroupMessagesBatch, ageDays)
+func (q *Queries) DeleteOldGroupMessagesBatch(ctx context.Context, arg DeleteOldGroupMessagesBatchParams) ([]DeleteOldGroupMessagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldGroupMessagesBatch, arg.AgeDays, arg.BatchSize)
 	if err != nil {
 		return nil, err
 	}
