@@ -30,6 +30,8 @@ type GroupMessage struct {
 	Data            []byte
 	GroupIDDataHash []byte
 	IsCommit        sql.NullBool
+	SenderHmac      []byte
+	ShouldPush      sql.NullBool
 }
 
 type Inbox struct {
