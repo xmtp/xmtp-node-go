@@ -46,7 +46,7 @@ WITH to_delete AS (
     FROM welcome_messages
     WHERE created_at < NOW() - make_interval(days := $1)
     ORDER BY id
-    LIMIT 1000
+    LIMIT $2
     FOR UPDATE SKIP LOCKED
             )
 DELETE FROM welcome_messages wm
@@ -55,13 +55,18 @@ WHERE wm.id = td.id
     RETURNING wm.id, wm.created_at
 `
 
+type DeleteOldWelcomeMessagesBatchParams struct {
+	AgeDays   int32
+	BatchSize int32
+}
+
 type DeleteOldWelcomeMessagesBatchRow struct {
 	ID        int64
 	CreatedAt time.Time
 }
 
-func (q *Queries) DeleteOldWelcomeMessagesBatch(ctx context.Context, ageDays int32) ([]DeleteOldWelcomeMessagesBatchRow, error) {
-	rows, err := q.db.QueryContext(ctx, deleteOldWelcomeMessagesBatch, ageDays)
+func (q *Queries) DeleteOldWelcomeMessagesBatch(ctx context.Context, arg DeleteOldWelcomeMessagesBatchParams) ([]DeleteOldWelcomeMessagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldWelcomeMessagesBatch, arg.AgeDays, arg.BatchSize)
 	if err != nil {
 		return nil, err
 	}

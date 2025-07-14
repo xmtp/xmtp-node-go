@@ -249,7 +249,7 @@ WITH to_delete AS (
     FROM welcome_messages
     WHERE created_at < NOW() - make_interval(days := @age_days)
     ORDER BY id
-    LIMIT 1000
+    LIMIT @batch_size
     FOR UPDATE SKIP LOCKED
             )
 DELETE FROM welcome_messages wm

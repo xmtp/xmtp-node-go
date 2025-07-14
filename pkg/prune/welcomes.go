@@ -12,8 +12,21 @@ import (
 const DEFAULT_LIFETIME_OF_WELCOME_MESSAGES = 90
 
 type WelcomePruner struct {
-	log     *zap.Logger
-	querier *queries.Queries
+	log       *zap.Logger
+	querier   *queries.Queries
+	batchSize int32
+}
+
+func NewWelcomePruner(log *zap.Logger, querier *queries.Queries, batchSize int32) *WelcomePruner {
+	if batchSize < 100 {
+		log.Panic("batchSize must be at least 100")
+	}
+
+	return &WelcomePruner{
+		log:       log,
+		querier:   querier,
+		batchSize: batchSize,
+	}
 }
 
 func (w *WelcomePruner) Count(ctx context.Context) (int64, error) {
@@ -32,7 +45,13 @@ func (w *WelcomePruner) Count(ctx context.Context) (int64, error) {
 }
 
 func (w *WelcomePruner) PruneCycle(ctx context.Context) (int, error) {
-	rows, err := w.querier.DeleteOldWelcomeMessagesBatch(ctx, DEFAULT_LIFETIME_OF_WELCOME_MESSAGES)
+	rows, err := w.querier.DeleteOldWelcomeMessagesBatch(
+		ctx,
+		queries.DeleteOldWelcomeMessagesBatchParams{
+			AgeDays:   DEFAULT_LIFETIME_OF_WELCOME_MESSAGES,
+			BatchSize: w.batchSize,
+		},
+	)
 	if err != nil {
 		return 0, err
 	}
