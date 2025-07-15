@@ -53,6 +53,16 @@ type Installation struct {
 	KeyPackage []byte
 }
 
+type KeyPackage struct {
+	SequenceID     int64
+	InstallationID []byte
+	KeyPackage     []byte
+}
+
+type KeyPackagesBackfillTracker struct {
+	LastMigratedTimestamp int64
+}
+
 type WelcomeMessage struct {
 	ID                      int64
 	CreatedAt               time.Time
