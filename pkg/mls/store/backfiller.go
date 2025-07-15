@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"go.uber.org/zap"
@@ -73,20 +76,94 @@ func NewIsCommitBackfiller(ctx context.Context, db *sql.DB,
 	}
 }
 
+const maxPayloadSize = 4 * 1024 * 1024 // 4MB
+
+// The MLS validation service enforces a maximum request payload size of 4 MiB.
+// While the average message is only a few hundred bytes, some can be as large as ~3.5 MiB.
+// To stay within the limit, we batch messages conservatively—ensuring each batch is under 4 MiB
 func (b *IsCommitBackfiller) classifyMessages(
 	messages []BackfillGroupMessage,
 ) ([]BackfillGroupMessage, error) {
-	payloads := make([][]byte, len(messages))
-	for i, msg := range messages {
-		payloads[i] = msg.Data
+	var (
+		batchedOutput    []BackfillGroupMessage
+		currentBatch     []BackfillGroupMessage
+		currentBatchSize int
+	)
+
+	for _, message := range messages {
+		// Construct proto to estimate the size
+		input := &mlsv1.GroupMessageInput{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
+					Data: message.Data,
+				},
+			},
+		}
+
+		messageSize := proto.Size(input)
+
+		if messageSize > maxPayloadSize {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"message too large: %d bytes",
+				messageSize,
+			)
+		}
+
+		if currentBatchSize+messageSize > maxPayloadSize {
+			validated, err := b.classifyMessageBatch(currentBatch)
+			if err != nil {
+				return nil, err
+			}
+			batchedOutput = append(batchedOutput, validated...)
+			currentBatch = []BackfillGroupMessage{}
+			currentBatchSize = 0
+		}
+
+		currentBatch = append(currentBatch, message)
+		currentBatchSize += messageSize
 	}
 
-	validationResults, err := b.validationService.ValidateGroupMessagePayloads(b.ctx, payloads)
+	if len(currentBatch) > 0 {
+		validated, err := b.classifyMessageBatch(currentBatch)
+		if err != nil {
+			return nil, err
+		}
+		batchedOutput = append(batchedOutput, validated...)
+	}
+
+	return batchedOutput, nil
+}
+
+func (b *IsCommitBackfiller) classifyMessageBatch(
+	messages []BackfillGroupMessage,
+) ([]BackfillGroupMessage, error) {
+	input := make([]*mlsv1.GroupMessageInput, len(messages))
+
+	for i, message := range messages {
+		input[i] = &mlsv1.GroupMessageInput{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
+					Data: message.Data,
+				},
+			},
+		}
+	}
+
+	results, err := b.validationService.ValidateGroupMessages(b.ctx, input)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to validate group message: %v", err)
 	}
+	if len(results) != len(messages) {
+		return nil, status.Errorf(
+			codes.Internal,
+			"expected %d results, got %d",
+			len(messages),
+			len(results),
+		)
+	}
 
-	for i, result := range validationResults {
+	for i, result := range results {
 		messages[i].IsCommit = result.IsCommit
 	}
 
