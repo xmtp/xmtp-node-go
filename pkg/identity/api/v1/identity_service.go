@@ -13,7 +13,7 @@ type Service struct {
 	identityV1.UnimplementedIdentityApiServer
 
 	log               *zap.Logger
-	store             mlsstore.MlsStore
+	store             mlsstore.ReadWriteMlsStore
 	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
@@ -22,7 +22,7 @@ type Service struct {
 
 func NewService(
 	log *zap.Logger,
-	store mlsstore.MlsStore,
+	store mlsstore.ReadWriteMlsStore,
 	validationService mlsvalidate.MLSValidationService,
 ) (s *Service, err error) {
 	s = &Service{

@@ -7,7 +7,7 @@ on:
       - dev
       - rel/**
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
   workflow_dispatch:
 
