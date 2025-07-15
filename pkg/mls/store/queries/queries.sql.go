@@ -15,12 +15,13 @@ import (
 )
 
 const countDeletableGroupMessages = `-- name: CountDeletableGroupMessages :one
-SELECT COUNT(*)
-FROM group_messages
+SELECT
+	COUNT(*)
+FROM
+	group_messages
 WHERE
-    is_commit = false
-    AND
-    created_at < NOW() - make_interval(days := $1)
+	is_commit = FALSE
+	AND created_at < NOW() - make_interval(days := $1)
 `
 
 func (q *Queries) CountDeletableGroupMessages(ctx context.Context, ageDays int32) (int64, error) {
@@ -58,18 +59,22 @@ func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUp
 
 const deleteOldGroupMessagesBatch = `-- name: DeleteOldGroupMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM group_messages
-    WHERE is_commit = false
-      AND created_at < NOW() - make_interval(days := $1)
-    ORDER BY id
-    LIMIT $2
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM group_messages gm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		group_messages
+	WHERE
+		is_commit = FALSE
+		AND created_at < NOW() - make_interval(days := $1)
+	ORDER BY
+		id
+	LIMIT $2
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM group_messages gm USING to_delete td
 WHERE gm.id = td.id
-    RETURNING gm.id, gm.created_at
+RETURNING
+	gm.id, gm.created_at
 `
 
 type DeleteOldGroupMessagesBatchParams struct {
@@ -107,17 +112,21 @@ func (q *Queries) DeleteOldGroupMessagesBatch(ctx context.Context, arg DeleteOld
 
 const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
-    SELECT id
-    FROM welcome_messages
-    WHERE created_at < NOW() - make_interval(days := $1)
-    ORDER BY id
-    LIMIT $2
-    FOR UPDATE SKIP LOCKED
-            )
-DELETE FROM welcome_messages wm
-    USING to_delete td
+	SELECT
+		id
+	FROM
+		welcome_messages
+	WHERE
+		created_at < NOW() - make_interval(days := $1)
+	ORDER BY
+		id
+	LIMIT $2
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM welcome_messages wm USING to_delete td
 WHERE wm.id = td.id
-    RETURNING wm.id, wm.created_at
+RETURNING
+	wm.id, wm.created_at
 `
 
 type DeleteOldWelcomeMessagesBatchParams struct {
@@ -441,10 +450,29 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 	return i, err
 }
 
+const getInstallationLatestSequenceID = `-- name: GetInstallationLatestSequenceID :one
+SELECT
+	MAX(sequence_id)
+FROM
+	key_packages
+WHERE
+	installation_id = $1
+`
+
+func (q *Queries) GetInstallationLatestSequenceID(ctx context.Context, installationID []byte) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getInstallationLatestSequenceID, installationID)
+	var max interface{}
+	err := row.Scan(&max)
+	return max, err
+}
+
 const getOldWelcomeMessages = `-- name: GetOldWelcomeMessages :one
-SELECT COUNT(*)::bigint as old_message_count
-FROM welcome_messages
-WHERE created_at < NOW() - make_interval(days := $1)
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	welcome_messages
+WHERE
+	created_at < NOW() - make_interval(days := $1)
 `
 
 func (q *Queries) GetOldWelcomeMessages(ctx context.Context, ageDays int32) (int64, error) {
@@ -513,7 +541,7 @@ const insertGroupMessage = `-- name: InsertGroupMessage :one
 SELECT
 	id, created_at, group_id, data, group_id_data_hash, is_commit
 FROM
-    insert_group_message_with_is_commit($1, $2, $3, $4)
+	insert_group_message_with_is_commit($1, $2, $3, $4)
 `
 
 type InsertGroupMessageParams struct {
@@ -560,6 +588,25 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 	var sequence_id int64
 	err := row.Scan(&sequence_id)
 	return sequence_id, err
+}
+
+const insertKeyPackage = `-- name: InsertKeyPackage :one
+INSERT INTO key_packages(installation_id, key_package)
+	VALUES ($1, $2)
+RETURNING
+	sequence_id, installation_id, key_package
+`
+
+type InsertKeyPackageParams struct {
+	InstallationID []byte
+	KeyPackage     []byte
+}
+
+func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackageParams) (KeyPackage, error) {
+	row := q.db.QueryRowContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage)
+	var i KeyPackage
+	err := row.Scan(&i.SequenceID, &i.InstallationID, &i.KeyPackage)
+	return i, err
 }
 
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
@@ -999,14 +1046,16 @@ func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFro
 
 const selectEnvelopesForIsCommitBackfill = `-- name: SelectEnvelopesForIsCommitBackfill :many
 SELECT
-    id, data
+	id,
+	data
 FROM
-    group_messages
+	group_messages
 WHERE
-    is_commit
-        IS NULL
-ORDER BY id ASC
-    FOR UPDATE SKIP LOCKED
+	is_commit IS NULL
+ORDER BY
+	id ASC
+FOR UPDATE
+	SKIP LOCKED
 LIMIT 100
 `
 
@@ -1053,11 +1102,11 @@ func (q *Queries) TouchInbox(ctx context.Context, inboxID string) error {
 
 const updateIsCommitStatus = `-- name: UpdateIsCommitStatus :exec
 UPDATE
-    group_messages
+	group_messages
 SET
-    is_commit = $1
+	is_commit = $1
 WHERE
-    id = $2
+	id = $2
 `
 
 type UpdateIsCommitStatusParams struct {
@@ -1067,5 +1116,17 @@ type UpdateIsCommitStatusParams struct {
 
 func (q *Queries) UpdateIsCommitStatus(ctx context.Context, arg UpdateIsCommitStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateIsCommitStatus, arg.IsCommit, arg.ID)
+	return err
+}
+
+const updateKeyPackagesBackfillTracker = `-- name: UpdateKeyPackagesBackfillTracker :exec
+UPDATE
+	key_packages_backfill_tracker
+SET
+	last_migrated_timestamp = $1
+`
+
+func (q *Queries) UpdateKeyPackagesBackfillTracker(ctx context.Context, lastMigratedTimestamp int64) error {
+	_, err := q.db.ExecContext(ctx, updateKeyPackagesBackfillTracker, lastMigratedTimestamp)
 	return err
 }
