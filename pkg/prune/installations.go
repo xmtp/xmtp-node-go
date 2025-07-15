@@ -17,7 +17,11 @@ type InstallationsPruner struct {
 	batchSize int32
 }
 
-func NewInstallationsPruner(log *zap.Logger, querier *queries.Queries, batchSize int32) *InstallationsPruner {
+func NewInstallationsPruner(
+	log *zap.Logger,
+	querier *queries.Queries,
+	batchSize int32,
+) *InstallationsPruner {
 	if batchSize < 100 {
 		log.Panic("batchSize must be at least 100")
 	}
