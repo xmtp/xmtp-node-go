@@ -162,6 +162,7 @@ func (b *IsCommitBackfiller) Run() {
 				)
 				if err != nil {
 					b.log.Error("Failed to execute is_commit backfill cycle", zap.Error(err))
+					time.Sleep(1 * time.Second)
 				} else if !foundMessages {
 					time.Sleep(1 * time.Minute)
 				}
