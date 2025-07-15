@@ -67,6 +67,14 @@ func addEnvVars() {
 	if connStr, hasConnstr := os.LookupEnv("MLS_DB_CONNECTION_STRING"); hasConnstr {
 		options.MLSStore.DbConnectionString = connStr
 	}
+
+	if timeoutStr, hasTimeout := os.LookupEnv("MLS_DB_READ_TIMEOUT"); hasTimeout {
+		if duration, err := time.ParseDuration(timeoutStr); err == nil {
+			options.MLSStore.ReadTimeout = duration
+		} else {
+			log.Printf("Warning: Invalid MLS_DB_READ_TIMEOUT format '%s': %v", timeoutStr, err)
+		}
+	}
 }
 
 func fatal(msg string, args ...any) {
