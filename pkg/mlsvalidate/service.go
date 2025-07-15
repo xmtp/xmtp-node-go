@@ -50,6 +50,10 @@ type MLSValidationService interface {
 		ctx context.Context,
 		groupMessages []*mlsv1.GroupMessageInput,
 	) ([]GroupMessageValidationResult, error)
+	ValidateGroupMessagePayloads(
+		ctx context.Context,
+		groupMessagePayloads [][]byte,
+	) ([]GroupMessageValidationResult, error)
 	GetAssociationState(
 		ctx context.Context,
 		oldUpdates []*associations.IdentityUpdate,
@@ -162,6 +166,44 @@ func (s *MLSValidationServiceImpl) ValidateGroupMessages(
 	groupMessages []*mlsv1.GroupMessageInput,
 ) ([]GroupMessageValidationResult, error) {
 	req := makeValidateGroupMessagesRequest(groupMessages)
+
+	response, err := s.grpcClient.ValidateGroupMessages(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]GroupMessageValidationResult, len(response.Responses))
+	for i, response := range response.Responses {
+		if !response.IsOk {
+			return nil, fmt.Errorf("validation failed with error %s", response.ErrorMessage)
+		}
+		out[i] = GroupMessageValidationResult{
+			GroupId:  response.GroupId,
+			IsCommit: response.IsCommit,
+		}
+	}
+
+	return out, nil
+}
+
+func (s *MLSValidationServiceImpl) ValidateGroupMessagePayloads(
+	ctx context.Context,
+	groupMessagePayloads [][]byte,
+) ([]GroupMessageValidationResult, error) {
+	groupMessageRequests := make(
+		[]*svc.ValidateGroupMessagesRequest_GroupMessage,
+		len(groupMessagePayloads),
+	)
+
+	for i, payload := range groupMessagePayloads {
+		groupMessageRequests[i] = &svc.ValidateGroupMessagesRequest_GroupMessage{
+			GroupMessageBytesTlsSerialized: payload,
+		}
+	}
+
+	req := &svc.ValidateGroupMessagesRequest{
+		GroupMessages: groupMessageRequests,
+	}
 
 	response, err := s.grpcClient.ValidateGroupMessages(ctx, req)
 	if err != nil {

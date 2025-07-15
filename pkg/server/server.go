@@ -60,6 +60,7 @@ type Server struct {
 	allowLister   authz.AllowList
 	grpc          *api.Server
 	mlsDB         *bun.DB
+	backfiller    mlsstore.Backfiller
 }
 
 // Create a new Server
@@ -300,6 +301,16 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
+	if MLSStore != nil && MLSValidator != nil {
+		s.backfiller = mlsstore.NewIsCommitBackfiller(
+			ctx,
+			s.mlsDB.DB,
+			s.log.Named("backfiller"),
+			MLSValidator,
+		)
+		s.backfiller.Run()
+	}
+
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
 		&api.Config{
@@ -359,6 +370,10 @@ func (s *Server) Shutdown() {
 	// Close the gRPC s.
 	if s.grpc != nil {
 		s.grpc.Close()
+	}
+
+	if s.backfiller != nil {
+		s.backfiller.Close()
 	}
 
 	// Cancel outstanding goroutines

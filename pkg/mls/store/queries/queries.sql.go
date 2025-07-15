@@ -997,6 +997,47 @@ func (q *Queries) RevokeAddressFromLog(ctx context.Context, arg RevokeAddressFro
 	return err
 }
 
+const selectEnvelopesForIsCommitBackfill = `-- name: SelectEnvelopesForIsCommitBackfill :many
+SELECT
+    id, data
+FROM
+    group_messages
+WHERE
+    is_commit
+        IS NULL
+ORDER BY id ASC
+    FOR UPDATE SKIP LOCKED
+LIMIT 100
+`
+
+type SelectEnvelopesForIsCommitBackfillRow struct {
+	ID   int64
+	Data []byte
+}
+
+func (q *Queries) SelectEnvelopesForIsCommitBackfill(ctx context.Context) ([]SelectEnvelopesForIsCommitBackfillRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectEnvelopesForIsCommitBackfill)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectEnvelopesForIsCommitBackfillRow
+	for rows.Next() {
+		var i SelectEnvelopesForIsCommitBackfillRow
+		if err := rows.Scan(&i.ID, &i.Data); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const touchInbox = `-- name: TouchInbox :exec
 INSERT INTO inboxes(id)
 	VALUES (decode($1, 'hex'))
@@ -1007,5 +1048,24 @@ ON CONFLICT (id)
 
 func (q *Queries) TouchInbox(ctx context.Context, inboxID string) error {
 	_, err := q.db.ExecContext(ctx, touchInbox, inboxID)
+	return err
+}
+
+const updateIsCommitStatus = `-- name: UpdateIsCommitStatus :exec
+UPDATE
+    group_messages
+SET
+    is_commit = $1
+WHERE
+    id = $2
+`
+
+type UpdateIsCommitStatusParams struct {
+	IsCommit sql.NullBool
+	ID       int64
+}
+
+func (q *Queries) UpdateIsCommitStatus(ctx context.Context, arg UpdateIsCommitStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateIsCommitStatus, arg.IsCommit, arg.ID)
 	return err
 }
