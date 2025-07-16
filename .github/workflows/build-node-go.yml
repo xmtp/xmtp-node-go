@@ -122,8 +122,11 @@ jobs:
               exit 1
             fi
           
-            echo "node_go_image=$NODE_GO_DIGEST" >> $GITHUB_OUTPUT
-            echo "pruner_image=$PRUNER_DIGEST" >> $GITHUB_OUTPUT
+            NODE_GO_IMAGE="ghcr.io/xmtp/node-go@$NODE_GO_DIGEST"
+            PRUNER_IMAGE="ghcr.io/xmtp/xmtp-prune-mls@$PRUNER_DIGEST"
+
+            echo "node_go_image=$NODE_GO_IMAGE"   >> $GITHUB_OUTPUT
+            echo "pruner_image=$PRUNER_IMAGE"     >> $GITHUB_OUTPUT
 
       - name: Deploy Dev
         uses: xmtp-labs/terraform-deployer@v1
