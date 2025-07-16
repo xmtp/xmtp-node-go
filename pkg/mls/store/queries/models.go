@@ -59,10 +59,6 @@ type KeyPackage struct {
 	KeyPackage     []byte
 }
 
-type KeyPackagesBackfillTracker struct {
-	LastMigratedTimestamp int64
-}
-
 type WelcomeMessage struct {
 	ID                      int64
 	CreatedAt               time.Time

@@ -780,6 +780,26 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 	return sequence_id, err
 }
 
+const insertKeyPackage = `-- name: InsertKeyPackage :execrows
+INSERT INTO key_packages(installation_id, key_package)
+	VALUES ($1, $2)
+ON CONFLICT (installation_id, key_package)
+	DO NOTHING
+`
+
+type InsertKeyPackageParams struct {
+	InstallationID []byte
+	KeyPackage     []byte
+}
+
+func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 SELECT
 	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
