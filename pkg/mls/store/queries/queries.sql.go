@@ -450,22 +450,6 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 	return i, err
 }
 
-const getInstallationLatestSequenceID = `-- name: GetInstallationLatestSequenceID :one
-SELECT
-	MAX(sequence_id)
-FROM
-	key_packages
-WHERE
-	installation_id = $1
-`
-
-func (q *Queries) GetInstallationLatestSequenceID(ctx context.Context, installationID []byte) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, getInstallationLatestSequenceID, installationID)
-	var max interface{}
-	err := row.Scan(&max)
-	return max, err
-}
-
 const getOldWelcomeMessages = `-- name: GetOldWelcomeMessages :one
 SELECT
 	COUNT(*)::BIGINT AS old_message_count
@@ -590,11 +574,11 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 	return sequence_id, err
 }
 
-const insertKeyPackage = `-- name: InsertKeyPackage :one
+const insertKeyPackage = `-- name: InsertKeyPackage :execrows
 INSERT INTO key_packages(installation_id, key_package)
 	VALUES ($1, $2)
-RETURNING
-	sequence_id, installation_id, key_package
+ON CONFLICT (installation_id, key_package)
+	DO NOTHING
 `
 
 type InsertKeyPackageParams struct {
@@ -602,11 +586,12 @@ type InsertKeyPackageParams struct {
 	KeyPackage     []byte
 }
 
-func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackageParams) (KeyPackage, error) {
-	row := q.db.QueryRowContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage)
-	var i KeyPackage
-	err := row.Scan(&i.SequenceID, &i.InstallationID, &i.KeyPackage)
-	return i, err
+func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
@@ -1116,17 +1101,5 @@ type UpdateIsCommitStatusParams struct {
 
 func (q *Queries) UpdateIsCommitStatus(ctx context.Context, arg UpdateIsCommitStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateIsCommitStatus, arg.IsCommit, arg.ID)
-	return err
-}
-
-const updateKeyPackagesBackfillTracker = `-- name: UpdateKeyPackagesBackfillTracker :exec
-UPDATE
-	key_packages_backfill_tracker
-SET
-	last_migrated_timestamp = $1
-`
-
-func (q *Queries) UpdateKeyPackagesBackfillTracker(ctx context.Context, lastMigratedTimestamp int64) error {
-	_, err := q.db.ExecContext(ctx, updateKeyPackagesBackfillTracker, lastMigratedTimestamp)
 	return err
 }

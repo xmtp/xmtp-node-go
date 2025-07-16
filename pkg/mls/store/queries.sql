@@ -320,23 +320,9 @@ SET
 WHERE
 	id = @id;
 
--- name: InsertKeyPackage :one
+-- name: InsertKeyPackage :execrows
 INSERT INTO key_packages(installation_id, key_package)
 	VALUES (@installation_id, @key_package)
-RETURNING
-	*;
-
--- name: UpdateKeyPackagesBackfillTracker :exec
-UPDATE
-	key_packages_backfill_tracker
-SET
-	last_migrated_timestamp = @last_migrated_timestamp;
-
--- name: GetInstallationLatestSequenceID :one
-SELECT
-	MAX(sequence_id)
-FROM
-	key_packages
-WHERE
-	installation_id = @installation_id;
+ON CONFLICT (installation_id, key_package)
+	DO NOTHING;
 
