@@ -113,10 +113,14 @@ jobs:
       - name: Read and export digests
         id: digests
         run: |
-          NODE_GO_DIGEST=$(cut -d= -f2 digests/node-go.txt)
-          PRUNER_DIGEST=$(cut -d= -f2 digests/xmtp-prune-mls.txt)
-          echo "node_go_image=ghcr.io/xmtp/node-go@${NODE_GO_DIGEST}" >> $GITHUB_OUTPUT
-          echo "pruner_image=ghcr.io/xmtp/xmtp-prune-mls@${PRUNER_DIGEST}" >> $GITHUB_OUTPUT
+            set -euo pipefail
+            NODE_GO_DIGEST=$(cut -d= -f2 digests/node-go.txt)
+            PRUNER_DIGEST=$(cut -d= -f2 digests/xmtp-prune-mls.txt)
+  
+            if [[ -z "$NODE_GO_DIGEST" || -z "$PRUNER_DIGEST" ]]; then
+              echo "✖️  One or both digests are empty – aborting deploy." >&2
+              exit 1
+            fi
 
       - name: Deploy Dev
         uses: xmtp-labs/terraform-deployer@v1
