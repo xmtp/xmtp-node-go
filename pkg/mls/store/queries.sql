@@ -384,9 +384,3 @@ SELECT
 		FROM welcome_messages), 0)::BIGINT
 LIMIT 1;
 
--- name: InsertKeyPackage :execrows
-INSERT INTO key_packages(installation_id, key_package)
-	VALUES (@installation_id, @key_package)
-ON CONFLICT (installation_id, key_package)
-	DO NOTHING;
-
