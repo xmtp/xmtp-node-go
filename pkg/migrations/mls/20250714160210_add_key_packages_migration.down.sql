@@ -2,5 +2,5 @@ SET statement_timeout = 0;
 
 DROP TABLE IF EXISTS key_packages;
 
-DROP TABLE IF EXISTS key_packages_backfill_tracker;
+DROP INDEX IF EXISTS idx_key_packages_installation_id;
 
