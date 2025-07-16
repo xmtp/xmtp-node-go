@@ -320,7 +320,7 @@ SET
 WHERE
 	id = @id;
 
--- name: InsertKeyPackage :execrows
+-- name: InsertKeyPackage :exec
 INSERT INTO key_packages(installation_id, key_package)
 	VALUES (@installation_id, @key_package)
 ON CONFLICT (installation_id, key_package)
