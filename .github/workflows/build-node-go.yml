@@ -23,9 +23,6 @@ jobs:
       packages: write
     env:
       DOCKER_METADATA_PR_HEAD_SHA: true
-    outputs:
-      xmtpd_digest: ${{ steps.set_xmtpd_digest.outputs.digest }}
-      pruner_digest: ${{ steps.set_pruner_digest.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,23 +79,46 @@ jobs:
             GIT_COMMIT=${{ steps.ghd.outputs.describe }}
             GO_VERSION=${{ steps.goversion.outputs.go_version }}
 
-      - name: Set xmtpd digest output
-        if: ${{ matrix.image == 'node-go' }}
-        id: set_xmtpd_digest
-        run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
-      - name: Set pruner digest output
-        if: ${{ matrix.image == 'xmtp-prune-mls' }}
-        id: set_pruner_digest
-        run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
+      - name: Save digest output
+        run: |
+          mkdir -p image-digests
+          echo "digest=${{ steps.push.outputs.digest }}" > image-digests/${{ matrix.image }}.txt
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.image }}-digest
+          path: image-digests/${{ matrix.image }}.txt
 
   deploy:
-    name: Deploy new images to infra
+    name: Aggregate digests & deploy to infra
     runs-on: ubuntu-latest
     needs: push_to_registry
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download node-go digest
+        uses: actions/download-artifact@v4
+        with:
+          name: node-go-digest
+          path: digests
+
+      - name: Download pruner digest
+        uses: actions/download-artifact@v4
+        with:
+          name: xmtp-prune-mls-digest
+          path: digests
+
+      - name: Read and export digests
+        id: digests
+        run: |
+          NODE_GO_DIGEST=$(cut -d= -f2 digests/node-go.txt)
+          PRUNER_DIGEST=$(cut -d= -f2 digests/xmtp-prune-mls.txt)
+          echo "node_go_image=ghcr.io/xmtp/node-go@${NODE_GO_DIGEST}" >> $GITHUB_OUTPUT
+          echo "pruner_image=ghcr.io/xmtp/xmtp-prune-mls@${PRUNER_DIGEST}" >> $GITHUB_OUTPUT
+
       - name: Deploy Dev
         uses: xmtp-labs/terraform-deployer@v1
         timeout-minutes: 45
@@ -108,5 +128,5 @@ jobs:
           terraform-org: xmtp
           terraform-workspace: dev
           variable-name: "xmtp_node_image,xmtp_prune_mls_docker_image"
-          variable-value: "ghcr.io/xmtp/node-go@${{ needs.push_to_registry.outputs.xmtpd_digest }},ghcr.io/xmtp/xmtp-prune-mls@${{ needs.push_to_registry.outputs.pruner_digest }}"
+          variable-value: "${{ steps.digests.outputs.node_go_image }},${{ steps.digests.outputs.pruner_image }}"
           variable-value-required-prefix: "ghcr.io/xmtp/"
