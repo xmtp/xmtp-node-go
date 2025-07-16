@@ -40,7 +40,7 @@ func (ip *InstallationsPruner) Count(ctx context.Context) (int64, error) {
 		if errors.As(err, &pqErr) && pqErr.Code == "57014" {
 			// timeout error
 			// there might be millions of rows in the DB and a full table scan might take too long
-			ip.log.Warn("Timeout error while counting old welcome messages", zap.Error(err))
+			ip.log.Warn("Timeout error while counting old installations", zap.Error(err))
 			return 1, nil
 		}
 		return 0, err
