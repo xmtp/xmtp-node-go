@@ -81,14 +81,13 @@ jobs:
 
       - name: Save digest output
         run: |
-          mkdir -p image-digests
-          echo "digest=${{ steps.push.outputs.digest }}" > image-digests/${{ matrix.image }}.txt
+          echo "digest=${{ steps.push.outputs.digest }}" > ${{ matrix.image }}.txt
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.image }}-digest
-          path: image-digests/${{ matrix.image }}.txt
+          path: ${{ matrix.image }}.txt
 
   deploy:
     name: Aggregate digests & deploy to infra
