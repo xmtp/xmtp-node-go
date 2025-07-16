@@ -25,6 +25,7 @@ jobs:
       DOCKER_METADATA_PR_HEAD_SHA: true
     outputs:
       xmtpd_digest: ${{ steps.set_xmtpd_digest.outputs.digest }}
+      pruner_digest: ${{ steps.set_pruner_digest.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -85,6 +86,10 @@ jobs:
         if: ${{ matrix.image == 'node-go' }}
         id: set_xmtpd_digest
         run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
+      - name: Set pruner digest output
+        if: ${{ matrix.image == 'xmtp-prune-mls' }}
+        id: set_pruner_digest
+        run: echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy new images to infra
@@ -102,6 +107,6 @@ jobs:
           terraform-token: ${{ secrets.TERRAFORM_TOKEN }}
           terraform-org: xmtp
           terraform-workspace: dev
-          variable-name: xmtp_node_image
-          variable-value: "ghcr.io/xmtp/node-go@${{ needs.push_to_registry.outputs.xmtpd_digest }}"
-          variable-value-required-prefix: "ghcr.io/xmtp/node-go@sha256:"
+          variable-name: "xmtp_node_image,xmtp_prune_mls_docker_image"
+          variable-value: "ghcr.io/xmtp/node-go@${{ needs.push_to_registry.outputs.xmtpd_digest }},ghcr.io/xmtp/xmtp-prune-mls@${{ needs.push_to_registry.outputs.pruner_digest }}"
+          variable-value-required-prefix: "ghcr.io/xmtp/"
