@@ -105,6 +105,54 @@ func (q *Queries) DeleteOldGroupMessagesBatch(ctx context.Context, arg DeleteOld
 	return items, nil
 }
 
+const deleteOldInstallationsBatch = `-- name: DeleteOldInstallationsBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM installations
+    WHERE created_at < NOW() - make_interval(days := $1)
+    ORDER BY id
+    LIMIT $2
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM installations i
+    USING to_delete td
+WHERE i.id = td.id
+    RETURNING i.id, i.created_at
+`
+
+type DeleteOldInstallationsBatchParams struct {
+	AgeDays   int32
+	BatchSize int32
+}
+
+type DeleteOldInstallationsBatchRow struct {
+	ID        []byte
+	CreatedAt int64
+}
+
+func (q *Queries) DeleteOldInstallationsBatch(ctx context.Context, arg DeleteOldInstallationsBatchParams) ([]DeleteOldInstallationsBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldInstallationsBatch, arg.AgeDays, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeleteOldInstallationsBatchRow
+	for rows.Next() {
+		var i DeleteOldInstallationsBatchRow
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
     SELECT id
@@ -439,6 +487,19 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 		&i.KeyPackage,
 	)
 	return i, err
+}
+
+const getOldInstallations = `-- name: GetOldInstallations :one
+SELECT COUNT(*)::bigint as old_message_count
+FROM installations
+WHERE created_at < NOW() - make_interval(days := $1)
+`
+
+func (q *Queries) GetOldInstallations(ctx context.Context, ageDays int32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOldInstallations, ageDays)
+	var old_message_count int64
+	err := row.Scan(&old_message_count)
+	return old_message_count, err
 }
 
 const getOldWelcomeMessages = `-- name: GetOldWelcomeMessages :one

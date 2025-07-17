@@ -3,6 +3,8 @@ package prune
 import (
 	"context"
 	"database/sql"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
@@ -38,6 +40,7 @@ func (e *Executor) Run() error {
 	pruners := []Pruner{
 		NewWelcomePruner(e.log, querier, e.config.BatchSize),
 		NewGroupMessagesPruner(e.log, querier, e.config.BatchSize),
+		NewInstallationsPruner(e.log, querier, e.config.BatchSize),
 	}
 
 	if e.config.CountDeletable {
@@ -63,7 +66,7 @@ func (e *Executor) Run() error {
 		return nil
 	}
 
-	totalDeletionCount := 0
+	var totalDeletionCount int64 = 0
 
 	cyclesCompleted := 0
 
@@ -73,21 +76,40 @@ func (e *Executor) Run() error {
 			break
 		}
 
-		deletedThisCycle := 0
+		var (
+			wg               sync.WaitGroup
+			deletedThisCycle int64
+			errCh            = make(chan error, len(pruners))
+		)
+
+		wg.Add(len(pruners))
 		for _, pruner := range pruners {
-			deleteCnt, err := pruner.PruneCycle(e.ctx)
-			if err != nil {
-				return err
-			}
-			deletedThisCycle += deleteCnt
-			totalDeletionCount += deleteCnt
+			go func(p Pruner) {
+				defer wg.Done()
+
+				deleteCnt, err := p.PruneCycle(e.ctx)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				atomic.AddInt64(&deletedThisCycle, int64(deleteCnt))
+				atomic.AddInt64(&totalDeletionCount, int64(deleteCnt))
+			}(pruner)
+		}
+
+		wg.Wait()
+		close(errCh)
+
+		if err := <-errCh; err != nil {
+			return err
 		}
 
 		if deletedThisCycle == 0 {
 			break
 		}
 
-		e.log.Info("Pruned expired envelopes batch", zap.Int("count", deletedThisCycle))
+		e.log.Info("Pruned expired envelopes batch", zap.Int64("count", deletedThisCycle))
 		cyclesCompleted++
 	}
 
@@ -97,7 +119,7 @@ func (e *Executor) Run() error {
 
 	e.log.Info(
 		"Done",
-		zap.Int("pruned count", totalDeletionCount),
+		zap.Int64("pruned count", totalDeletionCount),
 		zap.Duration("elapsed", time.Since(start)),
 	)
 

@@ -286,6 +286,25 @@ DELETE FROM group_messages gm
 WHERE gm.id = td.id
     RETURNING gm.id, gm.created_at;
 
+-- name: GetOldInstallations :one
+SELECT COUNT(*)::bigint as old_message_count
+FROM installations
+WHERE created_at < NOW() - make_interval(days := @age_days);
+
+-- name: DeleteOldInstallationsBatch :many
+WITH to_delete AS (
+    SELECT id
+    FROM installations
+    WHERE created_at < NOW() - make_interval(days := @age_days)
+    ORDER BY id
+    LIMIT @batch_size
+    FOR UPDATE SKIP LOCKED
+            )
+DELETE FROM installations i
+    USING to_delete td
+WHERE i.id = td.id
+    RETURNING i.id, i.created_at;
+
 -- name: SelectEnvelopesForIsCommitBackfill :many
 SELECT
     id, data
