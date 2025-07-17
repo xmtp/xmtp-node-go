@@ -51,6 +51,12 @@ type Installation struct {
 	KeyPackage []byte
 }
 
+type KeyPackage struct {
+	SequenceID     int64
+	InstallationID []byte
+	KeyPackage     []byte
+}
+
 type WelcomeMessage struct {
 	ID                      int64
 	CreatedAt               time.Time
