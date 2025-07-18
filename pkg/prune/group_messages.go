@@ -17,6 +17,10 @@ type GroupMessagesPruner struct {
 	batchSize int32
 }
 
+func (g *GroupMessagesPruner) Name() string {
+	return "group_messages"
+}
+
 func NewGroupMessagesPruner(
 	log *zap.Logger,
 	querier *queries.Queries,

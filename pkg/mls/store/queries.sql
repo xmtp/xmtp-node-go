@@ -295,7 +295,9 @@ WHERE created_at < NOW() - make_interval(days := @age_days);
 WITH to_delete AS (
     SELECT id
     FROM installations
-    WHERE created_at < NOW() - make_interval(days := @age_days)
+    WHERE created_at < (
+        EXTRACT(EPOCH FROM NOW() - ((@age_days)::int || ' days')::interval) * 1e9
+        )::bigint
     ORDER BY id
     LIMIT @batch_size
     FOR UPDATE SKIP LOCKED
