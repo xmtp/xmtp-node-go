@@ -83,7 +83,6 @@ func (e *Executor) Run() error {
 
 			var totalDeletionCount int64 = 0
 			cyclesCompleted := 0
-			var deletedThisCycle int64 = 0
 
 			for {
 				if cyclesCompleted >= e.config.MaxCycles {
@@ -94,21 +93,20 @@ func (e *Executor) Run() error {
 					break
 				}
 
-				deleteCnt, err := pruner.PruneCycle(e.ctx)
+				deletedThisCycle, err := pruner.PruneCycle(e.ctx)
 				if err != nil {
 					logger.Error("Error pruning envelopes", zap.Error(err))
 					errCh <- err
 					return
 				}
 
-				deletedThisCycle += int64(deleteCnt)
-				totalDeletionCount += int64(deleteCnt)
+				totalDeletionCount += int64(deletedThisCycle)
 
 				if deletedThisCycle == 0 {
 					break
 				}
 
-				logger.Info("Pruned expired envelopes batch", zap.Int64("count", deletedThisCycle))
+				logger.Info("Pruned expired envelopes batch", zap.Int("count", deletedThisCycle))
 				cyclesCompleted++
 			}
 
@@ -125,7 +123,6 @@ func (e *Executor) Run() error {
 	}
 
 	wg.Wait()
-	close(errCh)
 
 	e.log.Info("All pruners finished")
 
