@@ -123,6 +123,7 @@ func (e *Executor) Run() error {
 	}
 
 	wg.Wait()
+	close(errCh)
 
 	e.log.Info("All pruners finished")
 
