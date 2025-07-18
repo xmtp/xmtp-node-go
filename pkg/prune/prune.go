@@ -54,15 +54,11 @@ func (e *Executor) Run() error {
 			defer wg.Done()
 			logger := e.log.Named(pruner.Name())
 			if e.config.CountDeletable {
-				deletableCount := int64(0)
-				for _, pruner := range pruners {
-					prunerCount, err := pruner.Count(e.ctx)
-					if err != nil {
-						logger.Error("Error counting envelopes for pruning", zap.Error(err))
-						errCh <- err
-						return
-					}
-					deletableCount += prunerCount
+				deletableCount, err := pruner.Count(e.ctx)
+				if err != nil {
+					logger.Error("Error counting envelopes for pruning", zap.Error(err))
+					errCh <- err
+					return
 				}
 
 				logger.Info(
