@@ -17,6 +17,10 @@ type WelcomePruner struct {
 	batchSize int32
 }
 
+func (w *WelcomePruner) Name() string {
+	return "welcomes"
+}
+
 func NewWelcomePruner(log *zap.Logger, querier *queries.Queries, batchSize int32) *WelcomePruner {
 	if batchSize < 100 {
 		log.Panic("batchSize must be at least 100")

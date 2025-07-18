@@ -109,7 +109,9 @@ const deleteOldInstallationsBatch = `-- name: DeleteOldInstallationsBatch :many
 WITH to_delete AS (
     SELECT id
     FROM installations
-    WHERE created_at < NOW() - make_interval(days := $1)
+    WHERE created_at < (
+        EXTRACT(EPOCH FROM NOW() - (($1)::int || ' days')::interval) * 1e9
+        )::bigint
     ORDER BY id
     LIMIT $2
     FOR UPDATE SKIP LOCKED

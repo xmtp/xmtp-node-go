@@ -17,6 +17,10 @@ type InstallationsPruner struct {
 	batchSize int32
 }
 
+func (ip *InstallationsPruner) Name() string {
+	return "installations"
+}
+
 func NewInstallationsPruner(
 	log *zap.Logger,
 	querier *queries.Queries,
