@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
@@ -43,85 +42,90 @@ func (e *Executor) Run() error {
 		NewInstallationsPruner(e.log, querier, e.config.BatchSize),
 	}
 
-	if e.config.CountDeletable {
-		deletableCount := int64(0)
-		for _, pruner := range pruners {
-			prunerCount, err := pruner.Count(e.ctx)
-			if err != nil {
-				return err
-			}
-			deletableCount += prunerCount
-		}
+	var (
+		wg    sync.WaitGroup
+		errCh = make(chan error, len(pruners))
+	)
 
-		e.log.Info("Count of envelopes eligible for pruning", zap.Int64("count", deletableCount))
+	wg.Add(len(pruners))
 
-		if deletableCount == 0 {
-			e.log.Info("No envelopes found for pruning")
-			return nil
-		}
-	}
-
-	if e.config.DryRun {
-		e.log.Info("Dry run mode enabled. Nothing to do")
-		return nil
-	}
-
-	var totalDeletionCount int64 = 0
-
-	cyclesCompleted := 0
-
-	for {
-		if cyclesCompleted >= e.config.MaxCycles {
-			e.log.Warn("Reached maximum pruning cycles", zap.Int("maxCycles", e.config.MaxCycles))
-			break
-		}
-
-		var (
-			wg               sync.WaitGroup
-			deletedThisCycle int64
-			errCh            = make(chan error, len(pruners))
-		)
-
-		wg.Add(len(pruners))
-		for _, pruner := range pruners {
-			go func(p Pruner) {
-				defer wg.Done()
-
-				deleteCnt, err := p.PruneCycle(e.ctx)
+	for _, pruner := range pruners {
+		go func(pruner Pruner) {
+			defer wg.Done()
+			logger := e.log.Named(pruner.Name())
+			if e.config.CountDeletable {
+				deletableCount, err := pruner.Count(e.ctx)
 				if err != nil {
+					logger.Error("Error counting envelopes for pruning", zap.Error(err))
 					errCh <- err
 					return
 				}
 
-				atomic.AddInt64(&deletedThisCycle, int64(deleteCnt))
-				atomic.AddInt64(&totalDeletionCount, int64(deleteCnt))
-			}(pruner)
-		}
+				logger.Info(
+					"Count of envelopes eligible for pruning",
+					zap.Int64("count", deletableCount),
+				)
 
-		wg.Wait()
-		close(errCh)
+				if deletableCount == 0 {
+					logger.Info("No envelopes found for pruning")
+					return
+				}
+			}
 
-		if err := <-errCh; err != nil {
-			return err
-		}
+			if e.config.DryRun {
+				logger.Info("Dry run mode enabled. Nothing to do")
+				return
+			}
 
-		if deletedThisCycle == 0 {
-			break
-		}
+			var totalDeletionCount int64 = 0
+			cyclesCompleted := 0
 
-		e.log.Info("Pruned expired envelopes batch", zap.Int64("count", deletedThisCycle))
-		cyclesCompleted++
+			for {
+				if cyclesCompleted >= e.config.MaxCycles {
+					logger.Warn(
+						"Reached maximum pruning cycles",
+						zap.Int("maxCycles", e.config.MaxCycles),
+					)
+					break
+				}
+
+				deletedThisCycle, err := pruner.PruneCycle(e.ctx)
+				if err != nil {
+					logger.Error("Error pruning envelopes", zap.Error(err))
+					errCh <- err
+					return
+				}
+
+				totalDeletionCount += int64(deletedThisCycle)
+
+				if deletedThisCycle == 0 {
+					break
+				}
+
+				logger.Info("Pruned expired envelopes batch", zap.Int("count", deletedThisCycle))
+				cyclesCompleted++
+			}
+
+			if totalDeletionCount == 0 {
+				logger.Info("No expired envelopes found")
+			}
+
+			logger.Info(
+				"Done",
+				zap.Int64("pruned count", totalDeletionCount),
+				zap.Duration("elapsed", time.Since(start)),
+			)
+		}(pruner)
 	}
 
-	if totalDeletionCount == 0 {
-		e.log.Info("No expired envelopes found")
-	}
+	wg.Wait()
+	close(errCh)
 
-	e.log.Info(
-		"Done",
-		zap.Int64("pruned count", totalDeletionCount),
-		zap.Duration("elapsed", time.Since(start)),
-	)
+	e.log.Info("All pruners finished")
+
+	if err := <-errCh; err != nil {
+		return err
+	}
 
 	return nil
 }
