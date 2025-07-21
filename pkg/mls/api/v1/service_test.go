@@ -490,8 +490,10 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 	stream.EXPECT().Send(mock.MatchedBy(newGroupMessageIdAndDataEqualsMatcher(&mlsv1.GroupMessage{
 		Version: &mlsv1.GroupMessage_V1_{
 			V1: &mlsv1.GroupMessage_V1{
-				Id:   3,
-				Data: []byte("data3"),
+				Id:         3,
+				Data:       []byte("data3"),
+				SenderHmac: []byte("hmac3"),
+				ShouldPush: false,
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
