@@ -36,7 +36,8 @@ type Config struct {
 	Waku         *wakunode.WakuNode
 	Log          *zap.Logger
 	Store        *store.Store
-	MLSStore     mlsstore.MlsStore
+	MLSStore     mlsstore.ReadWriteMlsStore
+	ReadMLSStore mlsstore.ReadMlsStore
 	MLSValidator mlsvalidate.MLSValidationService
 	RateLimiter  ratelimiter.RateLimiter
 }

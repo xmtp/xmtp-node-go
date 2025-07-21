@@ -121,10 +121,7 @@ func newMockedValidationService() *mockedMLSValidationService {
 func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func()) {
 	log := test.NewLog(t)
 	db, _, mlsDbCleanup := test.NewMLSDB(t)
-	store, err := mlsstore.New(ctx, mlsstore.Config{
-		Log: log,
-		DB:  db,
-	})
+	store, err := mlsstore.New(ctx, log, db)
 	require.NoError(t, err)
 	mlsValidationService := newMockedValidationService()
 
