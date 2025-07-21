@@ -8,21 +8,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
-	wakupb "github.com/waku-org/go-waku/waku/v2/protocol/pb"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity"
+	messageApi "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	messageContentsProto "github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
+	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	test "github.com/xmtp/xmtp-node-go/pkg/testing"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -69,29 +71,14 @@ func newTestService(
 	})
 	require.NoError(t, err)
 	mockMlsValidation := mocks.NewMockMLSValidationService(t)
-	natsServer, err := server.NewServer(&server.Options{
-		Port: server.RANDOM_PORT,
-	})
-	require.NoError(t, err)
-	go natsServer.Start()
-	if !natsServer.ReadyForConnections(4 * time.Second) {
-		t.Fail()
-	}
 
-	svc, err := NewService(
-		log,
-		store,
-		mockMlsValidation,
-		natsServer,
-		func(ctx context.Context, wm *wakupb.WakuMessage) error {
-			return nil
-		},
-	)
+	subDispatcher := subscriptions.NewSubscriptionDispatcher(log)
+
+	svc, err := NewService(log, store, subDispatcher, mockMlsValidation)
 	require.NoError(t, err)
 
 	return svc, db, mockMlsValidation, func() {
 		svc.Close()
-		natsServer.Shutdown()
 		mlsDbCleanup()
 	}
 }
@@ -365,19 +352,18 @@ func TestSendWelcomeMessagesConcurrent(t *testing.T) {
 
 func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _, cleanup := newTestService(t, ctx)
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
 	groupId := []byte(test.RandomString(32))
 
-	msgs := make([]*mlsv1.GroupMessage, 10)
+	mockValidateGroupMessages(validationSvc, groupId)
+
+	inputs := make([]*mlsv1.GroupMessageInput, 10)
 	for i := 0; i < 10; i++ {
-		msgs[i] = &mlsv1.GroupMessage{
-			Version: &mlsv1.GroupMessage_V1_{
-				V1: &mlsv1.GroupMessage_V1{
-					Id:         uint64(i + 1),
-					CreatedNs:  uint64(i + 1),
-					GroupId:    groupId,
+		inputs[i] = &mlsv1.GroupMessageInput{
+			Version: &mlsv1.GroupMessageInput_V1_{
+				V1: &mlsv1.GroupMessageInput_V1{
 					Data:       []byte(fmt.Sprintf("data%d", i+1)),
 					SenderHmac: []byte(fmt.Sprintf("hmac%d", i+1)),
 					ShouldPush: true,
@@ -386,11 +372,25 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 		}
 	}
 
+	// Publish the first 5 messages before the stream starts
+	for _, input := range inputs[:5] {
+		_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
+			Messages: []*mlsv1.GroupMessageInput{input},
+		})
+		require.NoError(t, err)
+	}
+
 	stream := mocks.NewMockMlsApi_SubscribeGroupMessagesServer(t)
 	stream.EXPECT().SendHeader(metadata.New(map[string]string{"subscribed": "true"})).Return(nil)
-	for _, msg := range msgs {
+	allIDs := make(chan uint64, 10)
+	for _, input := range inputs {
+		input := input
+		runner := func(msg *mlsv1.GroupMessage) {
+			allIDs <- msg.GetV1().Id
+		}
 		stream.EXPECT().
-			Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).
+			Send(mock.MatchedBy(newGroupMessageDataAndHmacEqualsMatcher(input).Matches)).
+			Run(runner).
 			Return(nil).
 			Times(1)
 	}
@@ -404,23 +404,33 @@ func TestSubscribeGroupMessages_WithoutCursor(t *testing.T) {
 				},
 			},
 		}, stream)
-		require.NoError(t, err)
+		if err != nil {
+			require.Error(t, err)
+			require.Equal(t, codes.Unavailable, status.Code(err))
+		}
 	}()
-	time.Sleep(50 * time.Millisecond)
 
-	for _, msg := range msgs {
-		msgB, err := proto.Marshal(msg)
-		require.NoError(t, err)
-
-		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
-			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
-			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+	// Publish the last 5 messages after the stream is already running
+	for _, input := range inputs[5:] {
+		_, err := svc.SendGroupMessages(ctx, &mlsv1.SendGroupMessagesRequest{
+			Messages: []*mlsv1.GroupMessageInput{input},
 		})
 		require.NoError(t, err)
 	}
 
-	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
+	assertExpectationsWithTimeout(t, &stream.Mock, 3*time.Second, 100*time.Millisecond)
+
+	close(allIDs)
+
+	highestId := uint64(0)
+	numSent := 0
+	for id := range allIDs {
+		require.Greater(t, id, highestId)
+		highestId = id
+		numSent++
+	}
+
+	require.Equal(t, numSent, len(inputs))
 }
 
 func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
@@ -497,6 +507,7 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 			},
 		},
 	}).Matches)).Return(nil).Times(1)
+
 	for _, msg := range msgs {
 		stream.EXPECT().
 			Send(mock.MatchedBy(newGroupMessageEqualsMatcher(msg).Matches)).
@@ -514,21 +525,25 @@ func TestSubscribeGroupMessages_WithCursor(t *testing.T) {
 				},
 			},
 		}, stream)
-		require.NoError(t, err)
+		if err != nil {
+			require.Error(t, err)
+			require.Equal(t, codes.Unavailable, status.Code(err))
+		}
 	}()
-	time.Sleep(50 * time.Millisecond)
+
+	// Make sure that the stream has started before we send more messages
+	time.Sleep(100 * time.Millisecond)
 
 	// Send the 10 real-time messages.
 	for _, msg := range msgs {
 		msgB, err := proto.Marshal(msg)
 		require.NoError(t, err)
 
-		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+		svc.subDispatcher.HandleEnvelope(&messageApi.Envelope{
 			ContentTopic: topic.BuildMLSV1GroupTopic(msg.GetV1().GroupId),
-			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			TimestampNs:  uint64(msg.GetV1().CreatedNs),
+			Message:      msgB,
 		})
-		require.NoError(t, err)
 	}
 
 	// Expectations should eventually be satisfied.
@@ -576,20 +591,23 @@ func TestSubscribeWelcomeMessages_WithoutCursor(t *testing.T) {
 				},
 			},
 		}, stream)
-		require.NoError(t, err)
+		if err != nil {
+			require.Error(t, err)
+			require.Equal(t, codes.Unavailable, status.Code(err))
+		}
 	}()
-	time.Sleep(50 * time.Millisecond)
+	// Make sure that the stream has started before we send more messages
+	time.Sleep(100 * time.Millisecond)
 
 	for _, msg := range msgs {
 		msgB, err := proto.Marshal(msg)
 		require.NoError(t, err)
 
-		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+		svc.subDispatcher.HandleEnvelope(&messageApi.Envelope{
 			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
-			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			TimestampNs:  uint64(msg.GetV1().CreatedNs),
+			Message:      msgB,
 		})
-		require.NoError(t, err)
 	}
 
 	assertExpectationsWithTimeout(t, &stream.Mock, 5*time.Second, 100*time.Millisecond)
@@ -693,21 +711,24 @@ func TestSubscribeWelcomeMessages_WithCursor(t *testing.T) {
 				},
 			},
 		}, stream)
-		require.NoError(t, err)
+		if err != nil {
+			require.Error(t, err)
+			require.Equal(t, codes.Unavailable, status.Code(err))
+		}
 	}()
-	time.Sleep(50 * time.Millisecond)
+	// Make sure that the stream has started before we send more messages
+	time.Sleep(100 * time.Millisecond)
 
 	// Send the 10 real-time messages.
 	for _, msg := range msgs {
 		msgB, err := proto.Marshal(msg)
 		require.NoError(t, err)
 
-		err = svc.HandleIncomingWakuRelayMessage(&wakupb.WakuMessage{
+		svc.subDispatcher.HandleEnvelope(&messageApi.Envelope{
 			ContentTopic: topic.BuildMLSV1WelcomeTopic(msg.GetV1().InstallationKey),
-			Timestamp:    int64(msg.GetV1().CreatedNs),
-			Payload:      msgB,
+			TimestampNs:  uint64(msg.GetV1().CreatedNs),
+			Message:      msgB,
 		})
-		require.NoError(t, err)
 	}
 
 	// Expectations should eventually be satisfied.
@@ -729,6 +750,25 @@ func (m *groupMessageEqualsMatcher) Matches(obj interface{}) bool {
 }
 
 func (m *groupMessageEqualsMatcher) String() string {
+	return m.obj.String()
+}
+
+type groupMessageDataAndHmacEqualsMatcher struct {
+	obj *mlsv1.GroupMessageInput
+}
+
+func newGroupMessageDataAndHmacEqualsMatcher(
+	obj *mlsv1.GroupMessageInput,
+) *groupMessageDataAndHmacEqualsMatcher {
+	return &groupMessageDataAndHmacEqualsMatcher{obj}
+}
+
+func (m *groupMessageDataAndHmacEqualsMatcher) Matches(obj interface{}) bool {
+	return bytes.Equal(m.obj.GetV1().Data, obj.(*mlsv1.GroupMessage).GetV1().Data) &&
+		bytes.Equal(m.obj.GetV1().SenderHmac, obj.(*mlsv1.GroupMessage).GetV1().SenderHmac)
+}
+
+func (m *groupMessageDataAndHmacEqualsMatcher) String() string {
 	return m.obj.String()
 }
 

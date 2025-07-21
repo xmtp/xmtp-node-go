@@ -343,6 +343,55 @@ func (q *Queries) GetAllGroupMessages(ctx context.Context) ([]GroupMessage, erro
 	return items, nil
 }
 
+const getAllGroupMessagesWithCursor = `-- name: GetAllGroupMessagesWithCursor :many
+SELECT
+	id, created_at, group_id, data, group_id_data_hash, is_commit, sender_hmac, should_push
+FROM
+	group_messages
+WHERE
+	id > $1
+ORDER BY
+	id ASC
+LIMIT $2
+`
+
+type GetAllGroupMessagesWithCursorParams struct {
+	Cursor  int64
+	Numrows int32
+}
+
+func (q *Queries) GetAllGroupMessagesWithCursor(ctx context.Context, arg GetAllGroupMessagesWithCursorParams) ([]GroupMessage, error) {
+	rows, err := q.db.QueryContext(ctx, getAllGroupMessagesWithCursor, arg.Cursor, arg.Numrows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GroupMessage
+	for rows.Next() {
+		var i GroupMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.GroupID,
+			&i.Data,
+			&i.GroupIDDataHash,
+			&i.IsCommit,
+			&i.SenderHmac,
+			&i.ShouldPush,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllInboxLogs = `-- name: GetAllInboxLogs :many
 SELECT
 	sequence_id,
@@ -396,6 +445,55 @@ ORDER BY
 
 func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, error) {
 	rows, err := q.db.QueryContext(ctx, getAllWelcomeMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WelcomeMessage
+	for rows.Next() {
+		var i WelcomeMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.InstallationKey,
+			&i.Data,
+			&i.HpkePublicKey,
+			&i.InstallationKeyDataHash,
+			&i.WrapperAlgorithm,
+			&i.WelcomeMetadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllWelcomeMessagesWithCursor = `-- name: GetAllWelcomeMessagesWithCursor :many
+SELECT
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+FROM
+	welcome_messages
+WHERE
+	id > $1
+ORDER BY
+	id ASC
+LIMIT $2
+`
+
+type GetAllWelcomeMessagesWithCursorParams struct {
+	Cursor  int64
+	Numrows int32
+}
+
+func (q *Queries) GetAllWelcomeMessagesWithCursor(ctx context.Context, arg GetAllWelcomeMessagesWithCursorParams) ([]WelcomeMessage, error) {
+	rows, err := q.db.QueryContext(ctx, getAllWelcomeMessagesWithCursor, arg.Cursor, arg.Numrows)
 	if err != nil {
 		return nil, err
 	}
@@ -502,6 +600,38 @@ func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation,
 		&i.KeyPackage,
 	)
 	return i, err
+}
+
+const getLatestGroupMessageID = `-- name: GetLatestGroupMessageID :one
+SELECT
+	COALESCE((
+		SELECT
+			max(id)
+		FROM group_messages), 0)::BIGINT
+LIMIT 1
+`
+
+func (q *Queries) GetLatestGroupMessageID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getLatestGroupMessageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getLatestWelcomeMessageID = `-- name: GetLatestWelcomeMessageID :one
+SELECT
+	COALESCE((
+		SELECT
+			max(id)
+		FROM welcome_messages), 0)::BIGINT
+LIMIT 1
+`
+
+func (q *Queries) GetLatestWelcomeMessageID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getLatestWelcomeMessageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getOldInstallations = `-- name: GetOldInstallations :one
