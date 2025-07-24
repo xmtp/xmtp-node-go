@@ -37,11 +37,11 @@ import (
 // Final ordering in key_packages is not needed, as this design guarantees that the newest
 // key package is always inserted in last position in key_packages.
 type InstallationsBackfiller struct {
-	ctx               context.Context
-	cancel            context.CancelFunc
-	wg                sync.WaitGroup
-	log               *zap.Logger
-	db                *sql.DB
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	log    *zap.Logger
+	db     *sql.DB
 }
 
 var _ Backfiller = (*InstallationsBackfiller)(nil)
@@ -52,10 +52,10 @@ func NewInstallationsBackfiller(ctx context.Context, db *sql.DB,
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &InstallationsBackfiller{
-		ctx:               ctx,
-		cancel:            cancel,
-		log:               log,
-		db:                db,
+		ctx:    ctx,
+		cancel: cancel,
+		log:    log,
+		db:     db,
 	}
 }
 
@@ -100,13 +100,16 @@ func (b *InstallationsBackfiller) Run() {
 								return err
 							}
 
-							err = querier.UpdateIsAppendedStatus(ctx, queries.UpdateIsAppendedStatusParams{
-								IsAppended: sql.NullBool{
-									Bool:  true,
-									Valid: true,
+							err = querier.UpdateIsAppendedStatus(
+								ctx,
+								queries.UpdateIsAppendedStatusParams{
+									IsAppended: sql.NullBool{
+										Bool:  true,
+										Valid: true,
+									},
+									ID: installation.ID,
 								},
-								ID: installation.ID,
-							})
+							)
 							if err != nil {
 								b.log.Error("error updating is_appended status", zap.Error(err))
 								return err
