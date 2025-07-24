@@ -243,6 +243,7 @@ func (s *Store) CreateOrUpdateInstallation(
 		err = querier.InsertKeyPackage(ctx, queries.InsertKeyPackageParams{
 			InstallationID: installationId,
 			KeyPackage:     keyPackage,
+			CreatedAt:      now,
 		})
 		if err != nil {
 			s.log.Error("error inserting key package", zap.Error(err))

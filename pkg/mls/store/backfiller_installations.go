@@ -90,34 +90,27 @@ func (b *InstallationsBackfiller) Run() {
 						}
 
 						for _, installation := range installations {
-								err := RunInTx(ctx, b.db, nil, func(ctx context.Context, querier *queries.Queries) error {
-									err = querier.InsertKeyPackage(ctx, queries.InsertKeyPackageParams{
-										InstallationID: installation.ID,
-										KeyPackage:     installation.KeyPackage,
-									})
-									if err != nil {
-										b.log.Error("error inserting key package", zap.Error(err))
-										return err
-									}
+							err = querier.InsertKeyPackage(ctx, queries.InsertKeyPackageParams{
+								InstallationID: installation.ID,
+								KeyPackage:     installation.KeyPackage,
+								CreatedAt:      installation.CreatedAt,
+							})
+							if err != nil {
+								b.log.Error("error inserting key package", zap.Error(err))
+								return err
+							}
 
-									err = querier.UpdateIsAppendedStatus(ctx, queries.UpdateIsAppendedStatusParams{
-										IsAppended: sql.NullBool{
-											Bool:  true,
-											Valid: true,
-										},
-										ID: installation.ID,
-									})
-									if err != nil {
-										b.log.Error("error updating is_appended status", zap.Error(err))
-										return err
-									}
-
-									return nil
-								})
-								if err != nil {
-									b.log.Error("error backfilling installation", zap.Error(err))
-									return err
-								}
+							err = querier.UpdateIsAppendedStatus(ctx, queries.UpdateIsAppendedStatusParams{
+								IsAppended: sql.NullBool{
+									Bool:  true,
+									Valid: true,
+								},
+								ID: installation.ID,
+							})
+							if err != nil {
+								b.log.Error("error updating is_appended status", zap.Error(err))
+								return err
+							}
 						}
 
 						return nil

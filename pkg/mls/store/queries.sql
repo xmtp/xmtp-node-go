@@ -387,7 +387,8 @@ LIMIT 1;
 -- name: SelectInstallationsToBackfill :many
 SELECT
 	id,
-	key_package
+	key_package,
+	created_at
 FROM
 	installations
 WHERE
@@ -407,8 +408,8 @@ WHERE
 	id = @id;
 
 -- name: InsertKeyPackage :exec
-INSERT INTO key_packages(installation_id, key_package)
-	VALUES (@installation_id, @key_package)
+INSERT INTO key_packages(installation_id, key_package, created_at)
+	VALUES (@installation_id, @key_package, @created_at)
 ON CONFLICT (installation_id, key_package)
 	DO NOTHING;
 

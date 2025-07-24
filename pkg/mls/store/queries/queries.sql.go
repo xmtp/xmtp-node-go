@@ -790,8 +790,8 @@ func (q *Queries) InsertInboxLog(ctx context.Context, arg InsertInboxLogParams) 
 }
 
 const insertKeyPackage = `-- name: InsertKeyPackage :exec
-INSERT INTO key_packages(installation_id, key_package)
-	VALUES ($1, $2)
+INSERT INTO key_packages(installation_id, key_package, created_at)
+	VALUES ($1, $2, $3)
 ON CONFLICT (installation_id, key_package)
 	DO NOTHING
 `
@@ -799,10 +799,11 @@ ON CONFLICT (installation_id, key_package)
 type InsertKeyPackageParams struct {
 	InstallationID []byte
 	KeyPackage     []byte
+	CreatedAt      int64
 }
 
 func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackageParams) error {
-	_, err := q.db.ExecContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage)
+	_, err := q.db.ExecContext(ctx, insertKeyPackage, arg.InstallationID, arg.KeyPackage, arg.CreatedAt)
 	return err
 }
 
@@ -1293,7 +1294,8 @@ func (q *Queries) SelectEnvelopesForIsCommitBackfill(ctx context.Context) ([]Sel
 const selectInstallationsToBackfill = `-- name: SelectInstallationsToBackfill :many
 SELECT
 	id,
-	key_package
+	key_package,
+	created_at
 FROM
 	installations
 WHERE
@@ -1308,6 +1310,7 @@ LIMIT 100
 type SelectInstallationsToBackfillRow struct {
 	ID         []byte
 	KeyPackage []byte
+	CreatedAt  int64
 }
 
 func (q *Queries) SelectInstallationsToBackfill(ctx context.Context) ([]SelectInstallationsToBackfillRow, error) {
@@ -1319,7 +1322,7 @@ func (q *Queries) SelectInstallationsToBackfill(ctx context.Context) ([]SelectIn
 	var items []SelectInstallationsToBackfillRow
 	for rows.Next() {
 		var i SelectInstallationsToBackfillRow
-		if err := rows.Scan(&i.ID, &i.KeyPackage); err != nil {
+		if err := rows.Scan(&i.ID, &i.KeyPackage, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
