@@ -224,12 +224,36 @@ func (s *Store) CreateOrUpdateInstallation(
 ) error {
 	now := nowNs()
 
-	return s.queries.CreateOrUpdateInstallation(ctx, queries.CreateOrUpdateInstallationParams{
-		ID:         installationId,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		KeyPackage: keyPackage,
+	err := RunInTx(ctx, s.db.DB, nil, func(ctx context.Context, querier *queries.Queries) error {
+		err := querier.CreateOrUpdateInstallation(ctx, queries.CreateOrUpdateInstallationParams{
+			ID:         installationId,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			KeyPackage: keyPackage,
+			IsAppended: sql.NullBool{
+				Bool:  true,
+				Valid: true,
+			},
+		})
+		if err != nil {
+			s.log.Error("error creating or updating installation", zap.Error(err))
+			return err
+		}
+
+		err = querier.InsertKeyPackage(ctx, queries.InsertKeyPackageParams{
+			InstallationID: installationId,
+			KeyPackage:     keyPackage,
+			CreatedAt:      now,
+		})
+		if err != nil {
+			s.log.Error("error inserting key package", zap.Error(err))
+			return err
+		}
+
+		return nil
 	})
+
+	return err
 }
 
 func (s *Store) InsertGroupMessage(
