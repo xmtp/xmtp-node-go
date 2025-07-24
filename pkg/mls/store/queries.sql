@@ -84,8 +84,8 @@ WHERE (address, inbox_id, association_sequence_id) =(
 		inbox_id);
 
 -- name: CreateOrUpdateInstallation :exec
-INSERT INTO installations(id, created_at, updated_at, key_package)
-	VALUES (@id, @created_at, @updated_at, @key_package)
+INSERT INTO installations(id, created_at, updated_at, key_package, is_appended)
+	VALUES (@id, @created_at, @updated_at, @key_package, @is_appended)
 ON CONFLICT (id)
 	DO UPDATE SET
 		key_package = @key_package,
@@ -383,4 +383,32 @@ SELECT
 			max(id)
 		FROM welcome_messages), 0)::BIGINT
 LIMIT 1;
+
+-- name: SelectInstallationsToBackfill :many
+SELECT
+	id,
+	key_package
+FROM
+	installations
+WHERE
+	is_appended IS NULL
+ORDER BY
+	id ASC
+FOR UPDATE
+	SKIP LOCKED
+LIMIT 100;
+
+-- name: UpdateIsAppendedStatus :exec
+UPDATE
+	installations
+SET
+	is_appended = @is_appended
+WHERE
+	id = @id;
+
+-- name: InsertKeyPackage :exec
+INSERT INTO key_packages(installation_id, key_package)
+	VALUES (@installation_id, @key_package)
+ON CONFLICT (installation_id, key_package)
+	DO NOTHING;
 

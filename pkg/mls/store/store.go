@@ -230,6 +230,10 @@ func (s *Store) CreateOrUpdateInstallation(
 			CreatedAt:  now,
 			UpdatedAt:  now,
 			KeyPackage: keyPackage,
+			IsAppended: sql.NullBool{
+				Bool:  true,
+				Valid: true,
+			},
 		})
 		if err != nil {
 			s.log.Error("error creating or updating installation", zap.Error(err))

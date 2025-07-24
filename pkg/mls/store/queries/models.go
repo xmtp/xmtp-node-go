@@ -51,6 +51,7 @@ type Installation struct {
 	CreatedAt  int64
 	UpdatedAt  int64
 	KeyPackage []byte
+	IsAppended sql.NullBool
 }
 
 type KeyPackage struct {

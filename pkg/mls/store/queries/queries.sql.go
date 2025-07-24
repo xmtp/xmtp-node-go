@@ -32,8 +32,8 @@ func (q *Queries) CountDeletableGroupMessages(ctx context.Context, ageDays int32
 }
 
 const createOrUpdateInstallation = `-- name: CreateOrUpdateInstallation :exec
-INSERT INTO installations(id, created_at, updated_at, key_package)
-	VALUES ($1, $2, $3, $4)
+INSERT INTO installations(id, created_at, updated_at, key_package, is_appended)
+	VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (id)
 	DO UPDATE SET
 		key_package = $4,
@@ -45,6 +45,7 @@ type CreateOrUpdateInstallationParams struct {
 	CreatedAt  int64
 	UpdatedAt  int64
 	KeyPackage []byte
+	IsAppended sql.NullBool
 }
 
 func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUpdateInstallationParams) error {
@@ -53,6 +54,7 @@ func (q *Queries) CreateOrUpdateInstallation(ctx context.Context, arg CreateOrUp
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.KeyPackage,
+		arg.IsAppended,
 	)
 	return err
 }
@@ -590,9 +592,16 @@ WHERE
 	id = $1
 `
 
-func (q *Queries) GetInstallation(ctx context.Context, id []byte) (Installation, error) {
+type GetInstallationRow struct {
+	ID         []byte
+	CreatedAt  int64
+	UpdatedAt  int64
+	KeyPackage []byte
+}
+
+func (q *Queries) GetInstallation(ctx context.Context, id []byte) (GetInstallationRow, error) {
 	row := q.db.QueryRowContext(ctx, getInstallation, id)
-	var i Installation
+	var i GetInstallationRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -1281,6 +1290,49 @@ func (q *Queries) SelectEnvelopesForIsCommitBackfill(ctx context.Context) ([]Sel
 	return items, nil
 }
 
+const selectInstallationsToBackfill = `-- name: SelectInstallationsToBackfill :many
+SELECT
+	id,
+	key_package
+FROM
+	installations
+WHERE
+	is_appended IS NULL
+ORDER BY
+	id ASC
+FOR UPDATE
+	SKIP LOCKED
+LIMIT 100
+`
+
+type SelectInstallationsToBackfillRow struct {
+	ID         []byte
+	KeyPackage []byte
+}
+
+func (q *Queries) SelectInstallationsToBackfill(ctx context.Context) ([]SelectInstallationsToBackfillRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectInstallationsToBackfill)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectInstallationsToBackfillRow
+	for rows.Next() {
+		var i SelectInstallationsToBackfillRow
+		if err := rows.Scan(&i.ID, &i.KeyPackage); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const touchInbox = `-- name: TouchInbox :exec
 INSERT INTO inboxes(id)
 	VALUES (decode($1, 'hex'))
@@ -1291,6 +1343,25 @@ ON CONFLICT (id)
 
 func (q *Queries) TouchInbox(ctx context.Context, inboxID string) error {
 	_, err := q.db.ExecContext(ctx, touchInbox, inboxID)
+	return err
+}
+
+const updateIsAppendedStatus = `-- name: UpdateIsAppendedStatus :exec
+UPDATE
+	installations
+SET
+	is_appended = $1
+WHERE
+	id = $2
+`
+
+type UpdateIsAppendedStatusParams struct {
+	IsAppended sql.NullBool
+	ID         []byte
+}
+
+func (q *Queries) UpdateIsAppendedStatus(ctx context.Context, arg UpdateIsAppendedStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateIsAppendedStatus, arg.IsAppended, arg.ID)
 	return err
 }
 
