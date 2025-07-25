@@ -413,3 +413,29 @@ INSERT INTO key_packages(installation_id, key_package, created_at)
 ON CONFLICT (installation_id, key_package)
 	DO NOTHING;
 
+-- name: GetOldKeyPackages :one
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	key_packages
+WHERE
+	created_at < NOW() - make_interval(days := @age_days);
+
+-- name: DeleteOldKeyPackagesBatch :many
+WITH to_delete AS (
+	SELECT
+		installation_id
+	FROM
+		key_packages
+	WHERE
+		created_at <(EXTRACT(EPOCH FROM NOW() -((@age_days)::INT || ' days')::INTERVAL) * 1e9)::BIGINT
+	ORDER BY
+		installation_id
+	LIMIT @batch_size
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM key_packages kp USING to_delete td
+WHERE kp.installation_id = td.installation_id
+RETURNING
+	kp.installation_id, kp.created_at;
+

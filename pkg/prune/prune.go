@@ -40,6 +40,7 @@ func (e *Executor) Run() error {
 		NewWelcomePruner(e.log, querier, e.config.BatchSize),
 		NewGroupMessagesPruner(e.log, querier, e.config.BatchSize),
 		NewInstallationsPruner(e.log, querier, e.config.BatchSize),
+		NewKeyPackagesPruner(e.log, querier, e.config.BatchSize),
 	}
 
 	var (
