@@ -164,6 +164,58 @@ func (q *Queries) DeleteOldInstallationsBatch(ctx context.Context, arg DeleteOld
 	return items, nil
 }
 
+const deleteOldKeyPackagesBatch = `-- name: DeleteOldKeyPackagesBatch :many
+WITH to_delete AS (
+	SELECT
+		installation_id
+	FROM
+		key_packages
+	WHERE
+		created_at <(EXTRACT(EPOCH FROM NOW() -(($1)::INT || ' days')::INTERVAL) * 1e9)::BIGINT
+	ORDER BY
+		installation_id
+	LIMIT $2
+	FOR UPDATE
+		SKIP LOCKED)
+DELETE FROM key_packages kp USING to_delete td
+WHERE kp.installation_id = td.installation_id
+RETURNING
+	kp.installation_id, kp.created_at
+`
+
+type DeleteOldKeyPackagesBatchParams struct {
+	AgeDays   int32
+	BatchSize int32
+}
+
+type DeleteOldKeyPackagesBatchRow struct {
+	InstallationID []byte
+	CreatedAt      int64
+}
+
+func (q *Queries) DeleteOldKeyPackagesBatch(ctx context.Context, arg DeleteOldKeyPackagesBatchParams) ([]DeleteOldKeyPackagesBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldKeyPackagesBatch, arg.AgeDays, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeleteOldKeyPackagesBatchRow
+	for rows.Next() {
+		var i DeleteOldKeyPackagesBatchRow
+		if err := rows.Scan(&i.InstallationID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteOldWelcomeMessagesBatch = `-- name: DeleteOldWelcomeMessagesBatch :many
 WITH to_delete AS (
 	SELECT
@@ -654,6 +706,22 @@ WHERE
 
 func (q *Queries) GetOldInstallations(ctx context.Context, ageDays int32) (int64, error) {
 	row := q.db.QueryRowContext(ctx, getOldInstallations, ageDays)
+	var old_message_count int64
+	err := row.Scan(&old_message_count)
+	return old_message_count, err
+}
+
+const getOldKeyPackages = `-- name: GetOldKeyPackages :one
+SELECT
+	COUNT(*)::BIGINT AS old_message_count
+FROM
+	key_packages
+WHERE
+	created_at < NOW() - make_interval(days := $1)
+`
+
+func (q *Queries) GetOldKeyPackages(ctx context.Context, ageDays int32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOldKeyPackages, ageDays)
 	var old_message_count int64
 	err := row.Scan(&old_message_count)
 	return old_message_count, err
