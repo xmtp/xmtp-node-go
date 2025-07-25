@@ -60,7 +60,7 @@ type Server struct {
 	allowLister   authz.AllowList
 	grpc          *api.Server
 	mlsDB         *bun.DB
-	backfiller    mlsstore.Backfiller
+	backfillers   []mlsstore.Backfiller
 }
 
 // Create a new Server
@@ -315,15 +315,7 @@ func New(ctx context.Context, log *zap.Logger, options Options) (*Server, error)
 		}
 	}
 
-	if mlsWriteStore != nil && MLSValidator != nil {
-		s.backfiller = mlsstore.NewIsCommitBackfiller(
-			ctx,
-			s.mlsDB.DB,
-			s.log.Named("backfiller"),
-			MLSValidator,
-		)
-		s.backfiller.Run()
-	}
+	s.startMLSBackfillers(s.ctx, mlsWriteStore, MLSValidator)
 
 	// Initialize gRPC server.
 	s.grpc, err = api.New(
@@ -387,8 +379,8 @@ func (s *Server) Shutdown() {
 		s.grpc.Close()
 	}
 
-	if s.backfiller != nil {
-		s.backfiller.Close()
+	for _, backfiller := range s.backfillers {
+		backfiller.Close()
 	}
 
 	// Cancel outstanding goroutines
@@ -467,6 +459,35 @@ func (s *Server) statusMetricsLoop(options Options) {
 				metrics.EmitBootstrapPeersConnected(s.ctx, s.wakuNode.Host(), bootstrapPeers)
 			}
 		}
+	}
+}
+
+func (s *Server) startMLSBackfillers(
+	ctx context.Context,
+	MLSWriteStore mlsstore.ReadWriteMlsStore,
+	MLSValidator mlsvalidate.MLSValidationService,
+) {
+	if MLSWriteStore == nil {
+		return
+	}
+
+	if MLSValidator != nil {
+		s.backfillers = append(s.backfillers, mlsstore.NewIsCommitBackfiller(
+			ctx,
+			s.mlsDB.DB,
+			s.log.Named("backfiller-is-commit"),
+			MLSValidator,
+		))
+	}
+
+	s.backfillers = append(s.backfillers, mlsstore.NewInstallationsBackfiller(
+		ctx,
+		s.mlsDB.DB,
+		s.log.Named("backfiller-installations"),
+	))
+
+	for _, backfiller := range s.backfillers {
+		backfiller.Run()
 	}
 }
 
