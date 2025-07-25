@@ -3,6 +3,6 @@ set -euo pipefail
 
 script_dir=$(dirname "$(realpath "$0")")
 repo_root=$(realpath "${script_dir}/../../")
-cd "${repo_root}"
+cd "${repo_root}" || exit
 
 docker run --rm -v $(pwd):/src -w /src sqlc/sqlc generate
