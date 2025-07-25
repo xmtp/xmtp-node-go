@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Work always from the root directory
+script_dir=$(dirname "$(realpath "$0")")
+repo_root=$(realpath "${script_dir}/../../")
+cd "${repo_root}"
+
+rm -rf pkg/mocks/*
+
+mockery

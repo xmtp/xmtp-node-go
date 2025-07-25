@@ -35,7 +35,7 @@ You must have the _exact_ go version listed in `go.mod` - you can verify this by
 
 ### Fix formatting issues
 
-1. `golangci-lint --config .golangci.yaml run --fix ./...`
+1. `golangci-lint fmt`
 
 ### Create a migration for the message database
 
@@ -51,7 +51,7 @@ You must have the _exact_ go version listed in `go.mod` - you can verify this by
 
 ### Updating the SQLC Queries for the MLSStore
 
-If you modify `pkg/mls/store/queries.sql` you need to run `./dev/sqlc` from the root of this package to regenerate any generated code.
+If you modify `pkg/mls/store/queries.sql` you need to run `./dev/gen/sqlc` to regenerate any generated code.
 
 ### Debugging metrics
 
@@ -60,8 +60,6 @@ If you modify `pkg/mls/store/queries.sql` you need to run `./dev/sqlc` from the 
 
 ## Deployments
 
-Merging a PR to the `main` branch will trigger a new deployment via GitHub Actions and Terraform.
+Merging a PR to the `main` branch will trigger a new deployment via GitHub Actions and Terraform. The default behavior is to deploy `main` to the `dev` environment.
 
-The default behavior is to deploy `main` to both the `dev` and `production` environments. If you'd like to deploy a different branch to `dev`, open a PR with an update to [.github/workflows/deploy.yml](https://github.com/xmtp/xmtp-node-go/blob/main/.github/workflows/deploy.yml#L29) switching from `main` to your branch. Remember to PR it back to `main` when you're done.
-
-Changes will be automatically applied and no user action is required after merging.
+To deploy to `production`, you must move deliberately pick a tag and set the version in Terraform.

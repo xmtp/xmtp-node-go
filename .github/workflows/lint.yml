@@ -26,3 +26,15 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.0
+      - name: sqlc
+        uses: nickcharlton/diff-check@v1.0.0
+        with:
+          command: ./dev/gen/sqlc
+      - name: generate
+        uses: nickcharlton/diff-check@v1.0.0
+        with:
+          command: go generate ./...
+      - name: mockery
+        uses: nickcharlton/diff-check@v1.0.0
+        with:
+          command: ./dev/gen/mocks
