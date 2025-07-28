@@ -13,11 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-      - name: Download buf v1.50.0
-        run: |
-          curl -sSL https://github.com/bufbuild/buf/releases/download/v1.50.0/buf-Linux-x86_64 -o /usr/local/bin/buf
-          chmod +x /usr/local/bin/buf
-
+      - uses: bufbuild/buf-setup-action@v1.50.0
       - name: Verify buf installation
         run: buf --version
       - name: Generate Protos
