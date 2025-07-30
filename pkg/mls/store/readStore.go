@@ -322,7 +322,7 @@ func (s *ReadStore) QueryCommitLog(
 	}
 	idCursor := int64(req.GetPagingInfo().GetIdCursor())
 
-	entries, err := s.queries.QueryCommitLog(ctx, queries.QueryCommitLogParams{
+	entries, err := s.queries.QueryCommitLogV2(ctx, queries.QueryCommitLogV2Params{
 		GroupID: req.GroupId,
 		Cursor:  idCursor,
 		Numrows: pageSize,
@@ -333,9 +333,15 @@ func (s *ReadStore) QueryCommitLog(
 
 	out := make([]*message_contents.CommitLogEntry, len(entries))
 	for idx, entry := range entries {
+		signature := &associations.RecoverableEd25519Signature{}
+		err := proto.Unmarshal(entry.SerializedSignature, signature)
+		if err != nil {
+			return nil, err
+		}
 		out[idx] = &message_contents.CommitLogEntry{
-			SequenceId:              uint64(entry.ID),
-			EncryptedCommitLogEntry: entry.EncryptedEntry,
+			SequenceId:               uint64(entry.ID),
+			SerializedCommitLogEntry: entry.SerializedEntry,
+			Signature:                signature,
 		}
 	}
 

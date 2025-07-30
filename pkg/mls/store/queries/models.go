@@ -23,6 +23,14 @@ type CommitLog struct {
 	EncryptedEntry []byte
 }
 
+type CommitLogV2 struct {
+	ID                  int64
+	CreatedAt           time.Time
+	GroupID             []byte
+	SerializedEntry     []byte
+	SerializedSignature []byte
+}
+
 type GroupMessage struct {
 	ID              int64
 	CreatedAt       time.Time
