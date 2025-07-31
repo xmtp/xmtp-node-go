@@ -21,14 +21,14 @@ var (
 )
 
 type Options struct {
-	GRPCAddress       string       `long:"grpc-address" description:"API GRPC listening address"               default:"0.0.0.0"`
-	GRPCPort          uint         `long:"grpc-port"    description:"API GRPC listening port"                  default:"5556"`
-	HTTPAddress       string       `long:"http-address" description:"API HTTP listening address"               default:"0.0.0.0"`
-	HTTPPort          uint         `long:"http-port"    description:"API HTTP listening port"                  default:"5555"`
-	Authn             AuthnOptions `                                                                                              group:"API Authentication Options" namespace:"authn"`
+	GRPCAddress       string       `long:"grpc-address"        description:"API GRPC listening address"               default:"0.0.0.0"`
+	GRPCPort          uint         `long:"grpc-port"           description:"API GRPC listening port"                  default:"5556"`
+	HTTPAddress       string       `long:"http-address"        description:"API HTTP listening address"               default:"0.0.0.0"`
+	HTTPPort          uint         `long:"http-port"           description:"API HTTP listening port"                  default:"5555"`
+	Authn             AuthnOptions `                                                                                                     group:"API Authentication Options" namespace:"authn"`
 	MaxMsgSize        int          `long:"max-msg-size"        description:"Max message size in bytes (default 50MB)" default:"52428800"`
 	EnableMLS         bool         `long:"enable-mls"          description:"Enable the MLS server"`
-	DisableMLSPublish bool         `long:"disable-mls-publish" description:"Disable MLS publish" default:"false"`
+	DisableMLSPublish bool         `long:"disable-mls-publish" description:"Disable MLS publish"                      default:"false"`
 }
 
 type Config struct {
