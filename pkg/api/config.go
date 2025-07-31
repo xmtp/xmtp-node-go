@@ -28,7 +28,7 @@ type Options struct {
 	Authn             AuthnOptions `                                                                                                     group:"API Authentication Options" namespace:"authn"`
 	MaxMsgSize        int          `long:"max-msg-size"        description:"Max message size in bytes (default 50MB)" default:"52428800"`
 	EnableMLS         bool         `long:"enable-mls"          description:"Enable the MLS server"`
-	DisableMLSPublish bool         `long:"disable-mls-publish" description:"Disable MLS publish"                      default:"false"`
+	DisableMLSPublish bool         `long:"disable-mls-publish" description:"Disable MLS publish"`
 }
 
 type Config struct {
