@@ -94,7 +94,10 @@ func (s *Service) RegisterInstallation(
 	req *mlsv1.RegisterInstallationRequest,
 ) (*mlsv1.RegisterInstallationResponse, error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	if err := validateRegisterInstallationRequest(req); err != nil {
@@ -159,7 +162,10 @@ func (s *Service) UploadKeyPackage(
 	req *mlsv1.UploadKeyPackageRequest,
 ) (res *emptypb.Empty, err error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	if err = validateUploadKeyPackageRequest(req); err != nil {
@@ -204,7 +210,10 @@ func (s *Service) SendGroupMessages(
 	req *mlsv1.SendGroupMessagesRequest,
 ) (res *emptypb.Empty, err error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	log := s.log.Named("send-group-messages")
@@ -261,7 +270,10 @@ func (s *Service) SendWelcomeMessages(
 	req *mlsv1.SendWelcomeMessagesRequest,
 ) (res *emptypb.Empty, err error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	log := s.log.Named("send-welcome-messages")
@@ -618,7 +630,10 @@ func (s *Service) BatchPublishCommitLog(
 	req *mlsv1.BatchPublishCommitLogRequest,
 ) (*emptypb.Empty, error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	log := s.log.Named("batch-publish-commit-log")

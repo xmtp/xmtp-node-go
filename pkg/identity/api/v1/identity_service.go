@@ -34,6 +34,7 @@ func NewService(
 		log:               log.Named("identity"),
 		store:             store,
 		validationService: validationService,
+		disablePublish:    disablePublish,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -89,7 +90,10 @@ func (s *Service) PublishIdentityUpdate(
 	req *identityV1.PublishIdentityUpdateRequest,
 ) (*identityV1.PublishIdentityUpdateResponse, error) {
 	if s.disablePublish {
-		return nil, status.Errorf(codes.Unavailable, "publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.")
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
 	}
 
 	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
