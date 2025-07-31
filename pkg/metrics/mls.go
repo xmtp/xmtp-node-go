@@ -74,9 +74,10 @@ var mlsCommitLogEntryCount = prometheus.NewCounterVec(
 func EmitMLSPublishedCommitLogEntry(
 	ctx context.Context,
 	log *zap.Logger,
-	entry *queries.CommitLog,
+	entry *queries.CommitLogV2,
 ) {
 	labels := contextLabels(ctx)
-	mlsCommitLogEntrySize.With(labels).Observe(float64(len(entry.EncryptedEntry)))
+	mlsCommitLogEntrySize.With(labels).
+		Observe(float64(len(entry.SerializedEntry) + len(entry.SerializedSignature)))
 	mlsCommitLogEntryCount.With(labels).Inc()
 }
