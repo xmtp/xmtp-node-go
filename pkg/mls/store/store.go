@@ -91,8 +91,9 @@ type ReadWriteMlsStore interface {
 	InsertCommitLog(
 		ctx context.Context,
 		groupId []byte,
-		encrypted_entry []byte,
-	) (queries.CommitLog, error)
+		serialized_entry []byte,
+		serialized_signature []byte,
+	) (queries.CommitLogV2, error)
 }
 
 func New(ctx context.Context, log *zap.Logger, db *bun.DB) (*Store, error) {
@@ -348,11 +349,13 @@ func (s *Store) QueryWelcomeMessagesV1(
 func (s *Store) InsertCommitLog(
 	ctx context.Context,
 	groupId []byte,
-	encrypted_entry []byte,
-) (queries.CommitLog, error) {
-	return s.queries.InsertCommitLog(ctx, queries.InsertCommitLogParams{
-		GroupID:        groupId,
-		EncryptedEntry: encrypted_entry,
+	serialized_entry []byte,
+	serialized_signature []byte,
+) (queries.CommitLogV2, error) {
+	return s.queries.InsertCommitLogV2(ctx, queries.InsertCommitLogV2Params{
+		GroupID:             groupId,
+		SerializedEntry:     serialized_entry,
+		SerializedSignature: serialized_signature,
 	})
 }
 

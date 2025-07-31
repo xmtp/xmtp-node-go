@@ -774,26 +774,28 @@ func (q *Queries) InsertAddressLog(ctx context.Context, arg InsertAddressLogPara
 	return i, err
 }
 
-const insertCommitLog = `-- name: InsertCommitLog :one
+const insertCommitLogV2 = `-- name: InsertCommitLogV2 :one
 SELECT
-	id, created_at, group_id, encrypted_entry
+	id, created_at, group_id, serialized_entry, serialized_signature
 FROM
-	insert_commit_log($1, $2)
+	insert_commit_log_v2($1, $2, $3)
 `
 
-type InsertCommitLogParams struct {
-	GroupID        []byte
-	EncryptedEntry []byte
+type InsertCommitLogV2Params struct {
+	GroupID             []byte
+	SerializedEntry     []byte
+	SerializedSignature []byte
 }
 
-func (q *Queries) InsertCommitLog(ctx context.Context, arg InsertCommitLogParams) (CommitLog, error) {
-	row := q.db.QueryRowContext(ctx, insertCommitLog, arg.GroupID, arg.EncryptedEntry)
-	var i CommitLog
+func (q *Queries) InsertCommitLogV2(ctx context.Context, arg InsertCommitLogV2Params) (CommitLogV2, error) {
+	row := q.db.QueryRowContext(ctx, insertCommitLogV2, arg.GroupID, arg.SerializedEntry, arg.SerializedSignature)
+	var i CommitLogV2
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.GroupID,
-		&i.EncryptedEntry,
+		&i.SerializedEntry,
+		&i.SerializedSignature,
 	)
 	return i, err
 }
@@ -924,11 +926,11 @@ func (q *Queries) LockInboxLog(ctx context.Context, inboxID string) error {
 	return err
 }
 
-const queryCommitLog = `-- name: QueryCommitLog :many
+const queryCommitLogV2 = `-- name: QueryCommitLogV2 :many
 SELECT
-	id, created_at, group_id, encrypted_entry
+	id, created_at, group_id, serialized_entry, serialized_signature
 FROM
-	commit_log
+	commit_log_v2
 WHERE
 	group_id = $1
 	AND id > $2
@@ -937,26 +939,27 @@ ORDER BY
 LIMIT $3
 `
 
-type QueryCommitLogParams struct {
+type QueryCommitLogV2Params struct {
 	GroupID []byte
 	Cursor  int64
 	Numrows int32
 }
 
-func (q *Queries) QueryCommitLog(ctx context.Context, arg QueryCommitLogParams) ([]CommitLog, error) {
-	rows, err := q.db.QueryContext(ctx, queryCommitLog, arg.GroupID, arg.Cursor, arg.Numrows)
+func (q *Queries) QueryCommitLogV2(ctx context.Context, arg QueryCommitLogV2Params) ([]CommitLogV2, error) {
+	rows, err := q.db.QueryContext(ctx, queryCommitLogV2, arg.GroupID, arg.Cursor, arg.Numrows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CommitLog
+	var items []CommitLogV2
 	for rows.Next() {
-		var i CommitLog
+		var i CommitLogV2
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
 			&i.GroupID,
-			&i.EncryptedEntry,
+			&i.SerializedEntry,
+			&i.SerializedSignature,
 		); err != nil {
 			return nil, err
 		}

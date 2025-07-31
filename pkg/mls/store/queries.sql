@@ -219,11 +219,11 @@ ORDER BY
 	id DESC
 LIMIT @numrows;
 
--- name: QueryCommitLog :many
+-- name: QueryCommitLogV2 :many
 SELECT
 	*
 FROM
-	commit_log
+	commit_log_v2
 WHERE
 	group_id = @group_id
 	AND id > @cursor
@@ -264,11 +264,11 @@ WHERE wm.id = td.id
 RETURNING
 	wm.id, wm.created_at;
 
--- name: InsertCommitLog :one
+-- name: InsertCommitLogV2 :one
 SELECT
 	*
 FROM
-	insert_commit_log(@group_id, @encrypted_entry);
+	insert_commit_log_v2(@group_id, @serialized_entry, @serialized_signature);
 
 -- name: CountDeletableGroupMessages :one
 SELECT

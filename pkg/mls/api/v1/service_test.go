@@ -16,6 +16,7 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	"github.com/xmtp/xmtp-node-go/pkg/mocks"
 	"github.com/xmtp/xmtp-node-go/pkg/proto/identity"
+	"github.com/xmtp/xmtp-node-go/pkg/proto/identity/associations"
 	messageApi "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	messageContentsProto "github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
@@ -856,19 +857,28 @@ func assertExpectationsWithTimeout(
 	}
 }
 
+func randomSignature() *associations.RecoverableEd25519Signature {
+	return &associations.RecoverableEd25519Signature{
+		Bytes:     []byte(test.RandomString(32)),
+		PublicKey: []byte(test.RandomString(32)),
+	}
+}
+
 func TestBatchPublishCommitLog(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
 
 	groupId := []byte(test.RandomString(32))
-	encryptedEntry := []byte(test.RandomString(64))
+	serializedEntry := []byte(test.RandomString(64))
+	signature := randomSignature()
 
 	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                signature,
 			},
 		},
 	})
@@ -880,7 +890,9 @@ func TestBatchPublishCommitLog(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.CommitLogEntries, 1)
-	require.Equal(t, encryptedEntry, resp.CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, serializedEntry, resp.CommitLogEntries[0].SerializedCommitLogEntry)
+	require.Equal(t, signature.Bytes, resp.CommitLogEntries[0].Signature.Bytes)
+	require.Equal(t, signature.PublicKey, resp.CommitLogEntries[0].Signature.PublicKey)
 	require.Equal(t, uint64(1), resp.CommitLogEntries[0].SequenceId)
 }
 
@@ -891,18 +903,22 @@ func TestBatchPublishCommitLog_MultipleEntries(t *testing.T) {
 
 	groupId1 := []byte(test.RandomString(32))
 	groupId2 := []byte(test.RandomString(32))
-	encryptedEntry1 := []byte(test.RandomString(64))
-	encryptedEntry2 := []byte(test.RandomString(64))
+	serializedEntry1 := []byte(test.RandomString(64))
+	serializedEntry2 := []byte(test.RandomString(64))
+	signature1 := randomSignature()
+	signature2 := randomSignature()
 
 	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 groupId1,
-				EncryptedCommitLogEntry: encryptedEntry1,
+				GroupId:                  groupId1,
+				SerializedCommitLogEntry: serializedEntry1,
+				Signature:                signature1,
 			},
 			{
-				GroupId:                 groupId2,
-				EncryptedCommitLogEntry: encryptedEntry2,
+				GroupId:                  groupId2,
+				SerializedCommitLogEntry: serializedEntry2,
+				Signature:                signature2,
 			},
 		},
 	})
@@ -914,14 +930,18 @@ func TestBatchPublishCommitLog_MultipleEntries(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, resp1.CommitLogEntries, 1)
-	require.Equal(t, encryptedEntry1, resp1.CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, serializedEntry1, resp1.CommitLogEntries[0].SerializedCommitLogEntry)
+	require.Equal(t, signature1.Bytes, resp1.CommitLogEntries[0].Signature.Bytes)
+	require.Equal(t, signature1.PublicKey, resp1.CommitLogEntries[0].Signature.PublicKey)
 
 	resp2, err := svc.writerStore.QueryCommitLog(ctx, &mlsv1.QueryCommitLogRequest{
 		GroupId: groupId2,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp2.CommitLogEntries, 1)
-	require.Equal(t, encryptedEntry2, resp2.CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(t, serializedEntry2, resp2.CommitLogEntries[0].SerializedCommitLogEntry)
+	require.Equal(t, signature2.Bytes, resp2.CommitLogEntries[0].Signature.Bytes)
+	require.Equal(t, signature2.PublicKey, resp2.CommitLogEntries[0].Signature.PublicKey)
 }
 
 func TestBatchPublishCommitLog_InvalidRequest(t *testing.T) {
@@ -940,8 +960,9 @@ func TestBatchPublishCommitLog_InvalidRequest(t *testing.T) {
 	_, err = svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 []byte{},
-				EncryptedCommitLogEntry: []byte("test"),
+				GroupId:                  []byte{},
+				SerializedCommitLogEntry: []byte("test"),
+				Signature:                randomSignature(),
 			},
 		},
 	})
@@ -952,8 +973,9 @@ func TestBatchPublishCommitLog_InvalidRequest(t *testing.T) {
 	_, err = svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 []byte("test"),
-				EncryptedCommitLogEntry: []byte{},
+				GroupId:                  []byte("test"),
+				SerializedCommitLogEntry: []byte{},
+				Signature:                randomSignature(),
 			},
 		},
 	})
@@ -968,19 +990,23 @@ func TestBatchQueryCommitLog(t *testing.T) {
 
 	groupId1 := []byte(test.RandomString(32))
 	groupId2 := []byte(test.RandomString(32))
-	encryptedEntry1 := []byte(test.RandomString(64))
-	encryptedEntry2 := []byte(test.RandomString(64))
+	serializedEntry1 := []byte(test.RandomString(64))
+	serializedEntry2 := []byte(test.RandomString(64))
+	signature1 := randomSignature()
+	signature2 := randomSignature()
 
 	// Insert commit log entries
 	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 groupId1,
-				EncryptedCommitLogEntry: encryptedEntry1,
+				GroupId:                  groupId1,
+				SerializedCommitLogEntry: serializedEntry1,
+				Signature:                signature1,
 			},
 			{
-				GroupId:                 groupId2,
-				EncryptedCommitLogEntry: encryptedEntry2,
+				GroupId:                  groupId2,
+				SerializedCommitLogEntry: serializedEntry2,
+				Signature:                signature2,
 			},
 		},
 	})
@@ -1003,13 +1029,33 @@ func TestBatchQueryCommitLog(t *testing.T) {
 	// Verify first group response
 	require.Equal(t, groupId1, resp.Responses[0].GroupId)
 	require.Len(t, resp.Responses[0].CommitLogEntries, 1)
-	require.Equal(t, encryptedEntry1, resp.Responses[0].CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(
+		t,
+		serializedEntry1,
+		resp.Responses[0].CommitLogEntries[0].SerializedCommitLogEntry,
+	)
+	require.Equal(t, signature1.Bytes, resp.Responses[0].CommitLogEntries[0].Signature.Bytes)
+	require.Equal(
+		t,
+		signature1.PublicKey,
+		resp.Responses[0].CommitLogEntries[0].Signature.PublicKey,
+	)
 	require.Equal(t, uint64(1), resp.Responses[0].CommitLogEntries[0].SequenceId)
 
 	// Verify second group response
 	require.Equal(t, groupId2, resp.Responses[1].GroupId)
 	require.Len(t, resp.Responses[1].CommitLogEntries, 1)
-	require.Equal(t, encryptedEntry2, resp.Responses[1].CommitLogEntries[0].EncryptedCommitLogEntry)
+	require.Equal(
+		t,
+		serializedEntry2,
+		resp.Responses[1].CommitLogEntries[0].SerializedCommitLogEntry,
+	)
+	require.Equal(t, signature2.Bytes, resp.Responses[1].CommitLogEntries[0].Signature.Bytes)
+	require.Equal(
+		t,
+		signature2.PublicKey,
+		resp.Responses[1].CommitLogEntries[0].Signature.PublicKey,
+	)
 	require.Equal(t, uint64(2), resp.Responses[1].CommitLogEntries[0].SequenceId)
 }
 
@@ -1019,30 +1065,35 @@ func TestBatchQueryCommitLog_WithPaging(t *testing.T) {
 	defer cleanup()
 
 	groupId := []byte(test.RandomString(32))
-	encryptedEntry := []byte("entry")
+	serializedEntry := []byte("entry")
 
 	// Insert 5 commit log entries
 	_, err := svc.BatchPublishCommitLog(ctx, &mlsv1.BatchPublishCommitLogRequest{
 		Requests: []*mlsv1.PublishCommitLogRequest{
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                randomSignature(),
 			},
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                randomSignature(),
 			},
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                randomSignature(),
 			},
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                randomSignature(),
 			},
 			{
-				GroupId:                 groupId,
-				EncryptedCommitLogEntry: encryptedEntry,
+				GroupId:                  groupId,
+				SerializedCommitLogEntry: serializedEntry,
+				Signature:                randomSignature(),
 			},
 		},
 	})

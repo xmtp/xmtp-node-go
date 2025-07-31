@@ -629,14 +629,19 @@ func (s *Service) BatchPublishCommitLog(
 	for _, entry := range req.Requests {
 		if entry == nil ||
 			entry.GroupId == nil || len(entry.GroupId) == 0 ||
-			entry.EncryptedCommitLogEntry == nil || len(entry.EncryptedCommitLogEntry) == 0 {
+			entry.SerializedCommitLogEntry == nil || len(entry.SerializedCommitLogEntry) == 0 ||
+			entry.Signature == nil {
 			return nil, status.Error(codes.InvalidArgument, "invalid commit log entry")
 		}
-
+		serializedSignature, err := pb.Marshal(entry.Signature)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid signature")
+		}
 		inserted, err := s.writerStore.InsertCommitLog(
 			ctx,
 			entry.GroupId,
-			entry.EncryptedCommitLogEntry,
+			entry.SerializedCommitLogEntry,
+			serializedSignature,
 		)
 		if err != nil {
 			log.Error("error inserting commit log", zap.Error(err))
