@@ -45,6 +45,8 @@ type Service struct {
 
 	ctx       context.Context
 	ctxCancel func()
+
+	disablePublish bool
 }
 
 func NewService(
@@ -53,6 +55,7 @@ func NewService(
 	readOnlyStore mlsstore.ReadMlsStore,
 	subDispatcher *subscriptions.SubscriptionDispatcher,
 	validationService mlsvalidate.MLSValidationService,
+	disablePublish bool,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("mls/v1"),
@@ -60,6 +63,7 @@ func NewService(
 		readOnlyStore:     readOnlyStore,
 		validationService: validationService,
 		subDispatcher:     subDispatcher,
+		disablePublish:    disablePublish,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
@@ -89,6 +93,13 @@ func (s *Service) RegisterInstallation(
 	ctx context.Context,
 	req *mlsv1.RegisterInstallationRequest,
 ) (*mlsv1.RegisterInstallationResponse, error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	if err := validateRegisterInstallationRequest(req); err != nil {
 		return nil, err
 	}
@@ -150,6 +161,13 @@ func (s *Service) UploadKeyPackage(
 	ctx context.Context,
 	req *mlsv1.UploadKeyPackageRequest,
 ) (res *emptypb.Empty, err error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	if err = validateUploadKeyPackageRequest(req); err != nil {
 		return nil, err
 	}
@@ -191,6 +209,13 @@ func (s *Service) SendGroupMessages(
 	ctx context.Context,
 	req *mlsv1.SendGroupMessagesRequest,
 ) (res *emptypb.Empty, err error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	log := s.log.Named("send-group-messages")
 	if err = validateSendGroupMessagesRequest(req); err != nil {
 		return nil, err
@@ -244,6 +269,13 @@ func (s *Service) SendWelcomeMessages(
 	ctx context.Context,
 	req *mlsv1.SendWelcomeMessagesRequest,
 ) (res *emptypb.Empty, err error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	log := s.log.Named("send-welcome-messages")
 	if err = validateSendWelcomeMessagesRequest(req); err != nil {
 		return nil, err
@@ -597,6 +629,13 @@ func (s *Service) BatchPublishCommitLog(
 	ctx context.Context,
 	req *mlsv1.BatchPublishCommitLogRequest,
 ) (*emptypb.Empty, error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	log := s.log.Named("batch-publish-commit-log")
 	if err := validateBatchPublishCommitLogRequest(req); err != nil {
 		return nil, err

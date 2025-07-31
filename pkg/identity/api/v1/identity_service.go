@@ -7,6 +7,8 @@ import (
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identityV1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Service struct {
@@ -18,17 +20,21 @@ type Service struct {
 
 	ctx       context.Context
 	ctxCancel func()
+
+	disablePublish bool
 }
 
 func NewService(
 	log *zap.Logger,
 	store mlsstore.ReadWriteMlsStore,
 	validationService mlsvalidate.MLSValidationService,
+	disablePublish bool,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
 		store:             store,
 		validationService: validationService,
+		disablePublish:    disablePublish,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -83,6 +89,13 @@ func (s *Service) PublishIdentityUpdate(
 	ctx context.Context,
 	req *identityV1.PublishIdentityUpdateRequest,
 ) (*identityV1.PublishIdentityUpdateResponse, error) {
+	if s.disablePublish {
+		return nil, status.Errorf(
+			codes.Unavailable,
+			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
 }
 

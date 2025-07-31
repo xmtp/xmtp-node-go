@@ -151,20 +151,26 @@ func (s *Server) startGRPC() error {
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
 
 	// Enable the MLS and identity servers if a store is provided
-	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMls {
+	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMLS {
 		s.mlsv1, err = mlsv1.NewService(
 			s.Log,
 			s.MLSStore,
 			s.ReadMLSStore,
 			subDispatcher,
 			s.MLSValidator,
+			s.DisableMLSPublish,
 		)
 		if err != nil {
 			return errors.Wrap(err, "creating mls service")
 		}
 		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
 
-		s.identityv1, err = identityv1.NewService(s.Log, s.MLSStore, s.MLSValidator)
+		s.identityv1, err = identityv1.NewService(
+			s.Log,
+			s.MLSStore,
+			s.MLSValidator,
+			s.DisableMLSPublish,
+		)
 		if err != nil {
 			return errors.Wrap(err, "creating identity service")
 		}
@@ -247,7 +253,7 @@ func (s *Server) startHTTP() error {
 		return errors.Wrap(err, "registering message handler")
 	}
 
-	if s.MLSStore != nil && s.EnableMls {
+	if s.MLSStore != nil && s.EnableMLS {
 		err = mlsv1pb.RegisterMlsApiHandler(s.ctx, gwmux, conn)
 		if err != nil {
 			return errors.Wrap(err, "registering mls handler")

@@ -72,7 +72,7 @@ func newTestService(
 
 	subDispatcher := subscriptions.NewSubscriptionDispatcher(log)
 
-	svc, err := NewService(log, store, store, subDispatcher, mockMlsValidation)
+	svc, err := NewService(log, store, store, subDispatcher, mockMlsValidation, false)
 	require.NoError(t, err)
 
 	return svc, db, mockMlsValidation, func() {
