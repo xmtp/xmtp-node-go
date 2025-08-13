@@ -45,10 +45,11 @@ type AuthzOptions struct {
 }
 
 type PruneConfig struct {
-	MaxCycles      int   `long:"max-prune-cycles" description:"Maximum pruning cycles"                   default:"10"`
-	BatchSize      int32 `long:"batch-size"       description:"Batch size"                               default:"10000"`
-	CountDeletable bool  `long:"count-deletable"  description:"Attempt to count all deletable envelopes"`
-	DryRun         bool  `long:"dry-run"          description:"Dry run mode"`
+	MaxCycles              int   `long:"max-prune-cycles" description:"Maximum pruning cycles"                   default:"10"`
+	BatchSize              int32 `long:"batch-size"       description:"Batch size"                               default:"10000"`
+	CountDeletable         bool  `long:"count-deletable"  description:"Attempt to count all deletable envelopes"`
+	DryRun                 bool  `long:"dry-run"          description:"Dry run mode"`
+	DisablePostPruneVacuum bool  `long:"disable-post-prune-vacuum" description:"Disable post prune vacuum"`
 }
 
 type PruneOptions struct {

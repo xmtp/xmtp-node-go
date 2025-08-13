@@ -17,6 +17,10 @@ type InstallationsPruner struct {
 	batchSize int32
 }
 
+func (ip *InstallationsPruner) Vacuum(ctx context.Context) error {
+	return ip.querier.VacuumAnalyzeTable(ctx, "installations")
+}
+
 func (ip *InstallationsPruner) Name() string {
 	return "installations"
 }

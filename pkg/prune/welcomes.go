@@ -17,6 +17,10 @@ type WelcomePruner struct {
 	batchSize int32
 }
 
+func (w *WelcomePruner) Vacuum(ctx context.Context) error {
+	return w.querier.VacuumAnalyzeTable(ctx, "welcome_messages")
+}
+
 func (w *WelcomePruner) Name() string {
 	return "welcomes"
 }

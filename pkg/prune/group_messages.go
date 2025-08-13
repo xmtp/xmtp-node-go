@@ -17,6 +17,10 @@ type GroupMessagesPruner struct {
 	batchSize int32
 }
 
+func (g *GroupMessagesPruner) Vacuum(ctx context.Context) error {
+	return g.querier.VacuumAnalyzeTable(ctx, "group_messages")
+}
+
 func (g *GroupMessagesPruner) Name() string {
 	return "group_messages"
 }

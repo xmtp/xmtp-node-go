@@ -118,6 +118,24 @@ func (e *Executor) Run() error {
 				zap.Int64("pruned count", totalDeletionCount),
 				zap.Duration("elapsed", time.Since(start)),
 			)
+
+			if !e.config.DisablePostPruneVacuum {
+				start = time.Now()
+				err := pruner.Vacuum(e.ctx)
+				{
+					if err != nil {
+						logger.Error("Error vacuuming table", zap.Error(err))
+						errCh <- err
+						return
+					}
+				}
+
+				logger.Info(
+					"Vacuumed and re-analyzed table",
+					zap.Duration("elapsed", time.Since(start)),
+				)
+			}
+
 		}(pruner)
 	}
 

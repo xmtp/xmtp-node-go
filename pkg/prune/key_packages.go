@@ -17,6 +17,10 @@ type KeyPackagesPruner struct {
 	batchSize int32
 }
 
+func (ip *KeyPackagesPruner) Vacuum(ctx context.Context) error {
+	return ip.querier.VacuumAnalyzeTable(ctx, "key_packages")
+}
+
 func (ip *KeyPackagesPruner) Name() string {
 	return "key_packages"
 }

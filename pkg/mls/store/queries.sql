@@ -439,3 +439,6 @@ WHERE kp.installation_id = td.installation_id
 RETURNING
 	kp.installation_id, kp.created_at;
 
+
+-- name: VacuumAnalyzeTable :exec
+SELECT vacuum_analyze_table(sqlc.arg('table_name')::text);

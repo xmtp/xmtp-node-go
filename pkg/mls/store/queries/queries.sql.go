@@ -1457,3 +1457,12 @@ func (q *Queries) UpdateIsCommitStatus(ctx context.Context, arg UpdateIsCommitSt
 	_, err := q.db.ExecContext(ctx, updateIsCommitStatus, arg.IsCommit, arg.ID)
 	return err
 }
+
+const vacuumAnalyzeTable = `-- name: VacuumAnalyzeTable :exec
+SELECT vacuum_analyze_table($1::text)
+`
+
+func (q *Queries) VacuumAnalyzeTable(ctx context.Context, tableName string) error {
+	_, err := q.db.ExecContext(ctx, vacuumAnalyzeTable, tableName)
+	return err
+}
