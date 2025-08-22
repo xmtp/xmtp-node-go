@@ -79,6 +79,10 @@ func registerCollectors(reg prometheus.Registerer) {
 		mlsSentGroupMessageCount,
 		mlsSentWelcomeMessageSize,
 		mlsSentWelcomeMessageCount,
+		mlsIdentityUpdateSize,
+		mlsIdentityUpdateCount,
+		mlsCommitLogEntrySize,
+		mlsCommitLogEntryCount,
 	}
 	for _, col := range cols {
 		reg.MustRegister(col)

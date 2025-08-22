@@ -120,6 +120,9 @@ func (s *Service) RegisterInstallation(
 	if err = s.writerStore.CreateOrUpdateInstallation(ctx, installationKey, req.KeyPackage.KeyPackageTlsSerialized); err != nil {
 		return nil, err
 	}
+
+	metrics.EmitMLSPublishedKeyPackage(ctx, s.log, len(req.KeyPackage.KeyPackageTlsSerialized))
+
 	return &mlsv1.RegisterInstallationResponse{
 		InstallationKey: installationKey,
 	}, nil
@@ -187,6 +190,8 @@ func (s *Service) UploadKeyPackage(
 	if err = s.writerStore.CreateOrUpdateInstallation(ctx, installationId, keyPackageBytes); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to insert key packages: %s", err)
 	}
+
+	metrics.EmitMLSPublishedKeyPackage(ctx, s.log, len(keyPackageBytes))
 
 	return &emptypb.Empty{}, nil
 }
