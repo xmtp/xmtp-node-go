@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/utils"
 
 	"github.com/uptrace/bun"
@@ -126,6 +127,8 @@ func (s *Store) PublishIdentityUpdate(
 		return nil, errors.New("IdentityUpdate is required")
 	}
 
+	var numBytes int
+
 	if err := s.RunInRepeatableReadTx(ctx, 3, func(ctx context.Context, txQueries *queries.Queries) error {
 		inboxId := newUpdate.GetInboxId()
 		// We use a pg_advisory_lock to lock the inbox_id instead of SELECT FOR UPDATE
@@ -209,10 +212,14 @@ func (s *Store) PublishIdentityUpdate(
 			return err
 		}
 
+		numBytes = len(protoBytes)
+
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	metrics.EmitMLSSentIdentityUpdate(ctx, s.log, numBytes)
 
 	return &identity.PublishIdentityUpdateResponse{}, nil
 }

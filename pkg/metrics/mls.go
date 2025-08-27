@@ -81,3 +81,49 @@ func EmitMLSPublishedCommitLogEntry(
 		Observe(float64(len(entry.SerializedEntry) + len(entry.SerializedSignature)))
 	mlsCommitLogEntryCount.With(labels).Inc()
 }
+
+var mlsIdentityUpdateSize = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "mls_sent_identity_update_size",
+		Help:    "Size of a sent identity update in bytes",
+		Buckets: []float64{100, 1000, 10000, 100000},
+	},
+	appClientVersionTagKeys,
+)
+
+var mlsIdentityUpdateCount = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "mls_sent_identity_updates",
+		Help: "Count of sent identity updates",
+	},
+	appClientVersionTagKeys,
+)
+
+func EmitMLSSentIdentityUpdate(ctx context.Context, log *zap.Logger, numBytes int) {
+	labels := contextLabels(ctx)
+	mlsIdentityUpdateSize.With(labels).Observe(float64(numBytes))
+	mlsIdentityUpdateCount.With(labels).Inc()
+}
+
+var mlsKeyPackageSize = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "mls_sent_key_package_size",
+		Help:    "Size of a key package in bytes",
+		Buckets: []float64{100, 1000, 10000, 100000},
+	},
+	appClientVersionTagKeys,
+)
+
+var mlsKeyPackageCount = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "mls_sent_key_packages",
+		Help: "Count of key packages",
+	},
+	appClientVersionTagKeys,
+)
+
+func EmitMLSPublishedKeyPackage(ctx context.Context, log *zap.Logger, numBytes int) {
+	labels := contextLabels(ctx)
+	mlsKeyPackageSize.With(labels).Observe(float64(numBytes))
+	mlsKeyPackageCount.With(labels).Inc()
+}
