@@ -8,11 +8,13 @@ import (
 	"go.uber.org/zap"
 )
 
+var sizeBuckets = []float64{100, 500, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000, 1_000_000}
+
 var mlsSentGroupMessageSize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "mls_sent_group_message_size",
 		Help:    "Size of a sent group message in bytes",
-		Buckets: []float64{100, 1000, 10000, 100000},
+		Buckets: sizeBuckets,
 	},
 	appClientVersionTagKeys,
 )
@@ -35,7 +37,7 @@ var mlsSentWelcomeMessageSize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "mls_sent_welcome_message_size",
 		Help:    "Size of a sent welcome message in bytes",
-		Buckets: []float64{100, 1000, 10000, 100000},
+		Buckets: sizeBuckets,
 	},
 	appClientVersionTagKeys,
 )
@@ -58,7 +60,7 @@ var mlsCommitLogEntrySize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "mls_commit_log_entry_size",
 		Help:    "Size of a published commit log entry in bytes",
-		Buckets: []float64{100, 1000, 10000, 100000},
+		Buckets: sizeBuckets,
 	},
 	appClientVersionTagKeys,
 )
@@ -86,7 +88,7 @@ var mlsIdentityUpdateSize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "mls_sent_identity_update_size",
 		Help:    "Size of a sent identity update in bytes",
-		Buckets: []float64{100, 1000, 10000, 100000},
+		Buckets: sizeBuckets,
 	},
 	appClientVersionTagKeys,
 )
@@ -109,7 +111,7 @@ var mlsKeyPackageSize = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "mls_sent_key_package_size",
 		Help:    "Size of a key package in bytes",
-		Buckets: []float64{100, 1000, 10000, 100000},
+		Buckets: sizeBuckets,
 	},
 	appClientVersionTagKeys,
 )
