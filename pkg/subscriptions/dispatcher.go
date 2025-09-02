@@ -17,7 +17,7 @@ const (
 	allTopicsBacklogLength = 4096
 
 	// minBacklogBufferLength defines the minimal length used for backlog buffer.
-	minBacklogBufferLength = 1024
+	minBacklogBufferLength = 10240
 
 	WILDCARD_TOPIC = "*"
 

@@ -371,6 +371,13 @@ func (s *Service) SubscribeGroupMessages(
 			if highWaterMarks[groupID] < msg.GetV1().Id {
 				highWaterMarks[groupID] = msg.GetV1().Id
 			} else {
+				log.Info("skip sending MLS group message to client due to high water mark",
+					zap.String("group_id", fmt.Sprintf("%x", msg.GetV1().GroupId)),
+					zap.Uint64("message_id", msg.GetV1().Id),
+					zap.Uint64("created_ns", msg.GetV1().CreatedNs),
+					zap.Int("message_size_bytes", len(msg.GetV1().Data)),
+					zap.Bool("should_push", msg.GetV1().ShouldPush),
+				)
 				continue
 			}
 

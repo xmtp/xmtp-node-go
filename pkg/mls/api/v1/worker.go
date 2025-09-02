@@ -103,7 +103,7 @@ func (w *dbWorker) listenForGroupMessages(ctx context.Context, startID int64) {
 		case <-ticker.C:
 			groupMessages, err = w.queries.GetAllGroupMessagesWithCursor(w.ctx, queries.GetAllGroupMessagesWithCursorParams{
 				Cursor:  currentID,
-				Numrows: 500,
+				Numrows: 2000,
 			})
 			if err != nil {
 				w.log.Error("error getting group messages", zap.Error(err))
