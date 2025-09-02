@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"sync"
 
@@ -146,6 +148,16 @@ func (s *Service) Subscribe(
 				func() {
 					streamLock.Lock()
 					defer streamLock.Unlock()
+
+					// Log message details before sending to client
+					log.Info("sending message to client subscription",
+						zap.String("content_topic", msg.ContentTopic),
+						zap.Uint64("timestamp_ns", msg.TimestampNs),
+						zap.String("message_digest", fmt.Sprintf("%x", computeDigest(msg))),
+						zap.Int("message_size_bytes", len(msg.Message)),
+						zap.Strings("subscribed_topics", req.ContentTopics),
+					)
+
 					err := stream.Send(msg)
 					if err != nil {
 						log.Error("sending envelope to subscribe", zap.Error(err))
@@ -253,6 +265,16 @@ func (s *Service) Subscribe2(stream proto.MessageApi_Subscribe2Server) error {
 				func() {
 					streamLock.Lock()
 					defer streamLock.Unlock()
+
+					// Log message details before sending to client
+					log.Info("sending message to client subscription2",
+						zap.String("content_topic", msg.ContentTopic),
+						zap.Uint64("timestamp_ns", msg.TimestampNs),
+						zap.String("message_digest", fmt.Sprintf("%x", computeDigest(msg))),
+						zap.Int("message_size_bytes", len(msg.Message)),
+						zap.Int("subscribed_topic_count", subscribedTopicCount),
+					)
+
 					err := stream.Send(msg)
 					if err != nil {
 						log.Error("sending envelope to subscribe", zap.Error(err))
@@ -389,4 +411,10 @@ func getMaxRows(contentTopics []string) int {
 	}
 
 	return maxRowsPerQuery
+}
+
+// computeDigest calculates a digest for the envelope (same as in store package)
+func computeDigest(env *proto.Envelope) []byte {
+	digest := sha256.Sum256(append([]byte(env.ContentTopic), env.Message...))
+	return digest[:]
 }

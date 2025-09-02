@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
@@ -372,6 +373,16 @@ func (s *Service) SubscribeGroupMessages(
 			} else {
 				continue
 			}
+
+			// Log message details before sending to client
+			log.Info("sending MLS group message to client",
+				zap.String("group_id", fmt.Sprintf("%x", msg.GetV1().GroupId)),
+				zap.Uint64("message_id", msg.GetV1().Id),
+				zap.Uint64("created_ns", msg.GetV1().CreatedNs),
+				zap.Int("message_size_bytes", len(msg.GetV1().Data)),
+				zap.Bool("should_push", msg.GetV1().ShouldPush),
+			)
+
 			if err := stream.Send(msg); err != nil {
 				log.Error("error streaming group message", zap.Error(err))
 				return err
@@ -474,11 +485,28 @@ func (s *Service) SubscribeGroupMessages(
 			if !subOpen {
 				return status.Errorf(codes.Aborted, "caller did not read all messages fast enough")
 			}
+
+			// Log envelope details before parsing
+			log.Info("received group message from subscription channel",
+				zap.String("content_topic", env.ContentTopic),
+				zap.Uint64("timestamp_ns", env.TimestampNs),
+				zap.Int("message_size_bytes", len(env.Message)),
+			)
+
 			msg, err = getGroupMessageFromEnvelope(env)
 			if err != nil {
 				log.Error("error parsing message", zap.Error(err))
 				continue
 			}
+
+			// Log parsed group message details
+			log.Info("parsed group message from subscription",
+				zap.String("group_id", fmt.Sprintf("%x", msg.GetV1().GroupId)),
+				zap.Uint64("message_id", msg.GetV1().Id),
+				zap.Uint64("created_ns", msg.GetV1().CreatedNs),
+				zap.Bool("should_push", msg.GetV1().ShouldPush),
+			)
+
 			if err = sendToStream([]*mlsv1.GroupMessage{msg}); err != nil {
 				return err
 			}
@@ -518,6 +546,15 @@ func (s *Service) SubscribeWelcomeMessages(
 			} else {
 				continue
 			}
+
+			// Log message details before sending to client
+			log.Info("sending MLS welcome message to client",
+				zap.String("installation_key", fmt.Sprintf("%x", msg.GetV1().InstallationKey)),
+				zap.Uint64("message_id", msg.GetV1().Id),
+				zap.Uint64("created_ns", msg.GetV1().CreatedNs),
+				zap.Int("message_size_bytes", len(msg.GetV1().Data)),
+			)
+
 			if err := stream.Send(msg); err != nil {
 				log.Error("error streaming welcome message", zap.Error(err))
 				return err
@@ -618,11 +655,27 @@ func (s *Service) SubscribeWelcomeMessages(
 			if !subOpen {
 				return nil
 			}
+
+			// Log envelope details before parsing
+			log.Info("received welcome message from subscription channel",
+				zap.String("content_topic", env.ContentTopic),
+				zap.Uint64("timestamp_ns", env.TimestampNs),
+				zap.Int("message_size_bytes", len(env.Message)),
+			)
+
 			msg, err = getWelcomeMessageFromEnvelope(env)
 			if err != nil {
 				log.Error("error parsing message", zap.Error(err))
 				continue
 			}
+
+			// Log parsed welcome message details
+			log.Info("parsed welcome message from subscription",
+				zap.String("installation_key", fmt.Sprintf("%x", msg.GetV1().InstallationKey)),
+				zap.Uint64("message_id", msg.GetV1().Id),
+				zap.Uint64("created_ns", msg.GetV1().CreatedNs),
+			)
+
 			if err = sendToStream([]*mlsv1.WelcomeMessage{msg}); err != nil {
 				return err
 			}

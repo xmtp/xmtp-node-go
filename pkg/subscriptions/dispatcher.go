@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -51,6 +52,14 @@ func (d *SubscriptionDispatcher) HandleEnvelope(env *proto.Envelope) {
 
 	xmtpTopic := isValidSubscribeAllTopic(env.ContentTopic)
 
+	// Log message details for tracking
+	d.log.Info("dispatching message to subscriptions",
+		zap.String("content_topic", env.ContentTopic),
+		zap.Uint64("timestamp_ns", env.TimestampNs),
+		zap.String("message_digest", fmt.Sprintf("%x", computeDigest(env))),
+		zap.Int("message_size_bytes", len(env.Message)),
+	)
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for subscription := range d.subscriptions {
@@ -60,6 +69,13 @@ func (d *SubscriptionDispatcher) HandleEnvelope(env *proto.Envelope) {
 		if subscription.all || subscription.topics[env.ContentTopic] {
 			select {
 			case subscription.MessagesCh <- env:
+				d.log.Debug("message dispatched to subscription",
+					zap.String("content_topic", env.ContentTopic),
+					zap.Uint64("timestamp_ns", env.TimestampNs),
+					zap.String("message_digest", fmt.Sprintf("%x", computeDigest(env))),
+					zap.Bool("is_subscribe_all", subscription.all),
+					zap.Int("num_topics", len(subscription.topics)),
+				)
 			default:
 				d.log.Info(
 					fmt.Sprintf(
@@ -77,6 +93,12 @@ func (d *SubscriptionDispatcher) HandleEnvelope(env *proto.Envelope) {
 			}
 		}
 	}
+}
+
+// computeDigest calculates a digest for the envelope (same as in store package)
+func computeDigest(env *proto.Envelope) []byte {
+	digest := sha256.Sum256(append([]byte(env.ContentTopic), env.Message...))
+	return digest[:]
 }
 
 // log2 calculates the base-2 logarithm of an integer using bitwise operations.

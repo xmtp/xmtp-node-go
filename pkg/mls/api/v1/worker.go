@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -122,6 +123,16 @@ func (w *dbWorker) listenForGroupMessages(ctx context.Context, startID int64) {
 						},
 					},
 				}
+
+				// Log message details before dispatching
+				w.log.Info("dispatching MLS group message to subscription system",
+					zap.Int64("message_id", groupMessage.ID),
+					zap.Uint64("created_ns", uint64(groupMessage.CreatedAt.UnixNano())),
+					zap.String("group_id", fmt.Sprintf("%x", groupMessage.GroupID)),
+					zap.Int("message_size_bytes", len(groupMessage.Data)),
+					zap.Bool("should_push", groupMessage.ShouldPush.Bool),
+				)
+
 				data, err := proto.Marshal(&groupMessageProto)
 				if err != nil {
 					w.log.Error("error marshalling group message", zap.Error(err))
@@ -179,6 +190,15 @@ func (w *dbWorker) listenForWelcomeMessages(ctx context.Context, startID int64) 
 						},
 					},
 				}
+
+				// Log message details before dispatching
+				w.log.Info("dispatching MLS welcome message to subscription system",
+					zap.Int64("message_id", welcomeMessage.ID),
+					zap.Uint64("created_ns", uint64(welcomeMessage.CreatedAt.UnixNano())),
+					zap.String("installation_key", fmt.Sprintf("%x", welcomeMessage.InstallationKey)),
+					zap.Int("message_size_bytes", len(welcomeMessage.Data)),
+				)
+
 				data, err := proto.Marshal(&welcomeMessageProto)
 				if err != nil {
 					w.log.Error("error marshalling welcome message", zap.Error(err))
