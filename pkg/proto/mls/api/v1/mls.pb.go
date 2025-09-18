@@ -1600,6 +1600,105 @@ func (x *BatchQueryCommitLogResponse) GetResponses() []*QueryCommitLogResponse {
 	return nil
 }
 
+// Request to get the newest group message from a range of topics
+type GetNewestGroupMessageRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Get the newest message from each of these topics
+	GroupIds       [][]byte `protobuf:"bytes,1,rep,name=group_ids,json=groupIds,proto3" json:"group_ids,omitempty"`
+	IncludeContent bool     `protobuf:"varint,2,opt,name=include_content,json=includeContent,proto3" json:"include_content,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetNewestGroupMessageRequest) Reset() {
+	*x = GetNewestGroupMessageRequest{}
+	mi := &file_mls_api_v1_mls_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNewestGroupMessageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNewestGroupMessageRequest) ProtoMessage() {}
+
+func (x *GetNewestGroupMessageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mls_api_v1_mls_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNewestGroupMessageRequest.ProtoReflect.Descriptor instead.
+func (*GetNewestGroupMessageRequest) Descriptor() ([]byte, []int) {
+	return file_mls_api_v1_mls_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GetNewestGroupMessageRequest) GetGroupIds() [][]byte {
+	if x != nil {
+		return x.GroupIds
+	}
+	return nil
+}
+
+func (x *GetNewestGroupMessageRequest) GetIncludeContent() bool {
+	if x != nil {
+		return x.IncludeContent
+	}
+	return false
+}
+
+// Returns a list of responses that will always be the same length as the request
+type GetNewestGroupMessageResponse struct {
+	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	Responses     []*GetNewestGroupMessageResponse_Response `protobuf:"bytes,1,rep,name=responses,proto3" json:"responses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNewestGroupMessageResponse) Reset() {
+	*x = GetNewestGroupMessageResponse{}
+	mi := &file_mls_api_v1_mls_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNewestGroupMessageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNewestGroupMessageResponse) ProtoMessage() {}
+
+func (x *GetNewestGroupMessageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mls_api_v1_mls_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNewestGroupMessageResponse.ProtoReflect.Descriptor instead.
+func (*GetNewestGroupMessageResponse) Descriptor() ([]byte, []int) {
+	return file_mls_api_v1_mls_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GetNewestGroupMessageResponse) GetResponses() []*GetNewestGroupMessageResponse_Response {
+	if x != nil {
+		return x.Responses
+	}
+	return nil
+}
+
 // Version 1 of the WelcomeMessage format
 type WelcomeMessage_V1 struct {
 	state            protoimpl.MessageState                    `protogen:"open.v1"`
@@ -1616,7 +1715,7 @@ type WelcomeMessage_V1 struct {
 
 func (x *WelcomeMessage_V1) Reset() {
 	*x = WelcomeMessage_V1{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[29]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1628,7 +1727,7 @@ func (x *WelcomeMessage_V1) String() string {
 func (*WelcomeMessage_V1) ProtoMessage() {}
 
 func (x *WelcomeMessage_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[29]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1707,7 +1806,7 @@ type WelcomeMessageInput_V1 struct {
 
 func (x *WelcomeMessageInput_V1) Reset() {
 	*x = WelcomeMessageInput_V1{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[30]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1719,7 +1818,7 @@ func (x *WelcomeMessageInput_V1) String() string {
 func (*WelcomeMessageInput_V1) ProtoMessage() {}
 
 func (x *WelcomeMessageInput_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[30]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1785,7 +1884,7 @@ type GroupMessage_V1 struct {
 
 func (x *GroupMessage_V1) Reset() {
 	*x = GroupMessage_V1{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[31]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1797,7 +1896,7 @@ func (x *GroupMessage_V1) String() string {
 func (*GroupMessage_V1) ProtoMessage() {}
 
 func (x *GroupMessage_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[31]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1867,7 +1966,7 @@ type GroupMessageInput_V1 struct {
 
 func (x *GroupMessageInput_V1) Reset() {
 	*x = GroupMessageInput_V1{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[32]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1879,7 +1978,7 @@ func (x *GroupMessageInput_V1) String() string {
 func (*GroupMessageInput_V1) ProtoMessage() {}
 
 func (x *GroupMessageInput_V1) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[32]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1926,7 +2025,7 @@ type FetchKeyPackagesResponse_KeyPackage struct {
 
 func (x *FetchKeyPackagesResponse_KeyPackage) Reset() {
 	*x = FetchKeyPackagesResponse_KeyPackage{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[33]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1938,7 +2037,7 @@ func (x *FetchKeyPackagesResponse_KeyPackage) String() string {
 func (*FetchKeyPackagesResponse_KeyPackage) ProtoMessage() {}
 
 func (x *FetchKeyPackagesResponse_KeyPackage) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[33]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2071,7 @@ type GetIdentityUpdatesResponse_NewInstallationUpdate struct {
 
 func (x *GetIdentityUpdatesResponse_NewInstallationUpdate) Reset() {
 	*x = GetIdentityUpdatesResponse_NewInstallationUpdate{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[34]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1984,7 +2083,7 @@ func (x *GetIdentityUpdatesResponse_NewInstallationUpdate) String() string {
 func (*GetIdentityUpdatesResponse_NewInstallationUpdate) ProtoMessage() {}
 
 func (x *GetIdentityUpdatesResponse_NewInstallationUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[34]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2024,7 +2123,7 @@ type GetIdentityUpdatesResponse_RevokedInstallationUpdate struct {
 
 func (x *GetIdentityUpdatesResponse_RevokedInstallationUpdate) Reset() {
 	*x = GetIdentityUpdatesResponse_RevokedInstallationUpdate{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[35]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2036,7 +2135,7 @@ func (x *GetIdentityUpdatesResponse_RevokedInstallationUpdate) String() string {
 func (*GetIdentityUpdatesResponse_RevokedInstallationUpdate) ProtoMessage() {}
 
 func (x *GetIdentityUpdatesResponse_RevokedInstallationUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[35]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2074,7 +2173,7 @@ type GetIdentityUpdatesResponse_Update struct {
 
 func (x *GetIdentityUpdatesResponse_Update) Reset() {
 	*x = GetIdentityUpdatesResponse_Update{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[36]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2086,7 +2185,7 @@ func (x *GetIdentityUpdatesResponse_Update) String() string {
 func (*GetIdentityUpdatesResponse_Update) ProtoMessage() {}
 
 func (x *GetIdentityUpdatesResponse_Update) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[36]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2162,7 +2261,7 @@ type GetIdentityUpdatesResponse_WalletUpdates struct {
 
 func (x *GetIdentityUpdatesResponse_WalletUpdates) Reset() {
 	*x = GetIdentityUpdatesResponse_WalletUpdates{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[37]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2174,7 +2273,7 @@ func (x *GetIdentityUpdatesResponse_WalletUpdates) String() string {
 func (*GetIdentityUpdatesResponse_WalletUpdates) ProtoMessage() {}
 
 func (x *GetIdentityUpdatesResponse_WalletUpdates) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[37]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2208,7 +2307,7 @@ type SubscribeGroupMessagesRequest_Filter struct {
 
 func (x *SubscribeGroupMessagesRequest_Filter) Reset() {
 	*x = SubscribeGroupMessagesRequest_Filter{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[38]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2220,7 +2319,7 @@ func (x *SubscribeGroupMessagesRequest_Filter) String() string {
 func (*SubscribeGroupMessagesRequest_Filter) ProtoMessage() {}
 
 func (x *SubscribeGroupMessagesRequest_Filter) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[38]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2261,7 +2360,7 @@ type SubscribeWelcomeMessagesRequest_Filter struct {
 
 func (x *SubscribeWelcomeMessagesRequest_Filter) Reset() {
 	*x = SubscribeWelcomeMessagesRequest_Filter{}
-	mi := &file_mls_api_v1_mls_proto_msgTypes[39]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2273,7 +2372,7 @@ func (x *SubscribeWelcomeMessagesRequest_Filter) String() string {
 func (*SubscribeWelcomeMessagesRequest_Filter) ProtoMessage() {}
 
 func (x *SubscribeWelcomeMessagesRequest_Filter) ProtoReflect() protoreflect.Message {
-	mi := &file_mls_api_v1_mls_proto_msgTypes[39]
+	mi := &file_mls_api_v1_mls_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2301,6 +2400,51 @@ func (x *SubscribeWelcomeMessagesRequest_Filter) GetIdCursor() uint64 {
 		return x.IdCursor
 	}
 	return 0
+}
+
+type GetNewestGroupMessageResponse_Response struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// If no message is found on the topic, will be nil
+	GroupMessage  *GroupMessage `protobuf:"bytes,1,opt,name=group_message,json=groupMessage,proto3,oneof" json:"group_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNewestGroupMessageResponse_Response) Reset() {
+	*x = GetNewestGroupMessageResponse_Response{}
+	mi := &file_mls_api_v1_mls_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNewestGroupMessageResponse_Response) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNewestGroupMessageResponse_Response) ProtoMessage() {}
+
+func (x *GetNewestGroupMessageResponse_Response) ProtoReflect() protoreflect.Message {
+	mi := &file_mls_api_v1_mls_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNewestGroupMessageResponse_Response.ProtoReflect.Descriptor instead.
+func (*GetNewestGroupMessageResponse_Response) Descriptor() ([]byte, []int) {
+	return file_mls_api_v1_mls_proto_rawDescGZIP(), []int{30, 0}
+}
+
+func (x *GetNewestGroupMessageResponse_Response) GetGroupMessage() *GroupMessage {
+	if x != nil {
+		return x.GroupMessage
+	}
+	return nil
 }
 
 var File_mls_api_v1_mls_proto protoreflect.FileDescriptor
@@ -2445,11 +2589,19 @@ const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\x1aBatchQueryCommitLogRequest\x12B\n" +
 	"\brequests\x18\x01 \x03(\v2&.xmtp.mls.api.v1.QueryCommitLogRequestR\brequests\"d\n" +
 	"\x1bBatchQueryCommitLogResponse\x12E\n" +
-	"\tresponses\x18\x01 \x03(\v2'.xmtp.mls.api.v1.QueryCommitLogResponseR\tresponses*l\n" +
+	"\tresponses\x18\x01 \x03(\v2'.xmtp.mls.api.v1.QueryCommitLogResponseR\tresponses\"d\n" +
+	"\x1cGetNewestGroupMessageRequest\x12\x1b\n" +
+	"\tgroup_ids\x18\x01 \x03(\fR\bgroupIds\x12'\n" +
+	"\x0finclude_content\x18\x02 \x01(\bR\x0eincludeContent\"\xdd\x01\n" +
+	"\x1dGetNewestGroupMessageResponse\x12U\n" +
+	"\tresponses\x18\x01 \x03(\v27.xmtp.mls.api.v1.GetNewestGroupMessageResponse.ResponseR\tresponses\x1ae\n" +
+	"\bResponse\x12G\n" +
+	"\rgroup_message\x18\x01 \x01(\v2\x1d.xmtp.mls.api.v1.GroupMessageH\x00R\fgroupMessage\x88\x01\x01B\x10\n" +
+	"\x0e_group_message*l\n" +
 	"\rSortDirection\x12\x1e\n" +
 	"\x1aSORT_DIRECTION_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18SORT_DIRECTION_ASCENDING\x10\x01\x12\x1d\n" +
-	"\x19SORT_DIRECTION_DESCENDING\x10\x022\xf9\x0e\n" +
+	"\x19SORT_DIRECTION_DESCENDING\x10\x022\x9c\x10\n" +
 	"\x06MlsApi\x12~\n" +
 	"\x11SendGroupMessages\x12).xmtp.mls.api.v1.SendGroupMessagesRequest\x1a\x16.google.protobuf.Empty\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/mls/v1/send-group-messages\x12\x84\x01\n" +
 	"\x13SendWelcomeMessages\x12+.xmtp.mls.api.v1.SendWelcomeMessagesRequest\x1a\x16.google.protobuf.Empty\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/mls/v1/send-welcome-messages\x12\x9d\x01\n" +
@@ -2463,7 +2615,8 @@ const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\x16SubscribeGroupMessages\x12..xmtp.mls.api.v1.SubscribeGroupMessagesRequest\x1a\x1d.xmtp.mls.api.v1.GroupMessage\"+\x82\xd3\xe4\x93\x02%:\x01*\" /mls/v1/subscribe-group-messages0\x01\x12\x9e\x01\n" +
 	"\x18SubscribeWelcomeMessages\x120.xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest\x1a\x1f.xmtp.mls.api.v1.WelcomeMessage\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/mls/v1/subscribe-welcome-messages0\x01\x12\x8b\x01\n" +
 	"\x15BatchPublishCommitLog\x12-.xmtp.mls.api.v1.BatchPublishCommitLogRequest\x1a\x16.google.protobuf.Empty\"+\x82\xd3\xe4\x93\x02%:\x01*\" /mls/v1/batch-publish-commit-log\x12\x9b\x01\n" +
-	"\x13BatchQueryCommitLog\x12+.xmtp.mls.api.v1.BatchQueryCommitLogRequest\x1a,.xmtp.mls.api.v1.BatchQueryCommitLogResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/mls/v1/batch-query-commit-logB\xc9\x01\x92A\x0f\x12\r\n" +
+	"\x13BatchQueryCommitLog\x12+.xmtp.mls.api.v1.BatchQueryCommitLogRequest\x1a,.xmtp.mls.api.v1.BatchQueryCommitLogResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/mls/v1/batch-query-commit-log\x12\xa0\x01\n" +
+	"\x15GetNewestGroupMessage\x12-.xmtp.mls.api.v1.GetNewestGroupMessageRequest\x1a..xmtp.mls.api.v1.GetNewestGroupMessageResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /mls/v1/get-newest-group-messageB\xc9\x01\x92A\x0f\x12\r\n" +
 	"\x06MlsApi2\x031.0\n" +
 	"\x13com.xmtp.mls.api.v1B\bMlsProtoP\x01Z7github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1;apiv1\xa2\x02\x03XMA\xaa\x02\x0fXmtp.Mls.Api.V1\xca\x02\x0fXmtp\\Mls\\Api\\V1\xe2\x02\x1bXmtp\\Mls\\Api\\V1\\GPBMetadata\xea\x02\x12Xmtp::Mls::Api::V1b\x06proto3"
 
@@ -2480,7 +2633,7 @@ func file_mls_api_v1_mls_proto_rawDescGZIP() []byte {
 }
 
 var file_mls_api_v1_mls_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_mls_api_v1_mls_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_mls_api_v1_mls_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_mls_api_v1_mls_proto_goTypes = []any{
 	(SortDirection)(0),                                           // 0: xmtp.mls.api.v1.SortDirection
 	(*WelcomeMessage)(nil),                                       // 1: xmtp.mls.api.v1.WelcomeMessage
@@ -2512,35 +2665,38 @@ var file_mls_api_v1_mls_proto_goTypes = []any{
 	(*QueryCommitLogResponse)(nil),                               // 27: xmtp.mls.api.v1.QueryCommitLogResponse
 	(*BatchQueryCommitLogRequest)(nil),                           // 28: xmtp.mls.api.v1.BatchQueryCommitLogRequest
 	(*BatchQueryCommitLogResponse)(nil),                          // 29: xmtp.mls.api.v1.BatchQueryCommitLogResponse
-	(*WelcomeMessage_V1)(nil),                                    // 30: xmtp.mls.api.v1.WelcomeMessage.V1
-	(*WelcomeMessageInput_V1)(nil),                               // 31: xmtp.mls.api.v1.WelcomeMessageInput.V1
-	(*GroupMessage_V1)(nil),                                      // 32: xmtp.mls.api.v1.GroupMessage.V1
-	(*GroupMessageInput_V1)(nil),                                 // 33: xmtp.mls.api.v1.GroupMessageInput.V1
-	(*FetchKeyPackagesResponse_KeyPackage)(nil),                  // 34: xmtp.mls.api.v1.FetchKeyPackagesResponse.KeyPackage
-	(*GetIdentityUpdatesResponse_NewInstallationUpdate)(nil),     // 35: xmtp.mls.api.v1.GetIdentityUpdatesResponse.NewInstallationUpdate
-	(*GetIdentityUpdatesResponse_RevokedInstallationUpdate)(nil), // 36: xmtp.mls.api.v1.GetIdentityUpdatesResponse.RevokedInstallationUpdate
-	(*GetIdentityUpdatesResponse_Update)(nil),                    // 37: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update
-	(*GetIdentityUpdatesResponse_WalletUpdates)(nil),             // 38: xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates
-	(*SubscribeGroupMessagesRequest_Filter)(nil),                 // 39: xmtp.mls.api.v1.SubscribeGroupMessagesRequest.Filter
-	(*SubscribeWelcomeMessagesRequest_Filter)(nil),               // 40: xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.Filter
-	(*message_contents.Signature)(nil),                           // 41: xmtp.message_contents.Signature
-	(*associations.RecoverableEd25519Signature)(nil),             // 42: xmtp.identity.associations.RecoverableEd25519Signature
-	(*message_contents1.CommitLogEntry)(nil),                     // 43: xmtp.mls.message_contents.CommitLogEntry
-	(message_contents1.WelcomeWrapperAlgorithm)(0),               // 44: xmtp.mls.message_contents.WelcomeWrapperAlgorithm
-	(*emptypb.Empty)(nil),                                        // 45: google.protobuf.Empty
+	(*GetNewestGroupMessageRequest)(nil),                         // 30: xmtp.mls.api.v1.GetNewestGroupMessageRequest
+	(*GetNewestGroupMessageResponse)(nil),                        // 31: xmtp.mls.api.v1.GetNewestGroupMessageResponse
+	(*WelcomeMessage_V1)(nil),                                    // 32: xmtp.mls.api.v1.WelcomeMessage.V1
+	(*WelcomeMessageInput_V1)(nil),                               // 33: xmtp.mls.api.v1.WelcomeMessageInput.V1
+	(*GroupMessage_V1)(nil),                                      // 34: xmtp.mls.api.v1.GroupMessage.V1
+	(*GroupMessageInput_V1)(nil),                                 // 35: xmtp.mls.api.v1.GroupMessageInput.V1
+	(*FetchKeyPackagesResponse_KeyPackage)(nil),                  // 36: xmtp.mls.api.v1.FetchKeyPackagesResponse.KeyPackage
+	(*GetIdentityUpdatesResponse_NewInstallationUpdate)(nil),     // 37: xmtp.mls.api.v1.GetIdentityUpdatesResponse.NewInstallationUpdate
+	(*GetIdentityUpdatesResponse_RevokedInstallationUpdate)(nil), // 38: xmtp.mls.api.v1.GetIdentityUpdatesResponse.RevokedInstallationUpdate
+	(*GetIdentityUpdatesResponse_Update)(nil),                    // 39: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update
+	(*GetIdentityUpdatesResponse_WalletUpdates)(nil),             // 40: xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates
+	(*SubscribeGroupMessagesRequest_Filter)(nil),                 // 41: xmtp.mls.api.v1.SubscribeGroupMessagesRequest.Filter
+	(*SubscribeWelcomeMessagesRequest_Filter)(nil),               // 42: xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.Filter
+	(*GetNewestGroupMessageResponse_Response)(nil),               // 43: xmtp.mls.api.v1.GetNewestGroupMessageResponse.Response
+	(*message_contents.Signature)(nil),                           // 44: xmtp.message_contents.Signature
+	(*associations.RecoverableEd25519Signature)(nil),             // 45: xmtp.identity.associations.RecoverableEd25519Signature
+	(*message_contents1.CommitLogEntry)(nil),                     // 46: xmtp.mls.message_contents.CommitLogEntry
+	(message_contents1.WelcomeWrapperAlgorithm)(0),               // 47: xmtp.mls.message_contents.WelcomeWrapperAlgorithm
+	(*emptypb.Empty)(nil),                                        // 48: google.protobuf.Empty
 }
 var file_mls_api_v1_mls_proto_depIdxs = []int32{
-	30, // 0: xmtp.mls.api.v1.WelcomeMessage.v1:type_name -> xmtp.mls.api.v1.WelcomeMessage.V1
-	31, // 1: xmtp.mls.api.v1.WelcomeMessageInput.v1:type_name -> xmtp.mls.api.v1.WelcomeMessageInput.V1
-	32, // 2: xmtp.mls.api.v1.GroupMessage.v1:type_name -> xmtp.mls.api.v1.GroupMessage.V1
-	33, // 3: xmtp.mls.api.v1.GroupMessageInput.v1:type_name -> xmtp.mls.api.v1.GroupMessageInput.V1
+	32, // 0: xmtp.mls.api.v1.WelcomeMessage.v1:type_name -> xmtp.mls.api.v1.WelcomeMessage.V1
+	33, // 1: xmtp.mls.api.v1.WelcomeMessageInput.v1:type_name -> xmtp.mls.api.v1.WelcomeMessageInput.V1
+	34, // 2: xmtp.mls.api.v1.GroupMessage.v1:type_name -> xmtp.mls.api.v1.GroupMessage.V1
+	35, // 3: xmtp.mls.api.v1.GroupMessageInput.v1:type_name -> xmtp.mls.api.v1.GroupMessageInput.V1
 	5,  // 4: xmtp.mls.api.v1.SendGroupMessagesRequest.messages:type_name -> xmtp.mls.api.v1.GroupMessageInput
 	2,  // 5: xmtp.mls.api.v1.SendWelcomeMessagesRequest.messages:type_name -> xmtp.mls.api.v1.WelcomeMessageInput
 	8,  // 6: xmtp.mls.api.v1.RegisterInstallationRequest.key_package:type_name -> xmtp.mls.api.v1.KeyPackageUpload
 	8,  // 7: xmtp.mls.api.v1.UploadKeyPackageRequest.key_package:type_name -> xmtp.mls.api.v1.KeyPackageUpload
-	34, // 8: xmtp.mls.api.v1.FetchKeyPackagesResponse.key_packages:type_name -> xmtp.mls.api.v1.FetchKeyPackagesResponse.KeyPackage
-	41, // 9: xmtp.mls.api.v1.RevokeInstallationRequest.wallet_signature:type_name -> xmtp.message_contents.Signature
-	38, // 10: xmtp.mls.api.v1.GetIdentityUpdatesResponse.updates:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates
+	36, // 8: xmtp.mls.api.v1.FetchKeyPackagesResponse.key_packages:type_name -> xmtp.mls.api.v1.FetchKeyPackagesResponse.KeyPackage
+	44, // 9: xmtp.mls.api.v1.RevokeInstallationRequest.wallet_signature:type_name -> xmtp.message_contents.Signature
+	40, // 10: xmtp.mls.api.v1.GetIdentityUpdatesResponse.updates:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates
 	0,  // 11: xmtp.mls.api.v1.PagingInfo.direction:type_name -> xmtp.mls.api.v1.SortDirection
 	17, // 12: xmtp.mls.api.v1.QueryGroupMessagesRequest.paging_info:type_name -> xmtp.mls.api.v1.PagingInfo
 	4,  // 13: xmtp.mls.api.v1.QueryGroupMessagesResponse.messages:type_name -> xmtp.mls.api.v1.GroupMessage
@@ -2548,51 +2704,55 @@ var file_mls_api_v1_mls_proto_depIdxs = []int32{
 	17, // 15: xmtp.mls.api.v1.QueryWelcomeMessagesRequest.paging_info:type_name -> xmtp.mls.api.v1.PagingInfo
 	1,  // 16: xmtp.mls.api.v1.QueryWelcomeMessagesResponse.messages:type_name -> xmtp.mls.api.v1.WelcomeMessage
 	17, // 17: xmtp.mls.api.v1.QueryWelcomeMessagesResponse.paging_info:type_name -> xmtp.mls.api.v1.PagingInfo
-	39, // 18: xmtp.mls.api.v1.SubscribeGroupMessagesRequest.filters:type_name -> xmtp.mls.api.v1.SubscribeGroupMessagesRequest.Filter
-	40, // 19: xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.filters:type_name -> xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.Filter
+	41, // 18: xmtp.mls.api.v1.SubscribeGroupMessagesRequest.filters:type_name -> xmtp.mls.api.v1.SubscribeGroupMessagesRequest.Filter
+	42, // 19: xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.filters:type_name -> xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest.Filter
 	25, // 20: xmtp.mls.api.v1.BatchPublishCommitLogRequest.requests:type_name -> xmtp.mls.api.v1.PublishCommitLogRequest
-	42, // 21: xmtp.mls.api.v1.PublishCommitLogRequest.signature:type_name -> xmtp.identity.associations.RecoverableEd25519Signature
+	45, // 21: xmtp.mls.api.v1.PublishCommitLogRequest.signature:type_name -> xmtp.identity.associations.RecoverableEd25519Signature
 	17, // 22: xmtp.mls.api.v1.QueryCommitLogRequest.paging_info:type_name -> xmtp.mls.api.v1.PagingInfo
-	43, // 23: xmtp.mls.api.v1.QueryCommitLogResponse.commit_log_entries:type_name -> xmtp.mls.message_contents.CommitLogEntry
+	46, // 23: xmtp.mls.api.v1.QueryCommitLogResponse.commit_log_entries:type_name -> xmtp.mls.message_contents.CommitLogEntry
 	17, // 24: xmtp.mls.api.v1.QueryCommitLogResponse.paging_info:type_name -> xmtp.mls.api.v1.PagingInfo
 	26, // 25: xmtp.mls.api.v1.BatchQueryCommitLogRequest.requests:type_name -> xmtp.mls.api.v1.QueryCommitLogRequest
 	27, // 26: xmtp.mls.api.v1.BatchQueryCommitLogResponse.responses:type_name -> xmtp.mls.api.v1.QueryCommitLogResponse
-	44, // 27: xmtp.mls.api.v1.WelcomeMessage.V1.wrapper_algorithm:type_name -> xmtp.mls.message_contents.WelcomeWrapperAlgorithm
-	44, // 28: xmtp.mls.api.v1.WelcomeMessageInput.V1.wrapper_algorithm:type_name -> xmtp.mls.message_contents.WelcomeWrapperAlgorithm
-	35, // 29: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update.new_installation:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.NewInstallationUpdate
-	36, // 30: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update.revoked_installation:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.RevokedInstallationUpdate
-	37, // 31: xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates.updates:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update
-	6,  // 32: xmtp.mls.api.v1.MlsApi.SendGroupMessages:input_type -> xmtp.mls.api.v1.SendGroupMessagesRequest
-	7,  // 33: xmtp.mls.api.v1.MlsApi.SendWelcomeMessages:input_type -> xmtp.mls.api.v1.SendWelcomeMessagesRequest
-	9,  // 34: xmtp.mls.api.v1.MlsApi.RegisterInstallation:input_type -> xmtp.mls.api.v1.RegisterInstallationRequest
-	11, // 35: xmtp.mls.api.v1.MlsApi.UploadKeyPackage:input_type -> xmtp.mls.api.v1.UploadKeyPackageRequest
-	12, // 36: xmtp.mls.api.v1.MlsApi.FetchKeyPackages:input_type -> xmtp.mls.api.v1.FetchKeyPackagesRequest
-	14, // 37: xmtp.mls.api.v1.MlsApi.RevokeInstallation:input_type -> xmtp.mls.api.v1.RevokeInstallationRequest
-	15, // 38: xmtp.mls.api.v1.MlsApi.GetIdentityUpdates:input_type -> xmtp.mls.api.v1.GetIdentityUpdatesRequest
-	18, // 39: xmtp.mls.api.v1.MlsApi.QueryGroupMessages:input_type -> xmtp.mls.api.v1.QueryGroupMessagesRequest
-	20, // 40: xmtp.mls.api.v1.MlsApi.QueryWelcomeMessages:input_type -> xmtp.mls.api.v1.QueryWelcomeMessagesRequest
-	22, // 41: xmtp.mls.api.v1.MlsApi.SubscribeGroupMessages:input_type -> xmtp.mls.api.v1.SubscribeGroupMessagesRequest
-	23, // 42: xmtp.mls.api.v1.MlsApi.SubscribeWelcomeMessages:input_type -> xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest
-	24, // 43: xmtp.mls.api.v1.MlsApi.BatchPublishCommitLog:input_type -> xmtp.mls.api.v1.BatchPublishCommitLogRequest
-	28, // 44: xmtp.mls.api.v1.MlsApi.BatchQueryCommitLog:input_type -> xmtp.mls.api.v1.BatchQueryCommitLogRequest
-	45, // 45: xmtp.mls.api.v1.MlsApi.SendGroupMessages:output_type -> google.protobuf.Empty
-	45, // 46: xmtp.mls.api.v1.MlsApi.SendWelcomeMessages:output_type -> google.protobuf.Empty
-	10, // 47: xmtp.mls.api.v1.MlsApi.RegisterInstallation:output_type -> xmtp.mls.api.v1.RegisterInstallationResponse
-	45, // 48: xmtp.mls.api.v1.MlsApi.UploadKeyPackage:output_type -> google.protobuf.Empty
-	13, // 49: xmtp.mls.api.v1.MlsApi.FetchKeyPackages:output_type -> xmtp.mls.api.v1.FetchKeyPackagesResponse
-	45, // 50: xmtp.mls.api.v1.MlsApi.RevokeInstallation:output_type -> google.protobuf.Empty
-	16, // 51: xmtp.mls.api.v1.MlsApi.GetIdentityUpdates:output_type -> xmtp.mls.api.v1.GetIdentityUpdatesResponse
-	19, // 52: xmtp.mls.api.v1.MlsApi.QueryGroupMessages:output_type -> xmtp.mls.api.v1.QueryGroupMessagesResponse
-	21, // 53: xmtp.mls.api.v1.MlsApi.QueryWelcomeMessages:output_type -> xmtp.mls.api.v1.QueryWelcomeMessagesResponse
-	4,  // 54: xmtp.mls.api.v1.MlsApi.SubscribeGroupMessages:output_type -> xmtp.mls.api.v1.GroupMessage
-	1,  // 55: xmtp.mls.api.v1.MlsApi.SubscribeWelcomeMessages:output_type -> xmtp.mls.api.v1.WelcomeMessage
-	45, // 56: xmtp.mls.api.v1.MlsApi.BatchPublishCommitLog:output_type -> google.protobuf.Empty
-	29, // 57: xmtp.mls.api.v1.MlsApi.BatchQueryCommitLog:output_type -> xmtp.mls.api.v1.BatchQueryCommitLogResponse
-	45, // [45:58] is the sub-list for method output_type
-	32, // [32:45] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	43, // 27: xmtp.mls.api.v1.GetNewestGroupMessageResponse.responses:type_name -> xmtp.mls.api.v1.GetNewestGroupMessageResponse.Response
+	47, // 28: xmtp.mls.api.v1.WelcomeMessage.V1.wrapper_algorithm:type_name -> xmtp.mls.message_contents.WelcomeWrapperAlgorithm
+	47, // 29: xmtp.mls.api.v1.WelcomeMessageInput.V1.wrapper_algorithm:type_name -> xmtp.mls.message_contents.WelcomeWrapperAlgorithm
+	37, // 30: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update.new_installation:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.NewInstallationUpdate
+	38, // 31: xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update.revoked_installation:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.RevokedInstallationUpdate
+	39, // 32: xmtp.mls.api.v1.GetIdentityUpdatesResponse.WalletUpdates.updates:type_name -> xmtp.mls.api.v1.GetIdentityUpdatesResponse.Update
+	4,  // 33: xmtp.mls.api.v1.GetNewestGroupMessageResponse.Response.group_message:type_name -> xmtp.mls.api.v1.GroupMessage
+	6,  // 34: xmtp.mls.api.v1.MlsApi.SendGroupMessages:input_type -> xmtp.mls.api.v1.SendGroupMessagesRequest
+	7,  // 35: xmtp.mls.api.v1.MlsApi.SendWelcomeMessages:input_type -> xmtp.mls.api.v1.SendWelcomeMessagesRequest
+	9,  // 36: xmtp.mls.api.v1.MlsApi.RegisterInstallation:input_type -> xmtp.mls.api.v1.RegisterInstallationRequest
+	11, // 37: xmtp.mls.api.v1.MlsApi.UploadKeyPackage:input_type -> xmtp.mls.api.v1.UploadKeyPackageRequest
+	12, // 38: xmtp.mls.api.v1.MlsApi.FetchKeyPackages:input_type -> xmtp.mls.api.v1.FetchKeyPackagesRequest
+	14, // 39: xmtp.mls.api.v1.MlsApi.RevokeInstallation:input_type -> xmtp.mls.api.v1.RevokeInstallationRequest
+	15, // 40: xmtp.mls.api.v1.MlsApi.GetIdentityUpdates:input_type -> xmtp.mls.api.v1.GetIdentityUpdatesRequest
+	18, // 41: xmtp.mls.api.v1.MlsApi.QueryGroupMessages:input_type -> xmtp.mls.api.v1.QueryGroupMessagesRequest
+	20, // 42: xmtp.mls.api.v1.MlsApi.QueryWelcomeMessages:input_type -> xmtp.mls.api.v1.QueryWelcomeMessagesRequest
+	22, // 43: xmtp.mls.api.v1.MlsApi.SubscribeGroupMessages:input_type -> xmtp.mls.api.v1.SubscribeGroupMessagesRequest
+	23, // 44: xmtp.mls.api.v1.MlsApi.SubscribeWelcomeMessages:input_type -> xmtp.mls.api.v1.SubscribeWelcomeMessagesRequest
+	24, // 45: xmtp.mls.api.v1.MlsApi.BatchPublishCommitLog:input_type -> xmtp.mls.api.v1.BatchPublishCommitLogRequest
+	28, // 46: xmtp.mls.api.v1.MlsApi.BatchQueryCommitLog:input_type -> xmtp.mls.api.v1.BatchQueryCommitLogRequest
+	30, // 47: xmtp.mls.api.v1.MlsApi.GetNewestGroupMessage:input_type -> xmtp.mls.api.v1.GetNewestGroupMessageRequest
+	48, // 48: xmtp.mls.api.v1.MlsApi.SendGroupMessages:output_type -> google.protobuf.Empty
+	48, // 49: xmtp.mls.api.v1.MlsApi.SendWelcomeMessages:output_type -> google.protobuf.Empty
+	10, // 50: xmtp.mls.api.v1.MlsApi.RegisterInstallation:output_type -> xmtp.mls.api.v1.RegisterInstallationResponse
+	48, // 51: xmtp.mls.api.v1.MlsApi.UploadKeyPackage:output_type -> google.protobuf.Empty
+	13, // 52: xmtp.mls.api.v1.MlsApi.FetchKeyPackages:output_type -> xmtp.mls.api.v1.FetchKeyPackagesResponse
+	48, // 53: xmtp.mls.api.v1.MlsApi.RevokeInstallation:output_type -> google.protobuf.Empty
+	16, // 54: xmtp.mls.api.v1.MlsApi.GetIdentityUpdates:output_type -> xmtp.mls.api.v1.GetIdentityUpdatesResponse
+	19, // 55: xmtp.mls.api.v1.MlsApi.QueryGroupMessages:output_type -> xmtp.mls.api.v1.QueryGroupMessagesResponse
+	21, // 56: xmtp.mls.api.v1.MlsApi.QueryWelcomeMessages:output_type -> xmtp.mls.api.v1.QueryWelcomeMessagesResponse
+	4,  // 57: xmtp.mls.api.v1.MlsApi.SubscribeGroupMessages:output_type -> xmtp.mls.api.v1.GroupMessage
+	1,  // 58: xmtp.mls.api.v1.MlsApi.SubscribeWelcomeMessages:output_type -> xmtp.mls.api.v1.WelcomeMessage
+	48, // 59: xmtp.mls.api.v1.MlsApi.BatchPublishCommitLog:output_type -> google.protobuf.Empty
+	29, // 60: xmtp.mls.api.v1.MlsApi.BatchQueryCommitLog:output_type -> xmtp.mls.api.v1.BatchQueryCommitLogResponse
+	31, // 61: xmtp.mls.api.v1.MlsApi.GetNewestGroupMessage:output_type -> xmtp.mls.api.v1.GetNewestGroupMessageResponse
+	48, // [48:62] is the sub-list for method output_type
+	34, // [34:48] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_mls_api_v1_mls_proto_init() }
@@ -2612,17 +2772,18 @@ func file_mls_api_v1_mls_proto_init() {
 	file_mls_api_v1_mls_proto_msgTypes[4].OneofWrappers = []any{
 		(*GroupMessageInput_V1_)(nil),
 	}
-	file_mls_api_v1_mls_proto_msgTypes[36].OneofWrappers = []any{
+	file_mls_api_v1_mls_proto_msgTypes[38].OneofWrappers = []any{
 		(*GetIdentityUpdatesResponse_Update_NewInstallation)(nil),
 		(*GetIdentityUpdatesResponse_Update_RevokedInstallation)(nil),
 	}
+	file_mls_api_v1_mls_proto_msgTypes[42].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mls_api_v1_mls_proto_rawDesc), len(file_mls_api_v1_mls_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   40,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

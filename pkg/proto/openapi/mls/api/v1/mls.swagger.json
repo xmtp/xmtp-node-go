@@ -147,6 +147,48 @@
         ]
       }
     },
+    "/mls/v1/get-newest-group-message": {
+      "get": {
+        "operationId": "MlsApi_GetNewestGroupMessage",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNewestGroupMessageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupIds",
+            "description": "Get the newest message from each of these topics",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "includeContent",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "MlsApi"
+        ]
+      }
+    },
     "/mls/v1/query-group-messages": {
       "post": {
         "summary": "Query stored group messages",
@@ -732,6 +774,28 @@
         }
       },
       "title": "An individual key package"
+    },
+    "v1GetNewestGroupMessageResponse": {
+      "type": "object",
+      "properties": {
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1GetNewestGroupMessageResponseResponse"
+          }
+        }
+      },
+      "title": "Returns a list of responses that will always be the same length as the request"
+    },
+    "v1GetNewestGroupMessageResponseResponse": {
+      "type": "object",
+      "properties": {
+        "groupMessage": {
+          "$ref": "#/definitions/apiv1GroupMessage",
+          "title": "If no message is found on the topic, will be nil"
+        }
+      }
     },
     "v1GroupMessageInput": {
       "type": "object",
