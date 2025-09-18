@@ -1268,3 +1268,182 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	require.Equal(t, []byte("content7"), resp.Messages[0].GetV1().Data)
 	require.Equal(t, []byte("content8"), resp.Messages[1].GetV1().Data)
 }
+
+func TestGetNewestGroupMessage(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	tests := []struct {
+		name          string
+		setup         func() ([][]byte, []*queries.GroupMessage)
+		queryGroups   [][]byte
+		expectedCount int
+		validate      func([]*queries.GetNewestGroupMessageRow, []*queries.GetNewestGroupMessageMetadataRow, []*queries.GroupMessage)
+	}{
+		{
+			name: "single group",
+			setup: func() ([][]byte, []*queries.GroupMessage) {
+				group := []byte("group1")
+				msg, err := store.InsertGroupMessage(
+					ctx,
+					group,
+					[]byte("data1"),
+					[]byte("hmac"),
+					true,
+					true,
+				)
+				require.NoError(t, err)
+				return [][]byte{group}, []*queries.GroupMessage{msg}
+			},
+			queryGroups:   [][]byte{[]byte("group1")},
+			expectedCount: 1,
+			validate: func(results []*queries.GetNewestGroupMessageRow, metadata []*queries.GetNewestGroupMessageMetadataRow, msgs []*queries.GroupMessage) {
+				require.NotNil(t, results[0])
+				require.Equal(t, []byte("group1"), results[0].GroupID)
+				require.Equal(t, msgs[0].ID, results[0].ID)
+				require.Equal(t, []byte("data1"), results[0].Data)
+
+				require.NotNil(t, metadata[0])
+				require.Equal(t, msgs[0].ID, metadata[0].ID)
+				require.Equal(t, results[0].CreatedAt, metadata[0].CreatedAt)
+				require.True(t, results[0].IsCommit.Bool)
+			},
+		},
+		{
+			name: "multiple groups with highest ID selection",
+			setup: func() ([][]byte, []*queries.GroupMessage) {
+				group1, group2 := []byte("group1"), []byte("group2")
+				_, err := store.InsertGroupMessage(
+					ctx,
+					group1,
+					[]byte("data1"),
+					[]byte("hmac"),
+					true,
+					true,
+				)
+				require.NoError(t, err)
+				msg2, err := store.InsertGroupMessage(
+					ctx,
+					group1,
+					[]byte("data2"),
+					[]byte("hmac"),
+					true,
+					false,
+				)
+				require.NoError(t, err)
+				msg3, err := store.InsertGroupMessage(
+					ctx,
+					group2,
+					[]byte("data3"),
+					[]byte("hmac"),
+					false,
+					true,
+				)
+				require.NoError(t, err)
+				return [][]byte{group1, group2}, []*queries.GroupMessage{msg2, msg3}
+			},
+			queryGroups:   [][]byte{[]byte("group1"), []byte("group2")},
+			expectedCount: 2,
+			validate: func(results []*queries.GetNewestGroupMessageRow, metadata []*queries.GetNewestGroupMessageMetadataRow, msgs []*queries.GroupMessage) {
+				// Verify results are in input order and contain highest ID messages
+				require.NotNil(t, results[0])
+				require.Equal(t, []byte("group1"), results[0].GroupID)
+				require.Equal(t, msgs[0].ID, results[0].ID) // highest ID for group1
+				require.Equal(t, []byte("data2"), results[0].Data)
+
+				require.NotNil(t, results[1])
+				require.Equal(t, []byte("group2"), results[1].GroupID)
+				require.Equal(t, msgs[1].ID, results[1].ID)
+
+				// Verify metadata matches
+				require.Equal(t, msgs[0].ID, metadata[0].ID)
+				require.Equal(t, msgs[1].ID, metadata[1].ID)
+			},
+		},
+		{
+			name: "no messages",
+			setup: func() ([][]byte, []*queries.GroupMessage) {
+				return [][]byte{[]byte("group1"), []byte("group2")}, nil
+			},
+			queryGroups:   [][]byte{[]byte("group1"), []byte("group2")},
+			expectedCount: 2,
+			validate: func(results []*queries.GetNewestGroupMessageRow, metadata []*queries.GetNewestGroupMessageMetadataRow, msgs []*queries.GroupMessage) {
+				require.Nil(t, results[0])
+				require.Nil(t, results[1])
+				require.Nil(t, metadata[0])
+				require.Nil(t, metadata[1])
+			},
+		},
+		{
+			name: "mixed results",
+			setup: func() ([][]byte, []*queries.GroupMessage) {
+				group1, group3 := []byte("group1"), []byte("group3")
+				msg1, err := store.InsertGroupMessage(
+					ctx,
+					group1,
+					[]byte("data1"),
+					[]byte("hmac"),
+					true,
+					true,
+				)
+				require.NoError(t, err)
+				msg2, err := store.InsertGroupMessage(
+					ctx,
+					group3,
+					[]byte("data3"),
+					[]byte("hmac"),
+					false,
+					false,
+				)
+				require.NoError(t, err)
+				return [][]byte{
+						group1,
+						[]byte("group2"),
+						group3,
+					}, []*queries.GroupMessage{
+						msg1,
+						msg2,
+					}
+			},
+			queryGroups:   [][]byte{[]byte("group1"), []byte("group2"), []byte("group3")},
+			expectedCount: 3,
+			validate: func(results []*queries.GetNewestGroupMessageRow, metadata []*queries.GetNewestGroupMessageMetadataRow, msgs []*queries.GroupMessage) {
+				require.NotNil(t, results[0])
+				require.Equal(t, msgs[0].ID, results[0].ID)
+
+				require.Nil(t, results[1]) // no messages for group2
+
+				require.NotNil(t, results[2])
+				require.Equal(t, msgs[1].ID, results[2].ID)
+
+				require.Equal(t, msgs[0].ID, metadata[0].ID)
+				require.Nil(t, metadata[1])
+				require.Equal(t, msgs[1].ID, metadata[2].ID)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup test data
+			_, expectedMsgs := tt.setup()
+
+			// Test both methods
+			results, err := store.GetNewestGroupMessage(ctx, tt.queryGroups)
+			require.NoError(t, err)
+			require.Len(t, results, tt.expectedCount)
+
+			metadata, err := store.GetNewestGroupMessageMetadata(ctx, tt.queryGroups)
+			require.NoError(t, err)
+			require.Len(t, metadata, tt.expectedCount)
+
+			// Validate results
+			tt.validate(results, metadata, expectedMsgs)
+
+			// Cleanup for next test
+			_, err = store.db.Exec("DELETE FROM group_messages")
+			require.NoError(t, err)
+		})
+	}
+}

@@ -60,6 +60,14 @@ type ReadMlsStore interface {
 		ctx context.Context,
 		query *mlsv1.QueryCommitLogRequest,
 	) (*mlsv1.QueryCommitLogResponse, error)
+	GetNewestGroupMessage(
+		ctx context.Context,
+		groupIds [][]byte,
+	) ([]*queries.GetNewestGroupMessageRow, error)
+	GetNewestGroupMessageMetadata(
+		ctx context.Context,
+		groupIds [][]byte,
+	) ([]*queries.GetNewestGroupMessageMetadataRow, error)
 	Queries() *queries.Queries
 }
 
@@ -400,6 +408,20 @@ func (s *Store) QueryWelcomeMessagesV1(
 	req *mlsv1.QueryWelcomeMessagesRequest,
 ) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	return s.readstore.QueryWelcomeMessagesV1(ctx, req)
+}
+
+func (s *Store) GetNewestGroupMessageMetadata(
+	ctx context.Context,
+	groupIds [][]byte,
+) ([]*queries.GetNewestGroupMessageMetadataRow, error) {
+	return s.readstore.GetNewestGroupMessageMetadata(ctx, groupIds)
+}
+
+func (s *Store) GetNewestGroupMessage(
+	ctx context.Context,
+	groupIds [][]byte,
+) ([]*queries.GetNewestGroupMessageRow, error) {
+	return s.readstore.GetNewestGroupMessage(ctx, groupIds)
 }
 
 func (s *Store) InsertCommitLog(

@@ -445,3 +445,33 @@ WHERE kp.installation_id = td.installation_id
 RETURNING
 	kp.installation_id, kp.created_at;
 
+-- name: GetNewestGroupMessage :many
+SELECT DISTINCT ON (group_id)
+	id,
+	group_id,
+	data,
+	created_at,
+	should_push,
+	sender_hmac,
+	is_commit
+FROM
+	group_messages
+WHERE
+	group_id = ANY (@group_ids::BYTEA[])
+ORDER BY
+	group_id,
+	id DESC;
+
+-- name: GetNewestGroupMessageMetadata :many
+SELECT DISTINCT ON (group_id)
+	id,
+	group_id,
+	created_at,
+	is_commit
+FROM
+	group_messages
+WHERE
+	group_id = ANY (@group_ids::BYTEA[])
+ORDER BY
+	group_id,
+	id DESC;

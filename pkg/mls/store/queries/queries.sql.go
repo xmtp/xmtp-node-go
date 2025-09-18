@@ -697,6 +697,115 @@ func (q *Queries) GetLatestWelcomeMessageID(ctx context.Context) (int64, error) 
 	return column_1, err
 }
 
+const getNewestGroupMessage = `-- name: GetNewestGroupMessage :many
+SELECT DISTINCT ON (group_id)
+	id,
+	group_id,
+	data,
+	created_at,
+	should_push,
+	sender_hmac,
+	is_commit
+FROM
+	group_messages
+WHERE
+	group_id = ANY ($1::BYTEA[])
+ORDER BY
+	group_id,
+	id DESC
+`
+
+type GetNewestGroupMessageRow struct {
+	ID         int64
+	GroupID    []byte
+	Data       []byte
+	CreatedAt  time.Time
+	ShouldPush sql.NullBool
+	SenderHmac []byte
+	IsCommit   sql.NullBool
+}
+
+func (q *Queries) GetNewestGroupMessage(ctx context.Context, groupIds [][]byte) ([]GetNewestGroupMessageRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNewestGroupMessage, pq.Array(groupIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNewestGroupMessageRow
+	for rows.Next() {
+		var i GetNewestGroupMessageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.Data,
+			&i.CreatedAt,
+			&i.ShouldPush,
+			&i.SenderHmac,
+			&i.IsCommit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNewestGroupMessageMetadata = `-- name: GetNewestGroupMessageMetadata :many
+SELECT DISTINCT ON (group_id)
+	id,
+	group_id,
+	created_at,
+	is_commit
+FROM
+	group_messages
+WHERE
+	group_id = ANY ($1::BYTEA[])
+ORDER BY
+	group_id,
+	id DESC
+`
+
+type GetNewestGroupMessageMetadataRow struct {
+	ID        int64
+	GroupID   []byte
+	CreatedAt time.Time
+	IsCommit  sql.NullBool
+}
+
+func (q *Queries) GetNewestGroupMessageMetadata(ctx context.Context, groupIds [][]byte) ([]GetNewestGroupMessageMetadataRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNewestGroupMessageMetadata, pq.Array(groupIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNewestGroupMessageMetadataRow
+	for rows.Next() {
+		var i GetNewestGroupMessageMetadataRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.CreatedAt,
+			&i.IsCommit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOldInstallations = `-- name: GetOldInstallations :one
 SELECT
 	COUNT(*)::BIGINT AS old_message_count
