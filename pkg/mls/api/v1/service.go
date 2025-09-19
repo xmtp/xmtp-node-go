@@ -7,6 +7,7 @@ import (
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
@@ -700,6 +701,82 @@ func (s *Service) BatchQueryCommitLog(
 	}, nil
 }
 
+func (s *Service) GetNewestGroupMessage(
+	ctx context.Context,
+	req *mlsv1.GetNewestGroupMessageRequest,
+) (*mlsv1.GetNewestGroupMessageResponse, error) {
+	log := s.log.Named("get-newest-group-message")
+	if err := validateGetNewestGroupMessageRequest(req); err != nil {
+		return nil, err
+	}
+	out := make([]*mlsv1.GetNewestGroupMessageResponse_Response, len(req.GroupIds))
+	if req.IncludeContent {
+		results, err := s.readOnlyStore.GetNewestGroupMessage(ctx, req.GroupIds)
+		if err != nil {
+			log.Error("error getting newest group message", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "database query failed")
+		}
+		for idx, result := range results {
+			if result == nil {
+				out[idx] = &mlsv1.GetNewestGroupMessageResponse_Response{}
+				continue
+			}
+			out[idx] = &mlsv1.GetNewestGroupMessageResponse_Response{
+				GroupMessage: convertNewestMessageToProto(result),
+			}
+		}
+	} else {
+		results, err := s.readOnlyStore.GetNewestGroupMessageMetadata(ctx, req.GroupIds)
+		if err != nil {
+			log.Error("error getting newest group message metadata", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "database query failed")
+		}
+		for idx, result := range results {
+			if result == nil {
+				out[idx] = &mlsv1.GetNewestGroupMessageResponse_Response{}
+				continue
+			}
+
+			out[idx] = &mlsv1.GetNewestGroupMessageResponse_Response{
+				GroupMessage: convertNewestMessageMetadataToProto(result),
+			}
+		}
+	}
+
+	return &mlsv1.GetNewestGroupMessageResponse{
+		Responses: out,
+	}, nil
+}
+
+func convertNewestMessageToProto(result *queries.GetNewestGroupMessageRow) *mlsv1.GroupMessage {
+	return &mlsv1.GroupMessage{
+		Version: &mlsv1.GroupMessage_V1_{
+			V1: &mlsv1.GroupMessage_V1{
+				Id:         uint64(result.ID),
+				GroupId:    result.GroupID,
+				CreatedNs:  uint64(result.CreatedAt.UnixNano()),
+				Data:       result.Data,
+				ShouldPush: result.ShouldPush.Bool,
+				SenderHmac: result.SenderHmac,
+			},
+		},
+	}
+}
+
+func convertNewestMessageMetadataToProto(
+	result *queries.GetNewestGroupMessageMetadataRow,
+) *mlsv1.GroupMessage {
+	return &mlsv1.GroupMessage{
+		Version: &mlsv1.GroupMessage_V1_{
+			V1: &mlsv1.GroupMessage_V1{
+				Id:        uint64(result.ID),
+				GroupId:   result.GroupID,
+				CreatedNs: uint64(result.CreatedAt.UnixNano()),
+			},
+		},
+	}
+}
+
 func validateSendGroupMessagesRequest(req *mlsv1.SendGroupMessagesRequest) error {
 	if req == nil || len(req.Messages) == 0 {
 		return status.Error(codes.InvalidArgument, "no group messages to send")
@@ -768,6 +845,14 @@ func validateBatchQueryCommitLogRequest(req *mlsv1.BatchQueryCommitLogRequest) e
 			maxBatchQueries,
 		)
 	}
+	return nil
+}
+
+func validateGetNewestGroupMessageRequest(req *mlsv1.GetNewestGroupMessageRequest) error {
+	if req == nil || len(req.GroupIds) == 0 {
+		return status.Error(codes.InvalidArgument, "no group ids provided")
+	}
+
 	return nil
 }
 
