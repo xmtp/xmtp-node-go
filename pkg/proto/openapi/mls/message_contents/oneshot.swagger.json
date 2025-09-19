@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "mls/message_contents/out_of_band.proto",
+    "title": "mls/message_contents/oneshot.proto",
     "version": "version not set"
   },
   "consumes": [
