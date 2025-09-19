@@ -8,7 +8,7 @@ cd "${repo_root}" || exit
 BRANCH=${PROTO_BRANCH:-main}
 echo "Generating protos from branch ${BRANCH}..."
 
-rm -rf pkg/proto/**/*.pb.go pkg/proto/**/*.pb.gw.go pkg/proto/**/*.swagger.json
+find pkg/proto -type f \( -name "*.pb.go" -o -name "*.pb.gw.go" -o -name "*.swagger.json" \) -exec rm -f {} +
 if ! buf generate https://github.com/xmtp/proto.git#subdir=proto,branch="${BRANCH}"; then
     echo "Failed to generate protobuf definitions"
     exit 1
