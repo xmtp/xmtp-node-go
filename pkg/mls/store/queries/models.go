@@ -78,4 +78,5 @@ type WelcomeMessage struct {
 	InstallationKeyDataHash []byte
 	WrapperAlgorithm        int16
 	WelcomeMetadata         []byte
+	MessageType             int16
 }
