@@ -490,7 +490,7 @@ func (q *Queries) GetAllInboxLogs(ctx context.Context, inboxID string) ([]GetAll
 
 const getAllWelcomeMessages = `-- name: GetAllWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	welcome_messages
 ORDER BY
@@ -515,6 +515,7 @@ func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, 
 			&i.InstallationKeyDataHash,
 			&i.WrapperAlgorithm,
 			&i.WelcomeMetadata,
+			&i.MessageType,
 		); err != nil {
 			return nil, err
 		}
@@ -531,7 +532,7 @@ func (q *Queries) GetAllWelcomeMessages(ctx context.Context) ([]WelcomeMessage, 
 
 const getAllWelcomeMessagesWithCursor = `-- name: GetAllWelcomeMessagesWithCursor :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	welcome_messages
 WHERE
@@ -564,6 +565,7 @@ func (q *Queries) GetAllWelcomeMessagesWithCursor(ctx context.Context, arg GetAl
 			&i.InstallationKeyDataHash,
 			&i.WrapperAlgorithm,
 			&i.WelcomeMetadata,
+			&i.MessageType,
 		); err != nil {
 			return nil, err
 		}
@@ -879,7 +881,7 @@ func (q *Queries) InsertKeyPackage(ctx context.Context, arg InsertKeyPackagePara
 
 const insertWelcomeMessage = `-- name: InsertWelcomeMessage :one
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	insert_welcome_message_v4($1, $2, $3, $4, $5, $6)
 `
@@ -912,6 +914,45 @@ func (q *Queries) InsertWelcomeMessage(ctx context.Context, arg InsertWelcomeMes
 		&i.InstallationKeyDataHash,
 		&i.WrapperAlgorithm,
 		&i.WelcomeMetadata,
+		&i.MessageType,
+	)
+	return i, err
+}
+
+const insertWelcomePointerMessage = `-- name: InsertWelcomePointerMessage :one
+SELECT
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
+FROM
+	insert_welcome_pointer_message_v1($1, $2, $3, $4, $5)
+`
+
+type InsertWelcomePointerMessageParams struct {
+	InstallationKey         []byte
+	WelcomePointerData      []byte
+	InstallationKeyDataHash []byte
+	HpkePublicKey           []byte
+	WrapperAlgorithm        int16
+}
+
+func (q *Queries) InsertWelcomePointerMessage(ctx context.Context, arg InsertWelcomePointerMessageParams) (WelcomeMessage, error) {
+	row := q.db.QueryRowContext(ctx, insertWelcomePointerMessage,
+		arg.InstallationKey,
+		arg.WelcomePointerData,
+		arg.InstallationKeyDataHash,
+		arg.HpkePublicKey,
+		arg.WrapperAlgorithm,
+	)
+	var i WelcomeMessage
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.InstallationKey,
+		&i.Data,
+		&i.HpkePublicKey,
+		&i.InstallationKeyDataHash,
+		&i.WrapperAlgorithm,
+		&i.WelcomeMetadata,
+		&i.MessageType,
 	)
 	return i, err
 }
@@ -1133,7 +1174,7 @@ func (q *Queries) QueryGroupMessagesWithCursorDesc(ctx context.Context, arg Quer
 
 const queryWelcomeMessages = `-- name: QueryWelcomeMessages :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	welcome_messages
 WHERE
@@ -1172,6 +1213,7 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 			&i.InstallationKeyDataHash,
 			&i.WrapperAlgorithm,
 			&i.WelcomeMetadata,
+			&i.MessageType,
 		); err != nil {
 			return nil, err
 		}
@@ -1188,7 +1230,7 @@ func (q *Queries) QueryWelcomeMessages(ctx context.Context, arg QueryWelcomeMess
 
 const queryWelcomeMessagesWithCursorAsc = `-- name: QueryWelcomeMessagesWithCursorAsc :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	welcome_messages
 WHERE
@@ -1223,6 +1265,7 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 			&i.InstallationKeyDataHash,
 			&i.WrapperAlgorithm,
 			&i.WelcomeMetadata,
+			&i.MessageType,
 		); err != nil {
 			return nil, err
 		}
@@ -1239,7 +1282,7 @@ func (q *Queries) QueryWelcomeMessagesWithCursorAsc(ctx context.Context, arg Que
 
 const queryWelcomeMessagesWithCursorDesc = `-- name: QueryWelcomeMessagesWithCursorDesc :many
 SELECT
-	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
 FROM
 	welcome_messages
 WHERE
@@ -1274,6 +1317,7 @@ func (q *Queries) QueryWelcomeMessagesWithCursorDesc(ctx context.Context, arg Qu
 			&i.InstallationKeyDataHash,
 			&i.WrapperAlgorithm,
 			&i.WelcomeMetadata,
+			&i.MessageType,
 		); err != nil {
 			return nil, err
 		}

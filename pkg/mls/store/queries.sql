@@ -123,6 +123,12 @@ SELECT
 FROM
 	insert_welcome_message_v4(@installation_key, @data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm, @welcome_metadata);
 
+-- name: InsertWelcomePointerMessage :one
+SELECT
+	id, created_at, installation_key, data, hpke_public_key, installation_key_data_hash, wrapper_algorithm, welcome_metadata, message_type
+FROM
+	insert_welcome_pointer_message_v1(@installation_key, @welcome_pointer_data, @installation_key_data_hash, @hpke_public_key, @wrapper_algorithm);
+
 -- name: GetAllGroupMessages :many
 SELECT
 	*

@@ -122,7 +122,7 @@ type WelcomePointer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Version:
 	//
-	//	*WelcomePointer_V1_
+	//	*WelcomePointer_WelcomeV1Pointer_
 	Version       isWelcomePointer_Version `protobuf_oneof:"version"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -165,10 +165,10 @@ func (x *WelcomePointer) GetVersion() isWelcomePointer_Version {
 	return nil
 }
 
-func (x *WelcomePointer) GetV1() *WelcomePointer_V1 {
+func (x *WelcomePointer) GetWelcomeV1Pointer() *WelcomePointer_WelcomeV1Pointer {
 	if x != nil {
-		if x, ok := x.Version.(*WelcomePointer_V1_); ok {
-			return x.V1
+		if x, ok := x.Version.(*WelcomePointer_WelcomeV1Pointer_); ok {
+			return x.WelcomeV1Pointer
 		}
 	}
 	return nil
@@ -178,11 +178,11 @@ type isWelcomePointer_Version interface {
 	isWelcomePointer_Version()
 }
 
-type WelcomePointer_V1_ struct {
-	V1 *WelcomePointer_V1 `protobuf:"bytes,1,opt,name=v1,proto3,oneof"`
+type WelcomePointer_WelcomeV1Pointer_ struct {
+	WelcomeV1Pointer *WelcomePointer_WelcomeV1Pointer `protobuf:"bytes,1,opt,name=welcome_v1_pointer,json=welcomeV1Pointer,proto3,oneof"`
 }
 
-func (*WelcomePointer_V1_) isWelcomePointer_Version() {}
+func (*WelcomePointer_WelcomeV1Pointer_) isWelcomePointer_Version() {}
 
 // Extension message that indicates the types of encryption supported by a client
 type WelcomePointeeEncryptionAeadTypesExtension struct {
@@ -229,7 +229,8 @@ func (x *WelcomePointeeEncryptionAeadTypesExtension) GetSupportedAeadTypes() []W
 	return nil
 }
 
-type WelcomePointer_V1 struct {
+// Points to a V1 WelcomeMessage
+type WelcomePointer_WelcomeV1Pointer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The topic of the welcome message. For V1, this means that it will be the first message in the topic, so no other identifier is required
 	Destination []byte `protobuf:"bytes,1,opt,name=destination,proto3" json:"destination,omitempty"`
@@ -237,26 +238,28 @@ type WelcomePointer_V1 struct {
 	AeadType WelcomePointeeEncryptionAeadType `protobuf:"varint,2,opt,name=aead_type,json=aeadType,proto3,enum=xmtp.mls.message_contents.WelcomePointeeEncryptionAeadType" json:"aead_type,omitempty"`
 	// The encryption key of the welcome message. Must match key size specified by the aead_type.
 	EncryptionKey []byte `protobuf:"bytes,3,opt,name=encryption_key,json=encryptionKey,proto3" json:"encryption_key,omitempty"`
-	// Nonces used to encrypt the welcome pointer fields. Must match nonce size specified by the aead_type.
-	Nonces        [][]byte `protobuf:"bytes,4,rep,name=nonces,proto3" json:"nonces,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Nonce used to encrypt the data field. Must match nonce size specified by the aead_type.
+	DataNonce []byte `protobuf:"bytes,4,opt,name=data_nonce,json=dataNonce,proto3" json:"data_nonce,omitempty"`
+	// Nonce used to encrypt the welcome_metadata field. Must match nonce size specified by the aead_type.
+	WelcomeMetadataNonce []byte `protobuf:"bytes,5,opt,name=welcome_metadata_nonce,json=welcomeMetadataNonce,proto3" json:"welcome_metadata_nonce,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
-func (x *WelcomePointer_V1) Reset() {
-	*x = WelcomePointer_V1{}
+func (x *WelcomePointer_WelcomeV1Pointer) Reset() {
+	*x = WelcomePointer_WelcomeV1Pointer{}
 	mi := &file_mls_message_contents_welcome_pointer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WelcomePointer_V1) String() string {
+func (x *WelcomePointer_WelcomeV1Pointer) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WelcomePointer_V1) ProtoMessage() {}
+func (*WelcomePointer_WelcomeV1Pointer) ProtoMessage() {}
 
-func (x *WelcomePointer_V1) ProtoReflect() protoreflect.Message {
+func (x *WelcomePointer_WelcomeV1Pointer) ProtoReflect() protoreflect.Message {
 	mi := &file_mls_message_contents_welcome_pointer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -268,35 +271,42 @@ func (x *WelcomePointer_V1) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WelcomePointer_V1.ProtoReflect.Descriptor instead.
-func (*WelcomePointer_V1) Descriptor() ([]byte, []int) {
+// Deprecated: Use WelcomePointer_WelcomeV1Pointer.ProtoReflect.Descriptor instead.
+func (*WelcomePointer_WelcomeV1Pointer) Descriptor() ([]byte, []int) {
 	return file_mls_message_contents_welcome_pointer_proto_rawDescGZIP(), []int{0, 0}
 }
 
-func (x *WelcomePointer_V1) GetDestination() []byte {
+func (x *WelcomePointer_WelcomeV1Pointer) GetDestination() []byte {
 	if x != nil {
 		return x.Destination
 	}
 	return nil
 }
 
-func (x *WelcomePointer_V1) GetAeadType() WelcomePointeeEncryptionAeadType {
+func (x *WelcomePointer_WelcomeV1Pointer) GetAeadType() WelcomePointeeEncryptionAeadType {
 	if x != nil {
 		return x.AeadType
 	}
 	return WelcomePointeeEncryptionAeadType_WELCOME_POINTEE_ENCRYPTION_AEAD_TYPE_UNSPECIFIED
 }
 
-func (x *WelcomePointer_V1) GetEncryptionKey() []byte {
+func (x *WelcomePointer_WelcomeV1Pointer) GetEncryptionKey() []byte {
 	if x != nil {
 		return x.EncryptionKey
 	}
 	return nil
 }
 
-func (x *WelcomePointer_V1) GetNonces() [][]byte {
+func (x *WelcomePointer_WelcomeV1Pointer) GetDataNonce() []byte {
 	if x != nil {
-		return x.Nonces
+		return x.DataNonce
+	}
+	return nil
+}
+
+func (x *WelcomePointer_WelcomeV1Pointer) GetWelcomeMetadataNonce() []byte {
+	if x != nil {
+		return x.WelcomeMetadataNonce
 	}
 	return nil
 }
@@ -305,14 +315,16 @@ var File_mls_message_contents_welcome_pointer_proto protoreflect.FileDescriptor
 
 const file_mls_message_contents_welcome_pointer_proto_rawDesc = "" +
 	"\n" +
-	"*mls/message_contents/welcome_pointer.proto\x12\x19xmtp.mls.message_contents\"\x9d\x02\n" +
-	"\x0eWelcomePointer\x12>\n" +
-	"\x02v1\x18\x01 \x01(\v2,.xmtp.mls.message_contents.WelcomePointer.V1H\x00R\x02v1\x1a\xbf\x01\n" +
-	"\x02V1\x12 \n" +
+	"*mls/message_contents/welcome_pointer.proto\x12\x19xmtp.mls.message_contents\"\x94\x03\n" +
+	"\x0eWelcomePointer\x12j\n" +
+	"\x12welcome_v1_pointer\x18\x01 \x01(\v2:.xmtp.mls.message_contents.WelcomePointer.WelcomeV1PointerH\x00R\x10welcomeV1Pointer\x1a\x8a\x02\n" +
+	"\x10WelcomeV1Pointer\x12 \n" +
 	"\vdestination\x18\x01 \x01(\fR\vdestination\x12X\n" +
 	"\taead_type\x18\x02 \x01(\x0e2;.xmtp.mls.message_contents.WelcomePointeeEncryptionAeadTypeR\baeadType\x12%\n" +
-	"\x0eencryption_key\x18\x03 \x01(\fR\rencryptionKey\x12\x16\n" +
-	"\x06nonces\x18\x04 \x03(\fR\x06noncesB\t\n" +
+	"\x0eencryption_key\x18\x03 \x01(\fR\rencryptionKey\x12\x1d\n" +
+	"\n" +
+	"data_nonce\x18\x04 \x01(\fR\tdataNonce\x124\n" +
+	"\x16welcome_metadata_nonce\x18\x05 \x01(\fR\x14welcomeMetadataNonceB\t\n" +
 	"\aversion\"\x9b\x01\n" +
 	"*WelcomePointeeEncryptionAeadTypesExtension\x12m\n" +
 	"\x14supported_aead_types\x18\x01 \x03(\x0e2;.xmtp.mls.message_contents.WelcomePointeeEncryptionAeadTypeR\x12supportedAeadTypes*\x94\x01\n" +
@@ -343,12 +355,12 @@ var file_mls_message_contents_welcome_pointer_proto_goTypes = []any{
 	(WelcomePointerWrapperAlgorithm)(0),                // 1: xmtp.mls.message_contents.WelcomePointerWrapperAlgorithm
 	(*WelcomePointer)(nil),                             // 2: xmtp.mls.message_contents.WelcomePointer
 	(*WelcomePointeeEncryptionAeadTypesExtension)(nil), // 3: xmtp.mls.message_contents.WelcomePointeeEncryptionAeadTypesExtension
-	(*WelcomePointer_V1)(nil),                          // 4: xmtp.mls.message_contents.WelcomePointer.V1
+	(*WelcomePointer_WelcomeV1Pointer)(nil),            // 4: xmtp.mls.message_contents.WelcomePointer.WelcomeV1Pointer
 }
 var file_mls_message_contents_welcome_pointer_proto_depIdxs = []int32{
-	4, // 0: xmtp.mls.message_contents.WelcomePointer.v1:type_name -> xmtp.mls.message_contents.WelcomePointer.V1
+	4, // 0: xmtp.mls.message_contents.WelcomePointer.welcome_v1_pointer:type_name -> xmtp.mls.message_contents.WelcomePointer.WelcomeV1Pointer
 	0, // 1: xmtp.mls.message_contents.WelcomePointeeEncryptionAeadTypesExtension.supported_aead_types:type_name -> xmtp.mls.message_contents.WelcomePointeeEncryptionAeadType
-	0, // 2: xmtp.mls.message_contents.WelcomePointer.V1.aead_type:type_name -> xmtp.mls.message_contents.WelcomePointeeEncryptionAeadType
+	0, // 2: xmtp.mls.message_contents.WelcomePointer.WelcomeV1Pointer.aead_type:type_name -> xmtp.mls.message_contents.WelcomePointeeEncryptionAeadType
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -362,7 +374,7 @@ func file_mls_message_contents_welcome_pointer_proto_init() {
 		return
 	}
 	file_mls_message_contents_welcome_pointer_proto_msgTypes[0].OneofWrappers = []any{
-		(*WelcomePointer_V1_)(nil),
+		(*WelcomePointer_WelcomeV1Pointer_)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

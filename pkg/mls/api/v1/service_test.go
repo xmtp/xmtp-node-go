@@ -297,6 +297,58 @@ func TestSendWelcomeMessages(t *testing.T) {
 	require.NotEmpty(t, resp.Messages[0].GetV1().CreatedNs)
 }
 
+func TestSendWelcomePointerMessages(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	installationKey := []byte(test.RandomString(32))
+	welcomePointer := []byte(test.RandomString(32))
+	hpkePublicKey := []byte(test.RandomString(32))
+
+	_, err := svc.SendWelcomeMessages(ctx, &mlsv1.SendWelcomeMessagesRequest{
+		Messages: []*mlsv1.WelcomeMessageInput{
+			{
+				Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+					WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+						InstallationKey:  installationKey,
+						WelcomePointer:   welcomePointer,
+						HpkePublicKey:    hpkePublicKey,
+						WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.writerStore.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: installationKey,
+	})
+	require.NoError(t, err)
+
+	require.GreaterOrEqual(t, len(resp.Messages), 1)
+
+	// Find the welcome pointer message
+	var welcomePointerMsg *mlsv1.WelcomeMessage
+	for _, msg := range resp.Messages {
+		if msg.GetWelcomePointer() != nil {
+			welcomePointerMsg = msg
+			break
+		}
+	}
+	require.NotNil(t, welcomePointerMsg)
+	require.Equal(t, welcomePointerMsg.GetWelcomePointer().InstallationKey, installationKey)
+	require.Equal(t, welcomePointerMsg.GetWelcomePointer().WelcomePointer, welcomePointer)
+	require.Equal(t, welcomePointerMsg.GetWelcomePointer().HpkePublicKey, hpkePublicKey)
+	require.Equal(
+		t,
+		welcomePointerMsg.GetWelcomePointer().WrapperAlgorithm,
+		messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+	)
+	require.NotEmpty(t, welcomePointerMsg.GetWelcomePointer().CreatedNs)
+}
+
 func TestSendWelcomeMessagesConcurrent(t *testing.T) {
 	ctx := context.Background()
 	svc, _, _, cleanup := newTestService(t, ctx)
@@ -1191,4 +1243,288 @@ func TestBatchQueryCommitLog_Error(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "descending direction is not supported")
 	require.Nil(t, resp)
+}
+
+func TestValidateSendWelcomeMessagesRequest(t *testing.T) {
+	tests := []struct {
+		name        string
+		request     *mlsv1.SendWelcomeMessagesRequest
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "nil request",
+			request:     nil,
+			expectError: true,
+			errorMsg:    "no welcome messages to send",
+		},
+		{
+			name: "empty messages",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{},
+			},
+			expectError: true,
+			errorMsg:    "no welcome messages to send",
+		},
+		{
+			name: "nil message input",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{nil},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome message",
+		},
+		{
+			name: "missing version",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: nil,
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome message: missing version",
+		},
+		// V1 Welcome Message Tests
+		{
+			name: "valid V1 welcome message with HPKE key",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key"),
+								Data:             []byte("welcome-data"),
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "valid V1 welcome message with symmetric key algorithm",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key"),
+								Data:             []byte("welcome-data"),
+								HpkePublicKey:    []byte{}, // Empty HPKE key is allowed for symmetric key
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_SYMMETRIC_KEY,
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid V1 welcome message - empty data",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key"),
+								Data:             []byte{}, // Empty data
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome message",
+		},
+		{
+			name: "invalid V1 welcome message - empty installation key",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte{}, // Empty installation key
+								Data:             []byte("welcome-data"),
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome message",
+		},
+		{
+			name: "invalid V1 welcome message - empty HPKE key with non-symmetric algorithm",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key"),
+								Data:             []byte("welcome-data"),
+								HpkePublicKey:    []byte{},                                                                          // Empty HPKE key
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519, // Non-symmetric algorithm
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome message",
+		},
+		// Welcome Pointer Tests
+		{
+			name: "valid welcome pointer message",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte("installation-key"),
+								WelcomePointer:   []byte("welcome-pointer-data"),
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid welcome pointer message - empty installation key",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte{}, // Empty installation key
+								WelcomePointer:   []byte("welcome-pointer-data"),
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome pointer message",
+		},
+		{
+			name: "invalid welcome pointer message - empty welcome pointer",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte("installation-key"),
+								WelcomePointer:   []byte{}, // Empty welcome pointer
+								HpkePublicKey:    []byte("hpke-public-key"),
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome pointer message",
+		},
+		{
+			name: "invalid welcome pointer message - empty HPKE public key",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte("installation-key"),
+								WelcomePointer:   []byte("welcome-pointer-data"),
+								HpkePublicKey:    []byte{}, // Empty HPKE public key
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome pointer message",
+		},
+		// Mixed message types
+		{
+			name: "valid mixed V1 and welcome pointer messages",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key-1"),
+								Data:             []byte("welcome-data-1"),
+								HpkePublicKey:    []byte("hpke-public-key-1"),
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+							},
+						},
+					},
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte("installation-key-2"),
+								WelcomePointer:   []byte("welcome-pointer-data-2"),
+								HpkePublicKey:    []byte("hpke-public-key-2"),
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid mixed messages - one valid, one invalid",
+			request: &mlsv1.SendWelcomeMessagesRequest{
+				Messages: []*mlsv1.WelcomeMessageInput{
+					{
+						Version: &mlsv1.WelcomeMessageInput_V1_{
+							V1: &mlsv1.WelcomeMessageInput_V1{
+								InstallationKey:  []byte("installation-key-1"),
+								Data:             []byte("welcome-data-1"),
+								HpkePublicKey:    []byte("hpke-public-key-1"),
+								WrapperAlgorithm: messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_CURVE25519,
+							},
+						},
+					},
+					{
+						Version: &mlsv1.WelcomeMessageInput_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessageInput_WelcomePointer{
+								InstallationKey:  []byte{}, // Invalid - empty installation key
+								WelcomePointer:   []byte("welcome-pointer-data-2"),
+								HpkePublicKey:    []byte("hpke-public-key-2"),
+								WrapperAlgorithm: messageContentsProto.WelcomePointerWrapperAlgorithm_WELCOME_POINTER_WRAPPER_ALGORITHM_XWING_MLKEM_768_DRAFT_6,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid welcome pointer message",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSendWelcomeMessagesRequest(tt.request)
+			if tt.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

@@ -702,7 +702,7 @@
     "v1WelcomeMessageInputWelcomePointer": {
       "type": "object",
       "properties": {
-        "destination": {
+        "installationKey": {
           "type": "string",
           "format": "byte",
           "title": "The topic of the welcome message (generally the installation id)"

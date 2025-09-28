@@ -1730,7 +1730,7 @@ type WelcomeMessage_WelcomePointer struct {
 	Id        uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	CreatedNs uint64                 `protobuf:"varint,2,opt,name=created_ns,json=createdNs,proto3" json:"created_ns,omitempty"`
 	// The topic of the welcome message (generally the installation id)
-	Destination []byte `protobuf:"bytes,3,opt,name=destination,proto3" json:"destination,omitempty"`
+	InstallationKey []byte `protobuf:"bytes,3,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
 	// A WelcomePointer encrypted using the algorithm specified by wrapper_algorithm
 	WelcomePointer []byte `protobuf:"bytes,4,opt,name=welcome_pointer,json=welcomePointer,proto3" json:"welcome_pointer,omitempty"`
 	// The public key used to encrypt the welcome pointer
@@ -1785,9 +1785,9 @@ func (x *WelcomeMessage_WelcomePointer) GetCreatedNs() uint64 {
 	return 0
 }
 
-func (x *WelcomeMessage_WelcomePointer) GetDestination() []byte {
+func (x *WelcomeMessage_WelcomePointer) GetInstallationKey() []byte {
 	if x != nil {
-		return x.Destination
+		return x.InstallationKey
 	}
 	return nil
 }
@@ -1901,7 +1901,7 @@ func (x *WelcomeMessageInput_V1) GetWelcomeMetadata() []byte {
 type WelcomeMessageInput_WelcomePointer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The topic of the welcome message (generally the installation id)
-	Destination []byte `protobuf:"bytes,1,opt,name=destination,proto3" json:"destination,omitempty"`
+	InstallationKey []byte `protobuf:"bytes,1,opt,name=installation_key,json=installationKey,proto3" json:"installation_key,omitempty"`
 	// A WelcomePointer encrypted using the wrapper_algorithm
 	WelcomePointer []byte `protobuf:"bytes,2,opt,name=welcome_pointer,json=welcomePointer,proto3" json:"welcome_pointer,omitempty"`
 	// The public key used to encrypt the welcome pointer
@@ -1942,9 +1942,9 @@ func (*WelcomeMessageInput_WelcomePointer) Descriptor() ([]byte, []int) {
 	return file_mls_api_v1_mls_proto_rawDescGZIP(), []int{1, 1}
 }
 
-func (x *WelcomeMessageInput_WelcomePointer) GetDestination() []byte {
+func (x *WelcomeMessageInput_WelcomePointer) GetInstallationKey() []byte {
 	if x != nil {
-		return x.Destination
+		return x.InstallationKey
 	}
 	return nil
 }
@@ -2507,7 +2507,7 @@ var File_mls_api_v1_mls_proto protoreflect.FileDescriptor
 
 const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\n" +
-	"\x14mls/api/v1/mls.proto\x12\x0fxmtp.mls.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a%identity/associations/signature.proto\x1a message_contents/signature.proto\x1a%mls/message_contents/commit_log.proto\x1a*mls/message_contents/welcome_pointer.proto\x1a-mls/message_contents/wrapper_encryption.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xf2\x05\n" +
+	"\x14mls/api/v1/mls.proto\x12\x0fxmtp.mls.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a%identity/associations/signature.proto\x1a message_contents/signature.proto\x1a%mls/message_contents/commit_log.proto\x1a*mls/message_contents/welcome_pointer.proto\x1a-mls/message_contents/wrapper_encryption.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xfb\x05\n" +
 	"\x0eWelcomeMessage\x124\n" +
 	"\x02v1\x18\x01 \x01(\v2\".xmtp.mls.api.v1.WelcomeMessage.V1H\x00R\x02v1\x12Y\n" +
 	"\x0fwelcome_pointer\x18\x02 \x01(\v2..xmtp.mls.api.v1.WelcomeMessage.WelcomePointerH\x00R\x0ewelcomePointer\x1a\xa6\x02\n" +
@@ -2519,16 +2519,16 @@ const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\x04data\x18\x04 \x01(\fR\x04data\x12&\n" +
 	"\x0fhpke_public_key\x18\x05 \x01(\fR\rhpkePublicKey\x12_\n" +
 	"\x11wrapper_algorithm\x18\x06 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12)\n" +
-	"\x10welcome_metadata\x18\a \x01(\fR\x0fwelcomeMetadata\x1a\x9a\x02\n" +
+	"\x10welcome_metadata\x18\a \x01(\fR\x0fwelcomeMetadata\x1a\xa3\x02\n" +
 	"\x0eWelcomePointer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
-	"created_ns\x18\x02 \x01(\x04R\tcreatedNs\x12 \n" +
-	"\vdestination\x18\x03 \x01(\fR\vdestination\x12'\n" +
+	"created_ns\x18\x02 \x01(\x04R\tcreatedNs\x12)\n" +
+	"\x10installation_key\x18\x03 \x01(\fR\x0finstallationKey\x12'\n" +
 	"\x0fwelcome_pointer\x18\x04 \x01(\fR\x0ewelcomePointer\x12&\n" +
 	"\x0fhpke_public_key\x18\x05 \x01(\fR\rhpkePublicKey\x12f\n" +
 	"\x11wrapper_algorithm\x18\x06 \x01(\x0e29.xmtp.mls.message_contents.WelcomePointerWrapperAlgorithmR\x10wrapperAlgorithmB\t\n" +
-	"\aversion\"\xa3\x05\n" +
+	"\aversion\"\xac\x05\n" +
 	"\x13WelcomeMessageInput\x129\n" +
 	"\x02v1\x18\x01 \x01(\v2'.xmtp.mls.api.v1.WelcomeMessageInput.V1H\x00R\x02v1\x12^\n" +
 	"\x0fwelcome_pointer\x18\x02 \x01(\v23.xmtp.mls.api.v1.WelcomeMessageInput.WelcomePointerH\x00R\x0ewelcomePointer\x1a\xf7\x01\n" +
@@ -2537,9 +2537,9 @@ const file_mls_api_v1_mls_proto_rawDesc = "" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12&\n" +
 	"\x0fhpke_public_key\x18\x03 \x01(\fR\rhpkePublicKey\x12_\n" +
 	"\x11wrapper_algorithm\x18\x04 \x01(\x0e22.xmtp.mls.message_contents.WelcomeWrapperAlgorithmR\x10wrapperAlgorithm\x12)\n" +
-	"\x10welcome_metadata\x18\a \x01(\fR\x0fwelcomeMetadata\x1a\xeb\x01\n" +
-	"\x0eWelcomePointer\x12 \n" +
-	"\vdestination\x18\x01 \x01(\fR\vdestination\x12'\n" +
+	"\x10welcome_metadata\x18\a \x01(\fR\x0fwelcomeMetadata\x1a\xf4\x01\n" +
+	"\x0eWelcomePointer\x12)\n" +
+	"\x10installation_key\x18\x01 \x01(\fR\x0finstallationKey\x12'\n" +
 	"\x0fwelcome_pointer\x18\x02 \x01(\fR\x0ewelcomePointer\x12&\n" +
 	"\x0fhpke_public_key\x18\x03 \x01(\fR\rhpkePublicKey\x12f\n" +
 	"\x11wrapper_algorithm\x18\x04 \x01(\x0e29.xmtp.mls.message_contents.WelcomePointerWrapperAlgorithmR\x10wrapperAlgorithmB\t\n" +

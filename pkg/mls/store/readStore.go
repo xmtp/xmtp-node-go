@@ -275,22 +275,46 @@ func (s *ReadStore) QueryWelcomeMessagesV1(
 		return nil, err
 	}
 
-	out := make([]*mlsv1.WelcomeMessage, len(messages))
-	for idx, msg := range messages {
-		out[idx] = &mlsv1.WelcomeMessage{
-			Version: &mlsv1.WelcomeMessage_V1_{
-				V1: &mlsv1.WelcomeMessage_V1{
-					Id:              uint64(msg.ID),
-					CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
-					Data:            msg.Data,
-					InstallationKey: msg.InstallationKey,
-					HpkePublicKey:   msg.HpkePublicKey,
-					WrapperAlgorithm: types.WrapperAlgorithmToProto(
-						types.WrapperAlgorithm(msg.WrapperAlgorithm),
-					),
-					WelcomeMetadata: msg.WelcomeMetadata,
+	out := make([]*mlsv1.WelcomeMessage, 0, len(messages))
+	for _, msg := range messages {
+		// Check message type to determine how to construct the proto
+		switch msg.MessageType {
+		case 0:
+			// Regular welcome message
+			out = append(out, &mlsv1.WelcomeMessage{
+				Version: &mlsv1.WelcomeMessage_V1_{
+					V1: &mlsv1.WelcomeMessage_V1{
+						Id:              uint64(msg.ID),
+						CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+						Data:            msg.Data,
+						InstallationKey: msg.InstallationKey,
+						HpkePublicKey:   msg.HpkePublicKey,
+						WrapperAlgorithm: types.WrapperAlgorithmToProto(
+							types.WrapperAlgorithm(msg.WrapperAlgorithm),
+						),
+						WelcomeMetadata: msg.WelcomeMetadata,
+					},
 				},
-			},
+			})
+		case 1:
+			// Welcome pointer message
+			out = append(out, &mlsv1.WelcomeMessage{
+				Version: &mlsv1.WelcomeMessage_WelcomePointer_{
+					WelcomePointer: &mlsv1.WelcomeMessage_WelcomePointer{
+						Id:              uint64(msg.ID),
+						CreatedNs:       uint64(msg.CreatedAt.UnixNano()),
+						InstallationKey: msg.InstallationKey,
+						WelcomePointer:  msg.Data,
+						HpkePublicKey:   msg.HpkePublicKey,
+						WrapperAlgorithm: types.WrapperAlgorithmToWelcomePointerWrapperAlgorithm(
+							types.WrapperAlgorithm(msg.WrapperAlgorithm),
+						),
+					},
+				},
+			})
+		default:
+			// Skip unknown message types
+			continue
 		}
 	}
 

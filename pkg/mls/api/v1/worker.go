@@ -166,19 +166,44 @@ func (w *dbWorker) listenForWelcomeMessages(ctx context.Context, startID int64) 
 				continue
 			}
 			for _, welcomeMessage := range welcomeMessages {
-				welcomeMessageProto := mlsv1.WelcomeMessage{
-					Version: &mlsv1.WelcomeMessage_V1_{
-						V1: &mlsv1.WelcomeMessage_V1{
-							Id:               uint64(welcomeMessage.ID),
-							Data:             welcomeMessage.Data,
-							CreatedNs:        uint64(welcomeMessage.CreatedAt.UnixNano()),
-							InstallationKey:  welcomeMessage.InstallationKey,
-							HpkePublicKey:    welcomeMessage.HpkePublicKey,
-							WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(welcomeMessage.WrapperAlgorithm)),
-							WelcomeMetadata:  welcomeMessage.WelcomeMetadata,
+				var welcomeMessageProto mlsv1.WelcomeMessage
+
+				// Check message type to determine how to construct the proto
+				switch welcomeMessage.MessageType {
+				case 0:
+					// Regular welcome message
+					welcomeMessageProto = mlsv1.WelcomeMessage{
+						Version: &mlsv1.WelcomeMessage_V1_{
+							V1: &mlsv1.WelcomeMessage_V1{
+								Id:               uint64(welcomeMessage.ID),
+								Data:             welcomeMessage.Data,
+								CreatedNs:        uint64(welcomeMessage.CreatedAt.UnixNano()),
+								InstallationKey:  welcomeMessage.InstallationKey,
+								HpkePublicKey:    welcomeMessage.HpkePublicKey,
+								WrapperAlgorithm: types.WrapperAlgorithmToProto(types.WrapperAlgorithm(welcomeMessage.WrapperAlgorithm)),
+								WelcomeMetadata:  welcomeMessage.WelcomeMetadata,
+							},
 						},
-					},
+					}
+				case 1:
+					// Welcome pointer message
+					welcomeMessageProto = mlsv1.WelcomeMessage{
+						Version: &mlsv1.WelcomeMessage_WelcomePointer_{
+							WelcomePointer: &mlsv1.WelcomeMessage_WelcomePointer{
+								Id:               uint64(welcomeMessage.ID),
+								CreatedNs:        uint64(welcomeMessage.CreatedAt.UnixNano()),
+								InstallationKey:  welcomeMessage.InstallationKey,
+								WelcomePointer:   welcomeMessage.Data,
+								HpkePublicKey:    welcomeMessage.HpkePublicKey,
+								WrapperAlgorithm: types.WrapperAlgorithmToWelcomePointerWrapperAlgorithm(types.WrapperAlgorithm(welcomeMessage.WrapperAlgorithm)),
+							},
+						},
+					}
+				default:
+					w.log.Error("unknown welcome message type", zap.Int16("message_type", welcomeMessage.MessageType))
+					continue
 				}
+
 				data, err := proto.Marshal(&welcomeMessageProto)
 				if err != nil {
 					w.log.Error("error marshalling welcome message", zap.Error(err))

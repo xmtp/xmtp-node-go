@@ -89,6 +89,13 @@ type ReadWriteMlsStore interface {
 		algorithm types.WrapperAlgorithm,
 		welcomeMetadata []byte,
 	) (*queries.WelcomeMessage, error)
+	InsertWelcomePointerMessage(
+		ctx context.Context,
+		installationKey []byte,
+		welcomePointerData []byte,
+		hpkePublicKey []byte,
+		wrapperAlgorithm types.WrapperAlgorithm,
+	) (*queries.WelcomeMessage, error)
 	InsertCommitLog(
 		ctx context.Context,
 		groupId []byte,
@@ -308,6 +315,48 @@ func (s *Store) InsertWelcomeMessage(
 		WrapperAlgorithm:        int16(wrapperAlgorithm),
 		WelcomeMetadata:         welcomeMetadata,
 	})
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return nil, NewAlreadyExistsError(err)
+		}
+		return nil, err
+	}
+
+	return &message, nil
+}
+
+func (s *Store) InsertWelcomePointerMessage(
+	ctx context.Context,
+	installationKey []byte,
+	welcomePointerData []byte,
+	hpkePublicKey []byte,
+	wrapperAlgorithm types.WrapperAlgorithm,
+) (*queries.WelcomeMessage, error) {
+	if len(hpkePublicKey) == 0 {
+		return nil, errors.New("hpke public key is required")
+	}
+
+	h := sha256.New()
+	_, err := h.Write(installationKey)
+	if err != nil {
+		return nil, err
+	}
+	_, err = h.Write(welcomePointerData)
+	if err != nil {
+		return nil, err
+	}
+	var dataHash [32]byte
+	copy(dataHash[:], h.Sum(nil))
+	message, err := s.queries.InsertWelcomePointerMessage(
+		ctx,
+		queries.InsertWelcomePointerMessageParams{
+			InstallationKey:         installationKey,
+			WelcomePointerData:      welcomePointerData,
+			InstallationKeyDataHash: dataHash[:],
+			HpkePublicKey:           hpkePublicKey,
+			WrapperAlgorithm:        int16(wrapperAlgorithm),
+		},
+	)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return nil, NewAlreadyExistsError(err)
