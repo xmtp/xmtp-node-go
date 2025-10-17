@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -558,6 +559,255 @@ func TestInsertWelcomeMessage_ManyOrderedByTime(t *testing.T) {
 	require.Equal(t, []byte("3"), msgs[2].WelcomeMetadata)
 	require.Greater(t, msgs[1].CreatedAt, msgs[0].CreatedAt)
 	require.Greater(t, msgs[2].CreatedAt, msgs[1].CreatedAt)
+}
+
+func TestInsertWelcomePointerMessage_Single(t *testing.T) {
+	started := time.Now().UTC().Add(-time.Minute)
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	msg, err := store.InsertWelcomePointerMessage(
+		ctx,
+		[]byte("installation_key"),
+		[]byte("welcome_pointer_data"),
+		[]byte("hpke"),
+		types.AlgorithmXwingMlkem768Draft6,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	require.Equal(t, int64(1), msg.ID)
+	require.True(
+		t,
+		msg.CreatedAt.Before(time.Now().UTC().Add(1*time.Minute)) && msg.CreatedAt.After(started),
+	)
+	require.Equal(t, []byte("installation_key"), msg.InstallationKey)
+	require.Equal(t, []byte("welcome_pointer_data"), msg.Data)
+	require.Equal(t, []byte("hpke"), msg.HpkePublicKey)
+	require.Equal(t, int16(1), msg.MessageType) // Welcome pointer type
+
+	msgs, err := store.queries.GetAllWelcomeMessages(ctx)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	require.Equal(t, *msg, msgs[0])
+}
+
+func TestInsertWelcomePointerMessage_Comprehensive(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	tests := []struct {
+		name                string
+		installationKey     []byte
+		welcomePointerData  []byte
+		hpkePublicKey       []byte
+		wrapperAlgorithm    types.WrapperAlgorithm
+		expectError         bool
+		expectedMessageType int16
+	}{
+		{
+			name:                "valid welcome pointer with XWING_MLKEM_768_DRAFT_6",
+			installationKey:     []byte("installation_key-1"),
+			welcomePointerData:  []byte("welcome_pointer_data_1"),
+			hpkePublicKey:       []byte("hpke_public_key_1"),
+			wrapperAlgorithm:    types.AlgorithmXwingMlkem768Draft6,
+			expectError:         false,
+			expectedMessageType: 1, // Welcome pointer type
+		},
+		{
+			name:                "valid welcome pointer with CURVE25519",
+			installationKey:     []byte("installation_key-2"),
+			welcomePointerData:  []byte("welcome_pointer_data_2"),
+			hpkePublicKey:       []byte("hpke_public_key_2"),
+			wrapperAlgorithm:    types.AlgorithmCurve25519,
+			expectError:         false,
+			expectedMessageType: 1, // Welcome pointer type
+		},
+		{
+			name:                "invalid welcome pointer with empty HPKE key",
+			installationKey:     []byte("installation_key-3"),
+			welcomePointerData:  []byte("welcome_pointer_data_3"),
+			hpkePublicKey:       []byte{}, // Empty HPKE key should not be allowed
+			wrapperAlgorithm:    types.AlgorithmCurve25519,
+			expectError:         true,
+			expectedMessageType: 1, // Welcome pointer type
+		},
+		{
+			name:                "valid welcome pointer with large data",
+			installationKey:     []byte("installation_key-4"),
+			welcomePointerData:  make([]byte, 1024), // Large data
+			hpkePublicKey:       []byte("hpke_public_key_4"),
+			wrapperAlgorithm:    types.AlgorithmXwingMlkem768Draft6,
+			expectError:         false,
+			expectedMessageType: 1, // Welcome pointer type
+		},
+	}
+
+	// Insert all test messages
+	var insertedMessages []queries.WelcomeMessage
+	successCount := 0
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, err := store.InsertWelcomePointerMessage(
+				ctx,
+				tt.installationKey,
+				tt.welcomePointerData,
+				tt.hpkePublicKey,
+				tt.wrapperAlgorithm,
+			)
+
+			if tt.expectError {
+				require.Error(t, err)
+				require.Nil(t, msg)
+			} else {
+				successCount++
+				require.NoError(t, err)
+				require.NotNil(t, msg)
+				require.Equal(t, successCount, int(msg.ID))
+				require.Equal(t, tt.installationKey, msg.InstallationKey)
+				require.Equal(t, tt.welcomePointerData, msg.Data)
+				require.Equal(t, tt.hpkePublicKey, msg.HpkePublicKey)
+				require.Equal(t, int16(tt.wrapperAlgorithm), msg.WrapperAlgorithm)
+				require.Equal(t, tt.expectedMessageType, msg.MessageType)
+				require.NotZero(t, msg.CreatedAt)
+				require.NotNil(t, msg.InstallationKeyDataHash)
+
+				insertedMessages = append(insertedMessages, *msg)
+			}
+		})
+	}
+
+	// Verify all messages were inserted correctly
+	allMessages, err := store.queries.GetAllWelcomeMessages(ctx)
+	require.NoError(t, err)
+	require.Len(t, allMessages, successCount)
+
+	// Verify each message can be queried individually
+	for _, expectedMsg := range insertedMessages {
+		// Query by installation key
+		queryResp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+			InstallationKey: expectedMsg.InstallationKey,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, queryResp)
+		require.GreaterOrEqual(t, len(queryResp.Messages), 1)
+
+		// Find the matching message in the response
+		var found bool
+		for _, respMsg := range queryResp.Messages {
+			if respMsg.GetWelcomePointer() != nil {
+				welcomePointer := respMsg.GetWelcomePointer()
+				if bytes.Equal(welcomePointer.InstallationKey, expectedMsg.InstallationKey) &&
+					bytes.Equal(welcomePointer.WelcomePointer, expectedMsg.Data) &&
+					bytes.Equal(welcomePointer.HpkePublicKey, expectedMsg.HpkePublicKey) {
+					found = true
+					break
+				}
+			}
+		}
+		require.True(t, found, "Expected to find welcome pointer message in query response")
+	}
+}
+
+func TestInsertWelcomePointerMessage_Duplicate(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	installationKey := []byte("duplicate-installation_key")
+	welcomePointerData := []byte("duplicate-welcome-pointer-data")
+	hpkePublicKey := []byte("duplicate-hpke-public-key")
+	wrapperAlgorithm := types.AlgorithmXwingMlkem768Draft6
+
+	// Insert first message
+	msg1, err := store.InsertWelcomePointerMessage(
+		ctx,
+		installationKey,
+		welcomePointerData,
+		hpkePublicKey,
+		wrapperAlgorithm,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, msg1)
+
+	// Try to insert duplicate message (same installation key and data hash)
+	msg2, err := store.InsertWelcomePointerMessage(
+		ctx,
+		installationKey,
+		welcomePointerData,
+		hpkePublicKey,
+		wrapperAlgorithm,
+	)
+	require.Error(t, err)
+	require.Nil(t, msg2)
+	require.Contains(t, err.Error(), "duplicate key value violates unique constraint")
+
+	// Verify only one message exists
+	allMessages, err := store.queries.GetAllWelcomeMessages(ctx)
+	require.NoError(t, err)
+	require.Len(t, allMessages, 1)
+	require.Equal(t, *msg1, allMessages[0])
+}
+
+func TestInsertWelcomePointerMessage_MixedWithRegularWelcome(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert a regular welcome message
+	regularMsg, err := store.InsertWelcomeMessage(
+		ctx,
+		[]byte("regular-installation-key"),
+		[]byte("regular-welcome-data"),
+		[]byte("regular-hpke-public-key"),
+		types.AlgorithmCurve25519,
+		[]byte("welcome-metadata"),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, regularMsg)
+	require.Equal(t, int16(0), regularMsg.MessageType) // Regular welcome message type
+
+	// Insert a welcome pointer message
+	pointerMsg, err := store.InsertWelcomePointerMessage(
+		ctx,
+		[]byte("pointer-installation-key"),
+		[]byte("pointer-welcome-data"),
+		[]byte("pointer-hpke-public-key"),
+		types.AlgorithmXwingMlkem768Draft6,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, pointerMsg)
+	require.Equal(t, int16(1), pointerMsg.MessageType) // Welcome pointer type
+
+	// Verify both messages exist
+	allMessages, err := store.queries.GetAllWelcomeMessages(ctx)
+	require.NoError(t, err)
+	require.Len(t, allMessages, 2)
+
+	// Verify message types are different
+	messageTypes := make(map[int16]bool)
+	for _, msg := range allMessages {
+		messageTypes[msg.MessageType] = true
+	}
+	require.True(t, messageTypes[0], "Should have regular welcome message (type 0)")
+	require.True(t, messageTypes[1], "Should have welcome pointer message (type 1)")
+
+	// Query regular welcome message
+	regularResp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: []byte("regular-installation-key"),
+	})
+	require.NoError(t, err)
+	require.Len(t, regularResp.Messages, 1)
+	require.NotNil(t, regularResp.Messages[0].GetV1())
+
+	// Query welcome pointer message
+	pointerResp, err := store.QueryWelcomeMessagesV1(ctx, &mlsv1.QueryWelcomeMessagesRequest{
+		InstallationKey: []byte("pointer-installation-key"),
+	})
+	require.NoError(t, err)
+	require.Len(t, pointerResp.Messages, 1)
+	require.NotNil(t, pointerResp.Messages[0].GetWelcomePointer())
 }
 
 func TestQueryGroupMessagesV1_MissingGroup(t *testing.T) {

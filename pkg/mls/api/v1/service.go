@@ -7,9 +7,11 @@ import (
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
+	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	v1proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
+	messageContentsProto "github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents"
 	"github.com/xmtp/xmtp-node-go/pkg/subscriptions"
 	"github.com/xmtp/xmtp-node-go/pkg/topic"
 	"github.com/xmtp/xmtp-node-go/pkg/tracing"
@@ -302,14 +304,39 @@ func (s *Service) SendWelcomeMessages(
 						ctx,
 						"insert-welcome-message",
 					)
-					msg, err := s.writerStore.InsertWelcomeMessage(
-						insertCtx,
-						input.GetV1().InstallationKey,
-						input.GetV1().Data,
-						input.GetV1().HpkePublicKey,
-						types.WrapperAlgorithmFromProto(input.GetV1().WrapperAlgorithm),
-						input.GetV1().GetWelcomeMetadata(),
-					)
+
+					var msg *queries.WelcomeMessage
+					var err error
+
+					// Handle different types of welcome messages
+					if v1 := input.GetV1(); v1 != nil {
+						// Regular welcome message
+						msg, err = s.writerStore.InsertWelcomeMessage(
+							insertCtx,
+							v1.InstallationKey,
+							v1.Data,
+							v1.HpkePublicKey,
+							types.WrapperAlgorithmFromProto(v1.WrapperAlgorithm),
+							v1.GetWelcomeMetadata(),
+						)
+					} else if welcomePointer := input.GetWelcomePointer(); welcomePointer != nil {
+						// Welcome pointer message
+						wrapperAlgorithm, e := types.WelcomePointerWrapperAlgorithmFromProto(welcomePointer.WrapperAlgorithm)
+						if e != nil {
+							insertSpan.Finish(tracing.WithError(e))
+							return status.Errorf(codes.InvalidArgument, "invalid welcome pointer message: %v", e)
+						}
+						msg, err = s.writerStore.InsertWelcomePointerMessage(
+							insertCtx,
+							welcomePointer.InstallationKey,
+							welcomePointer.WelcomePointer,
+							welcomePointer.HpkePublicKey,
+							wrapperAlgorithm,
+						)
+					} else {
+						err = status.Errorf(codes.InvalidArgument, "invalid welcome message input: missing version")
+					}
+
 					insertSpan.Finish(tracing.WithError(err))
 					if err != nil {
 						if mlsstore.IsAlreadyExistsError(err) {
@@ -717,13 +744,27 @@ func validateSendWelcomeMessagesRequest(req *mlsv1.SendWelcomeMessagesRequest) e
 		return status.Errorf(codes.InvalidArgument, "no welcome messages to send")
 	}
 	for _, input := range req.Messages {
-		if input == nil || input.GetV1() == nil {
+		if input == nil {
 			return status.Error(codes.InvalidArgument, "invalid welcome message")
 		}
 
-		v1 := input.GetV1()
-		if len(v1.Data) == 0 || len(v1.InstallationKey) == 0 || len(v1.HpkePublicKey) == 0 {
-			return status.Error(codes.InvalidArgument, "invalid welcome message")
+		// Check for V1 welcome message
+		if v1 := input.GetV1(); v1 != nil {
+			if len(v1.Data) == 0 ||
+				len(v1.InstallationKey) == 0 ||
+				(len(v1.HpkePublicKey) == 0 && v1.WrapperAlgorithm != messageContentsProto.WelcomeWrapperAlgorithm_WELCOME_WRAPPER_ALGORITHM_SYMMETRIC_KEY) {
+				return status.Error(codes.InvalidArgument, "invalid welcome message")
+			}
+		} else if welcomePointer := input.GetWelcomePointer(); welcomePointer != nil {
+			// Check for welcome pointer message
+			if len(welcomePointer.InstallationKey) == 0 || len(welcomePointer.WelcomePointer) == 0 || len(welcomePointer.HpkePublicKey) == 0 {
+				return status.Error(codes.InvalidArgument, "invalid welcome pointer message")
+			}
+			if _, e := types.WelcomePointerWrapperAlgorithmFromProto(welcomePointer.WrapperAlgorithm); e != nil {
+				return status.Errorf(codes.InvalidArgument, "invalid welcome pointer wrapper algorithm: %v", e)
+			}
+		} else {
+			return status.Error(codes.InvalidArgument, "invalid welcome message: missing version")
 		}
 	}
 	return nil
