@@ -119,6 +119,7 @@ func (w *dbWorker) listenForGroupMessages(ctx context.Context, startID int64) {
 							SenderHmac: groupMessage.SenderHmac,
 							ShouldPush: groupMessage.ShouldPush.Bool,
 							GroupId:    groupMessage.GroupID,
+							IsCommit:   groupMessage.IsCommit.Bool,
 						},
 					},
 				}

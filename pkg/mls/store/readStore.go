@@ -195,6 +195,7 @@ func (s *ReadStore) QueryGroupMessagesV1(
 					Data:       msg.Data,
 					ShouldPush: msg.ShouldPush.Bool,
 					SenderHmac: msg.SenderHmac,
+					IsCommit:   msg.IsCommit.Bool,
 				},
 			},
 		}
@@ -386,4 +387,59 @@ func (s *ReadStore) QueryCommitLog(
 		CommitLogEntries: out,
 		PagingInfo:       pagingInfo,
 	}, nil
+}
+
+// Returns an array of the same length as the input groupIds in the original order. GroupIDs with no messages are represented by a nil value
+func (s *ReadStore) GetNewestGroupMessage(
+	ctx context.Context,
+	groupIds [][]byte,
+) ([]*queries.GetNewestGroupMessageRow, error) {
+	results, err := s.queries.GetNewestGroupMessage(ctx, groupIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map for quick lookup of results by group ID
+	resultMap := make(map[string]*queries.GetNewestGroupMessageRow)
+	for i, result := range results {
+		key := string(result.GroupID)
+		resultMap[key] = &results[i]
+	}
+
+	// Build the output array in the same order as input groupIds
+	output := make([]*queries.GetNewestGroupMessageRow, len(groupIds))
+	for i, groupId := range groupIds {
+		if result, exists := resultMap[string(groupId)]; exists {
+			output[i] = result
+		}
+	}
+
+	return output, nil
+}
+
+func (s *ReadStore) GetNewestGroupMessageMetadata(
+	ctx context.Context,
+	groupIds [][]byte,
+) ([]*queries.GetNewestGroupMessageMetadataRow, error) {
+	results, err := s.queries.GetNewestGroupMessageMetadata(ctx, groupIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map for quick lookup of results by group ID
+	resultMap := make(map[string]*queries.GetNewestGroupMessageMetadataRow)
+	for i, result := range results {
+		key := string(result.GroupID)
+		resultMap[key] = &results[i]
+	}
+
+	// Build the output array in the same order as input groupIds
+	output := make([]*queries.GetNewestGroupMessageMetadataRow, len(groupIds))
+	for i, groupId := range groupIds {
+		if result, exists := resultMap[string(groupId)]; exists {
+			output[i] = result
+		}
+	}
+
+	return output, nil
 }
