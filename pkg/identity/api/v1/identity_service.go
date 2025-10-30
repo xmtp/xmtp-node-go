@@ -96,7 +96,12 @@ func (s *Service) PublishIdentityUpdate(
 		)
 	}
 
-	return s.store.PublishIdentityUpdate(ctx, req, s.validationService)
+	res, err := s.store.PublishIdentityUpdate(ctx, req, s.validationService)
+	if err != nil {
+		s.log.Error("error publishing identity update", zap.Error(err))
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *Service) GetIdentityUpdates(
@@ -108,7 +113,12 @@ func (s *Service) GetIdentityUpdates(
 		1. Query the inbox_log table for the inbox_id, ordering by sequence_id
 		2. Return all of the entries
 	*/
-	return s.store.GetInboxLogs(ctx, req)
+	res, err := s.store.GetInboxLogs(ctx, req)
+	if err != nil {
+		s.log.Error("error getting inbox logs", zap.Error(err))
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *Service) GetInboxIds(
@@ -121,12 +131,22 @@ func (s *Service) GetInboxIds(
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	return s.store.GetInboxIds(ctx, req)
+	res, err := s.store.GetInboxIds(ctx, req)
+	if err != nil {
+		s.log.Error("error getting inbox ids", zap.Error(err))
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *Service) VerifySmartContractWalletSignatures(
 	ctx context.Context,
 	req *identityV1.VerifySmartContractWalletSignaturesRequest,
 ) (*identityV1.VerifySmartContractWalletSignaturesResponse, error) {
-	return s.validationService.VerifySmartContractWalletSignatures(ctx, req)
+	res, err := s.validationService.VerifySmartContractWalletSignatures(ctx, req)
+	if err != nil {
+		s.log.Error("error verifying smart contract wallet signatures", zap.Error(err))
+		return nil, err
+	}
+	return res, nil
 }
