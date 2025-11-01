@@ -532,8 +532,9 @@ func (s *Service) SubscribeWelcomeMessages(
 	filters := make([]*mlsv1.SubscribeWelcomeMessagesRequest_Filter, 0, len(req.Filters))
 	for _, filter := range req.Filters {
 		if filter == nil || len(filter.InstallationKey) == 0 {
-			log.Error("filter is nil or installation key is empty, skipping")
-			continue
+			log.Error("a filter is nil or installation key is empty")
+			return status.Errorf(codes.InvalidArgument,
+				"a filter is nil or installation key is empty")
 		}
 
 		filters = append(filters, filter)

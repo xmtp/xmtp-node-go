@@ -766,7 +766,7 @@ func TestStreaming_ErrorHandling(t *testing.T) {
 		}, stream)
 
 		// Should return an error for this invalid request
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("WelcomeMessages_InvalidInstallationKey", func(t *testing.T) {
@@ -785,7 +785,7 @@ func TestStreaming_ErrorHandling(t *testing.T) {
 		}, stream)
 
 		// Should return an error here
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("GroupMessages_ContextCancellation", func(t *testing.T) {
@@ -813,7 +813,7 @@ func TestStreaming_ErrorHandling(t *testing.T) {
 		}, stream)
 
 		// Should return without error when context is cancelled
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("WelcomeMessages_ContextCancellation", func(t *testing.T) {
@@ -841,7 +841,7 @@ func TestStreaming_ErrorHandling(t *testing.T) {
 		}, stream)
 
 		// Should return without error when context is cancelled
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
