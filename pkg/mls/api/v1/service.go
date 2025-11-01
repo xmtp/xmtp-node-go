@@ -517,6 +517,10 @@ func (s *Service) SubscribeWelcomeMessages(
 	req *mlsv1.SubscribeWelcomeMessagesRequest,
 	stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer,
 ) error {
+	if req == nil {
+		return status.Error(codes.InvalidArgument, "request is nil")
+	}
+
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
 
@@ -621,8 +625,7 @@ func (s *Service) SubscribeWelcomeMessages(
 				return
 			}
 
-			if resp == nil || len(resp.Messages) == 0 ||
-				resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+			if resp == nil || len(resp.Messages) == 0 {
 				log.Info("no more messages to fetch, stopping")
 				break
 			}
@@ -631,6 +634,11 @@ func (s *Service) SubscribeWelcomeMessages(
 				log.Error("error sending messages to stream", zap.Error(err))
 				sendError(err)
 				return
+			}
+
+			if resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+				log.Info("no more messages to fetch, stopping")
+				break
 			}
 
 			pagingInfo = resp.PagingInfo
