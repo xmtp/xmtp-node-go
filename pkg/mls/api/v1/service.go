@@ -621,7 +621,10 @@ func (s *Service) SubscribeWelcomeMessages(
 				return
 			}
 
-			if resp == nil || resp.Messages == nil || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+			if resp == nil ||
+				resp.Messages == nil ||
+				resp.PagingInfo == nil ||
+				resp.PagingInfo.IdCursor == 0 {
 				log.Info("no more messages to fetch, stopping")
 				break
 			}
