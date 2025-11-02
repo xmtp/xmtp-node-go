@@ -528,21 +528,20 @@ func (s *Service) SubscribeWelcomeMessages(
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	// Sanitize filters.
-	filters := make([]*mlsv1.SubscribeWelcomeMessagesRequest_Filter, 0, len(req.Filters))
+	if len(req.Filters) == 0 {
+		return status.Errorf(codes.InvalidArgument, "no valid filters provided")
+	}
+
+	// Validate filters.
 	for _, filter := range req.Filters {
 		if filter == nil || len(filter.InstallationKey) == 0 {
 			log.Error("a filter is nil or installation key is empty")
 			return status.Errorf(codes.InvalidArgument,
 				"a filter is nil or installation key is empty")
 		}
-
-		filters = append(filters, filter)
 	}
 
-	if len(filters) == 0 {
-		return status.Errorf(codes.InvalidArgument, "no valid filters provided")
-	}
+	filters := req.Filters
 
 	var (
 		errChan        = make(chan error, len(filters))
@@ -692,7 +691,7 @@ func (s *Service) SubscribeWelcomeMessages(
 			}
 
 			if env == nil || env.Message == nil {
-				log.Error("message is nil, skipping")
+				log.Error("message envelope is nil, skipping")
 				continue
 			}
 

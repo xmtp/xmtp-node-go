@@ -774,7 +774,6 @@ func TestStreaming_ErrorHandling(t *testing.T) {
 		stream.EXPECT().
 			SendHeader(metadata.New(map[string]string{"subscribed": "true"})).
 			Return(nil)
-		stream.EXPECT().Context().Return(ctx)
 
 		err := svc.SubscribeWelcomeMessages(&mlsv1.SubscribeWelcomeMessagesRequest{
 			Filters: []*mlsv1.SubscribeWelcomeMessagesRequest_Filter{
