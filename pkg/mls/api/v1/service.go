@@ -517,15 +517,37 @@ func (s *Service) SubscribeWelcomeMessages(
 	req *mlsv1.SubscribeWelcomeMessagesRequest,
 	stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer,
 ) error {
+	if req == nil {
+		return status.Error(codes.InvalidArgument, "request is nil")
+	}
+
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
+
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
 
-	errChan := make(chan error, len(req.Filters))
-	highWaterMarks := make(map[string]uint64)
-	var streamLock sync.Mutex
+	if len(req.Filters) == 0 {
+		return status.Errorf(codes.InvalidArgument, "no valid filters provided")
+	}
+
+	// Validate filters.
+	for _, filter := range req.Filters {
+		if filter == nil || len(filter.InstallationKey) == 0 {
+			log.Error("a filter is nil or installation key is empty")
+			return status.Errorf(codes.InvalidArgument,
+				"a filter is nil or installation key is empty")
+		}
+	}
+
+	filters := req.Filters
+
+	var (
+		errChan        = make(chan error, len(filters))
+		highWaterMarks = make(map[string]uint64)
+		streamLock     sync.Mutex
+	)
 
 	sendError := func(err error) {
 		select {
@@ -539,12 +561,26 @@ func (s *Service) SubscribeWelcomeMessages(
 		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
-			installationKey := string(msg.GetV1().InstallationKey)
-			if highWaterMarks[installationKey] < msg.GetV1().Id {
-				highWaterMarks[installationKey] = msg.GetV1().Id
+			if msg == nil {
+				log.Error("welcome message is nil, skipping")
+				continue
+			}
+
+			welcomeMessage := msg.GetV1()
+
+			if welcomeMessage == nil {
+				log.Error("welcome message is nil, skipping")
+				continue
+			}
+
+			installationKey := string(welcomeMessage.InstallationKey)
+
+			if highWaterMarks[installationKey] < welcomeMessage.Id {
+				highWaterMarks[installationKey] = welcomeMessage.Id
 			} else {
 				continue
 			}
+
 			if err := stream.Send(msg); err != nil {
 				log.Error("error streaming welcome message", zap.Error(err))
 				return err
@@ -589,20 +625,28 @@ func (s *Service) SubscribeWelcomeMessages(
 				return
 			}
 
+			if resp == nil || len(resp.Messages) == 0 {
+				log.Info("no more messages to fetch, stopping")
+				break
+			}
+
 			if err = sendToStream(resp.Messages); err != nil {
+				log.Error("error sending messages to stream", zap.Error(err))
 				sendError(err)
 				return
 			}
 
-			if len(resp.Messages) == 0 || resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+			if resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
+				log.Info("no more messages to fetch, stopping")
 				break
 			}
+
 			pagingInfo = resp.PagingInfo
 		}
 	}
 
-	topicMap := make(map[string]bool)
-	for _, filter := range req.Filters {
+	topicMap := make(map[string]bool, len(filters))
+	for _, filter := range filters {
 		topicMap[topic.BuildMLSV1WelcomeTopic(filter.InstallationKey)] = true
 	}
 
@@ -611,7 +655,7 @@ func (s *Service) SubscribeWelcomeMessages(
 	defer sub.Unsubscribe()
 
 	var wg sync.WaitGroup
-	for _, filter := range req.Filters {
+	for _, filter := range filters {
 		wg.Add(1)
 		go func(filter *mlsv1.SubscribeWelcomeMessagesRequest_Filter) {
 			defer wg.Done()
@@ -645,11 +689,23 @@ func (s *Service) SubscribeWelcomeMessages(
 			if !subOpen {
 				return nil
 			}
+
+			if env == nil || env.Message == nil {
+				log.Error("message envelope is nil, skipping")
+				continue
+			}
+
 			msg, err = getWelcomeMessageFromEnvelope(env)
 			if err != nil {
 				log.Error("error parsing message", zap.Error(err))
 				continue
 			}
+
+			if msg == nil {
+				log.Error("welcome message is nil, skipping")
+				continue
+			}
+
 			if err = sendToStream([]*mlsv1.WelcomeMessage{msg}); err != nil {
 				return err
 			}
