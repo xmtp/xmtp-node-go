@@ -562,7 +562,7 @@ func (s *Service) SubscribeWelcomeMessages(
 
 		for _, msg := range msgs {
 			if msg == nil {
-				log.Error("welcome message is nil, skipping")
+				log.Error("welcome message envelope is nil, skipping")
 				continue
 			}
 
@@ -625,24 +625,31 @@ func (s *Service) SubscribeWelcomeMessages(
 				return
 			}
 
-			if resp == nil || len(resp.Messages) == 0 {
-				log.Info("no more messages to fetch, stopping")
+			if resp == nil {
+				log.Error("fetching historical welcome messages returned nil, stopping")
+				break
+			}
+
+			if len(resp.Messages) == 0 {
+				log.Debug("fetching historical welcome messages returned zero messages, stopping")
 				break
 			}
 
 			if err = sendToStream(resp.Messages); err != nil {
-				log.Error("error sending messages to stream", zap.Error(err))
+				log.Error("error sending historical messages to stream", zap.Error(err))
 				sendError(err)
 				return
 			}
 
 			if resp.PagingInfo == nil || resp.PagingInfo.IdCursor == 0 {
-				log.Info("no more messages to fetch, stopping")
+				log.Debug("no more historical messages to fetch, stopping")
 				break
 			}
 
 			pagingInfo = resp.PagingInfo
 		}
+
+		log.Debug("finished fetching historical welcome messages")
 	}
 
 	topicMap := make(map[string]bool, len(filters))
@@ -690,8 +697,13 @@ func (s *Service) SubscribeWelcomeMessages(
 				return nil
 			}
 
-			if env == nil || env.Message == nil {
-				log.Error("message envelope is nil, skipping")
+			if env == nil {
+				log.Error("envelope is nil, skipping")
+				continue
+			}
+
+			if env.Message == nil {
+				log.Error("message is nil, skipping")
 				continue
 			}
 
