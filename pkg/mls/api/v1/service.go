@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"math/rand"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
@@ -49,6 +52,112 @@ type Service struct {
 	ctxCancel func()
 
 	disablePublish bool
+	chaosEnabled   bool
+}
+
+// chaosBuffer buffers messages for chaos testing
+type chaosBuffer[T any] struct {
+	messages   []T
+	timer      *time.Timer
+	mu         sync.Mutex
+	flushFunc  func([]T) error
+	rng        *rand.Rand
+	log        *zap.Logger
+	stopped    bool
+	firstMsgAt time.Time
+}
+
+func newChaosBuffer[T any](flushFunc func([]T) error, log *zap.Logger) *chaosBuffer[T] {
+	return &chaosBuffer[T]{
+		messages:  make([]T, 0),
+		flushFunc: flushFunc,
+		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		log:       log,
+	}
+}
+
+func (cb *chaosBuffer[T]) add(msg T) error {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.stopped {
+		return nil
+	}
+
+	cb.messages = append(cb.messages, msg)
+
+	// Start timer only if this is the first message in the buffer
+	if cb.timer == nil {
+		cb.firstMsgAt = time.Now()
+		cb.timer = time.AfterFunc(100*time.Millisecond, func() {
+			cb.flush()
+		})
+	}
+	// Don't reset timer - let it fire at the scheduled time to ensure max 100ms buffering
+
+	return nil
+}
+
+func (cb *chaosBuffer[T]) flush() {
+	cb.mu.Lock()
+	if cb.stopped || len(cb.messages) == 0 {
+		cb.mu.Unlock()
+		return
+	}
+
+	// Copy messages and clear buffer
+	msgs := make([]T, len(cb.messages))
+	copy(msgs, cb.messages)
+	cb.messages = cb.messages[:0]
+	cb.timer = nil
+	cb.mu.Unlock()
+
+	// Apply chaos: drop 20% of messages
+	kept := make([]T, 0, len(msgs))
+	for _, msg := range msgs {
+		if cb.rng.Float64() >= 0.05 {
+			kept = append(kept, msg)
+		}
+	}
+
+	cb.log.Debug("chaos buffer dropping messages",
+		zap.Int("total", len(msgs)),
+		zap.Int("dropped", len(msgs)-len(kept)),
+		zap.Int("kept", len(kept)))
+
+	// Shuffle remaining messages
+	cb.rng.Shuffle(len(kept), func(i, j int) {
+		kept[i], kept[j] = kept[j], kept[i]
+	})
+
+	// Send to stream
+	if len(kept) > 0 {
+		if err := cb.flushFunc(kept); err != nil {
+			cb.log.Error("chaos buffer flush error", zap.Error(err))
+		}
+	}
+}
+
+func (cb *chaosBuffer[T]) stop() {
+	cb.mu.Lock()
+	cb.stopped = true
+	if cb.timer != nil {
+		cb.timer.Stop()
+	}
+	pendingMsgs := cb.messages
+	cb.messages = nil
+	cb.mu.Unlock()
+
+	// Flush any remaining messages without chaos
+	if len(pendingMsgs) > 0 {
+		cb.log.Debug(
+			"chaos buffer flushing remaining messages on stop",
+			zap.Int("count", len(pendingMsgs)),
+		)
+		if err := cb.flushFunc(pendingMsgs); err != nil {
+			cb.log.Error("chaos buffer stop flush error", zap.Error(err))
+		}
+	}
 }
 
 func NewService(
@@ -59,6 +168,8 @@ func NewService(
 	validationService mlsvalidate.MLSValidationService,
 	disablePublish bool,
 ) (s *Service, err error) {
+	chaosEnabled := os.Getenv("XMTP_ENABLE_PUSH_CHAOS") != ""
+
 	s = &Service{
 		log:               log.Named("mls/v1"),
 		writerStore:       writerStore,
@@ -66,13 +177,18 @@ func NewService(
 		validationService: validationService,
 		subDispatcher:     subDispatcher,
 		disablePublish:    disablePublish,
+		chaosEnabled:      chaosEnabled,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
 		return nil, err
 	}
 
-	s.log.Info("Starting MLS service")
+	if chaosEnabled {
+		s.log.Info("Starting MLS service with CHAOS MODE ENABLED")
+	} else {
+		s.log.Info("Starting MLS service")
+	}
 	return s, nil
 }
 
@@ -388,17 +504,23 @@ func (s *Service) SubscribeGroupMessages(
 	var streamLock sync.Mutex
 	highWaterMarks := make(map[string]uint64)
 
-	sendToStream := func(msgs []*mlsv1.GroupMessage) error {
+	// Original send logic (without chaos)
+	originalSend := func(msgs []*mlsv1.GroupMessage) error {
 		streamLock.Lock()
 		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
 			groupID := string(msg.GetV1().GroupId)
-			if highWaterMarks[groupID] < msg.GetV1().Id {
-				highWaterMarks[groupID] = msg.GetV1().Id
-			} else {
-				continue
+
+			// Skip high-water mark check in chaos mode to allow reordered messages
+			if !s.chaosEnabled {
+				if highWaterMarks[groupID] < msg.GetV1().Id {
+					highWaterMarks[groupID] = msg.GetV1().Id
+				} else {
+					continue
+				}
 			}
+
 			if err := stream.Send(msg); err != nil {
 				log.Error("error streaming group message", zap.Error(err))
 				return err
@@ -406,6 +528,26 @@ func (s *Service) SubscribeGroupMessages(
 		}
 
 		return nil
+	}
+
+	// Create chaos buffer if chaos mode is enabled
+	var chaosBuffer *chaosBuffer[*mlsv1.GroupMessage]
+	if s.chaosEnabled {
+		chaosBuffer = newChaosBuffer(originalSend, log)
+		defer chaosBuffer.stop()
+	}
+
+	// sendToStream either buffers (chaos mode) or sends directly (normal mode)
+	sendToStream := func(msgs []*mlsv1.GroupMessage) error {
+		if s.chaosEnabled {
+			for _, msg := range msgs {
+				if err := chaosBuffer.add(msg); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		return originalSend(msgs)
 	}
 
 	errChan := make(chan error, len(req.Filters))
@@ -561,22 +703,14 @@ func (s *Service) SubscribeWelcomeMessages(
 		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
-			if msg == nil {
-				log.Error("welcome message envelope is nil, skipping")
+			isValid, installationKey, id := getMetadataFromWelcomeMessage(msg)
+			if !isValid || installationKey == "" {
+				log.Warn("invalid welcome message found in stream")
 				continue
 			}
 
-			welcomeMessage := msg.GetV1()
-
-			if welcomeMessage == nil {
-				log.Error("welcome message is nil, skipping")
-				continue
-			}
-
-			installationKey := string(welcomeMessage.InstallationKey)
-
-			if highWaterMarks[installationKey] < welcomeMessage.Id {
-				highWaterMarks[installationKey] = welcomeMessage.Id
+			if highWaterMarks[installationKey] < id {
+				highWaterMarks[installationKey] = id
 			} else {
 				continue
 			}
@@ -994,4 +1128,25 @@ func getWelcomeMessageFromEnvelope(env *v1proto.Envelope) (*mlsv1.WelcomeMessage
 	}
 
 	return &msg, nil
+}
+
+func getMetadataFromWelcomeMessage(msg *mlsv1.WelcomeMessage) (bool, string, uint64) {
+	if msg == nil {
+		return false, "", 0
+	}
+
+	switch version := msg.Version.(type) {
+	case *mlsv1.WelcomeMessage_V1_:
+		if version.V1 == nil {
+			return false, "", 0
+		}
+		return true, string(version.V1.InstallationKey), version.V1.Id
+	case *mlsv1.WelcomeMessage_WelcomePointer_:
+		if version.WelcomePointer == nil {
+			return false, "", 0
+		}
+		return true, string(version.WelcomePointer.InstallationKey), version.WelcomePointer.Id
+	default:
+		return false, "", 0
+	}
 }
