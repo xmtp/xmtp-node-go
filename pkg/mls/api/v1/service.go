@@ -563,7 +563,7 @@ func (s *Service) SubscribeWelcomeMessages(
 		for _, msg := range msgs {
 			isValid, installationKey, id := getMetadataFromWelcomeMessage(msg)
 			if !isValid {
-				log.Error("welcome message envelope is nil, skipping")
+				log.Error("welcome message is nil or invalid, skipping")
 				continue
 			}
 
