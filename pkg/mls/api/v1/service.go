@@ -561,22 +561,16 @@ func (s *Service) SubscribeWelcomeMessages(
 		defer streamLock.Unlock()
 
 		for _, msg := range msgs {
-			if msg == nil {
-				log.Error("welcome message envelope is nil, skipping")
+			isValid, installationKey, id := getMetadataFromWelcomeMessage(msg)
+			if !isValid {
+				log.Error("welcome message is nil or invalid, skipping")
 				continue
 			}
 
-			welcomeMessage := msg.GetV1()
+			installationKeyString := string(installationKey)
 
-			if welcomeMessage == nil {
-				log.Error("welcome message is nil, skipping")
-				continue
-			}
-
-			installationKey := string(welcomeMessage.InstallationKey)
-
-			if highWaterMarks[installationKey] < welcomeMessage.Id {
-				highWaterMarks[installationKey] = welcomeMessage.Id
+			if highWaterMarks[installationKeyString] < id {
+				highWaterMarks[installationKeyString] = id
 			} else {
 				continue
 			}
@@ -994,4 +988,25 @@ func getWelcomeMessageFromEnvelope(env *v1proto.Envelope) (*mlsv1.WelcomeMessage
 	}
 
 	return &msg, nil
+}
+
+func getMetadataFromWelcomeMessage(msg *mlsv1.WelcomeMessage) (bool, []byte, uint64) {
+	if msg == nil {
+		return false, []byte{}, 0
+	}
+
+	switch version := msg.Version.(type) {
+	case *mlsv1.WelcomeMessage_V1_:
+		if version.V1 == nil {
+			return false, []byte{}, 0
+		}
+		return true, version.V1.InstallationKey, version.V1.Id
+	case *mlsv1.WelcomeMessage_WelcomePointer_:
+		if version.WelcomePointer == nil {
+			return false, []byte{}, 0
+		}
+		return true, version.WelcomePointer.InstallationKey, version.WelcomePointer.Id
+	default:
+		return false, []byte{}, 0
+	}
 }
