@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
@@ -314,23 +316,45 @@ func (s *Store) InsertWelcomeMessage(
 	wrapperAlgorithm types.WrapperAlgorithm,
 	welcomeMetadata []byte,
 ) (*queries.WelcomeMessage, error) {
-	dataHash := sha256.Sum256(append(installationId, data...))
-	message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
-		InstallationKey:         installationId,
-		Data:                    data,
-		InstallationKeyDataHash: dataHash[:],
-		HpkePublicKey:           hpkePublicKey,
-		WrapperAlgorithm:        int16(wrapperAlgorithm),
-		WelcomeMetadata:         welcomeMetadata,
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			return nil, NewAlreadyExistsError(err)
-		}
-		return nil, err
+	enableDuplicates := os.Getenv("XMTP_ENABLE_DUPLICATE_WELCOMES") == "true"
+	numInserts := 1
+	if enableDuplicates {
+		numInserts = 3
 	}
 
-	return &message, nil
+	var firstMessage *queries.WelcomeMessage
+	for i := 0; i < numInserts; i++ {
+		// Include the index in the hash to ensure duplicates can be inserted
+		hashInput := append(installationId, data...)
+		if enableDuplicates {
+			indexBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(indexBytes, uint32(i))
+			hashInput = append(hashInput, indexBytes...)
+		}
+		dataHash := sha256.Sum256(hashInput)
+
+		message, err := s.queries.InsertWelcomeMessage(ctx, queries.InsertWelcomeMessageParams{
+			InstallationKey:         installationId,
+			Data:                    data,
+			InstallationKeyDataHash: dataHash[:],
+			HpkePublicKey:           hpkePublicKey,
+			WrapperAlgorithm:        int16(wrapperAlgorithm),
+			WelcomeMetadata:         welcomeMetadata,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				return nil, NewAlreadyExistsError(err)
+			}
+			return nil, err
+		}
+
+		// Store the first message to return
+		if i == 0 {
+			firstMessage = &message
+		}
+	}
+
+	return firstMessage, nil
 }
 
 func (s *Store) InsertWelcomePointerMessage(
@@ -344,35 +368,59 @@ func (s *Store) InsertWelcomePointerMessage(
 		return nil, errors.New("hpke public key is required")
 	}
 
-	h := sha256.New()
-	_, err := h.Write(installationKey)
-	if err != nil {
-		return nil, err
-	}
-	_, err = h.Write(welcomePointerData)
-	if err != nil {
-		return nil, err
-	}
-	var dataHash [32]byte
-	copy(dataHash[:], h.Sum(nil))
-	message, err := s.queries.InsertWelcomePointerMessage(
-		ctx,
-		queries.InsertWelcomePointerMessageParams{
-			InstallationKey:         installationKey,
-			WelcomePointerData:      welcomePointerData,
-			InstallationKeyDataHash: dataHash[:],
-			HpkePublicKey:           hpkePublicKey,
-			WrapperAlgorithm:        int16(wrapperAlgorithm),
-		},
-	)
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			return nil, NewAlreadyExistsError(err)
-		}
-		return nil, err
+	enableDuplicates := os.Getenv("XMTP_ENABLE_DUPLICATE_WELCOMES") == "true"
+	numInserts := 1
+	if enableDuplicates {
+		numInserts = 3
 	}
 
-	return &message, nil
+	var firstMessage *queries.WelcomeMessage
+	for i := 0; i < numInserts; i++ {
+		h := sha256.New()
+		_, err := h.Write(installationKey)
+		if err != nil {
+			return nil, err
+		}
+		_, err = h.Write(welcomePointerData)
+		if err != nil {
+			return nil, err
+		}
+		// Include the index in the hash to ensure duplicates can be inserted
+		if enableDuplicates {
+			indexBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(indexBytes, uint32(i))
+			_, err = h.Write(indexBytes)
+			if err != nil {
+				return nil, err
+			}
+		}
+		var dataHash [32]byte
+		copy(dataHash[:], h.Sum(nil))
+
+		message, err := s.queries.InsertWelcomePointerMessage(
+			ctx,
+			queries.InsertWelcomePointerMessageParams{
+				InstallationKey:         installationKey,
+				WelcomePointerData:      welcomePointerData,
+				InstallationKeyDataHash: dataHash[:],
+				HpkePublicKey:           hpkePublicKey,
+				WrapperAlgorithm:        int16(wrapperAlgorithm),
+			},
+		)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				return nil, NewAlreadyExistsError(err)
+			}
+			return nil, err
+		}
+
+		// Store the first message to return
+		if i == 0 {
+			firstMessage = &message
+		}
+	}
+
+	return firstMessage, nil
 }
 
 func (s *Store) GetInboxIds(
