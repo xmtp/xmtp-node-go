@@ -168,6 +168,7 @@ func (s *Server) startGRPC() error {
 		s.identityv1, err = identityv1.NewService(
 			s.Log,
 			s.MLSStore,
+			s.ReadMLSStore,
 			s.MLSValidator,
 			s.DisableMLSPublish,
 		)
