@@ -16,6 +16,7 @@ type Service struct {
 
 	log               *zap.Logger
 	store             mlsstore.ReadWriteMlsStore
+	readOnlyStore     mlsstore.ReadMlsStore
 	validationService mlsvalidate.MLSValidationService
 
 	ctx       context.Context
@@ -27,12 +28,14 @@ type Service struct {
 func NewService(
 	log *zap.Logger,
 	store mlsstore.ReadWriteMlsStore,
+	readOnlyStore mlsstore.ReadMlsStore,
 	validationService mlsvalidate.MLSValidationService,
 	disablePublish bool,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
 		store:             store,
+		readOnlyStore:     readOnlyStore,
 		validationService: validationService,
 		disablePublish:    disablePublish,
 	}
@@ -131,7 +134,7 @@ func (s *Service) GetInboxIds(
 		   for the address where revocation_sequence_id is lower or NULL
 		2. Return the value of the 'inbox_id' column
 	*/
-	res, err := s.store.GetInboxIds(ctx, req)
+	res, err := s.readOnlyStore.GetInboxIds(ctx, req)
 	if err != nil {
 		s.log.Error("error getting inbox ids", zap.Error(err))
 		return nil, err
