@@ -126,7 +126,7 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, *bun.DB, func(
 	readStore := mlsstore.NewReadStore(log, db)
 	mlsValidationService := newMockedValidationService()
 
-	svc, err := NewService(log, store, readStore, mlsValidationService, false)
+	svc, err := NewService(log, store, readStore, mlsValidationService, false, nil)
 	require.NoError(t, err)
 
 	return svc, db, func() {

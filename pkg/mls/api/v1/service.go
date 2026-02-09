@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
+	"github.com/xmtp/xmtp-node-go/pkg/migration"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
@@ -49,6 +50,7 @@ type Service struct {
 	ctxCancel func()
 
 	disablePublish bool
+	cutoverChecker *migration.CutoverChecker
 }
 
 func NewService(
@@ -58,6 +60,7 @@ func NewService(
 	subDispatcher *subscriptions.SubscriptionDispatcher,
 	validationService mlsvalidate.MLSValidationService,
 	disablePublish bool,
+	cutoverChecker *migration.CutoverChecker,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("mls/v1"),
@@ -66,6 +69,7 @@ func NewService(
 		validationService: validationService,
 		subDispatcher:     subDispatcher,
 		disablePublish:    disablePublish,
+		cutoverChecker:    cutoverChecker,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
@@ -86,6 +90,12 @@ func (s *Service) Close() {
 	s.log.Info("closed")
 }
 
+// isPublishDisabled returns true if publishing should be blocked,
+// either due to manual disable or migration cutover completion.
+func (s *Service) isPublishDisabled() bool {
+	return s.disablePublish || s.cutoverChecker.IsMigrationComplete()
+}
+
 /*
 *
 DEPRECATED: Use UploadKeyPackage instead
@@ -95,7 +105,7 @@ func (s *Service) RegisterInstallation(
 	ctx context.Context,
 	req *mlsv1.RegisterInstallationRequest,
 ) (*mlsv1.RegisterInstallationResponse, error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
@@ -166,7 +176,7 @@ func (s *Service) UploadKeyPackage(
 	ctx context.Context,
 	req *mlsv1.UploadKeyPackageRequest,
 ) (res *emptypb.Empty, err error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
@@ -216,7 +226,7 @@ func (s *Service) SendGroupMessages(
 	ctx context.Context,
 	req *mlsv1.SendGroupMessagesRequest,
 ) (res *emptypb.Empty, err error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
@@ -276,7 +286,7 @@ func (s *Service) SendWelcomeMessages(
 	ctx context.Context,
 	req *mlsv1.SendWelcomeMessagesRequest,
 ) (res *emptypb.Empty, err error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
@@ -723,7 +733,7 @@ func (s *Service) BatchPublishCommitLog(
 	ctx context.Context,
 	req *mlsv1.BatchPublishCommitLogRequest,
 ) (*emptypb.Empty, error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",
