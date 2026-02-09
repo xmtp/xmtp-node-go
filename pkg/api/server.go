@@ -18,6 +18,7 @@ import (
 	wakurelay "github.com/waku-org/go-waku/waku/v2/protocol/relay"
 	identityv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
 	proto "github.com/xmtp/xmtp-node-go/pkg/proto/message_api/v1"
+	migrationv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/migration/api/v1"
 	mlsv1pb "github.com/xmtp/xmtp-node-go/pkg/proto/mls/api/v1"
 	messagev1openapi "github.com/xmtp/xmtp-node-go/pkg/proto/openapi"
 	"github.com/xmtp/xmtp-node-go/pkg/ratelimiter"
@@ -36,6 +37,7 @@ import (
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	identityv1 "github.com/xmtp/xmtp-node-go/pkg/identity/api/v1"
+	migrationv1 "github.com/xmtp/xmtp-node-go/pkg/migration/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/mls/api/v1"
 )
 
@@ -58,6 +60,7 @@ type Server struct {
 	messagev1    *messagev1.Service
 	mlsv1        *mlsv1.Service
 	identityv1   *identityv1.Service
+	migrationv1  *migrationv1.Service
 	wg           sync.WaitGroup
 	ctx          context.Context
 	ctxCancel    func()
@@ -178,6 +181,22 @@ func (s *Server) startGRPC() error {
 		identityv1pb.RegisterIdentityApiServer(grpcServer, s.identityv1)
 	}
 
+	if s.EnableMigration {
+		if s.D14NCutoverNs == 0 {
+			return errors.New("d14n-cutover-ns must be specified when migration is enabled")
+		}
+		nowNs := uint64(time.Now().UnixNano())
+		if s.D14NCutoverNs <= nowNs {
+			s.Log.Warn(
+				"d14n-cutover-ns is in the past, publishing is disabled",
+				zap.Uint64("cutover_ns", s.D14NCutoverNs),
+				zap.Uint64("now_ns", nowNs),
+			)
+		}
+		s.migrationv1 = migrationv1.NewService(s.Log, s.D14NCutoverNs)
+		migrationv1pb.RegisterD14NMigrationApiServer(grpcServer, s.migrationv1)
+	}
+
 	// Initialize waku relay subscription.
 	s.wakuRelaySub, err = s.Waku.Relay().Subscribe(s.ctx)
 	if err != nil {
@@ -266,6 +285,13 @@ func (s *Server) startHTTP() error {
 		}
 	}
 
+	if s.EnableMigration {
+		err = migrationv1pb.RegisterD14NMigrationApiHandler(s.ctx, gwmux, conn)
+		if err != nil {
+			return errors.Wrap(err, "registering migration handler")
+		}
+	}
+
 	addr := addrString(s.HTTPAddress, s.HTTPPort)
 	s.httpListener, err = net.Listen("tcp", addr)
 	if err != nil {
@@ -308,6 +334,9 @@ func (s *Server) Close() {
 	}
 	if s.mlsv1 != nil {
 		s.mlsv1.Close()
+	}
+	if s.migrationv1 != nil {
+		s.migrationv1.Close()
 	}
 
 	if s.httpListener != nil {
