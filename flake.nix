@@ -34,11 +34,13 @@
               gopls
               go-mockery
               golangci-lint
+              golines
               moreutils
               shellcheck
               protobuf
               protolint
               buf
+              gopls
 
             ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.darwin.cctools ];
           };
