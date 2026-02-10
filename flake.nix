@@ -38,6 +38,7 @@
               shellcheck
               protobuf
               protolint
+              buf
 
             ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.darwin.cctools ];
           };
