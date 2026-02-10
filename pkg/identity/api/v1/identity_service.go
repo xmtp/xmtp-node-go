@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/xmtp/xmtp-node-go/pkg/migration"
 	mlsstore "github.com/xmtp/xmtp-node-go/pkg/mls/store"
 	"github.com/xmtp/xmtp-node-go/pkg/mlsvalidate"
 	identityV1 "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
@@ -23,6 +24,7 @@ type Service struct {
 	ctxCancel func()
 
 	disablePublish bool
+	cutoverChecker *migration.CutoverChecker
 }
 
 func NewService(
@@ -31,6 +33,7 @@ func NewService(
 	readOnlyStore mlsstore.ReadMlsStore,
 	validationService mlsvalidate.MLSValidationService,
 	disablePublish bool,
+	cutoverChecker *migration.CutoverChecker,
 ) (s *Service, err error) {
 	s = &Service{
 		log:               log.Named("identity"),
@@ -38,6 +41,7 @@ func NewService(
 		readOnlyStore:     readOnlyStore,
 		validationService: validationService,
 		disablePublish:    disablePublish,
+		cutoverChecker:    cutoverChecker,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
@@ -53,6 +57,12 @@ func (s *Service) Close() {
 	}
 
 	s.log.Info("closed")
+}
+
+// isPublishDisabled returns true if publishing should be blocked,
+// either due to manual disable or migration cutover completion.
+func (s *Service) isPublishDisabled() bool {
+	return s.disablePublish || s.cutoverChecker.IsMigrationComplete()
 }
 
 /*
@@ -92,7 +102,7 @@ func (s *Service) PublishIdentityUpdate(
 	ctx context.Context,
 	req *identityV1.PublishIdentityUpdateRequest,
 ) (*identityV1.PublishIdentityUpdateResponse, error) {
-	if s.disablePublish {
+	if s.isPublishDisabled() {
 		return nil, status.Errorf(
 			codes.Unavailable,
 			"publishing to XMTP V3 is no longer available. Please upgrade your client to XMTP D14N.",

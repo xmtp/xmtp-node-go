@@ -37,6 +37,7 @@ import (
 	messagev1 "github.com/xmtp/xmtp-node-go/pkg/api/message/v1"
 	apicontext "github.com/xmtp/xmtp-node-go/pkg/api/message/v1/context"
 	identityv1 "github.com/xmtp/xmtp-node-go/pkg/identity/api/v1"
+	"github.com/xmtp/xmtp-node-go/pkg/migration"
 	migrationv1 "github.com/xmtp/xmtp-node-go/pkg/migration/api/v1"
 	mlsv1 "github.com/xmtp/xmtp-node-go/pkg/mls/api/v1"
 )
@@ -153,34 +154,13 @@ func (s *Server) startGRPC() error {
 	}
 	proto.RegisterMessageApiServer(grpcServer, s.messagev1)
 
-	// Enable the MLS and identity servers if a store is provided
-	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMLS {
-		s.mlsv1, err = mlsv1.NewService(
-			s.Log,
-			s.MLSStore,
-			s.ReadMLSStore,
-			subDispatcher,
-			s.MLSValidator,
-			s.DisableMLSPublish,
-		)
-		if err != nil {
-			return errors.Wrap(err, "creating mls service")
-		}
-		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
-
-		s.identityv1, err = identityv1.NewService(
-			s.Log,
-			s.MLSStore,
-			s.ReadMLSStore,
-			s.MLSValidator,
-			s.DisableMLSPublish,
-		)
-		if err != nil {
-			return errors.Wrap(err, "creating identity service")
-		}
-		identityv1pb.RegisterIdentityApiServer(grpcServer, s.identityv1)
-	}
-
+	var cutoverChecker *migration.CutoverChecker
+	// Enable migration should be set in preparation for the migration from
+	// the centralized XMTP network to the decentralized XMTP network.
+	// this migration requires also setting `--d14n-cutover-ns`. at `d14n-cutover-ns` time,
+	// this xmtp-node-go software will stop accepting publishes/writes. all clients
+	// will know to begin writing/reading from the decentralized backend
+	// https://github.com/xmtp/xmtpd
 	if s.EnableMigration {
 		if s.D14NCutoverNs == 0 {
 			return errors.New("d14n-cutover-ns must be specified when migration is enabled")
@@ -193,8 +173,40 @@ func (s *Server) startGRPC() error {
 				zap.Uint64("now_ns", nowNs),
 			)
 		}
+
+		cutoverChecker = migration.NewCutoverChecker(s.D14NCutoverNs)
 		s.migrationv1 = migrationv1.NewService(s.Log, s.D14NCutoverNs)
 		migrationv1pb.RegisterD14NMigrationApiServer(grpcServer, s.migrationv1)
+	}
+
+	// Enable the MLS and identity servers if a store is provided
+	if s.MLSStore != nil && s.MLSValidator != nil && s.EnableMLS {
+		s.mlsv1, err = mlsv1.NewService(
+			s.Log,
+			s.MLSStore,
+			s.ReadMLSStore,
+			subDispatcher,
+			s.MLSValidator,
+			s.DisableMLSPublish,
+			cutoverChecker,
+		)
+		if err != nil {
+			return errors.Wrap(err, "creating mls service")
+		}
+		mlsv1pb.RegisterMlsApiServer(grpcServer, s.mlsv1)
+
+		s.identityv1, err = identityv1.NewService(
+			s.Log,
+			s.MLSStore,
+			s.ReadMLSStore,
+			s.MLSValidator,
+			s.DisableMLSPublish,
+			cutoverChecker,
+		)
+		if err != nil {
+			return errors.Wrap(err, "creating identity service")
+		}
+		identityv1pb.RegisterIdentityApiServer(grpcServer, s.identityv1)
 	}
 
 	// Initialize waku relay subscription.
