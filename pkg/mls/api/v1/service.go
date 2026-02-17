@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"sync"
+	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
 	"github.com/xmtp/xmtp-node-go/pkg/migration"
@@ -94,6 +95,12 @@ func (s *Service) Close() {
 // either due to manual disable or migration cutover completion.
 func (s *Service) isPublishDisabled() bool {
 	return s.disablePublish || s.cutoverChecker.IsMigrationComplete()
+}
+
+// isStreamingDisabled returns true if streaming should be blocked
+// due to migration cutover completion.
+func (s *Service) isStreamingDisabled() bool {
+	return s.cutoverChecker.IsMigrationComplete()
 }
 
 /*
@@ -389,6 +396,14 @@ func (s *Service) SubscribeGroupMessages(
 	req *mlsv1.SubscribeGroupMessagesRequest,
 	stream mlsv1.MlsApi_SubscribeGroupMessagesServer,
 ) error {
+	// Block new subscriptions if migration is complete
+	if s.isStreamingDisabled() {
+		return status.Errorf(
+			codes.Unavailable,
+			"XMTP V3 streaming is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	log := s.log.Named("subscribe-group-messages").With(zap.Int("filters", len(req.Filters)))
 	log.Info("subscription started")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
@@ -495,6 +510,10 @@ func (s *Service) SubscribeGroupMessages(
 		subOpen bool
 	)
 
+	// Create ticker for periodic cutover check
+	cutoverTicker := time.NewTicker(5 * time.Second)
+	defer cutoverTicker.Stop()
+
 	for {
 		select {
 		// We received an error when pulling the historical messages
@@ -506,6 +525,14 @@ func (s *Service) SubscribeGroupMessages(
 		// The service is shutting down
 		case <-s.ctx.Done():
 			return status.Errorf(codes.Unavailable, "service is shutting down")
+		// Check if migration cutover has occurred
+		case <-cutoverTicker.C:
+			if s.isStreamingDisabled() {
+				return status.Errorf(
+					codes.Unavailable,
+					"XMTP V3 streaming is no longer available. Please upgrade your client to XMTP D14N.",
+				)
+			}
 		// We received a message from the subscription
 		case env, subOpen = <-sub.MessagesCh:
 			if !subOpen {
@@ -527,6 +554,14 @@ func (s *Service) SubscribeWelcomeMessages(
 	req *mlsv1.SubscribeWelcomeMessagesRequest,
 	stream mlsv1.MlsApi_SubscribeWelcomeMessagesServer,
 ) error {
+	// Block new subscriptions if migration is complete
+	if s.isStreamingDisabled() {
+		return status.Errorf(
+			codes.Unavailable,
+			"XMTP V3 streaming is no longer available. Please upgrade your client to XMTP D14N.",
+		)
+	}
+
 	if req == nil {
 		return status.Error(codes.InvalidArgument, "request is nil")
 	}
@@ -684,6 +719,10 @@ func (s *Service) SubscribeWelcomeMessages(
 		subOpen bool
 	)
 
+	// Create ticker for periodic cutover check
+	cutoverTicker := time.NewTicker(5 * time.Second)
+	defer cutoverTicker.Stop()
+
 	for {
 		select {
 		// We received an error when pulling the historical messages
@@ -695,6 +734,14 @@ func (s *Service) SubscribeWelcomeMessages(
 		// The service is shutting down
 		case <-s.ctx.Done():
 			return status.Errorf(codes.Unavailable, "service is shutting down")
+		// Check if migration cutover has occurred
+		case <-cutoverTicker.C:
+			if s.isStreamingDisabled() {
+				return status.Errorf(
+					codes.Unavailable,
+					"XMTP V3 streaming is no longer available. Please upgrade your client to XMTP D14N.",
+				)
+			}
 		// We received a message from the subscription
 		case env, subOpen = <-sub.MessagesCh:
 			if !subOpen {
