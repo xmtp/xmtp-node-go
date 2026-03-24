@@ -116,7 +116,7 @@ func (rli *RateLimitInterceptor) applyLimits(
 	}
 
 	if err := rli.limiter.Spend(limitType, bucket, uint16(cost), isPriority); err != nil {
-		rli.log.Info("rate limited",
+		rli.log.Debug("rate limited",
 			logging.String("client_ip", ip),
 			logging.Bool("priority", isPriority),
 			logging.String("method", method),

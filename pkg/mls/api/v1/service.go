@@ -405,7 +405,7 @@ func (s *Service) SubscribeGroupMessages(
 	}
 
 	log := s.log.Named("subscribe-group-messages").With(zap.Int("filters", len(req.Filters)))
-	log.Info("subscription started")
+	log.Debug("subscription started")
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58
 	_ = stream.SendHeader(metadata.Pairs("subscribed", "true"))
@@ -567,7 +567,7 @@ func (s *Service) SubscribeWelcomeMessages(
 	}
 
 	log := s.log.Named("subscribe-welcome-messages").With(zap.Int("filters", len(req.Filters)))
-	log.Info("subscription started")
+	log.Debug("subscription started")
 
 	// Send a header (any header) to fix an issue with Tonic based GRPC clients.
 	// See: https://github.com/xmtp/libxmtp/pull/58

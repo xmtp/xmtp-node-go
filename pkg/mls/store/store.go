@@ -187,14 +187,14 @@ func (s *Store) PublishIdentityUpdate(
 			IdentityUpdateProto: protoBytes,
 		})
 
-		log.Info("Inserted inbox log", zap.Any("sequence_id", sequence_id))
+		log.Debug("Inserted inbox log", zap.Any("sequence_id", sequence_id))
 
 		if err != nil {
 			return err
 		}
 
 		for _, new_member := range state.StateDiff.NewMembers {
-			log.Info("New member", zap.Any("member", new_member))
+			log.Debug("New member", zap.Any("member", new_member))
 			if address, ok := new_member.Kind.(*associations.MemberIdentifier_EthereumAddress); ok {
 				_, err = txQueries.InsertAddressLog(ctx, queries.InsertAddressLogParams{
 					Address:               address.EthereumAddress,
