@@ -76,16 +76,21 @@ func (ti *TelemetryInterceptor) record(
 	logFn := ti.log.Debug
 
 	if err != nil {
-		logFn = ti.log.Info
 		fields = append(fields, zap.Error(err))
 		grpcErr, _ := status.FromError(err)
 		if grpcErr != nil {
-			errCode := grpcErr.Code().String()
+			if grpcErr.Code() == codes.ResourceExhausted ||
+				grpcErr.Code() == codes.InvalidArgument {
+				logFn = ti.log.Debug
+			} else {
+				logFn = ti.log.Error
+			}
 			fields = append(fields, []zapcore.Field{
-				zap.String("error_code", errCode),
+				zap.String("error_code", grpcErr.Code().String()),
 				zap.String("error_message", grpcErr.Message()),
 			}...)
 		} else {
+			logFn = ti.log.Error
 			fields = append(fields, []zapcore.Field{
 				zap.String("error_code", codes.Internal.String()),
 				zap.String("error_message", err.Error()),

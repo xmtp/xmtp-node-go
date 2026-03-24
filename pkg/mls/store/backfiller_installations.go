@@ -84,7 +84,7 @@ func (b *InstallationsBackfiller) Run() {
 						}
 
 						if len(installations) == 0 {
-							b.log.Info("No installations to backfill")
+							b.log.Debug("No installations to backfill")
 							foundMessages = false
 							return nil
 						}

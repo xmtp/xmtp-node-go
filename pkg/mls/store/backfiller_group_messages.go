@@ -196,7 +196,7 @@ func (b *IsCommitBackfiller) Run() {
 						}
 
 						if len(ids) == 0 {
-							b.log.Info("No messages to classify")
+							b.log.Debug("No messages to classify")
 							foundMessages = false
 							return nil
 						}
