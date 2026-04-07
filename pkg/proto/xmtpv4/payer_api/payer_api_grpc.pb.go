@@ -28,8 +28,9 @@ const (
 // PayerApiClient is the client API for PayerApi service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Deprecated: Do not use.
 type PayerApiClient interface {
-	// Publish envelope
 	PublishClientEnvelopes(ctx context.Context, in *PublishClientEnvelopesRequest, opts ...grpc.CallOption) (*PublishClientEnvelopesResponse, error)
 	GetNodes(ctx context.Context, in *GetNodesRequest, opts ...grpc.CallOption) (*GetNodesResponse, error)
 }
@@ -38,6 +39,7 @@ type payerApiClient struct {
 	cc grpc.ClientConnInterface
 }
 
+// Deprecated: Do not use.
 func NewPayerApiClient(cc grpc.ClientConnInterface) PayerApiClient {
 	return &payerApiClient{cc}
 }
@@ -63,8 +65,9 @@ func (c *payerApiClient) GetNodes(ctx context.Context, in *GetNodesRequest, opts
 // PayerApiServer is the server API for PayerApi service.
 // All implementations must embed UnimplementedPayerApiServer
 // for forward compatibility
+//
+// Deprecated: Do not use.
 type PayerApiServer interface {
-	// Publish envelope
 	PublishClientEnvelopes(context.Context, *PublishClientEnvelopesRequest) (*PublishClientEnvelopesResponse, error)
 	GetNodes(context.Context, *GetNodesRequest) (*GetNodesResponse, error)
 	mustEmbedUnimplementedPayerApiServer()
@@ -89,6 +92,7 @@ type UnsafePayerApiServer interface {
 	mustEmbedUnimplementedPayerApiServer()
 }
 
+// Deprecated: Do not use.
 func RegisterPayerApiServer(s grpc.ServiceRegistrar, srv PayerApiServer) {
 	s.RegisterService(&PayerApi_ServiceDesc, srv)
 }
