@@ -30,14 +30,16 @@ const (
 	ComponentType_COMPONENT_TYPE_UNSPECIFIED ComponentType = 0
 	// Opaque bytes, replaced atomically
 	ComponentType_COMPONENT_TYPE_BYTES ComponentType = 1
+	// A utf-8 encoded string, replaced atomically
+	ComponentType_COMPONENT_TYPE_STRING ComponentType = 2
 	// A TlsMap<bytes, bytes> supporting key-level insert/update/delete via deltas
-	ComponentType_COMPONENT_TYPE_TLS_MAP_BYTES_BYTES ComponentType = 2
+	ComponentType_COMPONENT_TYPE_TLS_MAP_BYTES_BYTES ComponentType = 3
 	// A TlsMap<InboxId, bytes> supporting key-level insert/update/delete via deltas
-	ComponentType_COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES ComponentType = 3
+	ComponentType_COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES ComponentType = 4
 	// A TlsSet<bytes> supporting insert/remove/remove-by-hash via deltas
-	ComponentType_COMPONENT_TYPE_SET_BYTES ComponentType = 4
+	ComponentType_COMPONENT_TYPE_TLS_SET_BYTES ComponentType = 5
 	// A TlsSet<InboxId> supporting insert/remove/remove-by-hash via deltas
-	ComponentType_COMPONENT_TYPE_SET_INBOX_ID ComponentType = 5
+	ComponentType_COMPONENT_TYPE_TLS_SET_INBOX_ID ComponentType = 6
 )
 
 // Enum value maps for ComponentType.
@@ -45,18 +47,20 @@ var (
 	ComponentType_name = map[int32]string{
 		0: "COMPONENT_TYPE_UNSPECIFIED",
 		1: "COMPONENT_TYPE_BYTES",
-		2: "COMPONENT_TYPE_TLS_MAP_BYTES_BYTES",
-		3: "COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES",
-		4: "COMPONENT_TYPE_SET_BYTES",
-		5: "COMPONENT_TYPE_SET_INBOX_ID",
+		2: "COMPONENT_TYPE_STRING",
+		3: "COMPONENT_TYPE_TLS_MAP_BYTES_BYTES",
+		4: "COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES",
+		5: "COMPONENT_TYPE_TLS_SET_BYTES",
+		6: "COMPONENT_TYPE_TLS_SET_INBOX_ID",
 	}
 	ComponentType_value = map[string]int32{
 		"COMPONENT_TYPE_UNSPECIFIED":            0,
 		"COMPONENT_TYPE_BYTES":                  1,
-		"COMPONENT_TYPE_TLS_MAP_BYTES_BYTES":    2,
-		"COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES": 3,
-		"COMPONENT_TYPE_SET_BYTES":              4,
-		"COMPONENT_TYPE_SET_INBOX_ID":           5,
+		"COMPONENT_TYPE_STRING":                 2,
+		"COMPONENT_TYPE_TLS_MAP_BYTES_BYTES":    3,
+		"COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES": 4,
+		"COMPONENT_TYPE_TLS_SET_BYTES":          5,
+		"COMPONENT_TYPE_TLS_SET_INBOX_ID":       6,
 	}
 )
 
@@ -164,10 +168,10 @@ func (x *ComponentPermissions) GetDeletePolicy() *MetadataPolicy {
 // it holds and who can insert, update, or delete it.
 type ComponentMetadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Permission policies for this component
-	Permissions *ComponentPermissions `protobuf:"bytes,1,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	// The data structure type of the component's value
-	ComponentType ComponentType `protobuf:"varint,2,opt,name=component_type,json=componentType,proto3,enum=xmtp.mls.message_contents.ComponentType" json:"component_type,omitempty"`
+	ComponentType ComponentType `protobuf:"varint,1,opt,name=component_type,json=componentType,proto3,enum=xmtp.mls.message_contents.ComponentType" json:"component_type,omitempty"`
+	// Permission policies for this component
+	Permissions   *ComponentPermissions `protobuf:"bytes,2,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -202,18 +206,18 @@ func (*ComponentMetadata) Descriptor() ([]byte, []int) {
 	return file_mls_message_contents_component_permissions_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ComponentMetadata) GetPermissions() *ComponentPermissions {
-	if x != nil {
-		return x.Permissions
-	}
-	return nil
-}
-
 func (x *ComponentMetadata) GetComponentType() ComponentType {
 	if x != nil {
 		return x.ComponentType
 	}
 	return ComponentType_COMPONENT_TYPE_UNSPECIFIED
+}
+
+func (x *ComponentMetadata) GetPermissions() *ComponentPermissions {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
 }
 
 var File_mls_message_contents_component_permissions_proto protoreflect.FileDescriptor
@@ -225,16 +229,17 @@ const file_mls_message_contents_component_permissions_proto_rawDesc = "" +
 	"\rinsert_policy\x18\x01 \x01(\v2).xmtp.mls.message_contents.MetadataPolicyR\finsertPolicy\x12N\n" +
 	"\rupdate_policy\x18\x02 \x01(\v2).xmtp.mls.message_contents.MetadataPolicyR\fupdatePolicy\x12N\n" +
 	"\rdelete_policy\x18\x03 \x01(\v2).xmtp.mls.message_contents.MetadataPolicyR\fdeletePolicy\"\xb7\x01\n" +
-	"\x11ComponentMetadata\x12Q\n" +
-	"\vpermissions\x18\x01 \x01(\v2/.xmtp.mls.message_contents.ComponentPermissionsR\vpermissions\x12O\n" +
-	"\x0ecomponent_type\x18\x02 \x01(\x0e2(.xmtp.mls.message_contents.ComponentTypeR\rcomponentType*\xdb\x01\n" +
+	"\x11ComponentMetadata\x12O\n" +
+	"\x0ecomponent_type\x18\x01 \x01(\x0e2(.xmtp.mls.message_contents.ComponentTypeR\rcomponentType\x12Q\n" +
+	"\vpermissions\x18\x02 \x01(\v2/.xmtp.mls.message_contents.ComponentPermissionsR\vpermissions*\xfe\x01\n" +
 	"\rComponentType\x12\x1e\n" +
 	"\x1aCOMPONENT_TYPE_UNSPECIFIED\x10\x00\x12\x18\n" +
-	"\x14COMPONENT_TYPE_BYTES\x10\x01\x12&\n" +
-	"\"COMPONENT_TYPE_TLS_MAP_BYTES_BYTES\x10\x02\x12)\n" +
-	"%COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES\x10\x03\x12\x1c\n" +
-	"\x18COMPONENT_TYPE_SET_BYTES\x10\x04\x12\x1f\n" +
-	"\x1bCOMPONENT_TYPE_SET_INBOX_ID\x10\x05B\xf9\x01\n" +
+	"\x14COMPONENT_TYPE_BYTES\x10\x01\x12\x19\n" +
+	"\x15COMPONENT_TYPE_STRING\x10\x02\x12&\n" +
+	"\"COMPONENT_TYPE_TLS_MAP_BYTES_BYTES\x10\x03\x12)\n" +
+	"%COMPONENT_TYPE_TLS_MAP_INBOX_ID_BYTES\x10\x04\x12 \n" +
+	"\x1cCOMPONENT_TYPE_TLS_SET_BYTES\x10\x05\x12#\n" +
+	"\x1fCOMPONENT_TYPE_TLS_SET_INBOX_ID\x10\x06B\xf9\x01\n" +
 	"\x1dcom.xmtp.mls.message_contentsB\x19ComponentPermissionsProtoP\x01Z;github.com/xmtp/xmtp-node-go/pkg/proto/mls/message_contents\xa2\x02\x03XMM\xaa\x02\x18Xmtp.Mls.MessageContents\xca\x02\x18Xmtp\\Mls\\MessageContents\xe2\x02$Xmtp\\Mls\\MessageContents\\GPBMetadata\xea\x02\x1aXmtp::Mls::MessageContentsb\x06proto3"
 
 var (
@@ -261,8 +266,8 @@ var file_mls_message_contents_component_permissions_proto_depIdxs = []int32{
 	3, // 0: xmtp.mls.message_contents.ComponentPermissions.insert_policy:type_name -> xmtp.mls.message_contents.MetadataPolicy
 	3, // 1: xmtp.mls.message_contents.ComponentPermissions.update_policy:type_name -> xmtp.mls.message_contents.MetadataPolicy
 	3, // 2: xmtp.mls.message_contents.ComponentPermissions.delete_policy:type_name -> xmtp.mls.message_contents.MetadataPolicy
-	1, // 3: xmtp.mls.message_contents.ComponentMetadata.permissions:type_name -> xmtp.mls.message_contents.ComponentPermissions
-	0, // 4: xmtp.mls.message_contents.ComponentMetadata.component_type:type_name -> xmtp.mls.message_contents.ComponentType
+	0, // 3: xmtp.mls.message_contents.ComponentMetadata.component_type:type_name -> xmtp.mls.message_contents.ComponentType
+	1, // 4: xmtp.mls.message_contents.ComponentMetadata.permissions:type_name -> xmtp.mls.message_contents.ComponentPermissions
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
