@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -140,6 +141,7 @@ func (s *Server) startGRPC() error {
 	grpcServer := grpc.NewServer(options...)
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)
+	reflection.Register(grpcServer)
 
 	publishToWakuRelay := func(ctx context.Context, msg *wakupb.WakuMessage) error {
 		_, err := s.Waku.Relay().Publish(ctx, msg)
