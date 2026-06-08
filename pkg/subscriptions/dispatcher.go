@@ -127,6 +127,26 @@ func (d *SubscriptionDispatcher) Subscribe(topics map[string]bool) *Subscription
 	return sub
 }
 
+// NewSubscription creates an empty subscription whose topic set is meant to be grown
+// and shrunk in place via (*Subscription).Add and Remove (XIP-83 mutate-in-place).
+// bufferSize is the message-channel backlog, clamped to a minimum. Unlike Subscribe it
+// does not size the buffer from the topic count (the set changes over the stream's
+// life), so size it for the connection's throughput.
+func (d *SubscriptionDispatcher) NewSubscription(bufferSize int) *Subscription {
+	if bufferSize < minBacklogBufferLength {
+		bufferSize = minBacklogBufferLength
+	}
+	sub := &Subscription{
+		dispatcher: d,
+		topics:     make(map[string]bool),
+		MessagesCh: make(chan *proto.Envelope, bufferSize),
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.subscriptions[sub] = true
+	return sub
+}
+
 func isValidSubscribeAllTopic(contentTopic string) bool {
 	return strings.HasPrefix(contentTopic, v2TopicPrefix) || topic.IsMLSV1(contentTopic)
 }

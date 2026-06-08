@@ -16,3 +16,30 @@ func (sub *Subscription) Unsubscribe() {
 	defer sub.dispatcher.mu.Unlock()
 	delete(sub.dispatcher.subscriptions, sub)
 }
+
+// Add grows the live topic set in place (XIP-83 mutate-in-place). It is O(len(topics))
+// and safe to call concurrently with dispatch: HandleEnvelope reads sub.topics while
+// holding the dispatcher mutex, so mutating under the same lock serializes the two.
+// A no-op on a wildcard ("all") subscription.
+func (sub *Subscription) Add(topics ...string) {
+	sub.dispatcher.mu.Lock()
+	defer sub.dispatcher.mu.Unlock()
+	if sub.all {
+		return
+	}
+	if sub.topics == nil {
+		sub.topics = make(map[string]bool, len(topics))
+	}
+	for _, t := range topics {
+		sub.topics[t] = true
+	}
+}
+
+// Remove shrinks the live topic set in place. See Add for concurrency notes.
+func (sub *Subscription) Remove(topics ...string) {
+	sub.dispatcher.mu.Lock()
+	defer sub.dispatcher.mu.Unlock()
+	for _, t := range topics {
+		delete(sub.topics, t)
+	}
+}
