@@ -56,6 +56,16 @@ type ReadMlsStore interface {
 		ctx context.Context,
 		query *mlsv1.QueryWelcomeMessagesRequest,
 	) (*mlsv1.QueryWelcomeMessagesResponse, error)
+	QueryGroupMessagesBatch(
+		ctx context.Context,
+		filters []GroupCatchup,
+		perGroupLimit int32,
+	) ([]*mlsv1.GroupMessage, error)
+	QueryWelcomeMessagesBatch(
+		ctx context.Context,
+		filters []WelcomeCatchup,
+		perGroupLimit int32,
+	) ([]*mlsv1.WelcomeMessage, error)
 	QueryCommitLog(
 		ctx context.Context,
 		query *mlsv1.QueryCommitLogRequest,
@@ -408,6 +418,22 @@ func (s *Store) QueryWelcomeMessagesV1(
 	req *mlsv1.QueryWelcomeMessagesRequest,
 ) (*mlsv1.QueryWelcomeMessagesResponse, error) {
 	return s.readstore.QueryWelcomeMessagesV1(ctx, req)
+}
+
+func (s *Store) QueryGroupMessagesBatch(
+	ctx context.Context,
+	filters []GroupCatchup,
+	perGroupLimit int32,
+) ([]*mlsv1.GroupMessage, error) {
+	return s.readstore.QueryGroupMessagesBatch(ctx, filters, perGroupLimit)
+}
+
+func (s *Store) QueryWelcomeMessagesBatch(
+	ctx context.Context,
+	filters []WelcomeCatchup,
+	perGroupLimit int32,
+) ([]*mlsv1.WelcomeMessage, error) {
+	return s.readstore.QueryWelcomeMessagesBatch(ctx, filters, perGroupLimit)
 }
 
 func (s *Store) GetNewestGroupMessageMetadata(

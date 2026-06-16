@@ -51,7 +51,15 @@ type Service struct {
 	ctxCancel func()
 
 	disablePublish bool
+
 	cutoverChecker *migration.CutoverChecker
+
+	// Subscribe (XIP-83) tunables; overridable in tests. Default to the package consts
+	// (subscribePingInterval / subscribePongDeadline / maxPendingBytes / maxFrameBytes).
+	pingInterval    time.Duration
+	pongDeadline    time.Duration
+	maxPendingBytes int
+	maxFrameBytes   int
 }
 
 func NewService(
@@ -71,6 +79,10 @@ func NewService(
 		subDispatcher:     subDispatcher,
 		disablePublish:    disablePublish,
 		cutoverChecker:    cutoverChecker,
+		pingInterval:      subscribePingInterval,
+		pongDeadline:      subscribePongDeadline,
+		maxPendingBytes:   maxPendingBytes,
+		maxFrameBytes:     maxFrameBytes,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {

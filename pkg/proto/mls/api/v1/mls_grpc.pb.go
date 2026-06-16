@@ -33,6 +33,7 @@ const (
 	MlsApi_QueryWelcomeMessages_FullMethodName     = "/xmtp.mls.api.v1.MlsApi/QueryWelcomeMessages"
 	MlsApi_SubscribeGroupMessages_FullMethodName   = "/xmtp.mls.api.v1.MlsApi/SubscribeGroupMessages"
 	MlsApi_SubscribeWelcomeMessages_FullMethodName = "/xmtp.mls.api.v1.MlsApi/SubscribeWelcomeMessages"
+	MlsApi_Subscribe_FullMethodName                = "/xmtp.mls.api.v1.MlsApi/Subscribe"
 	MlsApi_BatchPublishCommitLog_FullMethodName    = "/xmtp.mls.api.v1.MlsApi/BatchPublishCommitLog"
 	MlsApi_BatchQueryCommitLog_FullMethodName      = "/xmtp.mls.api.v1.MlsApi/BatchQueryCommitLog"
 	MlsApi_GetNewestGroupMessage_FullMethodName    = "/xmtp.mls.api.v1.MlsApi/GetNewestGroupMessage"
@@ -68,6 +69,11 @@ type MlsApiClient interface {
 	SubscribeGroupMessages(ctx context.Context, in *SubscribeGroupMessagesRequest, opts ...grpc.CallOption) (MlsApi_SubscribeGroupMessagesClient, error)
 	// Subscribe stream of new welcome messages
 	SubscribeWelcomeMessages(ctx context.Context, in *SubscribeWelcomeMessagesRequest, opts ...grpc.CallOption) (MlsApi_SubscribeWelcomeMessagesClient, error)
+	// Bidirectional subscription (XIP-83). One long-lived stream the client mutates
+	// in place via add/remove topic deltas, with WebSocket-style liveness ping/pong.
+	// A single stream MAY carry both group-message and welcome topics.
+	// gRPC-only: bidirectional streaming has no HTTP/grpc-gateway mapping.
+	Subscribe(ctx context.Context, opts ...grpc.CallOption) (MlsApi_SubscribeClient, error)
 	BatchPublishCommitLog(ctx context.Context, in *BatchPublishCommitLogRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	BatchQueryCommitLog(ctx context.Context, in *BatchQueryCommitLogRequest, opts ...grpc.CallOption) (*BatchQueryCommitLogResponse, error)
 	GetNewestGroupMessage(ctx context.Context, in *GetNewestGroupMessageRequest, opts ...grpc.CallOption) (*GetNewestGroupMessageResponse, error)
@@ -226,6 +232,37 @@ func (x *mlsApiSubscribeWelcomeMessagesClient) Recv() (*WelcomeMessage, error) {
 	return m, nil
 }
 
+func (c *mlsApiClient) Subscribe(ctx context.Context, opts ...grpc.CallOption) (MlsApi_SubscribeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &MlsApi_ServiceDesc.Streams[2], MlsApi_Subscribe_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mlsApiSubscribeClient{stream}
+	return x, nil
+}
+
+type MlsApi_SubscribeClient interface {
+	Send(*SubscribeRequest) error
+	Recv() (*SubscribeResponse, error)
+	grpc.ClientStream
+}
+
+type mlsApiSubscribeClient struct {
+	grpc.ClientStream
+}
+
+func (x *mlsApiSubscribeClient) Send(m *SubscribeRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *mlsApiSubscribeClient) Recv() (*SubscribeResponse, error) {
+	m := new(SubscribeResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *mlsApiClient) BatchPublishCommitLog(ctx context.Context, in *BatchPublishCommitLogRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, MlsApi_BatchPublishCommitLog_FullMethodName, in, out, opts...)
@@ -283,6 +320,11 @@ type MlsApiServer interface {
 	SubscribeGroupMessages(*SubscribeGroupMessagesRequest, MlsApi_SubscribeGroupMessagesServer) error
 	// Subscribe stream of new welcome messages
 	SubscribeWelcomeMessages(*SubscribeWelcomeMessagesRequest, MlsApi_SubscribeWelcomeMessagesServer) error
+	// Bidirectional subscription (XIP-83). One long-lived stream the client mutates
+	// in place via add/remove topic deltas, with WebSocket-style liveness ping/pong.
+	// A single stream MAY carry both group-message and welcome topics.
+	// gRPC-only: bidirectional streaming has no HTTP/grpc-gateway mapping.
+	Subscribe(MlsApi_SubscribeServer) error
 	BatchPublishCommitLog(context.Context, *BatchPublishCommitLogRequest) (*emptypb.Empty, error)
 	BatchQueryCommitLog(context.Context, *BatchQueryCommitLogRequest) (*BatchQueryCommitLogResponse, error)
 	GetNewestGroupMessage(context.Context, *GetNewestGroupMessageRequest) (*GetNewestGroupMessageResponse, error)
@@ -325,6 +367,9 @@ func (UnimplementedMlsApiServer) SubscribeGroupMessages(*SubscribeGroupMessagesR
 }
 func (UnimplementedMlsApiServer) SubscribeWelcomeMessages(*SubscribeWelcomeMessagesRequest, MlsApi_SubscribeWelcomeMessagesServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeWelcomeMessages not implemented")
+}
+func (UnimplementedMlsApiServer) Subscribe(MlsApi_SubscribeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedMlsApiServer) BatchPublishCommitLog(context.Context, *BatchPublishCommitLogRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchPublishCommitLog not implemented")
@@ -552,6 +597,32 @@ func (x *mlsApiSubscribeWelcomeMessagesServer) Send(m *WelcomeMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _MlsApi_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MlsApiServer).Subscribe(&mlsApiSubscribeServer{stream})
+}
+
+type MlsApi_SubscribeServer interface {
+	Send(*SubscribeResponse) error
+	Recv() (*SubscribeRequest, error)
+	grpc.ServerStream
+}
+
+type mlsApiSubscribeServer struct {
+	grpc.ServerStream
+}
+
+func (x *mlsApiSubscribeServer) Send(m *SubscribeResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *mlsApiSubscribeServer) Recv() (*SubscribeRequest, error) {
+	m := new(SubscribeRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func _MlsApi_BatchPublishCommitLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BatchPublishCommitLogRequest)
 	if err := dec(in); err != nil {
@@ -672,6 +743,12 @@ var MlsApi_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "SubscribeWelcomeMessages",
 			Handler:       _MlsApi_SubscribeWelcomeMessages_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "Subscribe",
+			Handler:       _MlsApi_Subscribe_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "mls/api/v1/mls.proto",

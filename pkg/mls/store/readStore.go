@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"time"
 
+	"github.com/lib/pq"
 	"github.com/uptrace/bun"
 	queries "github.com/xmtp/xmtp-node-go/pkg/mls/store/queries"
 	identity "github.com/xmtp/xmtp-node-go/pkg/proto/identity/api/v1"
@@ -17,12 +20,14 @@ import (
 
 type ReadStore struct {
 	log     *zap.Logger
+	db      *sql.DB
 	queries *queries.Queries
 }
 
 func NewReadStore(log *zap.Logger, db *bun.DB) *ReadStore {
 	return &ReadStore{
 		log:     log.Named("read-mlsstore"),
+		db:      db.DB,
 		queries: queries.New(db.DB),
 	}
 }
@@ -329,6 +334,202 @@ func (s *ReadStore) QueryWelcomeMessagesV1(
 		Messages:   out,
 		PagingInfo: pagingInfo,
 	}, nil
+}
+
+// GroupCatchup names a group and the cursor to resume it from for a batched catch-up.
+type GroupCatchup struct {
+	GroupID  []byte
+	IdCursor uint64
+}
+
+// WelcomeCatchup names a welcome topic (by installation) and its resume cursor.
+type WelcomeCatchup struct {
+	InstallationKey []byte
+	IdCursor        uint64
+}
+
+// clampCursor narrows a uint64 client cursor to the int64 the SQL columns use,
+// saturating at MaxInt64. A cursor above 2^63-1 can't match any real row id, so
+// it must return no rows; without the clamp the int64 conversion would wrap to a
+// negative value and the `id > cursor` predicate would replay the entire history.
+func clampCursor(c uint64) int64 {
+	const maxInt64 = 1<<63 - 1
+	if c > maxInt64 {
+		return maxInt64
+	}
+	return int64(c)
+}
+
+const queryGroupMessagesBatch = `
+SELECT m.id, m.created_at, m.group_id, m.data, m.is_commit, m.sender_hmac, m.should_push
+FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (group_id, id_cursor)
+CROSS JOIN LATERAL (
+	SELECT g.id, g.created_at, g.group_id, g.data, g.is_commit, g.sender_hmac, g.should_push
+	FROM group_messages g
+	WHERE g.group_id = f.group_id AND g.id > f.id_cursor
+	ORDER BY g.id ASC
+	LIMIT $3
+) m
+ORDER BY m.group_id ASC, m.id ASC`
+
+// QueryGroupMessagesBatch fetches catch-up messages for many groups in one round-trip
+// (XIP-83). Each group resumes from its own cursor and is capped at perGroupLimit rows;
+// a group returning fewer than perGroupLimit rows is fully caught up. Ordered by
+// (group_id, id). The composite index (group_id, id) makes each per-group seek cheap.
+//
+// Filter keys MUST be unique: unnest preserves duplicates and CROSS JOIN LATERAL runs the
+// subquery once per occurrence, so a repeated key returns its rows more than once and
+// breaks the caller's per-key pagination count. The Subscribe handler deduplicates adds
+// before calling this.
+func (s *ReadStore) QueryGroupMessagesBatch(
+	ctx context.Context,
+	filters []GroupCatchup,
+	perGroupLimit int32,
+) ([]*mlsv1.GroupMessage, error) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	groupIds := make([][]byte, len(filters))
+	cursors := make([]int64, len(filters))
+	for i, f := range filters {
+		groupIds[i] = f.GroupID
+		cursors[i] = clampCursor(f.IdCursor)
+	}
+	rows, err := s.db.QueryContext(
+		ctx,
+		queryGroupMessagesBatch,
+		pq.Array(groupIds),
+		pq.Array(cursors),
+		perGroupLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []*mlsv1.GroupMessage
+	for rows.Next() {
+		var (
+			id         int64
+			createdAt  time.Time
+			groupID    []byte
+			data       []byte
+			isCommit   sql.NullBool
+			senderHmac []byte
+			shouldPush sql.NullBool
+		)
+		if err := rows.Scan(&id, &createdAt, &groupID, &data, &isCommit, &senderHmac, &shouldPush); err != nil {
+			return nil, err
+		}
+		out = append(out, &mlsv1.GroupMessage{
+			Version: &mlsv1.GroupMessage_V1_{
+				V1: &mlsv1.GroupMessage_V1{
+					Id:         uint64(id),
+					CreatedNs:  uint64(createdAt.UnixNano()),
+					GroupId:    groupID,
+					Data:       data,
+					ShouldPush: shouldPush.Bool,
+					SenderHmac: senderHmac,
+					IsCommit:   isCommit.Bool,
+				},
+			},
+		})
+	}
+	return out, rows.Err()
+}
+
+const queryWelcomeMessagesBatch = `
+SELECT m.id, m.created_at, m.installation_key, m.data, m.hpke_public_key, m.wrapper_algorithm, m.welcome_metadata, m.message_type
+FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (installation_key, id_cursor)
+CROSS JOIN LATERAL (
+	SELECT w.id, w.created_at, w.installation_key, w.data, w.hpke_public_key, w.wrapper_algorithm, w.welcome_metadata, w.message_type
+	FROM welcome_messages w
+	WHERE w.installation_key = f.installation_key AND w.id > f.id_cursor
+	ORDER BY w.id ASC
+	LIMIT $3
+) m
+ORDER BY m.installation_key ASC, m.id ASC`
+
+// QueryWelcomeMessagesBatch is the welcome-topic analogue of QueryGroupMessagesBatch.
+func (s *ReadStore) QueryWelcomeMessagesBatch(
+	ctx context.Context,
+	filters []WelcomeCatchup,
+	perGroupLimit int32,
+) ([]*mlsv1.WelcomeMessage, error) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	keys := make([][]byte, len(filters))
+	cursors := make([]int64, len(filters))
+	for i, f := range filters {
+		keys[i] = f.InstallationKey
+		cursors[i] = clampCursor(f.IdCursor)
+	}
+	rows, err := s.db.QueryContext(
+		ctx,
+		queryWelcomeMessagesBatch,
+		pq.Array(keys),
+		pq.Array(cursors),
+		perGroupLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []*mlsv1.WelcomeMessage
+	for rows.Next() {
+		var (
+			id               int64
+			createdAt        time.Time
+			installationKey  []byte
+			data             []byte
+			hpkePublicKey    []byte
+			wrapperAlgorithm int16
+			welcomeMetadata  []byte
+			messageType      int16
+		)
+		if err := rows.Scan(&id, &createdAt, &installationKey, &data, &hpkePublicKey, &wrapperAlgorithm, &welcomeMetadata, &messageType); err != nil {
+			return nil, err
+		}
+		switch messageType {
+		case 0:
+			out = append(out, &mlsv1.WelcomeMessage{
+				Version: &mlsv1.WelcomeMessage_V1_{
+					V1: &mlsv1.WelcomeMessage_V1{
+						Id:              uint64(id),
+						CreatedNs:       uint64(createdAt.UnixNano()),
+						Data:            data,
+						InstallationKey: installationKey,
+						HpkePublicKey:   hpkePublicKey,
+						WrapperAlgorithm: types.WrapperAlgorithmToProto(
+							types.WrapperAlgorithm(wrapperAlgorithm),
+						),
+						WelcomeMetadata: welcomeMetadata,
+					},
+				},
+			})
+		case 1:
+			out = append(out, &mlsv1.WelcomeMessage{
+				Version: &mlsv1.WelcomeMessage_WelcomePointer_{
+					WelcomePointer: &mlsv1.WelcomeMessage_WelcomePointer{
+						Id:              uint64(id),
+						CreatedNs:       uint64(createdAt.UnixNano()),
+						InstallationKey: installationKey,
+						WelcomePointer:  data,
+						HpkePublicKey:   hpkePublicKey,
+						WrapperAlgorithm: types.WrapperAlgorithmToWelcomePointerWrapperAlgorithm(
+							types.WrapperAlgorithm(wrapperAlgorithm),
+						),
+					},
+				},
+			})
+		default:
+			// Parity with the live dispatch path (worker.go): surface, don't swallow.
+			s.log.Error("unknown welcome message type", zap.Int16("message_type", messageType))
+		}
+	}
+	return out, rows.Err()
 }
 
 func (s *ReadStore) QueryCommitLog(
