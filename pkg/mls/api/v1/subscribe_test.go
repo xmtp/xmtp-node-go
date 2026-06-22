@@ -895,6 +895,49 @@ func TestSubscribe_HistoryOnlyOnLiveTopicRejected(t *testing.T) {
 	}
 }
 
+// TestSubscribe_AddOverInflightHistoryOnlyRejected verifies that a second add for a topic whose
+// history_only catch-up is still in flight is rejected: a competing wave would re-deliver history
+// the first wave already sent (and orphan it). The gate holds the history_only wave mid-fetch.
+func TestSubscribe_AddOverInflightHistoryOnlyRejected(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "hist")
+	gate := make(chan struct{})
+	defer close(gate)
+	svc.readOnlyStore = &fakeReadStore{ReadMlsStore: svc.readOnlyStore, groupGate: gate}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	// history_only add: its catch-up wave blocks on the gate, staying in flight.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), 0),
+		},
+		HistoryOnly: true,
+		MutateId:    1,
+	}))
+	// A second add for the same topic while that wave is in flight must be rejected.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 2,
+	}))
+
+	select {
+	case err := <-errCh:
+		require.Equal(t, codes.InvalidArgument, status.Code(err),
+			"an add overlapping an in-flight history_only wave must be rejected")
+	case <-time.After(5 * time.Second):
+		t.Fatal("overlapping add was not rejected")
+	}
+}
+
 // TestSubscribe_HalfCloseDrainsCatchUpThenCloses is the bounded catch-up ("catchUpOnce")
 // shape end to end: Mutate{history_only} then immediately half-close; the server finishes
 // the wave — history, marker, CatchupComplete — and then closes the stream itself.
