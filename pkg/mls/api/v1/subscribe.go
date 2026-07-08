@@ -209,7 +209,15 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		closeOutbound()
 		select {
 		case <-senderDone:
-			return nil // the sender drained every queued frame
+			// The sender finished — but it may have stopped early on a Send error, leaving the
+			// wave's terminal frames (history tail + CatchupComplete) unsent. Surface that rather
+			// than a false OK that misleads the client into believing the drain completed.
+			select {
+			case err := <-sendErrCh:
+				return err
+			default:
+				return nil
+			}
 		case <-ctx.Done():
 			return nil // client disconnected; gRPC surfaces the cancellation
 		case <-time.After(s.pongDeadline):
@@ -229,6 +237,12 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 	// writer calls it, in order. lastActivity advances when a batch is accepted by the sender
 	// and is what gates the liveness Ping, so the Ping probes the client's receive path on a
 	// send-idle schedule (it is deliberately NOT reset by inbound frames — see requestChannel).
+	// sendTimer bounds a single send(); reused across calls (send runs only on the writer
+	// goroutine) instead of allocating a time.After timer — live for the whole deadline — on
+	// every send under high throughput.
+	sendTimer := time.NewTimer(s.pongDeadline)
+	stopTimer(sendTimer)
+	defer sendTimer.Stop()
 	send := func(batches ...[]*mlsv1.SubscribeResponse) error {
 		var flat []*mlsv1.SubscribeResponse
 		for _, batch := range batches {
@@ -237,6 +251,8 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		if len(flat) == 0 {
 			return nil
 		}
+		sendTimer.Reset(s.pongDeadline)
+		defer stopTimer(sendTimer)
 		select {
 		case outbound <- flat:
 			lastActivity = time.Now()
@@ -247,7 +263,7 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			return nil
 		case <-s.ctx.Done():
 			return status.Errorf(codes.Unavailable, "service is shutting down")
-		case <-time.After(s.pongDeadline):
+		case <-sendTimer.C:
 			return status.Errorf(codes.Unavailable, "send stalled; client not reading")
 		}
 	}
@@ -745,6 +761,20 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				newlyLive := 0
 				for _, t := range addOrder {
 					a := addByTopic[t]
+					// A topic with an in-flight history_only catch-up has an active wave but no
+					// live registration (history_only never sets subscribed/catchingUp). A second
+					// overlapping add for it would start a competing wave and reset the high-water
+					// floor, re-delivering history the first wave already sent — reject. (This
+					// covers the common no-remove overlap; a remove+re-add of such a topic is an
+					// even more unusual sequence that dropTopic narrows but does not fully close.)
+					if _, hasWave := topicWave[t]; hasWave {
+						if _, live := subscribed[t]; !live && !catchingUp[t] {
+							return status.Errorf(
+								codes.InvalidArgument,
+								"add targets a topic with an in-flight history_only catch-up",
+							)
+						}
+					}
 					// Re-adding a topic already active on this stream is a no-op unless its
 					// cursor is below the current floor, which restarts catch-up to replay
 					// (XIP-83). The floor seeds to the starting cursor on a fresh add (below),
@@ -1003,4 +1033,15 @@ func welcomeData(m *mlsv1.WelcomeMessage) []byte {
 		return v1.GetData()
 	}
 	return m.GetWelcomePointer().GetWelcomePointer()
+}
+
+// stopTimer stops t and drains a pending fire if there is one, so a later Reset cannot observe a
+// stale value. Safe on an already-stopped or already-fired-and-drained timer.
+func stopTimer(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
 }
