@@ -1269,6 +1269,68 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 	require.Equal(t, []byte("content8"), resp.Messages[1].GetV1().Data)
 }
 
+// TestQueryWelcomeMessagesWaveScan_UnknownTypeRowsAdvanceRawCursor pins the wave scan's
+// paging contract: a row with an unknown message_type is skipped from the parsed result
+// but still consumes a LIMIT slot, so the raw scan position (lastRawID / rawCount) — not
+// the parsed slice — must drive the cursor. Paging by parsed rows would end the scan on
+// the first short page and silently truncate the replay.
+func TestQueryWelcomeMessagesWaveScan_UnknownTypeRowsAdvanceRawCursor(t *testing.T) {
+	store, cleanup := NewTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	installationKey := []byte("installation")
+	var ids []int64
+	for i := 0; i < 10; i++ {
+		msg, err := store.InsertWelcomeMessage(
+			ctx,
+			installationKey,
+			[]byte(fmt.Sprintf("data%d", i)),
+			[]byte("hpke"),
+			types.AlgorithmCurve25519,
+			[]byte("metadata"),
+		)
+		require.NoError(t, err)
+		ids = append(ids, msg.ID)
+	}
+	// Corrupt a middle row the way a future writer would: a message_type this reader does
+	// not understand. It still occupies its id slot in the scan.
+	_, err := store.db.Exec("UPDATE welcome_messages SET message_type = 99 WHERE id = ?", ids[4])
+	require.NoError(t, err)
+
+	ceiling, err := store.queries.GetLatestWelcomeMessageID(ctx)
+	require.NoError(t, err)
+
+	// Page exactly as the Subscribe welcome fetcher does: advance from the raw scan
+	// position, terminate on a short raw page.
+	const limit = 4
+	filters := []WelcomeCatchup{{InstallationKey: installationKey, IdCursor: 0}}
+	var got []*mlsv1.WelcomeMessage
+	scanCursor := uint64(0)
+	done := false
+	for i := 0; i < 10 && !done; i++ { // bound the loop; 3 pages suffice
+		msgs, lastRawID, rawCount, err := store.QueryWelcomeMessagesWaveScan(
+			ctx,
+			filters,
+			scanCursor,
+			uint64(ceiling),
+			limit,
+		)
+		require.NoError(t, err)
+		if rawCount > 0 {
+			scanCursor = lastRawID
+		}
+		got = append(got, msgs...)
+		done = rawCount < limit
+	}
+	require.True(t, done, "the scan must terminate on a short raw page")
+	require.Len(t, got, 9, "every parseable row must be returned despite the skipped row")
+	for i, msg := range got {
+		require.NotEqual(t, uint64(ids[4]), msg.GetV1().GetId(),
+			"the unknown-type row must be skipped, not parsed (index %d)", i)
+	}
+}
+
 func TestGetNewestGroupMessage(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()

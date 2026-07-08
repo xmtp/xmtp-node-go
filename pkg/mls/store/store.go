@@ -56,16 +56,20 @@ type ReadMlsStore interface {
 		ctx context.Context,
 		query *mlsv1.QueryWelcomeMessagesRequest,
 	) (*mlsv1.QueryWelcomeMessagesResponse, error)
-	QueryGroupMessagesBatch(
+	QueryGroupMessagesWaveScan(
 		ctx context.Context,
 		filters []GroupCatchup,
-		perGroupLimit int32,
+		scanCursor uint64,
+		ceiling uint64,
+		limit int32,
 	) ([]*mlsv1.GroupMessage, error)
-	QueryWelcomeMessagesBatch(
+	QueryWelcomeMessagesWaveScan(
 		ctx context.Context,
 		filters []WelcomeCatchup,
-		perGroupLimit int32,
-	) ([]*mlsv1.WelcomeMessage, error)
+		scanCursor uint64,
+		ceiling uint64,
+		limit int32,
+	) ([]*mlsv1.WelcomeMessage, uint64, int, error)
 	QueryCommitLog(
 		ctx context.Context,
 		query *mlsv1.QueryCommitLogRequest,
@@ -420,20 +424,24 @@ func (s *Store) QueryWelcomeMessagesV1(
 	return s.readstore.QueryWelcomeMessagesV1(ctx, req)
 }
 
-func (s *Store) QueryGroupMessagesBatch(
+func (s *Store) QueryGroupMessagesWaveScan(
 	ctx context.Context,
 	filters []GroupCatchup,
-	perGroupLimit int32,
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
 ) ([]*mlsv1.GroupMessage, error) {
-	return s.readstore.QueryGroupMessagesBatch(ctx, filters, perGroupLimit)
+	return s.readstore.QueryGroupMessagesWaveScan(ctx, filters, scanCursor, ceiling, limit)
 }
 
-func (s *Store) QueryWelcomeMessagesBatch(
+func (s *Store) QueryWelcomeMessagesWaveScan(
 	ctx context.Context,
 	filters []WelcomeCatchup,
-	perGroupLimit int32,
-) ([]*mlsv1.WelcomeMessage, error) {
-	return s.readstore.QueryWelcomeMessagesBatch(ctx, filters, perGroupLimit)
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
+) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+	return s.readstore.QueryWelcomeMessagesWaveScan(ctx, filters, scanCursor, ceiling, limit)
 }
 
 func (s *Store) GetNewestGroupMessageMetadata(

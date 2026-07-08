@@ -55,11 +55,14 @@ type Service struct {
 	cutoverChecker *migration.CutoverChecker
 
 	// Subscribe (XIP-83) tunables; overridable in tests. Default to the package consts
-	// (subscribePingInterval / subscribePongDeadline / maxPendingBytes / maxFrameBytes).
+	// (subscribePingInterval / subscribePongDeadline / maxPendingBytes / maxFrameBytes /
+	// catchUpScanPageLimit / maxMutateAdds).
 	pingInterval    time.Duration
 	pongDeadline    time.Duration
 	maxPendingBytes int
 	maxFrameBytes   int
+	scanPageLimit   int32
+	maxMutateAdds   int
 }
 
 func NewService(
@@ -83,6 +86,8 @@ func NewService(
 		pongDeadline:      subscribePongDeadline,
 		maxPendingBytes:   maxPendingBytes,
 		maxFrameBytes:     maxFrameBytes,
+		scanPageLimit:     catchUpScanPageLimit,
+		maxMutateAdds:     maxMutateAdds,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {
