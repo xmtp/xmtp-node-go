@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 
 const (
 	// subscribePingInterval is how long a Subscribe stream may be idle before the
-	// node sends a liveness Ping (XIP-83 server requirement 4; RECOMMENDED <= 30s).
+	// node sends a liveness Ping (XIP-83 server requirement 6; RECOMMENDED <= 30s).
 	subscribePingInterval = 30 * time.Second
 	// subscribePongDeadline is how long the node waits for the client's Pong before
 	// reaping the stream (XIP-83 RECOMMENDED <= the ping interval).
@@ -32,16 +33,20 @@ const (
 	// writer is not parked by a slow stream.Send. Small: it only smooths Send latency.
 	sendQueueDepth = 8
 
-	// Batched catch-up tuning (XIP-83). chunk = groups per DB round-trip;
-	// perGroupLimit = rows per group per round; concurrency = chunks in flight.
-	// The composite (group_id, id) index makes each per-group seek cheap, so the
-	// binding constraint is payload bytes, not the planner. All tunable.
-	catchUpChunkSize     = 256
-	catchUpPerGroupLimit = 50
-	catchUpConcurrency   = 4
+	// Wave-scan catch-up tuning (XIP-83 server requirement 4). A wave's replay is a
+	// single ascending-id scan merged across all of its topics — not per-topic
+	// bursts — paged by a global scan cursor and pinned to the ceiling (the newest
+	// id at wave start) so it terminates under sustained publishing. scanPageLimit
+	// is rows per DB round-trip.
+	catchUpScanPageLimit = 512
 	// catchUpChannelBuffer smooths handoff from the catch-up fetchers to the writer;
 	// when full, fetchers block (backpressure) rather than racing ahead of the client.
 	catchUpChannelBuffer = 64
+	// maxMutateAdds bounds a single wave's merged catch-up scan: the scan's floor arrays
+	// carry one entry per topic and ride every page query, so the raw adds one Mutate may
+	// carry are capped (pre-dedup — a stateless check). A client with a larger set splits
+	// it across Mutates, whose waves run concurrently (XIP-83 server requirement 8).
+	maxMutateAdds = 100_000
 
 	// maxPendingBytes caps live messages buffered while topics catch up. Exceeding it
 	// drops the stream (the client reconnects from its cursor) rather than risk OOM.
@@ -83,29 +88,34 @@ func buildMLSTopic(kind byte, id []byte) string {
 	return topic.BuildMLSV1GroupTopic(id)
 }
 
-// catchUpBatch is one unit of fetched catch-up history handed from a fetcher goroutine to
-// the single writer. opened lists internal topics that finished catch-up in this batch —
-// the writer flushes their buffered live messages, opens their gate, and announces them in
-// a TopicsLive frame; openedWire carries the matching kind-prefixed wire topics the
-// announcement echoes back to the client. wave identifies the Mutate whose adds this batch
-// serves; the writer emits that wave's CatchupComplete once all its topics have opened. A
-// non-nil err means the fetch failed and the writer should tear the stream down (the
-// client reconnects from its cursor) rather than emit a misleading CatchupComplete or a
-// history gap.
+// catchUpBatch is one unit of fetched catch-up history handed from a wave's fetcher
+// goroutine to the single writer, in scan order. wave identifies the Mutate whose adds
+// the batch serves; the writer stamps its frames with that wave's mutate_id (XIP-83
+// server requirement 3). done marks the end of one kind's scan for the wave (the group
+// and welcome scans run independently); when the wave's last scan is done the writer
+// flushes the wave's gated live buffer, announces TopicsLive, emits CatchupComplete,
+// and opens the gates. A non-nil err means the fetch failed and the writer should tear
+// the stream down (the client reconnects from its cursor) rather than emit a misleading
+// CatchupComplete or a history gap.
 type catchUpBatch struct {
 	groupMsgs   []*mlsv1.GroupMessage
 	welcomeMsgs []*mlsv1.WelcomeMessage
-	opened      []string
-	openedWire  [][]byte
 	wave        int
+	done        bool
 	err         error
 }
 
-// waveState tracks one Mutate's in-flight catch-up: how many of its topics have
-// yet to open, and the client's correlation id to echo on its CatchupComplete.
+// waveState tracks one Mutate's in-flight catch-up. A wave completes when its last
+// scan drains (scansLeft reaches 0) — or early, when every topic it owned has been
+// removed (owned reaches 0). topics/wire hold what its completion TopicsLive will
+// announce, filtered against topicWave at completion so topics removed or reset
+// mid-wave are not announced.
 type waveState struct {
-	remaining int
 	mutateID  uint64
+	scansLeft int
+	owned     int
+	topics    []string
+	wire      [][]byte
 }
 
 // Subscribe is the XIP-83 bidirectional subscription. One long-lived stream that the
@@ -153,7 +163,6 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 	// writer emits one CatchupComplete (echoing the Mutate's mutate_id) per wave once all
 	// of its topics have opened. topicWave maps a not-yet-opened topic to its wave so a
 	// remove mid-catch-up can free the wave slot it would otherwise wait on forever.
-	mutateSeen := false
 	nextWave := 0
 	waves := make(map[int]waveState)
 	topicWave := make(map[string]int)
@@ -269,8 +278,11 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 	}
 
 	// buildGroupFrames dedups by group id (advancing the high-water mark, so no duplicates
-	// across catch-up/live) and packs the survivors into <=maxFrameBytes frames.
-	buildGroupFrames := func(msgs []*mlsv1.GroupMessage) []*mlsv1.SubscribeResponse {
+	// across catch-up/live) and packs the survivors into <=maxFrameBytes frames, each
+	// stamped with the catch-up wave that produced it — a Mutate's mutate_id for wave
+	// replay, 0 for live tail (XIP-83 server requirement 3). A frame is exactly one or
+	// the other; callers never mix lanes in one call.
+	buildGroupFrames := func(msgs []*mlsv1.GroupMessage, mutateID uint64) []*mlsv1.SubscribeResponse {
 		var frames []*mlsv1.SubscribeResponse
 		var frame []*mlsv1.GroupMessage
 		frameBytes := 0
@@ -280,7 +292,10 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			}
 			frames = append(frames, wrap(&mlsv1.SubscribeResponse_V1{
 				Response: &mlsv1.SubscribeResponse_V1_Messages_{
-					Messages: &mlsv1.SubscribeResponse_V1_Messages{GroupMessages: frame},
+					Messages: &mlsv1.SubscribeResponse_V1_Messages{
+						GroupMessages: frame,
+						MutateId:      mutateID,
+					},
 				},
 			}))
 			frame = nil
@@ -304,7 +319,7 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 	}
 
 	// buildWelcomeFrames is the welcome-topic analogue of buildGroupFrames.
-	buildWelcomeFrames := func(msgs []*mlsv1.WelcomeMessage) []*mlsv1.SubscribeResponse {
+	buildWelcomeFrames := func(msgs []*mlsv1.WelcomeMessage, mutateID uint64) []*mlsv1.SubscribeResponse {
 		var frames []*mlsv1.SubscribeResponse
 		var frame []*mlsv1.WelcomeMessage
 		frameBytes := 0
@@ -314,7 +329,10 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			}
 			frames = append(frames, wrap(&mlsv1.SubscribeResponse_V1{
 				Response: &mlsv1.SubscribeResponse_V1_Messages_{
-					Messages: &mlsv1.SubscribeResponse_V1_Messages{WelcomeMessages: frame},
+					Messages: &mlsv1.SubscribeResponse_V1_Messages{
+						WelcomeMessages: frame,
+						MutateId:        mutateID,
+					},
 				},
 			}))
 			frame = nil
@@ -336,32 +354,6 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		}
 		flush()
 		return frames
-	}
-
-	// buildOpenGateFrames drains a topic's live messages buffered during catch-up (deduped)
-	// into frames and clears its gate, so subsequent live messages send directly.
-	buildOpenGateFrames := func(topicStr string) []*mlsv1.SubscribeResponse {
-		buffered := pending[topicStr]
-		delete(pending, topicStr)
-		delete(catchingUp, topicStr)
-		if topic.IsMLSV1Welcome(topicStr) {
-			welcomes := make([]*mlsv1.WelcomeMessage, 0, len(buffered))
-			for _, env := range buffered {
-				pendingBytes -= len(env.Message)
-				if m, err := getWelcomeMessageFromEnvelope(env); err == nil {
-					welcomes = append(welcomes, m)
-				}
-			}
-			return buildWelcomeFrames(welcomes)
-		}
-		groups := make([]*mlsv1.GroupMessage, 0, len(buffered))
-		for _, env := range buffered {
-			pendingBytes -= len(env.Message)
-			if m, err := getGroupMessageFromEnvelope(env); err == nil {
-				groups = append(groups, m)
-			}
-		}
-		return buildGroupFrames(groups)
 	}
 
 	startedFrame := func() []*mlsv1.SubscribeResponse {
@@ -410,10 +402,13 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		if wave, ok := topicWave[t]; ok {
 			delete(topicWave, t)
 			if w, ok := waves[wave]; ok {
-				w.remaining--
-				if w.remaining > 0 {
+				w.owned--
+				if w.owned > 0 {
 					waves[wave] = w
 				} else {
+					// Every topic the wave owned is gone; complete it now (there is
+					// nothing left to announce) rather than wait for its scans, whose
+					// remaining batches the writer drops once the wave is deleted.
 					delete(waves, wave)
 					if err := send(catchupCompleteFrame(w.mutateID)); err != nil {
 						return err
@@ -422,6 +417,76 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			}
 		}
 		return nil
+	}
+
+	// completeWave finishes a wave whose scans have all drained: it flushes the live
+	// messages buffered while its topics were gated — merged back into ascending id
+	// order and stamped with the wave's mutate_id, since the wave folds them in (their
+	// ids sit above the scan's ceiling) — then announces the surviving topics in one
+	// TopicsLive and emits the wave's CatchupComplete. Only then do the gates open, so
+	// a live (mutate_id 0) frame for a wave's topic is never delivered before its
+	// CatchupComplete (XIP-83 server requirement 4: the seam). Topics removed or reset
+	// mid-wave were settled by dropTopic and are skipped here.
+	completeWave := func(wave int, w waveState) error {
+		var groups []*mlsv1.GroupMessage
+		var welcomes []*mlsv1.WelcomeMessage
+		marker := &mlsv1.SubscribeResponse_V1_TopicsLive{}
+		for i, t := range w.topics {
+			if wv, ok := topicWave[t]; !ok || wv != wave {
+				continue // removed or reset mid-wave; its remove already settled it
+			}
+			delete(topicWave, t)
+			marker.Topics = append(marker.Topics, w.wire[i])
+			if !catchingUp[t] {
+				// history_only: never gated, nothing buffered — and no live registration
+				// follows (both live-over-history_only directions are rejected in the Mutate
+				// handler), so drop the floor here or one-shot reads leak it forever.
+				delete(highWaterMarks, t)
+				continue
+			}
+			delete(catchingUp, t)
+			for _, env := range pending[t] {
+				pendingBytes -= len(env.Message)
+				if topic.IsMLSV1Welcome(t) {
+					if m, err := getWelcomeMessageFromEnvelope(env); err == nil {
+						welcomes = append(welcomes, m)
+					} else {
+						log.Error("error parsing welcome message", zap.Error(err))
+					}
+				} else {
+					if m, err := getGroupMessageFromEnvelope(env); err == nil {
+						groups = append(groups, m)
+					} else {
+						log.Error("error parsing group message", zap.Error(err))
+					}
+				}
+			}
+			delete(pending, t)
+		}
+		// Each topic's buffer is in dispatch (= id) order, but the wave's replay must
+		// stay totally ordered across its topics: merge before framing. The frame
+		// builders' high-water dedup then drops anything the scan already delivered —
+		// sound only under the same id-visibility-order invariant the ceiling pin rests
+		// on (see catchUpGroups).
+		sort.Slice(groups, func(i, j int) bool {
+			return groups[i].GetV1().GetId() < groups[j].GetV1().GetId()
+		})
+		sort.Slice(welcomes, func(i, j int) bool {
+			return welcomeID(welcomes[i]) < welcomeID(welcomes[j])
+		})
+		var liveMarker []*mlsv1.SubscribeResponse
+		if len(marker.Topics) > 0 {
+			liveMarker = []*mlsv1.SubscribeResponse{wrap(&mlsv1.SubscribeResponse_V1{
+				Response: &mlsv1.SubscribeResponse_V1_TopicsLive_{TopicsLive: marker},
+			})}
+		}
+		delete(waves, wave)
+		return send(
+			buildGroupFrames(groups, w.mutateID),
+			buildWelcomeFrames(welcomes, w.mutateID),
+			liveMarker,
+			catchupCompleteFrame(w.mutateID),
+		)
 	}
 
 	// Started must be the first frame, before any catch-up, so proxied/buffered transports
@@ -442,180 +507,107 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		}
 	}
 
-	// catchUpGroups fetches catch-up history for the given groups — chunked across the DB
-	// with bounded concurrency — and forwards each page to the writer. It owns no shared
+	// catchUpGroups replays one wave's group topics as a single ascending-id scan
+	// merged across all of its groups (XIP-83 server requirement 4: a wave's replay is
+	// one cursor-ordered pass, not per-topic bursts). The scan is pinned to the newest
+	// id at wave start, so it terminates under sustained publishing; anything newer
+	// reaches the client through the gated live path and is folded into the wave when
+	// it completes. Pages are forwarded to the writer in scan order. It owns no shared
 	// state and never sends to the stream; it just queries and hands results over.
-	catchUpGroups := func(adds []mlsstore.GroupCatchup, topics []string, wire [][]byte, wave int) {
-		processChunk := func(chunk []mlsstore.GroupCatchup, chunkTopics []string, chunkWire [][]byte) {
-			cursors := make([]uint64, len(chunk))
-			for i := range chunk {
-				cursors[i] = chunk[i].IdCursor
+	catchUpGroups := func(adds []mlsstore.GroupCatchup, wave int) {
+		// The ceiling pin assumes v3's id-visibility-order invariant: ids become visible to
+		// readers in id order (the live poller in worker.go advances from raw rows on the same
+		// assumption — a row committing out of order behind a reader is undeliverable
+		// stream-wide, a pre-existing v3 property).
+		ceiling, err := s.readOnlyStore.Queries().GetLatestGroupMessageID(ctx)
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				log.Error("wave-scan ceiling (group)", zap.Error(err))
+				forward(catchUpBatch{err: err})
 			}
-			active := make([]int, len(chunk))
-			for i := range chunk {
-				active[i] = i
+			return
+		}
+		scanCursor := uint64(0)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.ctx.Done():
+				return
+			default:
 			}
-			for len(active) > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case <-s.ctx.Done():
-					return
-				default:
+			msgs, err := s.readOnlyStore.QueryGroupMessagesWaveScan(
+				ctx,
+				adds,
+				scanCursor,
+				uint64(ceiling),
+				s.scanPageLimit,
+			)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Error("wave-scan catch-up (group)", zap.Error(err))
+					forward(catchUpBatch{err: err})
 				}
-				filters := make([]mlsstore.GroupCatchup, len(active))
-				for j, idx := range active {
-					filters[j] = mlsstore.GroupCatchup{
-						GroupID:  chunk[idx].GroupID,
-						IdCursor: cursors[idx],
-					}
-				}
-				msgs, err := s.readOnlyStore.QueryGroupMessagesBatch(
-					ctx,
-					filters,
-					catchUpPerGroupLimit,
-				)
-				if err != nil {
-					if !errors.Is(err, context.Canceled) {
-						log.Error("batch catch-up (group)", zap.Error(err))
-						forward(catchUpBatch{err: err})
-					}
-					return
-				}
-				counts := make(map[string]int)
-				lastID := make(map[string]uint64)
-				for _, m := range msgs {
-					gid := string(m.GetV1().GetGroupId())
-					counts[gid]++
-					lastID[gid] = m.GetV1().GetId()
-				}
-				var opened []string
-				var openedWire [][]byte
-				var next []int
-				for _, idx := range active {
-					gid := string(chunk[idx].GroupID)
-					if counts[gid] == catchUpPerGroupLimit {
-						cursors[idx] = lastID[gid]
-						next = append(next, idx)
-					} else {
-						opened = append(opened, chunkTopics[idx])
-						openedWire = append(openedWire, chunkWire[idx])
-					}
-				}
-				forward(catchUpBatch{
-					groupMsgs:  msgs,
-					opened:     opened,
-					openedWire: openedWire,
-					wave:       wave,
-				})
-				active = next
+				return
+			}
+			if len(msgs) > 0 {
+				scanCursor = msgs[len(msgs)-1].GetV1().GetId()
+				forward(catchUpBatch{groupMsgs: msgs, wave: wave})
+			}
+			if len(msgs) < int(s.scanPageLimit) {
+				forward(catchUpBatch{wave: wave, done: true})
+				return
 			}
 		}
-
-		sem := make(chan struct{}, catchUpConcurrency)
-		var chunkWg sync.WaitGroup
-		for start := 0; start < len(adds); start += catchUpChunkSize {
-			end := start + catchUpChunkSize
-			if end > len(adds) {
-				end = len(adds)
-			}
-			chunk, chunkTopics, chunkWire := adds[start:end], topics[start:end], wire[start:end]
-			chunkWg.Add(1)
-			sem <- struct{}{}
-			go func(chunk []mlsstore.GroupCatchup, chunkTopics []string, chunkWire [][]byte) {
-				defer chunkWg.Done()
-				defer func() { <-sem }()
-				processChunk(chunk, chunkTopics, chunkWire)
-			}(chunk, chunkTopics, chunkWire)
-		}
-		chunkWg.Wait()
 	}
 
 	// catchUpWelcomes is the welcome-topic analogue of catchUpGroups.
-	catchUpWelcomes := func(adds []mlsstore.WelcomeCatchup, topics []string, wire [][]byte, wave int) {
-		processChunk := func(chunk []mlsstore.WelcomeCatchup, chunkTopics []string, chunkWire [][]byte) {
-			cursors := make([]uint64, len(chunk))
-			for i := range chunk {
-				cursors[i] = chunk[i].IdCursor
+	catchUpWelcomes := func(adds []mlsstore.WelcomeCatchup, wave int) {
+		ceiling, err := s.readOnlyStore.Queries().GetLatestWelcomeMessageID(ctx)
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				log.Error("wave-scan ceiling (welcome)", zap.Error(err))
+				forward(catchUpBatch{err: err})
 			}
-			active := make([]int, len(chunk))
-			for i := range chunk {
-				active[i] = i
+			return
+		}
+		scanCursor := uint64(0)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.ctx.Done():
+				return
+			default:
 			}
-			for len(active) > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case <-s.ctx.Done():
-					return
-				default:
+			msgs, lastRawID, rawCount, err := s.readOnlyStore.QueryWelcomeMessagesWaveScan(
+				ctx,
+				adds,
+				scanCursor,
+				uint64(ceiling),
+				s.scanPageLimit,
+			)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Error("wave-scan catch-up (welcome)", zap.Error(err))
+					forward(catchUpBatch{err: err})
 				}
-				filters := make([]mlsstore.WelcomeCatchup, len(active))
-				for j, idx := range active {
-					filters[j] = mlsstore.WelcomeCatchup{
-						InstallationKey: chunk[idx].InstallationKey,
-						IdCursor:        cursors[idx],
-					}
-				}
-				msgs, err := s.readOnlyStore.QueryWelcomeMessagesBatch(
-					ctx,
-					filters,
-					catchUpPerGroupLimit,
-				)
-				if err != nil {
-					if !errors.Is(err, context.Canceled) {
-						log.Error("batch catch-up (welcome)", zap.Error(err))
-						forward(catchUpBatch{err: err})
-					}
-					return
-				}
-				counts := make(map[string]int)
-				lastID := make(map[string]uint64)
-				for _, m := range msgs {
-					key := string(welcomeInstallationKey(m))
-					counts[key]++
-					lastID[key] = welcomeID(m)
-				}
-				var opened []string
-				var openedWire [][]byte
-				var next []int
-				for _, idx := range active {
-					key := string(chunk[idx].InstallationKey)
-					if counts[key] == catchUpPerGroupLimit {
-						cursors[idx] = lastID[key]
-						next = append(next, idx)
-					} else {
-						opened = append(opened, chunkTopics[idx])
-						openedWire = append(openedWire, chunkWire[idx])
-					}
-				}
-				forward(catchUpBatch{
-					welcomeMsgs: msgs,
-					opened:      opened,
-					openedWire:  openedWire,
-					wave:        wave,
-				})
-				active = next
+				return
+			}
+			// Advance from the RAW scan position, not the parsed slice: the store skips rows
+			// with an unknown message_type but they still consumed LIMIT slots, so paging by
+			// parsed rows would silently truncate the replay at the first skipped row.
+			if rawCount > 0 {
+				scanCursor = lastRawID
+			}
+			if len(msgs) > 0 {
+				forward(catchUpBatch{welcomeMsgs: msgs, wave: wave})
+			}
+			if rawCount < int(s.scanPageLimit) {
+				forward(catchUpBatch{wave: wave, done: true})
+				return
 			}
 		}
-
-		sem := make(chan struct{}, catchUpConcurrency)
-		var chunkWg sync.WaitGroup
-		for start := 0; start < len(adds); start += catchUpChunkSize {
-			end := start + catchUpChunkSize
-			if end > len(adds) {
-				end = len(adds)
-			}
-			chunk, chunkTopics, chunkWire := adds[start:end], topics[start:end], wire[start:end]
-			chunkWg.Add(1)
-			sem <- struct{}{}
-			go func(chunk []mlsstore.WelcomeCatchup, chunkTopics []string, chunkWire [][]byte) {
-				defer chunkWg.Done()
-				defer func() { <-sem }()
-				processChunk(chunk, chunkTopics, chunkWire)
-			}(chunk, chunkTopics, chunkWire)
-		}
-		chunkWg.Wait()
 	}
 
 	// Read client frames in a dedicated goroutine (gRPC Recv blocks) and forward them to
@@ -700,29 +692,59 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			v1 := req.GetV1()
 			if v1 == nil {
 				// Unrecognized request version arm: fail rather than silently ignore, so a
-				// forward-version client is not left waiting on a response (XIP-83 req 8).
+				// forward-version client is not left waiting on a response (XIP-83 req 10).
 				return status.Errorf(codes.InvalidArgument, "unrecognized SubscribeRequest version")
 			}
 			switch {
 			case v1.GetMutate() != nil:
 				m := v1.GetMutate()
-				// Removes are applied before adds, so a topic appearing in both is reset:
-				// removed (clearing its cursor floor), then re-added with a fresh catch-up.
-				// dropTopic owns the gauge/metric for any topic that was actually live, so a
-				// duplicate or unknown remove is harmless rather than drifting the count.
-				for _, wire := range m.GetRemoves() {
-					kind, id, err := splitTopic(wire)
-					if err != nil {
-						return status.Errorf(codes.InvalidArgument, "remove: %v", err)
-					}
-					if err := dropTopic(buildMLSTopic(kind, id)); err != nil {
-						return err
+				// A wave's replay frames are stamped with its mutate_id, and 0 is the live
+				// tag, so a wave of adds cannot ride on 0 (XIP-83 server requirement 3).
+				// Validated before any state changes so the rejected frame is atomic.
+				if len(m.GetAdds()) > 0 && m.GetMutateId() == 0 {
+					return status.Errorf(
+						codes.InvalidArgument,
+						"a Mutate with adds requires a nonzero mutate_id",
+					)
+				}
+				// Each add becomes a floor entry in the wave's merged catch-up scan,
+				// riding every page query (see maxMutateAdds). Checked on the raw adds —
+				// stateless, before any state changes — so the rejected frame is atomic.
+				if len(m.GetAdds()) > s.maxMutateAdds {
+					return status.Errorf(
+						codes.ResourceExhausted,
+						"adds-per-Mutate limit %d exceeded; split the adds across Mutates",
+						s.maxMutateAdds,
+					)
+				}
+				// The frame tag and the CatchupComplete echo are the only keys correlating
+				// frames to mutations, so a mutate_id reused while its wave is still in
+				// flight would make the two waves' replay and completions indistinguishable
+				// (XIP-83 server requirement 3). This applies to ANY Mutate — even a
+				// removes-only one, whose immediate CatchupComplete would be ambiguous with
+				// the in-flight wave's — and is checked before the removes' side effects.
+				// In-flight ids are always nonzero (waves start only from adds-bearing
+				// Mutates, rejected above on 0), so a mutate_id of 0 never collides. Reuse
+				// after a wave's CatchupComplete stays legal.
+				if m.GetMutateId() != 0 {
+					for _, w := range waves {
+						if w.mutateID == m.GetMutateId() {
+							return status.Errorf(
+								codes.InvalidArgument,
+								"mutate_id %d is already in flight on this stream",
+								m.GetMutateId(),
+							)
+						}
 					}
 				}
-
 				// history_only adds never touch the dispatcher: no live registration,
 				// no gate, no pending buffer — a pure batched read with markers.
 				historyOnly := m.GetHistoryOnly()
+				// Parse and kind-validate every add up front — pure parsing, no state
+				// decisions — so a malformed add fails the stream BEFORE any remove's side
+				// effects (dropTopic, including a freed wave's CatchupComplete) take hold.
+				// The state-dependent no-op/reset decisions stay below the removes: a
+				// same-Mutate remove+re-add must see the removed state.
 				// Collapse duplicate topics within this Mutate's adds, lowest id_cursor
 				// winning, so a repeated topic resolves deterministically and a lower cursor
 				// still drives the replay path below.
@@ -750,6 +772,20 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 					}
 					addByTopic[t] = &addReq{wire: wire, kind: kind, id: id, cursor: cursor}
 					addOrder = append(addOrder, t)
+				}
+
+				// Removes are applied before adds, so a topic appearing in both is reset:
+				// removed (clearing its cursor floor), then re-added with a fresh catch-up.
+				// dropTopic owns the gauge/metric for any topic that was actually live, so a
+				// duplicate or unknown remove is harmless rather than drifting the count.
+				for _, wire := range m.GetRemoves() {
+					kind, id, err := splitTopic(wire)
+					if err != nil {
+						return status.Errorf(codes.InvalidArgument, "remove: %v", err)
+					}
+					if err := dropTopic(buildMLSTopic(kind, id)); err != nil {
+						return err
+					}
 				}
 
 				var groupAdds []mlsstore.GroupCatchup
@@ -786,7 +822,7 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 						// so honoring it would have to disturb the live subscription's floor — and
 						// on the replay path (cursor below the floor) dropTopic would unsubscribe
 						// the topic without re-registering it, silently severing a live tail.
-						// Reject rather than guess (XIP-83 req 8 stance: fail contradictory input).
+						// Reject rather than guess (XIP-83 req 11 stance: fail contradictory input).
 						if historyOnly {
 							return status.Errorf(
 								codes.InvalidArgument,
@@ -830,17 +866,30 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				}
 
 				// Each mutate that catches up subscriptions starts a wave; its
-				// CatchupComplete (echoing mutate_id) is emitted once all of the wave's
-				// topics are live. A mutate whose adds were all already-live (no-ops) or that
-				// added nothing still gets an immediate CatchupComplete — both so the client's
-				// mutate_id is answered and so a client that subscribed nothing learns it is
-				// live. A pure remove-only mutate after the first yields neither.
+				// CatchupComplete (echoing mutate_id) is emitted once its scans drain and
+				// its gates open. Every other mutate — removes-only, empty, or adds that
+				// were all no-ops — is acknowledged with an immediate CatchupComplete, so
+				// every Mutate is answered by exactly one CatchupComplete echoing its
+				// mutate_id.
 				adds := len(groupAdds) + len(welcomeAdds)
 				switch {
 				case adds > 0:
 					wave := nextWave
 					nextWave++
-					waves[wave] = waveState{remaining: adds, mutateID: m.GetMutateId()}
+					scans := 0
+					if len(groupAdds) > 0 {
+						scans++
+					}
+					if len(welcomeAdds) > 0 {
+						scans++
+					}
+					waves[wave] = waveState{
+						mutateID:  m.GetMutateId(),
+						scansLeft: scans,
+						owned:     adds,
+						topics:    append(append([]string{}, groupTopics...), welcomeTopics...),
+						wire:      append(append([][]byte{}, groupWire...), welcomeWire...),
+					}
 					for _, t := range groupTopics {
 						topicWave[t] = wave
 					}
@@ -848,17 +897,16 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 						topicWave[t] = wave
 					}
 					if len(groupAdds) > 0 {
-						go catchUpGroups(groupAdds, groupTopics, groupWire, wave)
+						go catchUpGroups(groupAdds, wave)
 					}
 					if len(welcomeAdds) > 0 {
-						go catchUpWelcomes(welcomeAdds, welcomeTopics, welcomeWire, wave)
+						go catchUpWelcomes(welcomeAdds, wave)
 					}
-				case len(m.GetAdds()) > 0 || !mutateSeen:
+				default:
 					if err := send(catchupCompleteFrame(m.GetMutateId())); err != nil {
 						return err
 					}
 				}
-				mutateSeen = true
 
 			case v1.GetPing() != nil:
 				nonce := v1.GetPing().GetNonce()
@@ -883,10 +931,13 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				// CATCHUP_COMPLETE.
 				return status.Errorf(codes.Unavailable, "catch-up failed: %v", b.err)
 			}
-			// A topic can be removed (or reset) while its catch-up page is in flight. wanted
-			// reports whether this batch's wave still owns the topic; history, the gate
-			// flush, TopicsLive and the wave count all skip topics no longer wanted, so a
-			// removed topic never gets stale history, a phantom marker, or a miscounted wave.
+			w, waveActive := waves[b.wave]
+			if !waveActive {
+				continue // the wave completed early (all topics removed); drop the straggler
+			}
+			// A topic can be removed (or reset) while its wave's scan page is in flight.
+			// wanted reports whether this batch's wave still owns the topic, so a removed
+			// topic never gets stale history. Dropping rows preserves the scan's order.
 			wanted := func(t string) bool {
 				wv, ok := topicWave[t]
 				return ok && wv == b.wave
@@ -899,7 +950,7 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 						kept = append(kept, m)
 					}
 				}
-				history = buildGroupFrames(kept)
+				history = buildGroupFrames(kept, w.mutateID)
 			} else if len(b.welcomeMsgs) > 0 {
 				kept := b.welcomeMsgs[:0]
 				for _, m := range b.welcomeMsgs {
@@ -907,44 +958,20 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 						kept = append(kept, m)
 					}
 				}
-				history = buildWelcomeFrames(kept)
+				history = buildWelcomeFrames(kept, w.mutateID)
 			}
-			var openFrames []*mlsv1.SubscribeResponse
-			var liveMarker []*mlsv1.SubscribeResponse
-			openedCount := 0
-			if len(b.opened) > 0 {
-				marker := &mlsv1.SubscribeResponse_V1_TopicsLive{}
-				for i, t := range b.opened {
-					if wv, ok := topicWave[t]; !ok || wv != b.wave {
-						continue // removed or reset mid-catch-up; its remove already settled it
-					}
-					delete(topicWave, t)
-					openFrames = append(openFrames, buildOpenGateFrames(t)...)
-					marker.Topics = append(marker.Topics, b.openedWire[i])
-					openedCount++
-				}
-				if openedCount > 0 {
-					liveMarker = []*mlsv1.SubscribeResponse{wrap(&mlsv1.SubscribeResponse_V1{
-						Response: &mlsv1.SubscribeResponse_V1_TopicsLive_{TopicsLive: marker},
-					})}
-				}
-			}
-			// Order is just program order here: history, then the flushed pending buffer
-			// (live messages that queued behind the catch-up — equally historical from the
-			// client's perspective), and only then the TopicsLive marker, so every frame a
-			// client sees after the marker really is live tail.
-			if err := send(history, openFrames, liveMarker); err != nil {
+			if err := send(history); err != nil {
 				return err
 			}
-			if w, ok := waves[b.wave]; ok {
-				w.remaining -= openedCount
-				if w.remaining > 0 {
+			if b.done {
+				w.scansLeft--
+				if w.scansLeft > 0 {
 					waves[b.wave] = w
 				} else {
-					// The wave's last topic just went live; its CatchupComplete (echoing
-					// the Mutate's id) follows the wave's final TopicsLive in program order.
-					delete(waves, b.wave)
-					if err := send(catchupCompleteFrame(w.mutateID)); err != nil {
+					// The wave's last scan just drained: flush its gated live buffer (still
+					// the wave's replay), announce TopicsLive, emit its CatchupComplete, and
+					// open the gates — in that order, so the seam holds.
+					if err := completeWave(b.wave, w); err != nil {
 						return err
 					}
 					if halfClosed && len(waves) == 0 {
@@ -971,16 +998,19 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				}
 				continue
 			}
+			// Live tail: tagged 0. The dispatcher delivers each kind in ascending id
+			// order and the writer sends in arrival order, so the live lane stays
+			// totally ordered per kind (XIP-83 server requirement 4).
 			var frames []*mlsv1.SubscribeResponse
 			if topic.IsMLSV1Welcome(t) {
 				if m, err := getWelcomeMessageFromEnvelope(env); err == nil {
-					frames = buildWelcomeFrames([]*mlsv1.WelcomeMessage{m})
+					frames = buildWelcomeFrames([]*mlsv1.WelcomeMessage{m}, 0)
 				} else {
 					log.Error("error parsing welcome message", zap.Error(err))
 				}
 			} else {
 				if m, err := getGroupMessageFromEnvelope(env); err == nil {
-					frames = buildGroupFrames([]*mlsv1.GroupMessage{m})
+					frames = buildGroupFrames([]*mlsv1.GroupMessage{m}, 0)
 				} else {
 					log.Error("error parsing group message", zap.Error(err))
 				}

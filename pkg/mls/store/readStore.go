@@ -360,33 +360,35 @@ func clampCursor(c uint64) int64 {
 	return int64(c)
 }
 
-const queryGroupMessagesBatch = `
-SELECT m.id, m.created_at, m.group_id, m.data, m.is_commit, m.sender_hmac, m.should_push
-FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (group_id, id_cursor)
-CROSS JOIN LATERAL (
-	SELECT g.id, g.created_at, g.group_id, g.data, g.is_commit, g.sender_hmac, g.should_push
-	FROM group_messages g
-	WHERE g.group_id = f.group_id AND g.id > f.id_cursor
-	ORDER BY g.id ASC
-	LIMIT $3
-) m
-ORDER BY m.group_id ASC, m.id ASC`
+const queryGroupMessagesWaveScan = `
+SELECT g.id, g.created_at, g.group_id, g.data, g.is_commit, g.sender_hmac, g.should_push
+FROM group_messages g
+JOIN unnest($1::BYTEA[], $2::BIGINT[]) AS f (group_id, id_cursor)
+	ON g.group_id = f.group_id
+WHERE g.id > f.id_cursor AND g.id > $3 AND g.id <= $4
+ORDER BY g.id ASC
+LIMIT $5`
 
-// QueryGroupMessagesBatch fetches catch-up messages for many groups in one round-trip
-// (XIP-83). Each group resumes from its own cursor and is capped at perGroupLimit rows;
-// a group returning fewer than perGroupLimit rows is fully caught up. Ordered by
-// (group_id, id). The composite index (group_id, id) makes each per-group seek cheap.
+// QueryGroupMessagesWaveScan fetches one page of a catch-up wave's replay: the
+// messages of many groups merged into a single ascending-id scan (XIP-83 server
+// requirement 4 — a wave's replay is one cursor-ordered pass across its topics,
+// not per-topic bursts). Each group's rows start above that group's own cursor;
+// the page as a whole starts above scanCursor (the previous page's last id) and
+// never exceeds ceiling (the newest id at wave start, so the scan terminates
+// under sustained publishing). A page shorter than limit means the wave is fully
+// replayed up to the ceiling.
 //
-// Filter keys MUST be unique: unnest preserves duplicates and CROSS JOIN LATERAL runs the
-// subquery once per occurrence, so a repeated key returns its rows more than once and
-// breaks the caller's per-key pagination count. The Subscribe handler deduplicates adds
-// before calling this.
-func (s *ReadStore) QueryGroupMessagesBatch(
+// Filter keys MUST be unique: unnest preserves duplicates and the join would
+// return a repeated group's rows more than once. The Subscribe handler
+// deduplicates adds before calling this.
+func (s *ReadStore) QueryGroupMessagesWaveScan(
 	ctx context.Context,
 	filters []GroupCatchup,
-	perGroupLimit int32,
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
 ) ([]*mlsv1.GroupMessage, error) {
-	if len(filters) == 0 {
+	if len(filters) == 0 || ceiling == 0 {
 		return nil, nil
 	}
 	groupIds := make([][]byte, len(filters))
@@ -397,10 +399,12 @@ func (s *ReadStore) QueryGroupMessagesBatch(
 	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		queryGroupMessagesBatch,
+		queryGroupMessagesWaveScan,
 		pq.Array(groupIds),
 		pq.Array(cursors),
-		perGroupLimit,
+		clampCursor(scanCursor),
+		clampCursor(ceiling),
+		limit,
 	)
 	if err != nil {
 		return nil, err
@@ -438,26 +442,30 @@ func (s *ReadStore) QueryGroupMessagesBatch(
 	return out, rows.Err()
 }
 
-const queryWelcomeMessagesBatch = `
-SELECT m.id, m.created_at, m.installation_key, m.data, m.hpke_public_key, m.wrapper_algorithm, m.welcome_metadata, m.message_type
-FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (installation_key, id_cursor)
-CROSS JOIN LATERAL (
-	SELECT w.id, w.created_at, w.installation_key, w.data, w.hpke_public_key, w.wrapper_algorithm, w.welcome_metadata, w.message_type
-	FROM welcome_messages w
-	WHERE w.installation_key = f.installation_key AND w.id > f.id_cursor
-	ORDER BY w.id ASC
-	LIMIT $3
-) m
-ORDER BY m.installation_key ASC, m.id ASC`
+const queryWelcomeMessagesWaveScan = `
+SELECT w.id, w.created_at, w.installation_key, w.data, w.hpke_public_key, w.wrapper_algorithm, w.welcome_metadata, w.message_type
+FROM welcome_messages w
+JOIN unnest($1::BYTEA[], $2::BIGINT[]) AS f (installation_key, id_cursor)
+	ON w.installation_key = f.installation_key
+WHERE w.id > f.id_cursor AND w.id > $3 AND w.id <= $4
+ORDER BY w.id ASC
+LIMIT $5`
 
-// QueryWelcomeMessagesBatch is the welcome-topic analogue of QueryGroupMessagesBatch.
-func (s *ReadStore) QueryWelcomeMessagesBatch(
+// QueryWelcomeMessagesWaveScan is the welcome-topic analogue of QueryGroupMessagesWaveScan.
+// A row with an unknown message_type is skipped from the parsed result but still consumed a
+// LIMIT slot, so the scan position is reported from the RAW rows: lastRawID is the last row
+// the query visited and rawCount how many. Callers MUST advance their cursor from lastRawID
+// and treat rawCount < limit as end-of-scan; paging by the parsed slice would silently
+// truncate the replay at the first skipped row inside a full page.
+func (s *ReadStore) QueryWelcomeMessagesWaveScan(
 	ctx context.Context,
 	filters []WelcomeCatchup,
-	perGroupLimit int32,
-) ([]*mlsv1.WelcomeMessage, error) {
-	if len(filters) == 0 {
-		return nil, nil
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
+) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+	if len(filters) == 0 || ceiling == 0 {
+		return nil, 0, 0, nil
 	}
 	keys := make([][]byte, len(filters))
 	cursors := make([]int64, len(filters))
@@ -467,17 +475,21 @@ func (s *ReadStore) QueryWelcomeMessagesBatch(
 	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		queryWelcomeMessagesBatch,
+		queryWelcomeMessagesWaveScan,
 		pq.Array(keys),
 		pq.Array(cursors),
-		perGroupLimit,
+		clampCursor(scanCursor),
+		clampCursor(ceiling),
+		limit,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 	defer func() { _ = rows.Close() }()
 
 	var out []*mlsv1.WelcomeMessage
+	var lastRawID uint64
+	rawCount := 0
 	for rows.Next() {
 		var (
 			id               int64
@@ -490,8 +502,10 @@ func (s *ReadStore) QueryWelcomeMessagesBatch(
 			messageType      int16
 		)
 		if err := rows.Scan(&id, &createdAt, &installationKey, &data, &hpkePublicKey, &wrapperAlgorithm, &welcomeMetadata, &messageType); err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
+		lastRawID = uint64(id)
+		rawCount++
 		switch messageType {
 		case 0:
 			out = append(out, &mlsv1.WelcomeMessage{
@@ -529,7 +543,7 @@ func (s *ReadStore) QueryWelcomeMessagesBatch(
 			s.log.Error("unknown welcome message type", zap.Int16("message_type", messageType))
 		}
 	}
-	return out, rows.Err()
+	return out, lastRawID, rawCount, rows.Err()
 }
 
 func (s *ReadStore) QueryCommitLog(

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -333,7 +334,8 @@ func TestSubscribe_CatchUpThenLiveNoDuplicates(t *testing.T) {
 	// Subscribe from the beginning, then immediately publish live messages so they race
 	// the catch-up.
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupId), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupId), 0)},
+		MutateId: 1,
 	}))
 	const live = 10
 	populateGroupMessages(t, ctx, svc, groupId, live, "live")
@@ -388,6 +390,7 @@ func TestSubscribe_MutateRemoveStopsDelivery(t *testing.T) {
 			addSub(groupTopic(groupId), 0),
 			addSub(groupTopic(sentinelId), 0),
 		},
+		MutateId: 1,
 	}))
 	waitForResponses(
 		t,
@@ -565,6 +568,7 @@ func TestSubscribe_MultiplexesMultipleIdentities(t *testing.T) {
 			addSub(welcomeTopic(instA), 0),
 			addSub(welcomeTopic(instB), 0),
 		},
+		MutateId: 1,
 	}))
 
 	// Catch-up delivers each identity's history, correctly attributed.
@@ -789,13 +793,17 @@ func TestSubscribe_HistoryOnlyDeliversNoLive(t *testing.T) {
 
 	// Wave 1: a live sentinel subscription. Wave 2: groupA, history only.
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(sentinelId), 0)},
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
 	}))
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
 		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
 			addSub(groupTopic(groupA), 0),
 		},
 		HistoryOnly: true,
+		MutateId:    2,
 	}))
 
 	markerAPred := func(r *mlsv1.SubscribeResponse) bool {
@@ -859,7 +867,8 @@ func TestSubscribe_HistoryOnlyOnLiveTopicRejected(t *testing.T) {
 	// Subscribe groupA live and wait until its catch-up completes — the cursor floor is now
 	// above 0, so the history_only re-add below lands on the replay path.
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
 	}))
 	waitForResponses(
 		t,
@@ -880,6 +889,7 @@ func TestSubscribe_HistoryOnlyOnLiveTopicRejected(t *testing.T) {
 			addSub(groupTopic(groupA), 0),
 		},
 		HistoryOnly: true,
+		MutateId:    2,
 	}))
 
 	select {
@@ -1127,7 +1137,9 @@ func TestSubscribe_DuplicateAddsDeduped(t *testing.T) {
 }
 
 // TestSubscribe_ReplayAfterRemove verifies removing a topic clears its cursor floor, so a
-// later re-add replays the history again (XIP-83 replay-after-remove).
+// later re-add replays the history again (XIP-83 replay-after-remove) — and that each
+// removes-only Mutate is acked with an immediate CatchupComplete echoing its mutate_id,
+// including mutate_id 0.
 func TestSubscribe_ReplayAfterRemove(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1156,9 +1168,11 @@ func TestSubscribe_ReplayAfterRemove(t *testing.T) {
 		},
 	)
 
-	// Remove, then re-add from cursor 0: the cleared floor lets the history replay.
+	// Remove, then re-add from cursor 0: the cleared floor lets the history replay. The
+	// removes-only Mutate spawns no wave, so it is acked immediately, echoing its id.
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Removes: [][]byte{groupTopic(groupA)},
+		Removes:  [][]byte{groupTopic(groupA)},
+		MutateId: 5,
 	}))
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
 		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
@@ -1169,10 +1183,24 @@ func TestSubscribe_ReplayAfterRemove(t *testing.T) {
 		stream,
 		10*time.Second,
 		"replayed catch-up (wave 2)",
-		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 },
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 3 },
 	)
 	require.Len(t, groupMsgsFrom(resps), 10, "remove + re-add must replay the full history")
-	require.Equal(t, []uint64{1, 2}, catchupCompletesFrom(resps))
+	require.Equal(t, []uint64{1, 5, 2}, catchupCompletesFrom(resps))
+
+	// A removes-only Mutate with mutate_id 0 is valid (0 only rejects adds) and is acked
+	// with a CatchupComplete echoing 0.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Removes: [][]byte{groupTopic(groupA)},
+	}))
+	resps = waitForResponses(
+		t,
+		stream,
+		5*time.Second,
+		"ack for the mutate_id-0 remove",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 4 },
+	)
+	require.Equal(t, []uint64{1, 5, 2, 0}, catchupCompletesFrom(resps))
 
 	stream.closeSend()
 	require.NoError(t, <-errCh)
@@ -1217,9 +1245,9 @@ func TestSubscribe_CursorAboveInt64ReturnsNoHistory(t *testing.T) {
 	require.NoError(t, <-errCh)
 }
 
-// TestSubscribe_InboundFramesResetIdleTimer verifies that inbound client frames which produce
-// no response (here, no-op removes) still reset the idle timer, so the node does not ping or
-// reap a stream the client is actively using.
+// TestSubscribe_InboundFramesDoNotSuppressLivenessPing verifies that inbound client frames
+// which produce no response (here, unsolicited Pongs) do not defer the liveness Ping, so a
+// peer that sends but never reads is still probed and reaped.
 func TestSubscribe_InboundFramesDoNotSuppressLivenessPing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1236,19 +1264,19 @@ func TestSubscribe_InboundFramesDoNotSuppressLivenessPing(t *testing.T) {
 		func(rs []*mlsv1.SubscribeResponse) bool { return hasStarted(rs) })
 
 	// The liveness Ping probes the client's RECEIVE path and is driven by SEND-side idleness
-	// only. A client streaming response-free frames (no-op removes) must NOT suppress it —
-	// otherwise a peer that sends but never reads could never be reaped.
+	// only. A client streaming response-free frames (unsolicited Pongs — every Mutate now
+	// yields a CatchupComplete) must NOT suppress it — otherwise a peer that sends but never
+	// reads could never be reaped.
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
-		dummy := groupTopic([]byte(test.RandomString(32)))
 		for {
 			select {
 			case <-done:
 				return
 			default:
 			}
-			stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{Removes: [][]byte{dummy}}))
+			stream.send(subReqPong(999999)) // never a nonce the server is waiting on
 			time.Sleep(40 * time.Millisecond)
 		}
 	}()
@@ -1279,6 +1307,7 @@ func TestSubscribe_GroupAndWelcomeSameIdentifierNoCollision(t *testing.T) {
 			addSub(groupTopic(id), 0),
 			addSub(welcomeTopic(id), 0),
 		},
+		MutateId: 1,
 	}))
 	waitForResponses(
 		t,
@@ -1316,9 +1345,11 @@ func TestSubscribe_GroupAndWelcomeSameIdentifierNoCollision(t *testing.T) {
 	require.NoError(t, <-errCh)
 }
 
-// TestQueryGroupMessagesBatch_CursorAboveInt64ReturnsNothing exercises clampCursor directly:
-// the Subscribe-level test is masked by the writer's high-water mark, so guard the store here.
-func TestQueryGroupMessagesBatch_CursorAboveInt64ReturnsNothing(t *testing.T) {
+// TestQueryGroupMessagesWaveScan_CursorAboveInt64ReturnsNothing exercises clampCursor
+// directly: the Subscribe-level test is masked by the writer's high-water mark, so guard
+// the store here. The ceiling above MaxInt64 clamps too (to "everything"), so the empty
+// result is attributable to the cursor alone.
+func TestQueryGroupMessagesWaveScan_CursorAboveInt64ReturnsNothing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	svc, _, validationSvc, cleanup := newTestService(t, ctx)
@@ -1328,9 +1359,11 @@ func TestQueryGroupMessagesBatch_CursorAboveInt64ReturnsNothing(t *testing.T) {
 	mockValidateGroupMessages(validationSvc, groupA)
 	populateGroupMessages(t, ctx, svc, groupA, 5, "hist")
 
-	msgs, err := svc.readOnlyStore.QueryGroupMessagesBatch(
+	msgs, err := svc.readOnlyStore.QueryGroupMessagesWaveScan(
 		ctx,
 		[]mlsstore.GroupCatchup{{GroupID: groupA, IdCursor: math.MaxUint64}},
+		0,
+		math.MaxUint64,
 		50,
 	)
 	require.NoError(t, err)
@@ -1338,17 +1371,18 @@ func TestQueryGroupMessagesBatch_CursorAboveInt64ReturnsNothing(t *testing.T) {
 }
 
 // TestSubscribe_MultiPageCatchUp exercises catch-up pagination across more than
-// catchUpPerGroupLimit messages: the active-loop continuation plus open-on-final-page wave
-// accounting, with exactly one TopicsLive and one CatchupComplete.
+// scanPageLimit messages: the scan-cursor continuation plus wave completion on the final
+// short page, with exactly one TopicsLive and one CatchupComplete.
 func TestSubscribe_MultiPageCatchUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	svc, _, validationSvc, cleanup := newTestService(t, ctx)
 	defer cleanup()
+	svc.scanPageLimit = 50 // small pages so a modest history spans several
 
 	groupA := []byte(test.RandomString(32))
 	mockValidateGroupMessages(validationSvc, groupA)
-	const history = catchUpPerGroupLimit*2 + 17
+	const history = 50*2 + 17
 	populateGroupMessages(t, ctx, svc, groupA, history, "hist")
 
 	stream := newFakeSubscribeStream(ctx)
@@ -1399,7 +1433,8 @@ func TestSubscribe_NonZeroStartingCursor(t *testing.T) {
 	e1 := make(chan error, 1)
 	go func() { e1 <- svc.Subscribe(s1) }()
 	s1.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
 	}))
 	r1 := waitForResponses(t, s1, 10*time.Second, "all 10",
 		func(rs []*mlsv1.SubscribeResponse) bool { return len(groupMsgsFrom(rs)) >= 10 })
@@ -1417,7 +1452,10 @@ func TestSubscribe_NonZeroStartingCursor(t *testing.T) {
 	e2 := make(chan error, 1)
 	go func() { e2 <- svc.Subscribe(s2) }()
 	s2.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), cursor)},
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), cursor),
+		},
+		MutateId: 2,
 	}))
 	r2 := waitForResponses(t, s2, 10*time.Second, "messages after the cursor",
 		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
@@ -1431,20 +1469,61 @@ func TestSubscribe_NonZeroStartingCursor(t *testing.T) {
 }
 
 // fakeReadStore wraps a ReadMlsStore to inject catch-up faults: groupErr makes
-// QueryGroupMessagesBatch fail, and groupGate (if non-nil) blocks it until released, letting
-// a test hold a topic mid-catch-up. All other methods delegate to the embedded store.
+// QueryGroupMessagesWaveScan fail, and groupGate / welcomeGate (if non-nil) block the
+// corresponding wave scan until released, letting a test hold a topic mid-catch-up.
+// gateGroup / gateInstallation (if set) narrow the gate to scans covering that topic, so
+// other waves on the same stream proceed. scanParked (if non-nil) is closed when a gated
+// scan first parks — the wave's ceiling is pinned by then, so a test can publish
+// deterministically above it. corruptWelcomeIDs (if set) simulates welcome rows the store
+// skips as unparseable (an unknown message_type from a future writer): they are dropped
+// from the parsed slice but keep their raw-scan slot (lastRawID / rawCount), matching the
+// real store's paging contract. All other methods delegate to the embedded store
+// (including Queries(), so the wave's ceiling lookup is unaffected).
 type fakeReadStore struct {
 	mlsstore.ReadMlsStore
-	groupErr  error
-	groupGate chan struct{}
+	groupErr          error
+	groupGate         chan struct{}
+	gateGroup         []byte
+	welcomeGate       chan struct{}
+	gateInstallation  []byte
+	scanParked        chan struct{}
+	parkedOnce        sync.Once
+	corruptWelcomeIDs map[uint64]bool
 }
 
-func (f *fakeReadStore) QueryGroupMessagesBatch(
+func filtersInclude(filters []mlsstore.GroupCatchup, groupID []byte) bool {
+	for _, flt := range filters {
+		if string(flt.GroupID) == string(groupID) {
+			return true
+		}
+	}
+	return false
+}
+
+func welcomeFiltersInclude(filters []mlsstore.WelcomeCatchup, installationKey []byte) bool {
+	for _, flt := range filters {
+		if string(flt.InstallationKey) == string(installationKey) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeReadStore) parked() {
+	if f.scanParked != nil {
+		f.parkedOnce.Do(func() { close(f.scanParked) })
+	}
+}
+
+func (f *fakeReadStore) QueryGroupMessagesWaveScan(
 	ctx context.Context,
 	filters []mlsstore.GroupCatchup,
-	perGroupLimit int32,
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
 ) ([]*mlsv1.GroupMessage, error) {
-	if f.groupGate != nil {
+	if f.groupGate != nil && (f.gateGroup == nil || filtersInclude(filters, f.gateGroup)) {
+		f.parked()
 		select {
 		case <-f.groupGate:
 		case <-ctx.Done():
@@ -1454,7 +1533,38 @@ func (f *fakeReadStore) QueryGroupMessagesBatch(
 	if f.groupErr != nil {
 		return nil, f.groupErr
 	}
-	return f.ReadMlsStore.QueryGroupMessagesBatch(ctx, filters, perGroupLimit)
+	return f.ReadMlsStore.QueryGroupMessagesWaveScan(ctx, filters, scanCursor, ceiling, limit)
+}
+
+func (f *fakeReadStore) QueryWelcomeMessagesWaveScan(
+	ctx context.Context,
+	filters []mlsstore.WelcomeCatchup,
+	scanCursor uint64,
+	ceiling uint64,
+	limit int32,
+) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+	if f.welcomeGate != nil &&
+		(f.gateInstallation == nil || welcomeFiltersInclude(filters, f.gateInstallation)) {
+		f.parked()
+		select {
+		case <-f.welcomeGate:
+		case <-ctx.Done():
+			return nil, 0, 0, ctx.Err()
+		}
+	}
+	msgs, lastRawID, rawCount, err := f.ReadMlsStore.QueryWelcomeMessagesWaveScan(
+		ctx, filters, scanCursor, ceiling, limit,
+	)
+	if err == nil && len(f.corruptWelcomeIDs) > 0 {
+		kept := msgs[:0]
+		for _, m := range msgs {
+			if !f.corruptWelcomeIDs[welcomeID(m)] {
+				kept = append(kept, m)
+			}
+		}
+		msgs = kept
+	}
+	return msgs, lastRawID, rawCount, err
 }
 
 // TestSubscribe_NonReadingClientIsReaped verifies a connected-but-non-reading client (a
@@ -1520,6 +1630,7 @@ func TestSubscribe_HalfCloseFlushTimeoutFailsNotOK(t *testing.T) {
 			addSub(groupTopic(groupA), 0),
 		},
 		HistoryOnly: true,
+		MutateId:    1,
 	}))
 	stream.closeSend()
 
@@ -1556,7 +1667,8 @@ func TestSubscribe_CatchUpFetchErrorTearsDownUnavailable(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- svc.Subscribe(stream) }()
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
 	}))
 
 	select {
@@ -1601,9 +1713,13 @@ func TestSubscribe_RemoveMidCatchUpFreesWaveSlot(t *testing.T) {
 	)
 
 	resps := waitForResponses(t, stream, 5*time.Second, "CatchupComplete from the remove",
-		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
-	require.Equal(t, []uint64{7}, catchupCompletesFrom(resps),
-		"the removed topic's wave completes from the remove, echoing its mutate_id")
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+	require.Equal(
+		t,
+		[]uint64{7, 0},
+		catchupCompletesFrom(resps),
+		"the removed topic's wave completes from the remove (echoing its mutate_id), then the removes-only Mutate is acked",
+	)
 	require.Empty(
 		t,
 		groupMsgsFrom(resps),
@@ -1634,7 +1750,8 @@ func TestSubscribe_PendingBufferCapAborts(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- svc.Subscribe(stream) }()
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
 	}))
 
 	// Catch-up is gated, so the topic stays in catch-up; live messages pile into pending.
@@ -1669,7 +1786,8 @@ func TestSubscribe_FramesSplitByMaxFrameBytes(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- svc.Subscribe(stream) }()
 	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
-		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
 	}))
 	resps := waitForResponses(t, stream, 10*time.Second, "all history",
 		func(rs []*mlsv1.SubscribeResponse) bool { return len(groupMsgsFrom(rs)) >= n })
@@ -1685,4 +1803,1213 @@ func TestSubscribe_FramesSplitByMaxFrameBytes(t *testing.T) {
 
 	stream.closeSend()
 	require.NoError(t, <-errCh)
+}
+
+// --- XIP-83 delivery tagging & ordering (server requirements 3 and 4) ---
+
+// groupMsgsTagged returns the group messages carried by Messages frames whose mutate_id
+// equals tag, in receive order.
+func groupMsgsTagged(resps []*mlsv1.SubscribeResponse, tag uint64) []*mlsv1.GroupMessage {
+	var out []*mlsv1.GroupMessage
+	for _, r := range resps {
+		if msgs := r.GetV1().GetMessages(); msgs != nil && msgs.GetMutateId() == tag {
+			out = append(out, msgs.GetGroupMessages()...)
+		}
+	}
+	return out
+}
+
+// welcomeMsgsTagged is the welcome analogue of groupMsgsTagged.
+func welcomeMsgsTagged(resps []*mlsv1.SubscribeResponse, tag uint64) []*mlsv1.WelcomeMessage {
+	var out []*mlsv1.WelcomeMessage
+	for _, r := range resps {
+		if msgs := r.GetV1().GetMessages(); msgs != nil && msgs.GetMutateId() == tag {
+			out = append(out, msgs.GetWelcomeMessages()...)
+		}
+	}
+	return out
+}
+
+// requireAscendingGroupIds asserts the messages' ids strictly ascend in the given order —
+// the total-order shape both delivery lanes guarantee per kind.
+func requireAscendingGroupIds(t *testing.T, msgs []*mlsv1.GroupMessage, desc string) {
+	t.Helper()
+	for i := 1; i < len(msgs); i++ {
+		require.Greater(
+			t,
+			msgs[i].GetV1().GetId(),
+			msgs[i-1].GetV1().GetId(),
+			"%s: ids must strictly ascend (index %d)",
+			desc,
+			i,
+		)
+	}
+}
+
+// requireAscendingWelcomeIds is the welcome analogue of requireAscendingGroupIds.
+func requireAscendingWelcomeIds(t *testing.T, msgs []*mlsv1.WelcomeMessage, desc string) {
+	t.Helper()
+	for i := 1; i < len(msgs); i++ {
+		require.Greater(
+			t,
+			welcomeID(msgs[i]),
+			welcomeID(msgs[i-1]),
+			"%s: welcome ids must strictly ascend (index %d)",
+			desc,
+			i,
+		)
+	}
+}
+
+// TestSubscribe_ReplayTaggedWithWaveLiveTaggedZero pins delivery tagging under overlapping
+// waves: every replay frame carries exactly the mutate_id of the wave that produced it —
+// even when a later wave completes first — and live frames carry 0.
+func TestSubscribe_ReplayTaggedWithWaveLiveTaggedZero(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	instB := []byte(test.RandomString(32))
+	hpke := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+	populateWelcomeMessages(t, ctx, svc, instB, hpke, 3, "welB")
+
+	// Gate group scans so wave 7 stays in flight while wave 8 (welcomes) overtakes it.
+	gate := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{ReadMlsStore: svc.readOnlyStore, groupGate: gate}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 7,
+	}))
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(welcomeTopic(instB), 0)},
+		MutateId: 8,
+	}))
+
+	// Wave 8 completes while wave 7 is still gated mid-fetch.
+	resps := waitForResponses(t, stream, 10*time.Second, "wave 8 catch-up",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+	require.Equal(t, []uint64{8}, catchupCompletesFrom(resps), "wave 8 overtakes the gated wave 7")
+	require.Len(t, welcomeMsgsTagged(resps, 8), 3, "wave 8's replay is tagged 8")
+	require.Empty(t, groupMsgsTagged(resps, 7), "wave 7 is still gated: no frames yet")
+
+	// Release wave 7: its replay arrives tagged 7, never mixed into another tag.
+	close(gate)
+	resps = waitForResponses(t, stream, 10*time.Second, "wave 7 catch-up",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+	require.Equal(t, []uint64{8, 7}, catchupCompletesFrom(resps))
+	require.Len(t, groupMsgsTagged(resps, 7), 5, "wave 7's replay is tagged 7")
+	require.Empty(t, groupMsgsTagged(resps, 8), "no group frame may carry wave 8's tag")
+	require.Empty(t, groupMsgsTagged(resps, 0), "no replay frame may carry the live tag")
+
+	// Live tail on both topics is tagged 0.
+	publishGroup(t, ctx, svc, validationSvc, groupA, "a-live")
+	populateWelcomeMessages(t, ctx, svc, instB, hpke, 1, "welB-live")
+	resps = waitForResponses(t, stream, 10*time.Second, "live tail",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsTagged(rs, 0)) >= 1 && len(welcomeMsgsTagged(rs, 0)) >= 1
+		})
+	require.Len(t, groupMsgsWithData(groupMsgsTagged(resps, 0), "a-live"), 1)
+	require.Len(t, welcomeMsgsTagged(resps, 0), 1)
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_InflightMutateIdCollisionRejected verifies that a Mutate reusing the
+// mutate_id of a wave still in flight is rejected with InvalidArgument: the frame tag and
+// the CatchupComplete echo are the only keys correlating frames to mutations, so an
+// in-flight collision would make the two waves' replay and completions indistinguishable
+// (XIP-83 server requirement 3). The gate holds wave 7 mid-fetch; both an adds-bearing
+// Mutate and a removes-only Mutate (whose immediate CatchupComplete would be ambiguous
+// with the in-flight wave's) must be rejected.
+func TestSubscribe_InflightMutateIdCollisionRejected(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	instB := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "hist")
+	gate := make(chan struct{})
+	defer close(gate)
+	svc.readOnlyStore = &fakeReadStore{ReadMlsStore: svc.readOnlyStore, groupGate: gate}
+
+	// Each rejection fails its stream, so each colliding Mutate gets a fresh stream with
+	// its own gated wave 7 in flight.
+	rejected := func(desc string, colliding *mlsv1.SubscribeRequest_V1_Mutate) {
+		t.Helper()
+		stream := newFakeSubscribeStream(ctx)
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.Subscribe(stream) }()
+
+		// Wave 7's catch-up blocks on the gate, staying in flight.
+		stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+			Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+				addSub(groupTopic(groupA), 0),
+			},
+			MutateId: 7,
+		}))
+		stream.send(subReqMutate(colliding))
+
+		select {
+		case err := <-errCh:
+			require.Equal(t, codes.InvalidArgument, status.Code(err), desc)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: colliding Mutate was not rejected", desc)
+		}
+	}
+
+	rejected("adds reusing an in-flight mutate_id must be rejected",
+		&mlsv1.SubscribeRequest_V1_Mutate{
+			Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+				addSub(welcomeTopic(instB), 0),
+			},
+			MutateId: 7,
+		})
+	rejected("a removes-only Mutate reusing an in-flight mutate_id must be rejected",
+		&mlsv1.SubscribeRequest_V1_Mutate{
+			Removes:  [][]byte{welcomeTopic(instB)},
+			MutateId: 7,
+		})
+}
+
+// TestSubscribe_MutateIdReuseAfterCompletionAccepted pins the boundary of the in-flight
+// collision rule: once a wave's CatchupComplete has been emitted its mutate_id is free
+// again, so a later adds-Mutate reusing it replays and completes normally.
+func TestSubscribe_MutateIdReuseAfterCompletionAccepted(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	instB := []byte(test.RandomString(32))
+	hpke := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+	populateWelcomeMessages(t, ctx, svc, instB, hpke, 3, "welB")
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	// Wave 7 runs to completion.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 7,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "wave 7 catch-up",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// The id is no longer in flight: a fresh wave reusing 7 replays and completes again.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(welcomeTopic(instB), 0)},
+		MutateId: 7,
+	}))
+	resps := waitForResponses(t, stream, 10*time.Second, "reused wave 7 catch-up",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+	require.Equal(t, []uint64{7, 7}, catchupCompletesFrom(resps),
+		"each wave completes with its own CatchupComplete echoing the reused id")
+	require.Len(t, groupMsgsTagged(resps, 7), 5, "the first wave's replay is tagged 7")
+	require.Len(t, welcomeMsgsTagged(resps, 7), 3, "the reused wave's replay is tagged 7")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_WaveReplayMergedAcrossTopics pins wave order: one wave covering two groups
+// whose histories interleave by id must replay the union in ascending id order — one merged
+// cursor-ordered pass — not one topic's burst then the other's.
+func TestSubscribe_WaveReplayMergedAcrossTopics(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	groupB := []byte(test.RandomString(32))
+	// Alternate publishes so the two groups' ids interleave globally.
+	const perGroup = 6
+	for i := 0; i < perGroup; i++ {
+		publishGroup(t, ctx, svc, validationSvc, groupA, fmt.Sprintf("a-%d", i))
+		publishGroup(t, ctx, svc, validationSvc, groupB, fmt.Sprintf("b-%d", i))
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), 0),
+			addSub(groupTopic(groupB), 0),
+		},
+		MutateId: 3,
+	}))
+	resps := waitForResponses(t, stream, 10*time.Second, "merged replay + CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsFrom(rs)) >= 2*perGroup && len(catchupCompletesFrom(rs)) >= 1
+		})
+
+	replay := groupMsgsTagged(resps, 3)
+	require.Len(t, replay, 2*perGroup, "the wave delivers both groups' history, tagged 3")
+	requireAscendingGroupIds(t, replay, "wave replay across interleaved topics")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_LiveTotalOrderPerKind pins live order: live (mutate_id 0) group messages
+// across all live topics on the stream arrive in ascending group id order, and live
+// welcomes across all live installations in ascending welcome id order — each kind totally
+// ordered on its own id sequence, independent of the other's.
+func TestSubscribe_LiveTotalOrderPerKind(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	groupB := []byte(test.RandomString(32))
+	instA := []byte(test.RandomString(32))
+	instB := []byte(test.RandomString(32))
+	hpke := []byte(test.RandomString(32))
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), 0),
+			addSub(groupTopic(groupB), 0),
+			addSub(welcomeTopic(instA), 0),
+			addSub(welcomeTopic(instB), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Interleave the kinds so their publishes overlap in time; the two id sequences are
+	// independent, and each must ascend on its own.
+	const perGroup = 5
+	for i := 0; i < perGroup; i++ {
+		publishGroup(t, ctx, svc, validationSvc, groupA, fmt.Sprintf("a-live-%d", i))
+		populateWelcomeMessages(t, ctx, svc, instA, hpke, 1, fmt.Sprintf("wa-live-%d", i))
+		publishGroup(t, ctx, svc, validationSvc, groupB, fmt.Sprintf("b-live-%d", i))
+		populateWelcomeMessages(t, ctx, svc, instB, hpke, 1, fmt.Sprintf("wb-live-%d", i))
+	}
+	resps := waitForResponses(t, stream, 10*time.Second, "all live messages",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsTagged(rs, 0)) >= 2*perGroup &&
+				len(welcomeMsgsTagged(rs, 0)) >= 2*perGroup
+		})
+
+	live := groupMsgsTagged(resps, 0)
+	require.Len(t, live, 2*perGroup)
+	requireAscendingGroupIds(t, live, "live lane across topics")
+
+	liveWelcomes := welcomeMsgsTagged(resps, 0)
+	require.Len(t, liveWelcomes, 2*perGroup)
+	requireAscendingWelcomeIds(t, liveWelcomes, "live welcome lane across installations")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_SeamHoldsLiveUntilCatchupComplete pins the seam: while a wave replays a
+// topic, that topic speaks live (mutate_id 0) only after the wave's CatchupComplete —
+// messages published mid-wave are folded into the wave (tagged), delivered exactly once —
+// while live frames for topics of other subscriptions keep flowing throughout.
+func TestSubscribe_SeamHoldsLiveUntilCatchupComplete(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	sentinelId := []byte(test.RandomString(32))
+	groupA := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+
+	// Gate ONLY groupA's wave, so the sentinel's wave and live tail flow freely.
+	gate := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    groupA,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Wave 9 starts (gated mid-fetch); groupA messages published now are gated behind it,
+	// while the sentinel keeps receiving live frames.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 9,
+	}))
+	publishGroup(t, ctx, svc, validationSvc, groupA, "a-mid-wave")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	resps := waitForResponses(t, stream, 10*time.Second, "sentinel live during the wave",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+	require.Empty(t, groupMsgsTagged(resps, 9), "wave 9 is still gated")
+	require.Empty(
+		t,
+		groupMsgsWithData(groupMsgsTagged(resps, 0), "a-mid-wave"),
+		"no live frame for the wave's topic before its CatchupComplete",
+	)
+
+	// Release the wave: history and the folded mid-wave message arrive tagged 9, in
+	// ascending id order, then CatchupComplete; only frames after it speak live for groupA.
+	close(gate)
+	resps = waitForResponses(t, stream, 10*time.Second, "wave 9 complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+	replay := groupMsgsTagged(resps, 9)
+	require.Len(t, replay, 6, "5 history + 1 folded mid-wave message, all tagged 9")
+	require.Len(t, groupMsgsWithData(replay, "a-mid-wave"), 1, "folded exactly once")
+	requireAscendingGroupIds(t, replay, "wave 9 replay including the folded tail")
+	require.Empty(t, groupMsgsWithData(groupMsgsTagged(resps, 0), "a-mid-wave"),
+		"the folded message must not also be delivered live")
+
+	// Live tail for groupA now flows tagged 0, strictly after the wave's CatchupComplete.
+	publishGroup(t, ctx, svc, validationSvc, groupA, "a-live")
+	resps = waitForResponses(t, stream, 10*time.Second, "groupA live tail",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "a-live")) >= 1
+		})
+	ccIdx := -1
+	for i, r := range resps {
+		if cc := r.GetV1().GetCatchupComplete(); cc != nil && cc.GetMutateId() == 9 {
+			ccIdx = i
+		}
+	}
+	require.GreaterOrEqual(t, ccIdx, 0)
+	liveIdx := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		msgs := r.GetV1().GetMessages()
+		return msgs.GetMutateId() == 0 &&
+			len(groupMsgsWithData(msgs.GetGroupMessages(), "a-live")) > 0
+	})
+	require.Greater(t, liveIdx, ccIdx, "groupA's live tail begins after CatchupComplete(9)")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_AddsRequireNonzeroMutateId pins the request-side rule the tag depends on:
+// a Mutate with adds and mutate_id 0 (the live tag) fails the stream with InvalidArgument.
+func TestSubscribe_AddsRequireNonzeroMutateId(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic([]byte(test.RandomString(32))), 0),
+		},
+	}))
+
+	select {
+	case err := <-errCh:
+		require.Equal(t, codes.InvalidArgument, status.Code(err),
+			"adds with mutate_id 0 must be rejected")
+	case <-time.After(5 * time.Second):
+		t.Fatal("a Mutate with adds and mutate_id 0 was not rejected")
+	}
+}
+
+// TestSubscribe_MutateAddsCapRejected verifies the per-Mutate adds cap (maxMutateAdds): a
+// Mutate carrying more adds than the cap fails the stream with ResourceExhausted, and the
+// rejection is atomic — it lands before the Mutate's removes or adds take any effect, so
+// the offending Mutate produces no frames at all. A fresh stream with exactly the cap
+// catches up to CatchupComplete.
+func TestSubscribe_MutateAddsCapRejected(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.maxMutateAdds = 3 // tiny: a handful of adds exceeds it
+
+	// Stream 1: subscribe a live topic, then send a Mutate that pairs removes:[liveTopic]
+	// with 4 adds (one over the cap).
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	liveTopic := groupTopic([]byte(test.RandomString(32)))
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(liveTopic, 0)},
+		MutateId: 1,
+	}))
+	waitForResponses(
+		t,
+		stream,
+		5*time.Second,
+		"wave 1 CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 },
+	)
+
+	overCap := &mlsv1.SubscribeRequest_V1_Mutate{Removes: [][]byte{liveTopic}, MutateId: 2}
+	for i := 0; i < 4; i++ {
+		overCap.Adds = append(overCap.Adds, addSub(groupTopic([]byte(test.RandomString(32))), 0))
+	}
+	stream.send(subReqMutate(overCap))
+
+	select {
+	case err := <-errCh:
+		require.Equal(t, codes.ResourceExhausted, status.Code(err),
+			"a Mutate with more adds than maxMutateAdds must be rejected")
+	case <-time.After(5 * time.Second):
+		t.Fatal("over-cap Mutate was not rejected")
+	}
+	// Atomicity: the rejection precedes the remove and the adds, so the offending Mutate
+	// delivered nothing — the stream's frames are exactly wave 1's (its TopicsLive and its
+	// CatchupComplete), with no CatchupComplete echoing mutate_id 2 and no later TopicsLive.
+	resps := stream.responses()
+	require.Equal(t, []uint64{1}, catchupCompletesFrom(resps),
+		"the rejected Mutate must not produce a CatchupComplete")
+	topicsLiveFrames := 0
+	for _, r := range resps {
+		if r.GetV1().GetTopicsLive() != nil {
+			topicsLiveFrames++
+		}
+	}
+	require.Equal(t, 1, topicsLiveFrames,
+		"the rejected Mutate must not produce a TopicsLive frame")
+
+	// Stream 2: exactly the cap is allowed and catches up.
+	stream2 := newFakeSubscribeStream(ctx)
+	errCh2 := make(chan error, 1)
+	go func() { errCh2 <- svc.Subscribe(stream2) }()
+
+	atCap := &mlsv1.SubscribeRequest_V1_Mutate{MutateId: 3}
+	for i := 0; i < 3; i++ {
+		atCap.Adds = append(atCap.Adds, addSub(groupTopic([]byte(test.RandomString(32))), 0))
+	}
+	stream2.send(subReqMutate(atCap))
+	resps2 := waitForResponses(
+		t,
+		stream2,
+		10*time.Second,
+		"at-cap wave CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 },
+	)
+	require.Equal(t, []uint64{3}, catchupCompletesFrom(resps2),
+		"a Mutate with exactly maxMutateAdds adds must catch up normally")
+
+	stream2.closeSend()
+	require.NoError(t, <-errCh2)
+}
+
+// TestSubscribe_ResetMidWaveHandsTopicToNewWave pins the seam when a topic moves between
+// overlapping waves: a remove+re-add mid-wave hands the topic (gate ownership, pending
+// buffer, cursor floor) to the new wave — the old wave replays only its surviving topics,
+// and the reset topic's full history plus its discarded mid-wave live message arrive
+// exactly once, under the new wave's tag.
+func TestSubscribe_ResetMidWaveHandsTopicToNewWave(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	t1 := []byte(test.RandomString(32))
+	t2 := []byte(test.RandomString(32))
+	sentinelId := []byte(test.RandomString(32))
+	for i := 0; i < 5; i++ {
+		publishGroup(t, ctx, svc, validationSvc, t1, fmt.Sprintf("h1-%d", i))
+		publishGroup(t, ctx, svc, validationSvc, t2, fmt.Sprintf("h2-%d", i))
+	}
+
+	// Gate ONLY scans covering t1 (both waves below include it), so the sentinel's wave
+	// and live tail flow freely.
+	gate := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    t1,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 11,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Wave 1 (gated mid-fetch) owns both topics; a live t1 message lands in its pending.
+	// The dbWorker dispatches strictly in id order, so the sentinel's arrival proves "mid"
+	// has been routed into the gated buffer.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(t1), 0),
+			addSub(groupTopic(t2), 0),
+		},
+		MutateId: 1,
+	}))
+	publishGroup(t, ctx, svc, validationSvc, t1, "mid")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	waitForResponses(t, stream, 10*time.Second, "sentinel live during wave 1",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+
+	// Reset t1 mid-wave: wave 1 drops it (pending discarded), wave 2 owns it gated.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Removes:  [][]byte{groupTopic(t1)},
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(t1), 0)},
+		MutateId: 2,
+	}))
+
+	close(gate)
+	resps := waitForResponses(t, stream, 10*time.Second, "both waves complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 3 })
+
+	// Wave 1 replays only its surviving topic.
+	wave1 := groupMsgsTagged(resps, 1)
+	require.Len(t, wave1, 5, "wave 1 delivers only t2's history")
+	for _, m := range wave1 {
+		require.Equal(t, string(t2), string(m.GetV1().GetGroupId()),
+			"no t1 frame may carry wave 1's tag")
+	}
+	requireAscendingGroupIds(t, wave1, "wave 1 replay")
+
+	// Wave 2 delivers ALL of t1 — the history plus the reset-discarded "mid" message, which
+	// its own scan (whose ceiling postdates the publish) picks back up — exactly once.
+	wave2 := groupMsgsTagged(resps, 2)
+	require.Len(t, wave2, 6, "wave 2 delivers t1's full history plus the mid-wave message")
+	for _, m := range wave2 {
+		require.Equal(t, string(t1), string(m.GetV1().GetGroupId()))
+	}
+	require.Len(t, groupMsgsWithData(wave2, "mid"), 1, "the mid-wave message arrives exactly once")
+	requireAscendingGroupIds(t, wave2, "wave 2 replay")
+
+	// t1 never speaks live before wave 2 completes (it was gated throughout).
+	for _, m := range groupMsgsTagged(resps, 0) {
+		require.NotEqual(t, string(t1), string(m.GetV1().GetGroupId()),
+			"no t1 frame may be tagged live")
+	}
+	// No message is delivered under two tags.
+	seen := make(map[uint64]bool)
+	for _, tag := range []uint64{0, 1, 2, 11} {
+		for _, m := range groupMsgsTagged(resps, tag) {
+			require.False(t, seen[m.GetV1().GetId()], "a message must appear under exactly one tag")
+			seen[m.GetV1().GetId()] = true
+		}
+	}
+
+	// Each wave's TopicsLive announces only what it still owned at completion (the marker
+	// is sent in the same batch as its CatchupComplete, so it is the frame just before).
+	cc1 := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		cc := r.GetV1().GetCatchupComplete()
+		return cc != nil && cc.GetMutateId() == 1
+	})
+	cc2 := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		cc := r.GetV1().GetCatchupComplete()
+		return cc != nil && cc.GetMutateId() == 2
+	})
+	require.Greater(t, cc1, 0)
+	require.Greater(t, cc2, 0)
+	require.Equal(t, [][]byte{groupTopic(t2)}, resps[cc1-1].GetV1().GetTopicsLive().GetTopics(),
+		"wave 1 announces only t2 live")
+	require.Equal(t, [][]byte{groupTopic(t1)}, resps[cc2-1].GetV1().GetTopicsLive().GetTopics(),
+		"wave 2 announces only t1 live")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_RemoveOneTopicMidMultiTopicWave verifies removing one of a wave's topics
+// mid-flight: the wave completes with only the survivor — the removed topic's history and
+// buffered live messages are dropped — and the removes-only Mutate itself is acked
+// immediately, echoing its own mutate_id.
+func TestSubscribe_RemoveOneTopicMidMultiTopicWave(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	t1 := []byte(test.RandomString(32))
+	t2 := []byte(test.RandomString(32))
+	sentinelId := []byte(test.RandomString(32))
+	for i := 0; i < 5; i++ {
+		publishGroup(t, ctx, svc, validationSvc, t1, fmt.Sprintf("g1-%d", i))
+		publishGroup(t, ctx, svc, validationSvc, t2, fmt.Sprintf("g2-%d", i))
+	}
+
+	gate := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    t1,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Wave 3 (gated mid-fetch) owns both topics; put a live t1 message in its pending
+	// (sentinel-sequenced), then remove t1 while the wave is still in flight.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(t1), 0),
+			addSub(groupTopic(t2), 0),
+		},
+		MutateId: 3,
+	}))
+	publishGroup(t, ctx, svc, validationSvc, t1, "g1-mid")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	waitForResponses(t, stream, 10*time.Second, "sentinel live during wave 3",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Removes:  [][]byte{groupTopic(t1)},
+		MutateId: 4,
+	}))
+
+	close(gate)
+	resps := waitForResponses(t, stream, 10*time.Second, "wave 3 complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 3 })
+	require.Equal(t, []uint64{1, 4, 3}, catchupCompletesFrom(resps),
+		"the remove is acked immediately; the wave completes exactly once")
+
+	wave := groupMsgsTagged(resps, 3)
+	require.Len(t, wave, 5, "the wave delivers only the surviving topic's history")
+	for _, m := range wave {
+		require.Equal(t, string(t2), string(m.GetV1().GetGroupId()))
+	}
+	requireAscendingGroupIds(t, wave, "wave 3 replay")
+
+	// The removed topic must not surface at all — not its history, not its pending.
+	for _, r := range resps {
+		for _, m := range r.GetV1().GetMessages().GetGroupMessages() {
+			require.NotEqual(t, string(t1), string(m.GetV1().GetGroupId()),
+				"no t1 message may be delivered under any tag")
+		}
+		require.False(t, topicsLiveHas(r, groupTopic(t1)), "no marker may announce t1 live")
+	}
+	cc3 := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		cc := r.GetV1().GetCatchupComplete()
+		return cc != nil && cc.GetMutateId() == 3
+	})
+	require.Greater(t, cc3, 0)
+	require.Equal(t, [][]byte{groupTopic(t2)}, resps[cc3-1].GetV1().GetTopicsLive().GetTopics(),
+		"the wave announces only the surviving topic")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_WelcomeFoldAndMergedOrder pins the welcome side of wave completion: a
+// two-installation welcome wave replays merged in ascending welcome id order, live welcomes
+// gated mid-wave fold into the wave (tagged, exactly once, in the merged order), and a
+// post-completion welcome is live tail.
+func TestSubscribe_WelcomeFoldAndMergedOrder(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	instA := []byte(test.RandomString(32))
+	instB := []byte(test.RandomString(32))
+	instC := []byte(test.RandomString(32)) // live sentinel: sequences the gated publishes
+	hpke := []byte(test.RandomString(32))
+	// Alternate publishes so the two installations' ids interleave globally.
+	for i := 0; i < 3; i++ {
+		populateWelcomeMessages(t, ctx, svc, instA, hpke, 1, fmt.Sprintf("wA-%d", i))
+		populateWelcomeMessages(t, ctx, svc, instB, hpke, 1, fmt.Sprintf("wB-%d", i))
+	}
+
+	// Gate ONLY scans covering instA (the wave below), so the sentinel's wave flows freely.
+	// scanParked pins the sequencing: once the wave parks, its ceiling is snapshotted, so
+	// welcomes published after it MUST reach the client through the pending fold.
+	gate := make(chan struct{})
+	parked := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore:     svc.readOnlyStore,
+		welcomeGate:      gate,
+		gateInstallation: instA,
+		scanParked:       parked,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(welcomeTopic(instC), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(welcomeTopic(instA), 0),
+			addSub(welcomeTopic(instB), 0),
+		},
+		MutateId: 5,
+	}))
+	select {
+	case <-parked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the welcome wave never reached its gated scan")
+	}
+
+	// One live welcome per installation, gated into the wave's pending — instB FIRST, so
+	// its welcome gets the lower id and the fold's wave-topic-order concatenation
+	// [instA's, instB's] is descending: only the fold's sort restores the merged order.
+	// The welcome dispatch is strictly id-ordered, so the sentinel's arrival proves both
+	// were routed.
+	populateWelcomeMessages(t, ctx, svc, instB, hpke, 1, "wB-live")
+	populateWelcomeMessages(t, ctx, svc, instA, hpke, 1, "wA-live")
+	populateWelcomeMessages(t, ctx, svc, instC, hpke, 1, "wC-live")
+	waitForResponses(t, stream, 10*time.Second, "sentinel welcome during the wave",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(welcomesForKey(welcomeMsgsTagged(rs, 0), instC)) >= 1
+		})
+
+	close(gate)
+	resps := waitForResponses(t, stream, 10*time.Second, "wave 5 complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+
+	wave := welcomeMsgsTagged(resps, 5)
+	require.Len(t, wave, 8, "6 history + 2 folded live welcomes, all tagged 5")
+	require.Len(t, welcomesForKey(wave, instA), 4)
+	require.Len(t, welcomesForKey(wave, instB), 4)
+	requireAscendingWelcomeIds(t, wave, "welcome wave replay including the folded tail")
+
+	// Before the wave's CatchupComplete, no welcome for its installations may be live.
+	cc5 := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		cc := r.GetV1().GetCatchupComplete()
+		return cc != nil && cc.GetMutateId() == 5
+	})
+	require.Greater(t, cc5, 0)
+	for _, r := range resps[:cc5] {
+		if msgs := r.GetV1().GetMessages(); msgs != nil && msgs.GetMutateId() == 0 {
+			for _, m := range msgs.GetWelcomeMessages() {
+				key := welcomeInstallationKey(m)
+				require.NotEqual(t, string(instA), string(key),
+					"no live frame for a wave installation before its CatchupComplete")
+				require.NotEqual(t, string(instB), string(key),
+					"no live frame for a wave installation before its CatchupComplete")
+			}
+		}
+	}
+
+	// A post-completion welcome flows live, tagged 0.
+	populateWelcomeMessages(t, ctx, svc, instA, hpke, 1, "wA-after")
+	waitForResponses(t, stream, 10*time.Second, "post-completion live welcome",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(welcomesForKey(welcomeMsgsTagged(rs, 0), instA)) >= 1
+		})
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_FoldSortsAcrossTopics pins the fold's merge order on the group side: live
+// messages gated for DIFFERENT topics of one wave land in per-topic pending buffers, and
+// completeWave concatenates those buffers in wave-topic order — so when the publish order
+// inverts the topic order, only the fold's sort restores the wave's ascending-id replay.
+func TestSubscribe_FoldSortsAcrossTopics(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	t1 := []byte(test.RandomString(32))
+	t2 := []byte(test.RandomString(32))
+	sentinelId := []byte(test.RandomString(32))
+	for i := 0; i < 3; i++ {
+		publishGroup(t, ctx, svc, validationSvc, t1, fmt.Sprintf("h1-%d", i))
+		publishGroup(t, ctx, svc, validationSvc, t2, fmt.Sprintf("h2-%d", i))
+	}
+
+	// Gate ONLY scans covering t1 (the two-topic wave below), so the sentinel's wave and
+	// live tail flow freely. scanParked pins the sequencing: once the wave parks, its
+	// ceiling is snapshotted, so messages published after it MUST reach the client through
+	// the pending fold.
+	gate := make(chan struct{})
+	parked := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    t1,
+		scanParked:   parked,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Wave 6 owns t1 THEN t2, so completeWave folds pending as [t1's, t2's].
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(t1), 0),
+			addSub(groupTopic(t2), 0),
+		},
+		MutateId: 6,
+	}))
+	select {
+	case <-parked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the two-topic wave never reached its gated scan")
+	}
+
+	// Publish to t2 FIRST, then t1: t2's gated message gets the LOWER id, so the fold's
+	// wave-topic-order concatenation [t1's, t2's] is descending — only the sort restores
+	// the replay's order. The dbWorker dispatches strictly in id order, so the sentinel's
+	// arrival proves both were routed into the gated pending buffers.
+	publishGroup(t, ctx, svc, validationSvc, t2, "t2-mid")
+	publishGroup(t, ctx, svc, validationSvc, t1, "t1-mid")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	waitForResponses(t, stream, 10*time.Second, "sentinel live during the wave",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+
+	close(gate)
+	resps := waitForResponses(t, stream, 10*time.Second, "wave 6 complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+
+	wave := groupMsgsTagged(resps, 6)
+	require.Len(t, wave, 8, "6 history + 2 folded live messages, all tagged 6")
+	require.Len(t, groupMsgsWithData(wave, "t1-mid"), 1, "t1's folded message arrives exactly once")
+	require.Len(t, groupMsgsWithData(wave, "t2-mid"), 1, "t2's folded message arrives exactly once")
+	requireAscendingGroupIds(t, wave, "wave 6 replay folded across topics")
+	require.Empty(t, groupMsgsWithData(groupMsgsTagged(resps, 0), "t1-mid"),
+		"the folded messages must not also be delivered live")
+	require.Empty(t, groupMsgsWithData(groupMsgsTagged(resps, 0), "t2-mid"),
+		"the folded messages must not also be delivered live")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_WelcomeWaveScanSkipsUnparseableRows pins the welcome fetcher's paging
+// contract at the Subscribe level: a row the store cannot parse (an unknown message_type
+// from a future writer) still consumes a raw LIMIT slot, so the fetcher must advance its
+// cursor from the raw scan position (lastRawID) and terminate on a short RAW page —
+// paging by the parsed slice would silently truncate the wave at the first skipped row
+// inside a full page.
+func TestSubscribe_WelcomeWaveScanSkipsUnparseableRows(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, _, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.scanPageLimit = 4 // small pages so the corrupt row sits inside a full page
+
+	inst := []byte(test.RandomString(32))
+	hpke := []byte(test.RandomString(32))
+	const total = 10
+	populateWelcomeMessages(t, ctx, svc, inst, hpke, total, "wel")
+
+	// Learn the real ids, then mark one INSIDE the first full raw page (not the final
+	// page) as unparseable: it keeps its raw slot but drops from the parsed slice.
+	all, _, rawCount, err := svc.readOnlyStore.QueryWelcomeMessagesWaveScan(
+		ctx,
+		[]mlsstore.WelcomeCatchup{{InstallationKey: inst}},
+		0,
+		math.MaxUint64,
+		total,
+	)
+	require.NoError(t, err)
+	require.Equal(t, total, rawCount)
+	corruptID := welcomeID(all[2])
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore:      svc.readOnlyStore,
+		corruptWelcomeIDs: map[uint64]bool{corruptID: true},
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(welcomeTopic(inst), 0)},
+		MutateId: 6,
+	}))
+	resps := waitForResponses(t, stream, 10*time.Second, "CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+	require.Equal(t, []uint64{6}, catchupCompletesFrom(resps))
+
+	wave := welcomeMsgsTagged(resps, 6)
+	require.Len(t, wave, total-1,
+		"every parseable welcome must arrive; the wave must not truncate at the skipped row")
+	requireAscendingWelcomeIds(t, wave, "welcome wave replay around the skipped row")
+	for _, m := range wave {
+		require.NotEqual(t, corruptID, welcomeID(m), "the unparseable row must not be delivered")
+	}
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_EveryHistoryPageCarriesWaveTag pins multi-page tag stamping: every
+// data-bearing frame before a wave's CatchupComplete carries the wave's mutate_id — no
+// page of a paginated replay may leak out tagged live.
+func TestSubscribe_EveryHistoryPageCarriesWaveTag(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.scanPageLimit = 50 // small pages so a modest history spans several
+
+	groupA := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	const history = 117
+	populateGroupMessages(t, ctx, svc, groupA, history, "hist")
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
+	}))
+	resps := waitForResponses(t, stream, 15*time.Second, "full history + CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsFrom(rs)) >= history && len(catchupCompletesFrom(rs)) >= 1
+		})
+	require.Equal(t, []uint64{1}, catchupCompletesFrom(resps))
+
+	ccIdx := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		return r.GetV1().GetCatchupComplete() != nil
+	})
+	dataFrames := 0
+	for _, r := range resps[:ccIdx] {
+		msgs := r.GetV1().GetMessages()
+		if msgs == nil ||
+			(len(msgs.GetGroupMessages()) == 0 && len(msgs.GetWelcomeMessages()) == 0) {
+			continue
+		}
+		dataFrames++
+		require.Equal(t, uint64(1), msgs.GetMutateId(),
+			"every data-bearing frame before CatchupComplete must carry the wave's tag")
+	}
+	require.Greater(t, dataFrames, 2, "the replay must have spanned multiple pages")
+
+	// The live tail after completion is tagged 0.
+	publishGroup(t, ctx, svc, validationSvc, groupA, "a-live")
+	resps = waitForResponses(t, stream, 5*time.Second, "live tail",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsFrom(rs), "a-live")) >= 1
+		})
+	liveIdx := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		return len(groupMsgsWithData(r.GetV1().GetMessages().GetGroupMessages(), "a-live")) > 0
+	})
+	require.Equal(t, uint64(0), resps[liveIdx].GetV1().GetMessages().GetMutateId(),
+		"the live frame must carry the live tag")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_HistoryOnlyMidReplayPublishNotDelivered pins the history_only seam: a
+// message published while a history_only replay is in flight is never delivered — the
+// topic has no live registration and the wave's ceiling predates the publish — while live
+// flow for other topics is uninterrupted.
+func TestSubscribe_HistoryOnlyMidReplayPublishNotDelivered(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	sentinelId := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+
+	gate := make(chan struct{})
+	parked := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    groupA,
+		scanParked:   parked,
+	}
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), 0),
+		},
+		HistoryOnly: true,
+		MutateId:    2,
+	}))
+	// The wave pins its ceiling before parking on its first page; publish only after, so
+	// "mid-replay" is deterministically above the ceiling.
+	select {
+	case <-parked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the history_only wave never reached its gated scan")
+	}
+	publishGroup(t, ctx, svc, validationSvc, groupA, "mid-replay")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	// The dbWorker dispatches strictly in id order, so the sentinel's arrival proves the
+	// dispatcher already handled (and, lacking a live registration, dropped) "mid-replay".
+	waitForResponses(t, stream, 10*time.Second, "sentinel live during the replay",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+
+	close(gate)
+	resps := waitForResponses(t, stream, 10*time.Second, "history_only wave complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 2 })
+	require.Equal(t, []uint64{1, 2}, catchupCompletesFrom(resps))
+
+	require.Len(t, groupMsgsTagged(resps, 2), 5, "exactly the history, tagged with the wave")
+	require.Empty(t, groupMsgsWithData(groupMsgsFrom(resps), "mid-replay"),
+		"a mid-replay publish to a history_only topic must not be delivered under any tag")
+
+	markerIdx := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		return topicsLiveHas(r, groupTopic(groupA))
+	})
+	cc2 := frameIndex(resps, func(r *mlsv1.SubscribeResponse) bool {
+		cc := r.GetV1().GetCatchupComplete()
+		return cc != nil && cc.GetMutateId() == 2
+	})
+	require.GreaterOrEqual(t, markerIdx, 0, "the history_only wave must announce its marker")
+	require.Greater(t, cc2, markerIdx, "the marker must precede the wave's CatchupComplete")
+	require.Len(t, groupMsgsWithData(groupMsgsTagged(resps, 0), "s-live"), 1,
+		"the sentinel's live flow must be uninterrupted")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_DisconnectMidWaveCleansUp verifies teardown with a gated wave and nonempty
+// pending: cancelling the client context returns the handler promptly, and the goroutines
+// the stream spawned (sender, frame reader, fetcher) all exit.
+func TestSubscribe_DisconnectMidWaveCleansUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	sentinelId := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "hist")
+
+	gate := make(chan struct{})
+	svc.readOnlyStore = &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		gateGroup:    groupA,
+	}
+
+	before := runtime.NumGoroutine()
+
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	defer streamCancel()
+	stream := newFakeSubscribeStream(streamCtx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(sentinelId), 0),
+		},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "sentinel live",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Wave 2 parks on the gate; a live message lands in its pending (sentinel-sequenced).
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 2,
+	}))
+	publishGroup(t, ctx, svc, validationSvc, groupA, "a-mid")
+	publishGroup(t, ctx, svc, validationSvc, sentinelId, "s-live")
+	waitForResponses(t, stream, 10*time.Second, "sentinel live during the wave",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsWithData(groupMsgsTagged(rs, 0), "s-live")) >= 1
+		})
+
+	// The client disconnects while the fetcher is parked and pending is nonempty.
+	streamCancel()
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "a client cancellation is not a server error")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Subscribe did not return after the client disconnected mid-wave")
+	}
+	close(gate) // release the parked fetcher only after the handler returned
+
+	// Every stream goroutine must exit. No leak-check helper exists in this repo, so bound
+	// the goroutine count instead: generous slack, retried for a few seconds.
+	require.Eventually(t, func() bool {
+		return runtime.NumGoroutine() <= before+2
+	}, 5*time.Second, 50*time.Millisecond, "stream goroutines did not exit after disconnect")
 }
