@@ -56,13 +56,21 @@ type Service struct {
 
 	// Subscribe (XIP-83) tunables; overridable in tests. Default to the package consts
 	// (subscribePingInterval / subscribePongDeadline / maxPendingBytes / maxFrameBytes /
-	// catchUpScanPageLimit / maxMutateAdds).
-	pingInterval    time.Duration
-	pongDeadline    time.Duration
-	maxPendingBytes int
-	maxFrameBytes   int
-	scanPageLimit   int32
-	maxMutateAdds   int
+	// catchUpTopicPageLimit / catchUpBatchTopics / catchUpMaxConcurrentScans /
+	// catchUpMaxPendingBytes / maxMutateAdds).
+	pingInterval        time.Duration
+	pongDeadline        time.Duration
+	maxPendingBytes     int
+	maxFrameBytes       int
+	scanTopicPageLimit  int32
+	scanBatchTopics     int
+	scanMaxConcurrent   int
+	scanMaxPendingBytes int
+	maxMutateAdds       int
+	// scanBytesObserved, when non-nil (tests only), receives the catch-up
+	// lane's occupancy after each successful byte reservation, letting a test
+	// pin the admission bound instead of only its liveness.
+	scanBytesObserved func(int64)
 }
 
 func NewService(
@@ -75,19 +83,22 @@ func NewService(
 	cutoverChecker *migration.CutoverChecker,
 ) (s *Service, err error) {
 	s = &Service{
-		log:               log.Named("mls/v1"),
-		writerStore:       writerStore,
-		readOnlyStore:     readOnlyStore,
-		validationService: validationService,
-		subDispatcher:     subDispatcher,
-		disablePublish:    disablePublish,
-		cutoverChecker:    cutoverChecker,
-		pingInterval:      subscribePingInterval,
-		pongDeadline:      subscribePongDeadline,
-		maxPendingBytes:   maxPendingBytes,
-		maxFrameBytes:     maxFrameBytes,
-		scanPageLimit:     catchUpScanPageLimit,
-		maxMutateAdds:     maxMutateAdds,
+		log:                 log.Named("mls/v1"),
+		writerStore:         writerStore,
+		readOnlyStore:       readOnlyStore,
+		validationService:   validationService,
+		subDispatcher:       subDispatcher,
+		disablePublish:      disablePublish,
+		cutoverChecker:      cutoverChecker,
+		pingInterval:        subscribePingInterval,
+		pongDeadline:        subscribePongDeadline,
+		maxPendingBytes:     maxPendingBytes,
+		maxFrameBytes:       maxFrameBytes,
+		scanTopicPageLimit:  catchUpTopicPageLimit,
+		scanBatchTopics:     catchUpBatchTopics,
+		scanMaxConcurrent:   catchUpMaxConcurrentScans,
+		scanMaxPendingBytes: catchUpMaxPendingBytes,
+		maxMutateAdds:       maxMutateAdds,
 	}
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 	if s.dbWorker, err = newDBWorker(s.ctx, log, s.readOnlyStore.Queries(), subDispatcher, DEFAULT_POLL_INTERVAL); err != nil {

@@ -69,7 +69,7 @@ type ReadMlsStore interface {
 		scanCursor uint64,
 		ceiling uint64,
 		limit int32,
-	) ([]*mlsv1.WelcomeMessage, uint64, int, error)
+	) ([]*mlsv1.WelcomeMessage, map[string]WaveScanTopicProgress, error)
 	QueryCommitLog(
 		ctx context.Context,
 		query *mlsv1.QueryCommitLogRequest,
@@ -440,7 +440,7 @@ func (s *Store) QueryWelcomeMessagesWaveScan(
 	scanCursor uint64,
 	ceiling uint64,
 	limit int32,
-) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+) ([]*mlsv1.WelcomeMessage, map[string]WaveScanTopicProgress, error) {
 	return s.readstore.QueryWelcomeMessagesWaveScan(ctx, filters, scanCursor, ceiling, limit)
 }
 
