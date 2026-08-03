@@ -8,6 +8,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1370,15 +1371,154 @@ func TestQueryGroupMessagesWaveScan_CursorAboveInt64ReturnsNothing(t *testing.T)
 	require.Empty(t, msgs, "a cursor above MaxInt64 must clamp to no rows, not wrap negative")
 }
 
+// TestSubscribe_CurrentCursorWaveSkipsScan pins the wave short-circuit: a wave whose
+// every cursor already sits at the ceiling can replay nothing, so it must complete —
+// TopicsLive and all — without a single wave-scan query. Reconnecting clients are
+// overwhelmingly in this state, and before the short-circuit each such wave still cost
+// a DB round trip. A second, stale-cursor wave on the same stream then proves the
+// counter observes real scans (the zero above is not vacuous).
+func TestSubscribe_CurrentCursorWaveSkipsScan(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupA := []byte(test.RandomString(32))
+	groupB := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+	validationSvc.ExpectedCalls = nil
+	mockValidateGroupMessages(validationSvc, groupB)
+	populateGroupMessages(t, ctx, svc, groupB, 3, "histB")
+
+	// The ceiling is the global newest id, so a "current" topic must be cursored there.
+	latest, err := svc.readOnlyStore.Queries().GetLatestGroupMessageID(ctx)
+	require.NoError(t, err)
+
+	fake := &fakeReadStore{ReadMlsStore: svc.readOnlyStore}
+	svc.readOnlyStore = fake
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), uint64(latest)),
+		},
+		MutateId: 1,
+	}))
+	resps := waitForResponses(t, stream, 10*time.Second, "current-cursor wave to go live",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return frameIndex(rs, func(r *mlsv1.SubscribeResponse) bool {
+				return topicsLiveHas(r, groupTopic(groupA))
+			}) >= 0
+		})
+	require.Zero(t, fake.groupScans.Load(), "a current-cursor wave must not query the store")
+	require.Empty(t, groupMsgsFrom(resps), "a current-cursor wave has nothing to replay")
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupB), 0),
+		},
+		MutateId: 2,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "stale-cursor wave replay",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(groupMsgsFrom(rs)) >= 3 })
+	require.Positive(t, fake.groupScans.Load(), "a stale-cursor wave must scan")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_WaveRotatesInBatches pins the batch rotation with shrunken
+// tunables (batch of 2 topics, page of 2 rows) over three groups: no scan query
+// ever carries more than a batch of topics, a full page rotates its batch to
+// the back of the queue (so a topic is re-queried across turns rather than
+// replayed in one burst), and the replay still delivers every message exactly
+// once, ascending within each topic — the per-topic guarantee the writer's
+// high-water dedup relies on now that turns are not globally id-ordered.
+func TestSubscribe_WaveRotatesInBatches(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.scanBatchTopics = 2
+	svc.scanTopicPageLimit = 2
+
+	groups := [][]byte{
+		[]byte(test.RandomString(32)),
+		[]byte(test.RandomString(32)),
+		[]byte(test.RandomString(32)),
+	}
+	for i, g := range groups {
+		validationSvc.ExpectedCalls = nil
+		mockValidateGroupMessages(validationSvc, g)
+		populateGroupMessages(t, ctx, svc, g, 3, fmt.Sprintf("hist%d", i))
+	}
+
+	fake := &fakeReadStore{ReadMlsStore: svc.readOnlyStore}
+	svc.readOnlyStore = fake
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	adds := make([]*mlsv1.SubscribeRequest_V1_Mutate_Subscription, len(groups))
+	for i, g := range groups {
+		adds[i] = addSub(groupTopic(g), 0)
+	}
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{Adds: adds, MutateId: 1}))
+
+	resps := waitForResponses(t, stream, 10*time.Second, "full rotated replay",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(groupMsgsFrom(rs)) >= 9 })
+	got := groupMsgsFrom(resps)
+	require.Len(t, got, 9, "every message exactly once, no duplicates from rotation")
+
+	perTopic := map[string][]uint64{}
+	for _, m := range got {
+		key := string(m.GetV1().GetGroupId())
+		perTopic[key] = append(perTopic[key], m.GetV1().GetId())
+	}
+	require.Len(t, perTopic, 3, "all three topics replayed")
+	for topic, ids := range perTopic {
+		require.Len(t, ids, 3, "topic %x complete", topic)
+		for i := 1; i < len(ids); i++ {
+			require.Greater(t, ids[i], ids[i-1], "topic %x ids must ascend", topic)
+		}
+	}
+
+	fake.scanMu.Lock()
+	calls := fake.groupScanFilters
+	fake.scanMu.Unlock()
+	seenTurns := map[string]int{}
+	for _, call := range calls {
+		require.LessOrEqual(t, len(call), 2, "a scan query must never carry more than a batch")
+		for _, topic := range call {
+			seenTurns[topic]++
+		}
+	}
+	rotated := false
+	for _, n := range seenTurns {
+		if n >= 2 {
+			rotated = true
+		}
+	}
+	require.True(t, rotated, "at least one topic must be re-queried across turns (rotation)")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
 // TestSubscribe_MultiPageCatchUp exercises catch-up pagination across more than
-// scanPageLimit messages: the scan-cursor continuation plus wave completion on the final
+// a topic's per-turn limit: the cursor continuation plus wave completion on the final
 // short page, with exactly one TopicsLive and one CatchupComplete.
 func TestSubscribe_MultiPageCatchUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	svc, _, validationSvc, cleanup := newTestService(t, ctx)
 	defer cleanup()
-	svc.scanPageLimit = 50 // small pages so a modest history spans several
+	svc.scanTopicPageLimit = 50 // small pages so a modest history spans several
 
 	groupA := []byte(test.RandomString(32))
 	mockValidateGroupMessages(validationSvc, groupA)
@@ -1481,6 +1621,13 @@ func TestSubscribe_NonZeroStartingCursor(t *testing.T) {
 // (including Queries(), so the wave's ceiling lookup is unaffected).
 type fakeReadStore struct {
 	mlsstore.ReadMlsStore
+	// groupScans counts QueryGroupMessagesWaveScan calls, letting a test assert a
+	// wave completed without touching the store (the current-cursor pruning), and
+	// groupScanFilters records each call's group ids so a test can assert batch
+	// rotation (bounded batches; a deep topic re-queried across turns).
+	groupScans        atomic.Int32
+	scanMu            sync.Mutex
+	groupScanFilters  [][]string
 	groupErr          error
 	groupGate         chan struct{}
 	gateGroup         []byte
@@ -1522,6 +1669,14 @@ func (f *fakeReadStore) QueryGroupMessagesWaveScan(
 	ceiling uint64,
 	limit int32,
 ) ([]*mlsv1.GroupMessage, error) {
+	f.groupScans.Add(1)
+	topics := make([]string, len(filters))
+	for i, flt := range filters {
+		topics[i] = string(flt.GroupID)
+	}
+	f.scanMu.Lock()
+	f.groupScanFilters = append(f.groupScanFilters, topics)
+	f.scanMu.Unlock()
 	if f.groupGate != nil && (f.gateGroup == nil || filtersInclude(filters, f.gateGroup)) {
 		f.parked()
 		select {
@@ -1542,17 +1697,17 @@ func (f *fakeReadStore) QueryWelcomeMessagesWaveScan(
 	scanCursor uint64,
 	ceiling uint64,
 	limit int32,
-) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+) ([]*mlsv1.WelcomeMessage, map[string]mlsstore.WaveScanTopicProgress, error) {
 	if f.welcomeGate != nil &&
 		(f.gateInstallation == nil || welcomeFiltersInclude(filters, f.gateInstallation)) {
 		f.parked()
 		select {
 		case <-f.welcomeGate:
 		case <-ctx.Done():
-			return nil, 0, 0, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
 	}
-	msgs, lastRawID, rawCount, err := f.ReadMlsStore.QueryWelcomeMessagesWaveScan(
+	msgs, progress, err := f.ReadMlsStore.QueryWelcomeMessagesWaveScan(
 		ctx, filters, scanCursor, ceiling, limit,
 	)
 	if err == nil && len(f.corruptWelcomeIDs) > 0 {
@@ -1564,7 +1719,7 @@ func (f *fakeReadStore) QueryWelcomeMessagesWaveScan(
 		}
 		msgs = kept
 	}
-	return msgs, lastRawID, rawCount, err
+	return msgs, progress, err
 }
 
 // TestSubscribe_NonReadingClientIsReaped verifies a connected-but-non-reading client (a
@@ -1731,6 +1886,189 @@ func TestSubscribe_RemoveMidCatchUpFreesWaveSlot(t *testing.T) {
 	require.NoError(t, <-errCh)
 }
 
+// TestSubscribe_ScanSlotsQueueWaves pins both halves of the scan-concurrency
+// cap with one slot and three waves:
+//
+//   - a second stale wave must not start its scan until the first wave's scan
+//     finishes — deterministic because wave 1's done-batch enters the FIFO
+//     catch-up channel before its fetcher releases the slot, and wave 2's
+//     fetcher acquires the slot only after that release;
+//   - a fully-current wave must NOT queue: it prunes slot-free and completes
+//     while the sole slot is still parked inside the store, so its
+//     CatchupComplete arrives first of the three.
+//
+// A broken cap flips the first property (wave 2 overtakes the parked wave 1);
+// a current wave wrongly routed through the slot hangs the third
+// CatchupComplete until the gate opens and flips the {3, ...} prefix.
+func TestSubscribe_ScanSlotsQueueWaves(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.scanMaxConcurrent = 1
+
+	groupA := []byte(test.RandomString(32))
+	groupB := []byte(test.RandomString(32))
+	groupC := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 2, "histA")
+	validationSvc.ExpectedCalls = nil
+	mockValidateGroupMessages(validationSvc, groupB)
+	populateGroupMessages(t, ctx, svc, groupB, 2, "histB")
+
+	latest, err := svc.readOnlyStore.Queries().GetLatestGroupMessageID(ctx)
+	require.NoError(t, err)
+
+	gate := make(chan struct{})
+	parked := make(chan struct{})
+	fake := &fakeReadStore{
+		ReadMlsStore: svc.readOnlyStore,
+		groupGate:    gate,
+		scanParked:   parked,
+	}
+	svc.readOnlyStore = fake
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupA), 0)},
+		MutateId: 1,
+	}))
+	select {
+	case <-parked:
+	case <-time.After(10 * time.Second):
+		t.Fatal("wave 1's scan never reached the store")
+	}
+
+	// Wave 2 is stale too: its scan needs the slot wave 1 is sitting on.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupB), 0)},
+		MutateId: 2,
+	}))
+	// Wave 3 is fully current: it must prune slot-free and complete NOW, while
+	// the sole slot is parked in the store and wave 2 queues behind it.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupC), uint64(latest)),
+		},
+		MutateId: 3,
+	}))
+	waitForResponses(t, stream, 10*time.Second, "current wave to bypass the slot queue",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			completes := catchupCompletesFrom(rs)
+			return len(completes) >= 1 && completes[0] == 3
+		})
+	// Give a hypothetically uncapped wave 2 ample time to (wrongly) reach the
+	// store and park at the gate before it opens. With the cap this only
+	// delays the gate.
+	time.Sleep(500 * time.Millisecond)
+	require.Equal(t, int32(1), fake.groupScans.Load(),
+		"only the parked wave 1 may query while it holds the sole slot")
+	close(gate)
+
+	resps := waitForResponses(t, stream, 10*time.Second, "all three waves to complete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 3 })
+	require.Equal(t, []uint64{3, 1, 2}, catchupCompletesFrom(resps),
+		"current wave bypasses; the queued stale wave completes only after the slot holder")
+	require.Len(t, groupMsgsFrom(resps), 4, "both stale waves' history must be delivered in full")
+	require.Equal(t, int32(2), fake.groupScans.Load(),
+		"one turn per stale wave; the current wave never queries")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_CatchUpByteBudgetBackpressures starves the catch-up byte
+// budget (1 byte: every non-empty turn is over-budget) so each turn must be
+// admitted alone through the CAS-from-zero arm, with the group and welcome
+// scans contending for the same budget across many small rotation turns. The
+// replay must still deliver everything exactly once, ascending per topic, and
+// complete — a lost free or a lost wakeup deadlocks the wave and times the
+// test out.
+func TestSubscribe_CatchUpByteBudgetBackpressures(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+	svc.scanMaxPendingBytes = 1
+	svc.scanTopicPageLimit = 2
+	svc.scanBatchTopics = 2
+	// Record the lane's peak occupancy at reservation time: with a 1-byte
+	// budget every admission must go through the empty-lane arm, so occupancy
+	// may never exceed a single turn — turns must not stack.
+	var peakLane atomic.Int64
+	svc.scanBytesObserved = func(n int64) {
+		for {
+			cur := peakLane.Load()
+			if n <= cur || peakLane.CompareAndSwap(cur, n) {
+				return
+			}
+		}
+	}
+
+	groupA := []byte(test.RandomString(32))
+	groupB := []byte(test.RandomString(32))
+	instA := []byte(test.RandomString(32))
+	hpke := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupA)
+	populateGroupMessages(t, ctx, svc, groupA, 5, "histA")
+	validationSvc.ExpectedCalls = nil
+	mockValidateGroupMessages(validationSvc, groupB)
+	populateGroupMessages(t, ctx, svc, groupB, 5, "histB")
+	populateWelcomeMessages(t, ctx, svc, instA, hpke, 5, "welA")
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds: []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{
+			addSub(groupTopic(groupA), 0),
+			addSub(groupTopic(groupB), 0),
+			addSub(welcomeTopic(instA), 0),
+		},
+		MutateId: 1,
+	}))
+
+	resps := waitForResponses(t, stream, 10*time.Second, "full starved replay",
+		func(rs []*mlsv1.SubscribeResponse) bool {
+			return len(groupMsgsFrom(rs)) >= 10 && len(welcomeMsgsFrom(rs)) >= 5 &&
+				len(catchupCompletesFrom(rs)) >= 1
+		})
+	require.Equal(t, []uint64{1}, catchupCompletesFrom(resps))
+
+	perTopic := map[string][]uint64{}
+	for _, m := range groupMsgsFrom(resps) {
+		key := string(m.GetV1().GetGroupId())
+		perTopic[key] = append(perTopic[key], m.GetV1().GetId())
+	}
+	require.Len(t, perTopic, 2, "both group topics replayed")
+	for topic, ids := range perTopic {
+		require.Len(t, ids, 5, "topic %x exactly once", topic)
+		for i := 1; i < len(ids); i++ {
+			require.Greater(t, ids[i], ids[i-1], "topic %x ids must ascend", topic)
+		}
+	}
+	welcomes := welcomeMsgsFrom(resps)
+	require.Len(t, welcomes, 5, "welcome history exactly once")
+	for i := 1; i < len(welcomes); i++ {
+		require.Greater(t, welcomeID(welcomes[i]), welcomeID(welcomes[i-1]),
+			"welcome ids must ascend")
+	}
+
+	// The largest possible turn here is a full group batch: 2 topics × 2 rows
+	// of len("histX_n") = 7 payload bytes. Anything above that means two turns
+	// were admitted concurrently past the starved budget.
+	require.Positive(t, peakLane.Load(), "the observer must have seen reservations")
+	require.LessOrEqual(t, peakLane.Load(), int64(28),
+		"a starved budget must admit turns one at a time, never stacked")
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
 // TestSubscribe_PendingBufferCapAborts verifies the maxPendingBytes guard: live messages
 // buffered while a topic is stuck catching up cannot grow without bound.
 func TestSubscribe_PendingBufferCapAborts(t *testing.T) {
@@ -1742,6 +2080,10 @@ func TestSubscribe_PendingBufferCapAborts(t *testing.T) {
 
 	groupA := []byte(test.RandomString(32))
 	mockValidateGroupMessages(validationSvc, groupA)
+	// One history row keeps the ceiling above the cursor: a fully-current topic
+	// is pruned without ever reaching the gated scan, and this test needs the
+	// wave parked mid-catch-up.
+	populateGroupMessages(t, ctx, svc, groupA, 1, "hist")
 	gate := make(chan struct{})
 	defer close(gate)
 	svc.readOnlyStore = &fakeReadStore{ReadMlsStore: svc.readOnlyStore, groupGate: gate}
@@ -2744,25 +3086,25 @@ func TestSubscribe_FoldSortsAcrossTopics(t *testing.T) {
 
 // TestSubscribe_WelcomeWaveScanSkipsUnparseableRows pins the welcome fetcher's paging
 // contract at the Subscribe level: a row the store cannot parse (an unknown message_type
-// from a future writer) still consumes a raw LIMIT slot, so the fetcher must advance its
-// cursor from the raw scan position (lastRawID) and terminate on a short RAW page —
-// paging by the parsed slice would silently truncate the wave at the first skipped row
-// inside a full page.
+// from a future writer) still consumes its topic's raw LIMIT slot, so the fetcher must
+// advance the topic's cursor from its raw scan position and retire it only on a short RAW
+// count — paging by the parsed slice would silently truncate the wave at the first
+// skipped row inside a full turn.
 func TestSubscribe_WelcomeWaveScanSkipsUnparseableRows(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	svc, _, _, cleanup := newTestService(t, ctx)
 	defer cleanup()
-	svc.scanPageLimit = 4 // small pages so the corrupt row sits inside a full page
+	svc.scanTopicPageLimit = 4 // small pages so the corrupt row sits inside a full page
 
 	inst := []byte(test.RandomString(32))
 	hpke := []byte(test.RandomString(32))
 	const total = 10
 	populateWelcomeMessages(t, ctx, svc, inst, hpke, total, "wel")
 
-	// Learn the real ids, then mark one INSIDE the first full raw page (not the final
-	// page) as unparseable: it keeps its raw slot but drops from the parsed slice.
-	all, _, rawCount, err := svc.readOnlyStore.QueryWelcomeMessagesWaveScan(
+	// Learn the real ids, then mark one INSIDE the first full raw turn (not the final
+	// turn) as unparseable: it keeps its raw slot but drops from the parsed slice.
+	all, progress, err := svc.readOnlyStore.QueryWelcomeMessagesWaveScan(
 		ctx,
 		[]mlsstore.WelcomeCatchup{{InstallationKey: inst}},
 		0,
@@ -2770,7 +3112,7 @@ func TestSubscribe_WelcomeWaveScanSkipsUnparseableRows(t *testing.T) {
 		total,
 	)
 	require.NoError(t, err)
-	require.Equal(t, total, rawCount)
+	require.Equal(t, total, progress[string(inst)].RawCount)
 	corruptID := welcomeID(all[2])
 	svc.readOnlyStore = &fakeReadStore{
 		ReadMlsStore:      svc.readOnlyStore,
@@ -2809,7 +3151,7 @@ func TestSubscribe_EveryHistoryPageCarriesWaveTag(t *testing.T) {
 	defer cancel()
 	svc, _, validationSvc, cleanup := newTestService(t, ctx)
 	defer cleanup()
-	svc.scanPageLimit = 50 // small pages so a modest history spans several
+	svc.scanTopicPageLimit = 50 // small pages so a modest history spans several
 
 	groupA := []byte(test.RandomString(32))
 	mockValidateGroupMessages(validationSvc, groupA)

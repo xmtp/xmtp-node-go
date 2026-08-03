@@ -348,6 +348,15 @@ type WelcomeCatchup struct {
 	IdCursor        uint64
 }
 
+// WaveScanTopicProgress is one topic's raw scan position within a wave-scan
+// turn: how many raw rows its probe returned (parsed or skipped) and the last
+// raw id visited. A topic whose RawCount is below the per-topic limit is fully
+// replayed up to the ceiling.
+type WaveScanTopicProgress struct {
+	RawCount  int
+	LastRawID uint64
+}
+
 // clampCursor narrows a uint64 client cursor to the int64 the SQL columns use,
 // saturating at MaxInt64. A cursor above 2^63-1 can't match any real row id, so
 // it must return no rows; without the clamp the int64 conversion would wrap to a
@@ -360,23 +369,38 @@ func clampCursor(c uint64) int64 {
 	return int64(c)
 }
 
+// The LATERAL shape matters: each topic is one bounded range probe of the
+// (group_id, id) index, capped at limit rows PER TOPIC, so the result is
+// bounded by len(filters)×limit and every fetched row is returned — no work is
+// fetched twice. The obvious flat join with a global ORDER BY id invites the
+// planner to walk the whole (scanCursor, ceiling] id range filtering by topic
+// membership instead — which makes an EMPTY catch-up (the common reconnect
+// case) cost a full pass over the table. The outer ORDER BY is load-bearing:
+// per-topic ascending delivery is what the writer's high-water dedup and the
+// client's replay guards rely on, and an unordered result would only be
+// topic-major by planner accident.
 const queryGroupMessagesWaveScan = `
 SELECT g.id, g.created_at, g.group_id, g.data, g.is_commit, g.sender_hmac, g.should_push
-FROM group_messages g
-JOIN unnest($1::BYTEA[], $2::BIGINT[]) AS f (group_id, id_cursor)
-	ON g.group_id = f.group_id
-WHERE g.id > f.id_cursor AND g.id > $3 AND g.id <= $4
-ORDER BY g.id ASC
-LIMIT $5`
+FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (group_id, id_cursor)
+CROSS JOIN LATERAL (
+	SELECT m.id, m.created_at, m.group_id, m.data, m.is_commit, m.sender_hmac, m.should_push
+	FROM group_messages m
+	WHERE m.group_id = f.group_id
+		AND m.id > GREATEST(f.id_cursor, $3)
+		AND m.id <= $4
+	ORDER BY m.id ASC
+	LIMIT $5
+) AS g
+ORDER BY g.id ASC`
 
-// QueryGroupMessagesWaveScan fetches one page of a catch-up wave's replay: the
-// messages of many groups merged into a single ascending-id scan (XIP-83 server
-// requirement 4 — a wave's replay is one cursor-ordered pass across its topics,
-// not per-topic bursts). Each group's rows start above that group's own cursor;
-// the page as a whole starts above scanCursor (the previous page's last id) and
-// never exceeds ceiling (the newest id at wave start, so the scan terminates
-// under sustained publishing). A page shorter than limit means the wave is fully
-// replayed up to the ceiling.
+// QueryGroupMessagesWaveScan fetches one turn of a catch-up wave's replay: up
+// to limit rows for EACH filter group, merged into a single ascending-id
+// result. Each group's rows start above that group's own cursor (and above
+// scanCursor, an additional shared floor the rotating caller leaves at zero)
+// and never exceed ceiling (the newest id at wave start, so the scan
+// terminates under sustained publishing). Truncation is per group: a group
+// contributing exactly limit rows may have more, fewer means it is fully
+// replayed up to the ceiling. The caller derives both from the returned rows.
 //
 // Filter keys MUST be unique: unnest preserves duplicates and the join would
 // return a repeated group's rows more than once. The Subscribe handler
@@ -442,30 +466,39 @@ func (s *ReadStore) QueryGroupMessagesWaveScan(
 	return out, rows.Err()
 }
 
+// Same LATERAL-probe shape as queryGroupMessagesWaveScan, for the same
+// reasons: per-key bounded probes of (installation_key, id) with a per-topic
+// limit, and a load-bearing outer ORDER BY.
 const queryWelcomeMessagesWaveScan = `
 SELECT w.id, w.created_at, w.installation_key, w.data, w.hpke_public_key, w.wrapper_algorithm, w.welcome_metadata, w.message_type
-FROM welcome_messages w
-JOIN unnest($1::BYTEA[], $2::BIGINT[]) AS f (installation_key, id_cursor)
-	ON w.installation_key = f.installation_key
-WHERE w.id > f.id_cursor AND w.id > $3 AND w.id <= $4
-ORDER BY w.id ASC
-LIMIT $5`
+FROM unnest($1::BYTEA[], $2::BIGINT[]) AS f (installation_key, id_cursor)
+CROSS JOIN LATERAL (
+	SELECT m.id, m.created_at, m.installation_key, m.data, m.hpke_public_key, m.wrapper_algorithm, m.welcome_metadata, m.message_type
+	FROM welcome_messages m
+	WHERE m.installation_key = f.installation_key
+		AND m.id > GREATEST(f.id_cursor, $3)
+		AND m.id <= $4
+	ORDER BY m.id ASC
+	LIMIT $5
+) AS w
+ORDER BY w.id ASC`
 
-// QueryWelcomeMessagesWaveScan is the welcome-topic analogue of QueryGroupMessagesWaveScan.
-// A row with an unknown message_type is skipped from the parsed result but still consumed a
-// LIMIT slot, so the scan position is reported from the RAW rows: lastRawID is the last row
-// the query visited and rawCount how many. Callers MUST advance their cursor from lastRawID
-// and treat rawCount < limit as end-of-scan; paging by the parsed slice would silently
-// truncate the replay at the first skipped row inside a full page.
+// QueryWelcomeMessagesWaveScan is the welcome-topic analogue of
+// QueryGroupMessagesWaveScan. A row with an unknown message_type is skipped
+// from the parsed result but still consumed its topic's LIMIT slot, so scan
+// positions are reported from the RAW rows via the progress map (keyed by
+// installation key): callers MUST advance a topic's cursor from its LastRawID
+// and treat RawCount < limit as that topic's end-of-scan; paging by the parsed
+// slice would silently truncate the replay at the first skipped row.
 func (s *ReadStore) QueryWelcomeMessagesWaveScan(
 	ctx context.Context,
 	filters []WelcomeCatchup,
 	scanCursor uint64,
 	ceiling uint64,
 	limit int32,
-) ([]*mlsv1.WelcomeMessage, uint64, int, error) {
+) ([]*mlsv1.WelcomeMessage, map[string]WaveScanTopicProgress, error) {
 	if len(filters) == 0 || ceiling == 0 {
-		return nil, 0, 0, nil
+		return nil, nil, nil
 	}
 	keys := make([][]byte, len(filters))
 	cursors := make([]int64, len(filters))
@@ -483,13 +516,12 @@ func (s *ReadStore) QueryWelcomeMessagesWaveScan(
 		limit,
 	)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, nil, err
 	}
 	defer func() { _ = rows.Close() }()
 
 	var out []*mlsv1.WelcomeMessage
-	var lastRawID uint64
-	rawCount := 0
+	progress := make(map[string]WaveScanTopicProgress, len(filters))
 	for rows.Next() {
 		var (
 			id               int64
@@ -502,10 +534,12 @@ func (s *ReadStore) QueryWelcomeMessagesWaveScan(
 			messageType      int16
 		)
 		if err := rows.Scan(&id, &createdAt, &installationKey, &data, &hpkePublicKey, &wrapperAlgorithm, &welcomeMetadata, &messageType); err != nil {
-			return nil, 0, 0, err
+			return nil, nil, err
 		}
-		lastRawID = uint64(id)
-		rawCount++
+		p := progress[string(installationKey)]
+		p.RawCount++
+		p.LastRawID = uint64(id)
+		progress[string(installationKey)] = p
 		switch messageType {
 		case 0:
 			out = append(out, &mlsv1.WelcomeMessage{
@@ -543,7 +577,7 @@ func (s *ReadStore) QueryWelcomeMessagesWaveScan(
 			s.log.Error("unknown welcome message type", zap.Int16("message_type", messageType))
 		}
 	}
-	return out, lastRawID, rawCount, rows.Err()
+	return out, progress, rows.Err()
 }
 
 func (s *ReadStore) QueryCommitLog(

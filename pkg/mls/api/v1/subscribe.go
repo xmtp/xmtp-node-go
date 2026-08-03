@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/xmtp/xmtp-node-go/pkg/metrics"
@@ -33,19 +34,69 @@ const (
 	// writer is not parked by a slow stream.Send. Small: it only smooths Send latency.
 	sendQueueDepth = 8
 
-	// Wave-scan catch-up tuning (XIP-83 server requirement 4). A wave's replay is a
-	// single ascending-id scan merged across all of its topics — not per-topic
-	// bursts — paged by a global scan cursor and pinned to the ceiling (the newest
-	// id at wave start) so it terminates under sustained publishing. scanPageLimit
-	// is rows per DB round-trip.
-	catchUpScanPageLimit = 512
+	// Wave-scan catch-up tuning (XIP-83 server requirement 4, amended for batch
+	// rotation). A wave prunes topics whose cursor already sits at the ceiling,
+	// then replays the rest in rotating batches: one query per turn returns up
+	// to catchUpTopicPageLimit rows for EACH topic in the batch, every fetched
+	// row is delivered (turns never discard and re-fetch work), and ids ascend
+	// within every turn and per topic across the wave. The per-topic guarantee
+	// is the one the writer's high-water dedup and the client's replay guards
+	// rely on; only the live lane needs total cursor order. The ceiling (the
+	// newest id at wave start) pins every turn so the wave terminates under
+	// sustained publishing.
+	//
+	// A turn is bounded by catchUpBatchTopics × catchUpTopicPageLimit = 16,384
+	// rows: generous for real deep replays, which stream out in few round
+	// trips, while still capping what a hostile subscription — many topics,
+	// all far behind — can force into one query result. Topics retire from
+	// the rotation individually the moment a turn returns fewer than their
+	// per-topic limit. The lane's other two axes are bounded by the scan-slot
+	// and byte-budget constants below; the channel buffer is sized in
+	// turns-of-16,384, not messages.
+	catchUpTopicPageLimit = 64
+	catchUpBatchTopics    = 256
 	// catchUpChannelBuffer smooths handoff from the catch-up fetchers to the writer;
-	// when full, fetchers block (backpressure) rather than racing ahead of the client.
-	catchUpChannelBuffer = 64
-	// maxMutateAdds bounds a single wave's merged catch-up scan: the scan's floor arrays
-	// carry one entry per topic and ride every page query, so the raw adds one Mutate may
-	// carry are capped (pre-dedup — a stateless check). A client with a larger set splits
-	// it across Mutates, whose waves run concurrently (XIP-83 server requirement 8).
+	// when full, fetchers block (backpressure) rather than racing ahead of the
+	// client. Sized in TURNS, each of which may now carry up to the full
+	// per-turn row cap (16,384 messages): 4 buffered turns bounds the channel
+	// at ~65k messages, the same order as the 64 × 512-row pages it previously
+	// buffered. Typical turns are tiny or empty, so the smaller depth costs
+	// real replays nothing.
+	catchUpChannelBuffer = 4
+	// catchUpMaxConcurrentScans bounds how many of one stream's catch-up scans
+	// fetch at once. Each add-bearing Mutate's wave contributes up to two scans
+	// (group + welcome); a scan with rows to replay owns a slot from before its
+	// first wave-scan query until its done marker is in the channel, while a
+	// fully-current wave — the dominant reconnect case — prunes slot-free and
+	// completes without queuing (a parked current wave would only hold its
+	// topics gated, live traffic accumulating against maxPendingBytes, for no
+	// replay at all). Excess scans park on the slot channel (FIFO) and start
+	// as slots free, so a burst of stale, topic-dense Mutates cannot multiply
+	// full-turn row hands or per-stream query concurrency without bound. A
+	// parked wave holds only its topic floors (state its waveState carries
+	// anyway). Waves still overlap up to the cap (XIP-83 server requirement 8
+	// promises concurrent waves, not unboundedly many), and cross-wave
+	// completion order was never part of the contract.
+	catchUpMaxConcurrentScans = 4
+	// catchUpMaxPendingBytes caps the payload bytes catch-up scans have
+	// fetched but the writer has not yet consumed — the catch-up mirror of
+	// maxPendingBytes, which covers only the gated live lane. A scan reserves
+	// a turn's bytes after its query returns (sizes are unknowable beforehand)
+	// and parks until the writer frees room: backpressure, like the channel,
+	// never a stream drop. An empty lane admits any single turn, so one turn
+	// larger than the whole budget still replays (alone) instead of
+	// deadlocking. The budget thus bounds fetched-but-unconsumed bytes at
+	// max(budget, one turn); on top of that sit not-yet-reserved query
+	// results in flight (≤ catchUpMaxConcurrentScans turns) and the
+	// writer→sender pipeline, which the budget deliberately does not cover —
+	// the writer frees a batch when it takes it, and delivery is separately
+	// turn-bounded by sendQueueDepth plus the writer's and sender's hands.
+	catchUpMaxPendingBytes = 64 << 20 // 64 MiB
+	// maxMutateAdds bounds one Mutate's raw adds (pre-dedup — a stateless
+	// check). Batch rotation keeps any single query small regardless, but the
+	// wave still holds every topic's floor in memory for its lifetime. A
+	// client with a larger set splits it across Mutates, whose waves run
+	// concurrently (XIP-83 server requirement 8).
 	maxMutateAdds = 100_000
 
 	// maxPendingBytes caps live messages buffered while topics catch up. Exceeding it
@@ -101,8 +152,11 @@ type catchUpBatch struct {
 	groupMsgs   []*mlsv1.GroupMessage
 	welcomeMsgs []*mlsv1.WelcomeMessage
 	wave        int
-	done        bool
-	err         error
+	// bytes is the turn's payload size, reserved against the stream's catch-up
+	// byte budget by the fetcher; the writer frees it when it takes the batch.
+	bytes int
+	done  bool
+	err   error
 }
 
 // waveState tracks one Mutate's in-flight catch-up. A wave completes when its last
@@ -507,18 +561,104 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 		}
 	}
 
-	// catchUpGroups replays one wave's group topics as a single ascending-id scan
-	// merged across all of its groups (XIP-83 server requirement 4: a wave's replay is
-	// one cursor-ordered pass, not per-topic bursts). The scan is pinned to the newest
-	// id at wave start, so it terminates under sustained publishing; anything newer
-	// reaches the client through the gated live path and is folded into the wave when
-	// it completes. Pages are forwarded to the writer in scan order. It owns no shared
-	// state and never sends to the stream; it just queries and hands results over.
+	// Catch-up lane bounds (see the catchUpMaxConcurrentScans /
+	// catchUpMaxPendingBytes comments). Both are per-stream and shared by the
+	// group and welcome fetchers; neither is writer-owned state — the writer
+	// only ever frees, which cannot block. Guard non-positive tunables the
+	// same way the fetchers guard theirs: a zero cap would park every scan
+	// forever.
+	maxScans := s.scanMaxConcurrent
+	if maxScans < 1 {
+		maxScans = 1
+	}
+	scanSlots := make(chan struct{}, maxScans)
+	byteBudget := s.scanMaxPendingBytes
+	if byteBudget < 1 {
+		byteBudget = 1
+	}
+	var catchUpBytes atomic.Int64
+	catchUpBytesFreed := make(chan struct{}, 1)
+
+	// acquireScanSlot parks a scan until one of the stream's fetch slots frees
+	// (or the stream dies — the false return, on which the fetcher just
+	// abandons the scan like any other teardown path). Parked acquirers are
+	// served FIFO by the channel.
+	acquireScanSlot := func() bool {
+		select {
+		case scanSlots <- struct{}{}:
+			return true
+		case <-ctx.Done():
+		case <-s.ctx.Done():
+		}
+		return false
+	}
+	releaseScanSlot := func() { <-scanSlots }
+
+	// reserveCatchUpBytes parks until n payload bytes fit the catch-up budget,
+	// returning false only when the stream dies first. The CAS-from-zero arm
+	// admits exactly one turn into an empty lane whatever its size, so an
+	// over-budget turn replays alone rather than deadlocking.
+	reserveCatchUpBytes := func(n int) bool {
+		for {
+			cur := catchUpBytes.Load()
+			if cur == 0 || cur+int64(n) <= int64(byteBudget) {
+				if catchUpBytes.CompareAndSwap(cur, cur+int64(n)) {
+					if s.scanBytesObserved != nil {
+						s.scanBytesObserved(cur + int64(n))
+					}
+					return true
+				}
+				continue
+			}
+			select {
+			case <-catchUpBytesFreed:
+			case <-ctx.Done():
+				return false
+			case <-s.ctx.Done():
+				return false
+			}
+		}
+	}
+	// freeCatchUpBytes releases a batch's reservation once the writer has
+	// consumed it (sent, filtered, or dropped with its wave) and wakes one
+	// parked fetcher to re-check the budget. Fetchers that parked without a
+	// wakeup slot re-check on the next free — whenever the lane is over
+	// budget, reserved batches exist for the writer to consume, so frees (and
+	// wakeups) keep coming.
+	freeCatchUpBytes := func(n int) {
+		if n == 0 {
+			return
+		}
+		catchUpBytes.Add(-int64(n))
+		select {
+		case catchUpBytesFreed <- struct{}{}:
+		default:
+		}
+	}
+
+	// catchUpGroups replays one wave's group topics in rotating batches (see
+	// catchUpBatchTopics). Topics whose cursor already sits at the ceiling are
+	// pruned without a query — a topic can only contribute rows in
+	// (cursor, ceiling], and reconnect waves are overwhelmingly fully current,
+	// so most waves complete right there. Each turn queries one batch for up
+	// to the per-topic limit of rows per topic: a topic that fills its limit
+	// may have more, so it advances its own cursor and rotates to the back of
+	// the queue; every other topic is fully replayed up to the ceiling and
+	// retires. Every fetched row is delivered — turns never discard and
+	// re-fetch work. Anything newer than the ceiling reaches the client
+	// through the gated live path and is folded into the wave when it
+	// completes. It owns no shared state and never sends to the stream; it
+	// just queries and hands results over.
 	catchUpGroups := func(adds []mlsstore.GroupCatchup, wave int) {
 		// The ceiling pin assumes v3's id-visibility-order invariant: ids become visible to
 		// readers in id order (the live poller in worker.go advances from raw rows on the same
 		// assumption — a row committing out of order behind a reader is undeliverable
-		// stream-wide, a pre-existing v3 property).
+		// stream-wide, a pre-existing v3 property). This first snapshot runs
+		// slot-free — it is one index-tail probe — so the dominant
+		// fully-current reconnect wave prunes to nothing and completes without
+		// queuing behind a deep scan: parked with no replay to do, such a wave
+		// would only hold its topics gated while live traffic accumulates
+		// against maxPendingBytes.
 		ceiling, err := s.readOnlyStore.Queries().GetLatestGroupMessageID(ctx)
 		if err != nil {
 			if !errors.Is(err, context.Canceled) {
@@ -527,8 +667,42 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			}
 			return
 		}
-		scanCursor := uint64(0)
-		for {
+		queue := make([]mlsstore.GroupCatchup, 0, len(adds))
+		for _, a := range adds {
+			if a.IdCursor < uint64(ceiling) {
+				queue = append(queue, a)
+			}
+		}
+		if len(queue) > 0 {
+			// Only a wave with rows to replay competes for a scan slot; the
+			// slot is held until the wave's done marker is in the channel.
+			if !acquireScanSlot() {
+				return
+			}
+			defer releaseScanSlot()
+			// Re-snapshot under the slot: the wait may have been long, and a
+			// fresher ceiling moves rows from the gated pending fold into the
+			// scan (never the reverse — the ceiling only grows, and the queue
+			// needs no re-prune: every queued cursor sits below the old
+			// ceiling, hence below the new). A refresh failure is benign; the
+			// first snapshot stays a valid pin.
+			c, cerr := s.readOnlyStore.Queries().GetLatestGroupMessageID(ctx)
+			if cerr == nil && c > ceiling {
+				ceiling = c
+			}
+		}
+		// Guard against non-positive tunables: a zero batch would spin the
+		// loop forever without consuming the queue, and a zero limit would
+		// make every topic look drained.
+		batchTopics := s.scanBatchTopics
+		if batchTopics < 1 {
+			batchTopics = 1
+		}
+		limit := s.scanTopicPageLimit
+		if limit < 1 {
+			limit = 1
+		}
+		for len(queue) > 0 {
 			select {
 			case <-ctx.Done():
 				return
@@ -536,12 +710,17 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				return
 			default:
 			}
+			batch := queue
+			if len(batch) > batchTopics {
+				batch = queue[:batchTopics]
+			}
+			queue = queue[len(batch):]
 			msgs, err := s.readOnlyStore.QueryGroupMessagesWaveScan(
 				ctx,
-				adds,
-				scanCursor,
+				batch,
+				0,
 				uint64(ceiling),
-				s.scanPageLimit,
+				limit,
 			)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -550,18 +729,50 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				}
 				return
 			}
-			if len(msgs) > 0 {
-				scanCursor = msgs[len(msgs)-1].GetV1().GetId()
-				forward(catchUpBatch{groupMsgs: msgs, wave: wave})
+			// Per-topic scan positions, captured BEFORE the writer takes
+			// ownership of msgs (it filters the slice in place once handed
+			// over). msgs ascend, so each topic's entry ends at its max id.
+			counts := make(map[string]int, len(batch))
+			lastIDs := make(map[string]uint64, len(batch))
+			for _, m := range msgs {
+				v1 := m.GetV1()
+				k := string(v1.GetGroupId())
+				counts[k]++
+				lastIDs[k] = v1.GetId()
 			}
-			if len(msgs) < int(s.scanPageLimit) {
-				forward(catchUpBatch{wave: wave, done: true})
-				return
+			if len(msgs) > 0 {
+				turnBytes := 0
+				for _, m := range msgs {
+					turnBytes += len(m.GetV1().GetData())
+				}
+				if !reserveCatchUpBytes(turnBytes) {
+					return
+				}
+				forward(catchUpBatch{groupMsgs: msgs, wave: wave, bytes: turnBytes})
+			}
+			// A topic that filled its per-topic limit may have more rows:
+			// advance its own cursor and rotate it to the back. Every other
+			// topic is fully replayed up to the ceiling and retires.
+			for _, b := range batch {
+				k := string(b.GroupID)
+				if counts[k] < int(limit) {
+					continue
+				}
+				if b.IdCursor < lastIDs[k] {
+					b.IdCursor = lastIDs[k]
+				}
+				queue = append(queue, b)
 			}
 		}
+		forward(catchUpBatch{wave: wave, done: true})
 	}
 
-	// catchUpWelcomes is the welcome-topic analogue of catchUpGroups.
+	// catchUpWelcomes is the welcome-topic analogue of catchUpGroups. Topic
+	// truncation and rotation cursors come from the store's RAW per-topic
+	// progress, not the parsed slice: the store skips rows with an unknown
+	// message_type but they still consumed their topic's LIMIT slots, so
+	// paging by parsed rows would silently truncate the replay at the first
+	// skipped row.
 	catchUpWelcomes := func(adds []mlsstore.WelcomeCatchup, wave int) {
 		ceiling, err := s.readOnlyStore.Queries().GetLatestWelcomeMessageID(ctx)
 		if err != nil {
@@ -571,8 +782,32 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			}
 			return
 		}
-		scanCursor := uint64(0)
-		for {
+		queue := make([]mlsstore.WelcomeCatchup, 0, len(adds))
+		for _, a := range adds {
+			if a.IdCursor < uint64(ceiling) {
+				queue = append(queue, a)
+			}
+		}
+		if len(queue) > 0 {
+			// Same slot discipline and ceiling re-snapshot as catchUpGroups.
+			if !acquireScanSlot() {
+				return
+			}
+			defer releaseScanSlot()
+			c, cerr := s.readOnlyStore.Queries().GetLatestWelcomeMessageID(ctx)
+			if cerr == nil && c > ceiling {
+				ceiling = c
+			}
+		}
+		batchTopics := s.scanBatchTopics
+		if batchTopics < 1 {
+			batchTopics = 1
+		}
+		limit := s.scanTopicPageLimit
+		if limit < 1 {
+			limit = 1
+		}
+		for len(queue) > 0 {
 			select {
 			case <-ctx.Done():
 				return
@@ -580,12 +815,17 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				return
 			default:
 			}
-			msgs, lastRawID, rawCount, err := s.readOnlyStore.QueryWelcomeMessagesWaveScan(
+			batch := queue
+			if len(batch) > batchTopics {
+				batch = queue[:batchTopics]
+			}
+			queue = queue[len(batch):]
+			msgs, progress, err := s.readOnlyStore.QueryWelcomeMessagesWaveScan(
 				ctx,
-				adds,
-				scanCursor,
+				batch,
+				0,
 				uint64(ceiling),
-				s.scanPageLimit,
+				limit,
 			)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -594,20 +834,28 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				}
 				return
 			}
-			// Advance from the RAW scan position, not the parsed slice: the store skips rows
-			// with an unknown message_type but they still consumed LIMIT slots, so paging by
-			// parsed rows would silently truncate the replay at the first skipped row.
-			if rawCount > 0 {
-				scanCursor = lastRawID
-			}
 			if len(msgs) > 0 {
-				forward(catchUpBatch{welcomeMsgs: msgs, wave: wave})
+				turnBytes := 0
+				for _, m := range msgs {
+					turnBytes += len(welcomeData(m))
+				}
+				if !reserveCatchUpBytes(turnBytes) {
+					return
+				}
+				forward(catchUpBatch{welcomeMsgs: msgs, wave: wave, bytes: turnBytes})
 			}
-			if rawCount < int(s.scanPageLimit) {
-				forward(catchUpBatch{wave: wave, done: true})
-				return
+			for _, b := range batch {
+				p := progress[string(b.InstallationKey)]
+				if p.RawCount < int(limit) {
+					continue
+				}
+				if b.IdCursor < p.LastRawID {
+					b.IdCursor = p.LastRawID
+				}
+				queue = append(queue, b)
 			}
 		}
+		forward(catchUpBatch{wave: wave, done: true})
 	}
 
 	// Read client frames in a dedicated goroutine (gRPC Recv blocks) and forward them to
@@ -707,9 +955,9 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 						"a Mutate with adds requires a nonzero mutate_id",
 					)
 				}
-				// Each add becomes a floor entry in the wave's merged catch-up scan,
-				// riding every page query (see maxMutateAdds). Checked on the raw adds —
-				// stateless, before any state changes — so the rejected frame is atomic.
+				// Each add becomes a floor entry the wave holds for its lifetime
+				// (see maxMutateAdds). Checked on the raw adds — stateless, before
+				// any state changes — so the rejected frame is atomic.
 				if len(m.GetAdds()) > s.maxMutateAdds {
 					return status.Errorf(
 						codes.ResourceExhausted,
@@ -931,6 +1179,11 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 				// CATCHUP_COMPLETE.
 				return status.Errorf(codes.Unavailable, "catch-up failed: %v", b.err)
 			}
+			// Taking the batch consumes it — sent below, filtered, or dropped
+			// with a dead wave — so its byte reservation is freed on every one
+			// of those paths, here, before any of them branch. (The err return
+			// above skips this safely: error batches always carry zero bytes.)
+			freeCatchUpBytes(b.bytes)
 			w, waveActive := waves[b.wave]
 			if !waveActive {
 				continue // the wave completed early (all topics removed); drop the straggler

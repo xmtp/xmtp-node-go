@@ -1271,9 +1271,10 @@ func TestQueryWelcomeMessagesV1_Paginate(t *testing.T) {
 
 // TestQueryWelcomeMessagesWaveScan_UnknownTypeRowsAdvanceRawCursor pins the wave scan's
 // paging contract: a row with an unknown message_type is skipped from the parsed result
-// but still consumes a LIMIT slot, so the raw scan position (lastRawID / rawCount) — not
-// the parsed slice — must drive the cursor. Paging by parsed rows would end the scan on
-// the first short page and silently truncate the replay.
+// but still consumes its topic's LIMIT slot, so the topic's raw scan position (RawCount /
+// LastRawID in the progress map) — not the parsed slice — must drive the cursor. Paging
+// by parsed rows would end the scan on the first short turn and silently truncate the
+// replay.
 func TestQueryWelcomeMessagesWaveScan_UnknownTypeRowsAdvanceRawCursor(t *testing.T) {
 	store, cleanup := NewTestStore(t)
 	defer cleanup()
@@ -1301,27 +1302,28 @@ func TestQueryWelcomeMessagesWaveScan_UnknownTypeRowsAdvanceRawCursor(t *testing
 	ceiling, err := store.queries.GetLatestWelcomeMessageID(ctx)
 	require.NoError(t, err)
 
-	// Page exactly as the Subscribe welcome fetcher does: advance from the raw scan
-	// position, terminate on a short raw page.
+	// Page exactly as the Subscribe welcome fetcher does: advance the topic's own
+	// cursor from its raw scan position, terminate when its raw count comes up short.
 	const limit = 4
+	key := string(installationKey)
 	filters := []WelcomeCatchup{{InstallationKey: installationKey, IdCursor: 0}}
 	var got []*mlsv1.WelcomeMessage
-	scanCursor := uint64(0)
 	done := false
-	for i := 0; i < 10 && !done; i++ { // bound the loop; 3 pages suffice
-		msgs, lastRawID, rawCount, err := store.QueryWelcomeMessagesWaveScan(
+	for i := 0; i < 10 && !done; i++ { // bound the loop; 3 turns suffice
+		msgs, progress, err := store.QueryWelcomeMessagesWaveScan(
 			ctx,
 			filters,
-			scanCursor,
+			0,
 			uint64(ceiling),
 			limit,
 		)
 		require.NoError(t, err)
-		if rawCount > 0 {
-			scanCursor = lastRawID
-		}
 		got = append(got, msgs...)
-		done = rawCount < limit
+		p := progress[key]
+		if p.RawCount > 0 && filters[0].IdCursor < p.LastRawID {
+			filters[0].IdCursor = p.LastRawID
+		}
+		done = p.RawCount < limit
 	}
 	require.True(t, done, "the scan must terminate on a short raw page")
 	require.Len(t, got, 9, "every parseable row must be returned despite the skipped row")
