@@ -6,13 +6,46 @@ script_dir=$(dirname "$(realpath "$0")")
 repo_root=$(realpath "${script_dir}/../")
 cd "${repo_root}"
 
-if ! which chronic &>/dev/null; then brew install moreutils; fi
-if ! which golangci-lint &>/dev/null; then brew install golangci-lint; fi
-if ! which shellcheck &>/dev/null; then brew install shellcheck; fi
-if ! which protoc &>/dev/null; then brew install protobuf; fi
-if ! which protoc-gen-go &>/dev/null; then go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0; fi
-if ! which mockery &>/dev/null; then brew install mockery; fi
-if ! which protolint &>/dev/null; then go install github.com/yoheimuta/protolint/cmd/protolint@latest; fi
+# Install a missing binary via Homebrew when available; otherwise print a
+# platform-agnostic hint instead of assuming macOS/`brew` exists.
+ensure_cmd() {
+  local cmd="$1"
+  local brew_pkg="$2"
+  local hint="$3"
+
+  if which "${cmd}" &>/dev/null; then
+    return 0
+  fi
+
+  if which brew &>/dev/null; then
+    brew install "${brew_pkg}"
+    return 0
+  fi
+
+  echo "error: '${cmd}' is required but not installed." >&2
+  if [ -n "${hint}" ]; then
+    echo "       ${hint}" >&2
+  else
+    echo "       On macOS: brew install ${brew_pkg}" >&2
+    echo "       On Debian/Ubuntu: sudo apt-get install -y ${brew_pkg}" >&2
+  fi
+  exit 1
+}
+
+ensure_cmd chronic moreutils
+ensure_cmd golangci-lint golangci-lint \
+  "Install golangci-lint: https://golangci-lint.run/welcome/install/"
+ensure_cmd shellcheck shellcheck
+ensure_cmd protoc protobuf \
+  "On Debian/Ubuntu: sudo apt-get install -y protobuf-compiler"
+if ! which protoc-gen-go &>/dev/null; then
+  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0
+fi
+ensure_cmd mockery mockery \
+  "Install mockery: https://github.com/vektra/mockery#installation"
+if ! which protolint &>/dev/null; then
+  go install github.com/yoheimuta/protolint/cmd/protolint@latest
+fi
 
 echo -e "→ Update Go dependencies"
 go mod tidy
