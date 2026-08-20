@@ -122,7 +122,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetIdentityUpdatesResponse"
+              "$ref": "#/definitions/xmtpmlsapiv1GetIdentityUpdatesResponse"
             }
           },
           "default": {
@@ -138,7 +138,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1GetIdentityUpdatesRequest"
+              "$ref": "#/definitions/xmtpmlsapiv1GetIdentityUpdatesRequest"
             }
           }
         ],
@@ -401,13 +401,13 @@
               "type": "object",
               "properties": {
                 "result": {
-                  "$ref": "#/definitions/v1GroupMessage"
+                  "$ref": "#/definitions/apiv1GroupMessage"
                 },
                 "error": {
                   "$ref": "#/definitions/rpcStatus"
                 }
               },
-              "title": "Stream result of v1GroupMessage"
+              "title": "Stream result of apiv1GroupMessage"
             }
           },
           "default": {
@@ -510,16 +510,6 @@
     }
   },
   "definitions": {
-    "FetchKeyPackagesResponseKeyPackage": {
-      "type": "object",
-      "properties": {
-        "keyPackageTlsSerialized": {
-          "type": "string",
-          "format": "byte"
-        }
-      },
-      "title": "An individual key package"
-    },
     "GetIdentityUpdatesResponseNewInstallationUpdate": {
       "type": "object",
       "properties": {
@@ -573,21 +563,6 @@
       },
       "title": "A wrapper for the updates for a single wallet"
     },
-    "MutateSubscription": {
-      "type": "object",
-      "properties": {
-        "topic": {
-          "type": "string",
-          "format": "byte"
-        },
-        "idCursor": {
-          "type": "string",
-          "format": "uint64",
-          "description": "Deliver ids greater than this; 0 = from the beginning. For a newly\njoined group, a client SHOULD seed this from the welcome's encrypted\nWelcomeMetadata.message_cursor so a new membership does not refetch\npre-join history it cannot decrypt; for a new installation's welcome\ntopic, 0 is how pending welcomes are collected."
-        }
-      },
-      "description": "A topic to subscribe, with the cursor to resume from."
-    },
     "SignatureECDSACompact": {
       "type": "object",
       "properties": {
@@ -620,25 +595,6 @@
       },
       "description": "ECDSA signature bytes and the recovery bit\nproduced by xmtp-js::PublicKey.signWithWallet function, i.e.\nEIP-191 signature of a \"Create Identity\" message with the key embedded.\nUsed to sign identity keys."
     },
-    "V1Capability": {
-      "type": "string",
-      "enum": [
-        "CAPABILITY_UNSPECIFIED"
-      ],
-      "default": "CAPABILITY_UNSPECIFIED",
-      "description": "Optional per-stream protocol features (none defined yet; future\nrevisions add values, e.g. fetch-over-stream lookups answered with the\nsame read view that feeds the stream, or new streamable topic kinds)."
-    },
-    "V1CatchupComplete": {
-      "type": "object",
-      "properties": {
-        "mutateId": {
-          "type": "string",
-          "format": "uint64",
-          "title": "echoes the Mutate; 0 only if a waveless Mutate carried 0"
-        }
-      },
-      "description": "Sent once per Mutate: at wave completion (after the wave's last\nTopicsLive) for a Mutate that started a catch-up \"wave\", immediately for\none that did not (nothing added — removes-only or empty — or every add\na no-op). Also the catch-up\nseam: live frames (mutate_id 0) for the wave's topics begin only after\nthis frame."
-    },
     "V1Messages": {
       "type": "object",
       "properties": {
@@ -646,7 +602,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1GroupMessage"
+            "$ref": "#/definitions/apiv1GroupMessage"
           }
         },
         "welcomeMessages": {
@@ -664,14 +620,59 @@
       },
       "description": "A batch of new messages; group and welcome messages share the stream,\ndepending on which subscriptions are active. A frame belongs to exactly\none catch-up wave or to live — the server never mixes lanes, or two\nwaves, in one frame — and each lane is delivered in ascending id order\nper message kind (live: across all live topics on the stream; a wave:\nacross the wave's topics, one merged cursor-ordered pass)."
     },
-    "V1Mutate": {
+    "apiv1GroupMessage": {
+      "type": "object",
+      "properties": {
+        "v1": {
+          "$ref": "#/definitions/v1GroupMessageV1"
+        }
+      },
+      "title": "Full representation of a group message"
+    },
+    "apiv1Ping": {
+      "type": "object",
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "description": "Liveness challenge/response, shared across versions. Either peer MAY send a\nPing; the receiver MUST reply with a Pong echoing the nonce. The sender closes\nthe stream if no Pong arrives within its deadline — how a node reaps a vanished\npeer (e.g. a mobile client the OS suspended behind a proxy that still ACKs the\ntransport)."
+    },
+    "apiv1Pong": {
+      "type": "object",
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "format": "uint64",
+          "title": "echoes the nonce of the Ping it answers"
+        }
+      }
+    },
+    "apiv1SubscribeRequestV1": {
+      "type": "object",
+      "properties": {
+        "mutate": {
+          "$ref": "#/definitions/apiv1SubscribeRequestV1Mutate"
+        },
+        "ping": {
+          "$ref": "#/definitions/apiv1Ping",
+          "title": "liveness challenge (e.g. probe the link after resuming)"
+        },
+        "pong": {
+          "$ref": "#/definitions/apiv1Pong",
+          "title": "answer to a server Ping"
+        }
+      }
+    },
+    "apiv1SubscribeRequestV1Mutate": {
       "type": "object",
       "properties": {
         "adds": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/MutateSubscription"
+            "$ref": "#/definitions/apiv1SubscribeRequestV1MutateSubscription"
           },
           "title": "begin delivering these topics"
         },
@@ -695,7 +696,78 @@
       },
       "description": "Add and/or remove subscriptions in place (applied atomically per frame).\nTopics use the kind-prefixed binary representation shared with the\ndecentralized backend (XIP-49 §3.3.2): the first byte is the topic kind,\nthe remainder is the identifier. This RPC initially serves\nTOPIC_KIND_GROUP_MESSAGES_V1 (0x00, identifier = group_id) and\nTOPIC_KIND_WELCOME_MESSAGES_V1 (0x01, identifier = installation_key);\na topic whose kind the node does not serve fails the stream with\nINVALID_ARGUMENT. Future kinds (key packages, identity updates) are\nadopted via the capabilities advertised on Started."
     },
-    "V1Started": {
+    "apiv1SubscribeRequestV1MutateSubscription": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "format": "byte"
+        },
+        "idCursor": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Deliver ids greater than this; 0 = from the beginning. For a newly\njoined group, a client SHOULD seed this from the welcome's encrypted\nWelcomeMetadata.message_cursor so a new membership does not refetch\npre-join history it cannot decrypt; for a new installation's welcome\ntopic, 0 is how pending welcomes are collected."
+        }
+      },
+      "description": "A topic to subscribe, with the cursor to resume from."
+    },
+    "apiv1SubscribeResponse": {
+      "type": "object",
+      "properties": {
+        "v1": {
+          "$ref": "#/definitions/apiv1SubscribeResponseV1"
+        }
+      },
+      "description": "Server -\u003e client."
+    },
+    "apiv1SubscribeResponseV1": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "$ref": "#/definitions/V1Messages"
+        },
+        "started": {
+          "$ref": "#/definitions/apiv1SubscribeResponseV1Started",
+          "title": "sent once, immediately on open, before any catch-up"
+        },
+        "ping": {
+          "$ref": "#/definitions/apiv1Ping",
+          "title": "idle liveness challenge; receiver MUST answer with Pong"
+        },
+        "pong": {
+          "$ref": "#/definitions/apiv1Pong",
+          "title": "answer to a client Ping"
+        },
+        "topicsLive": {
+          "$ref": "#/definitions/apiv1SubscribeResponseV1TopicsLive",
+          "title": "no more replay for these topics; live begins after CatchupComplete"
+        },
+        "catchupComplete": {
+          "$ref": "#/definitions/apiv1SubscribeResponseV1CatchupComplete",
+          "title": "acks a Mutate; wave completion if it started one"
+        }
+      }
+    },
+    "apiv1SubscribeResponseV1Capability": {
+      "type": "string",
+      "enum": [
+        "CAPABILITY_UNSPECIFIED"
+      ],
+      "default": "CAPABILITY_UNSPECIFIED",
+      "description": "Optional per-stream protocol features (none defined yet; future\nrevisions add values, e.g. fetch-over-stream lookups answered with the\nsame read view that feeds the stream, or new streamable topic kinds)."
+    },
+    "apiv1SubscribeResponseV1CatchupComplete": {
+      "type": "object",
+      "properties": {
+        "mutateId": {
+          "type": "string",
+          "format": "uint64",
+          "title": "echoes the Mutate; 0 only if a waveless Mutate carried 0"
+        }
+      },
+      "description": "Sent once per Mutate: at wave completion (after the wave's last\nTopicsLive) for a Mutate that started a catch-up \"wave\", immediately for\none that did not (nothing added — removes-only or empty — or every add\na no-op). Also the catch-up\nseam: live frames (mutate_id 0) for the wave's topics begin only after\nthis frame."
+    },
+    "apiv1SubscribeResponseV1Started": {
       "type": "object",
       "properties": {
         "keepaliveIntervalMs": {
@@ -706,14 +778,14 @@
         "capabilities": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/V1Capability"
+            "$ref": "#/definitions/apiv1SubscribeResponseV1Capability"
           },
           "description": "Optional protocol features the node supports on this stream. The node\nsilently ignores request types it does not understand, so a client\nMUST NOT send an optional request type whose capability the node did\nnot advertise (it would hang waiting on a response that never comes)."
         }
       },
       "description": "The first frame on every stream."
     },
-    "V1TopicsLive": {
+    "apiv1SubscribeResponseV1TopicsLive": {
       "type": "object",
       "properties": {
         "topics": {
@@ -779,6 +851,33 @@
       "default": "WELCOME_WRAPPER_ALGORITHM_UNSPECIFIED",
       "description": "- WELCOME_WRAPPER_ALGORITHM_SYMMETRIC_KEY: Only used for WelcomePointee's",
       "title": "Describes the algorithm used to encrypt the Welcome Wrapper"
+    },
+    "mlsapiv1PagingInfo": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/definitions/mlsapiv1SortDirection"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "idCursor": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "title": "Pagination config for queries"
+    },
+    "mlsapiv1SortDirection": {
+      "type": "string",
+      "enum": [
+        "SORT_DIRECTION_UNSPECIFIED",
+        "SORT_DIRECTION_ASCENDING",
+        "SORT_DIRECTION_DESCENDING"
+      ],
+      "default": "SORT_DIRECTION_UNSPECIFIED",
+      "title": "Sort direction for queries"
     },
     "protobufAny": {
       "type": "object",
@@ -865,42 +964,22 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/FetchKeyPackagesResponseKeyPackage"
+            "$ref": "#/definitions/v1FetchKeyPackagesResponseKeyPackage"
           },
           "description": "Returns one key package per installation in the original order of the\nrequest. If any installations are missing key packages, an empty entry is\nleft in their respective spots in the array."
         }
       },
       "title": "The response to a FetchKeyPackagesRequest"
     },
-    "v1GetIdentityUpdatesRequest": {
+    "v1FetchKeyPackagesResponseKeyPackage": {
       "type": "object",
       "properties": {
-        "accountAddresses": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "startTimeNs": {
+        "keyPackageTlsSerialized": {
           "type": "string",
-          "format": "uint64"
+          "format": "byte"
         }
       },
-      "title": "Get all updates for an identity since the specified time"
-    },
-    "v1GetIdentityUpdatesResponse": {
-      "type": "object",
-      "properties": {
-        "updates": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/GetIdentityUpdatesResponseWalletUpdates"
-          },
-          "title": "A list of updates (or empty objects if no changes) in the original order\nof the request"
-        }
-      },
-      "title": "Used to get any new or revoked installations for a list of wallet addresses"
+      "title": "An individual key package"
     },
     "v1GetNewestGroupMessageResponse": {
       "type": "object",
@@ -919,19 +998,10 @@
       "type": "object",
       "properties": {
         "groupMessage": {
-          "$ref": "#/definitions/v1GroupMessage",
+          "$ref": "#/definitions/apiv1GroupMessage",
           "title": "If no message is found on the topic, will be nil"
         }
       }
-    },
-    "v1GroupMessage": {
-      "type": "object",
-      "properties": {
-        "v1": {
-          "$ref": "#/definitions/v1GroupMessageV1"
-        }
-      },
-      "title": "Full representation of a group message"
     },
     "v1GroupMessageInput": {
       "type": "object",
@@ -1004,43 +1074,6 @@
       "description": "This would be a serialized MLS key package that the node would\n parse, validate, and then store.",
       "title": "A wrapper around the Key Package bytes"
     },
-    "v1PagingInfo": {
-      "type": "object",
-      "properties": {
-        "direction": {
-          "$ref": "#/definitions/v1SortDirection"
-        },
-        "limit": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "idCursor": {
-          "type": "string",
-          "format": "uint64"
-        }
-      },
-      "title": "Pagination config for queries"
-    },
-    "v1Ping": {
-      "type": "object",
-      "properties": {
-        "nonce": {
-          "type": "string",
-          "format": "uint64"
-        }
-      },
-      "description": "Liveness challenge/response, shared across versions. Either peer MAY send a\nPing; the receiver MUST reply with a Pong echoing the nonce. The sender closes\nthe stream if no Pong arrives within its deadline — how a node reaps a vanished\npeer (e.g. a mobile client the OS suspended behind a proxy that still ACKs the\ntransport)."
-    },
-    "v1Pong": {
-      "type": "object",
-      "properties": {
-        "nonce": {
-          "type": "string",
-          "format": "uint64",
-          "title": "echoes the nonce of the Ping it answers"
-        }
-      }
-    },
     "v1PublishCommitLogRequest": {
       "type": "object",
       "properties": {
@@ -1065,7 +1098,7 @@
           "format": "byte"
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       }
     },
@@ -1084,7 +1117,7 @@
           }
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       }
     },
@@ -1096,7 +1129,7 @@
           "format": "byte"
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       },
       "title": "Request for group message queries"
@@ -1108,11 +1141,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1GroupMessage"
+            "$ref": "#/definitions/apiv1GroupMessage"
           }
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       },
       "title": "Response for group message queries"
@@ -1125,7 +1158,7 @@
           "format": "byte"
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       },
       "title": "Request for welcome message queries"
@@ -1141,7 +1174,7 @@
           }
         },
         "pagingInfo": {
-          "$ref": "#/definitions/v1PagingInfo"
+          "$ref": "#/definitions/mlsapiv1PagingInfo"
         }
       },
       "title": "Response for welcome message queries"
@@ -1209,16 +1242,6 @@
       },
       "title": "Send a batch of welcome messages"
     },
-    "v1SortDirection": {
-      "type": "string",
-      "enum": [
-        "SORT_DIRECTION_UNSPECIFIED",
-        "SORT_DIRECTION_ASCENDING",
-        "SORT_DIRECTION_DESCENDING"
-      ],
-      "default": "SORT_DIRECTION_UNSPECIFIED",
-      "title": "Sort direction for queries"
-    },
     "v1SubscribeGroupMessagesRequest": {
       "type": "object",
       "properties": {
@@ -1245,59 +1268,6 @@
         }
       },
       "title": "Subscription filter"
-    },
-    "v1SubscribeRequestV1": {
-      "type": "object",
-      "properties": {
-        "mutate": {
-          "$ref": "#/definitions/V1Mutate"
-        },
-        "ping": {
-          "$ref": "#/definitions/v1Ping",
-          "title": "liveness challenge (e.g. probe the link after resuming)"
-        },
-        "pong": {
-          "$ref": "#/definitions/v1Pong",
-          "title": "answer to a server Ping"
-        }
-      }
-    },
-    "v1SubscribeResponse": {
-      "type": "object",
-      "properties": {
-        "v1": {
-          "$ref": "#/definitions/v1SubscribeResponseV1"
-        }
-      },
-      "description": "Server -\u003e client."
-    },
-    "v1SubscribeResponseV1": {
-      "type": "object",
-      "properties": {
-        "messages": {
-          "$ref": "#/definitions/V1Messages"
-        },
-        "started": {
-          "$ref": "#/definitions/V1Started",
-          "title": "sent once, immediately on open, before any catch-up"
-        },
-        "ping": {
-          "$ref": "#/definitions/v1Ping",
-          "title": "idle liveness challenge; receiver MUST answer with Pong"
-        },
-        "pong": {
-          "$ref": "#/definitions/v1Pong",
-          "title": "answer to a client Ping"
-        },
-        "topicsLive": {
-          "$ref": "#/definitions/V1TopicsLive",
-          "title": "no more replay for these topics; live begins after CatchupComplete"
-        },
-        "catchupComplete": {
-          "$ref": "#/definitions/V1CatchupComplete",
-          "title": "acks a Mutate; wave completion if it started one"
-        }
-      }
     },
     "v1SubscribeWelcomeMessagesRequest": {
       "type": "object",
@@ -1494,6 +1464,36 @@
         }
       },
       "description": "Signature represents a generalized public key signature,\ndefined as a union to support cryptographic algorithm agility."
+    },
+    "xmtpmlsapiv1GetIdentityUpdatesRequest": {
+      "type": "object",
+      "properties": {
+        "accountAddresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startTimeNs": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "title": "Get all updates for an identity since the specified time"
+    },
+    "xmtpmlsapiv1GetIdentityUpdatesResponse": {
+      "type": "object",
+      "properties": {
+        "updates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/GetIdentityUpdatesResponseWalletUpdates"
+          },
+          "title": "A list of updates (or empty objects if no changes) in the original order\nof the request"
+        }
+      },
+      "title": "Used to get any new or revoked installations for a list of wallet addresses"
     }
   }
 }
