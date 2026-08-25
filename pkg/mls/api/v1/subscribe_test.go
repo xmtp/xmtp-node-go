@@ -66,13 +66,28 @@ func (f *fakeSubscribeStream) responses() []*mlsv1.SubscribeResponse {
 // --- mlsv1.MlsApi_SubscribeServer ---
 
 func (f *fakeSubscribeStream) Send(resp *mlsv1.SubscribeResponse) error {
-	if f.blockSend != nil {
-		<-f.blockSend
+	f.mu.Lock()
+	block := f.blockSend
+	f.mu.Unlock()
+	if block != nil {
+		<-block
 	}
 	f.mu.Lock()
 	f.sent = append(f.sent, resp)
 	f.mu.Unlock()
 	return nil
+}
+
+// freezeSends makes every subsequent Send block until the returned release func is called.
+// Unlike setting blockSend directly, it is safe to call after Subscribe has started (the
+// field is guarded by mu), so a test can quiesce the sender mid-stream to force frames to
+// queue.
+func (f *fakeSubscribeStream) freezeSends() (release func()) {
+	ch := make(chan struct{})
+	f.mu.Lock()
+	f.blockSend = ch
+	f.mu.Unlock()
+	return func() { close(ch) }
 }
 
 func (f *fakeSubscribeStream) Recv() (*mlsv1.SubscribeRequest, error) {
@@ -2142,6 +2157,80 @@ func TestSubscribe_FramesSplitByMaxFrameBytes(t *testing.T) {
 	}
 	require.Equal(t, n, frames, "at maxFrameBytes=1 each message must be sent in its own frame")
 	require.Len(t, groupMsgsFrom(resps), n)
+
+	stream.closeSend()
+	require.NoError(t, <-errCh)
+}
+
+// TestSubscribe_LiveBurstCoalescesWhenQueued pins the live-lane coalescing drain: a burst of
+// live messages queued behind the one the writer is processing is packed into fewer frames
+// (bounded by liveCoalesceMax / maxFrameBytes) instead of one tiny frame each, while every
+// message is still delivered exactly once, in ascending id order, tagged live (mutate_id 0).
+//
+// Determinism: publishing only after CatchupComplete keeps every message on the live path (not
+// the gated catch-up lane). Freezing the sender first caps in-flight frames at sendQueueDepth,
+// so a 64-message burst cannot be flushed as 64 singles — the writer must coalesce the
+// remainder — making the coalescing assertion deterministic rather than timing-dependent.
+func TestSubscribe_LiveBurstCoalescesWhenQueued(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc, _, validationSvc, cleanup := newTestService(t, ctx)
+	defer cleanup()
+
+	groupId := []byte(test.RandomString(32))
+	mockValidateGroupMessages(validationSvc, groupId)
+
+	stream := newFakeSubscribeStream(ctx)
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Subscribe(stream) }()
+
+	// No history: subscribe, then wait for catch-up to complete so the topic is fully live
+	// before publishing — otherwise early messages would ride the gated catch-up lane and be
+	// tagged with the wave rather than delivered live.
+	stream.send(subReqMutate(&mlsv1.SubscribeRequest_V1_Mutate{
+		Adds:     []*mlsv1.SubscribeRequest_V1_Mutate_Subscription{addSub(groupTopic(groupId), 0)},
+		MutateId: 1,
+	}))
+	waitForResponses(t, stream, 5*time.Second, "CatchupComplete",
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(catchupCompletesFrom(rs)) >= 1 })
+
+	// Quiesce the sender so the burst queues on the subscription channel and the writer must
+	// coalesce it (in-flight frames are bounded by sendQueueDepth), then release to flush.
+	release := stream.freezeSends()
+	const n = 64
+	populateGroupMessages(t, ctx, svc, groupId, n, "live")
+	release()
+
+	resps := waitForResponses(
+		t,
+		stream,
+		10*time.Second,
+		fmt.Sprintf("%d live group messages", n),
+		func(rs []*mlsv1.SubscribeResponse) bool { return len(groupMsgsTagged(rs, 0)) >= n },
+	)
+
+	// Correctness: every message delivered exactly once, in order, tagged live (0).
+	live := groupMsgsTagged(resps, 0)
+	require.Len(t, live, n, "every live message delivered exactly once, tagged mutate_id 0")
+	validateMessageOrdering(t, live)
+	validateNoDuplicates(t, live)
+
+	// Coalescing: with the sender frozen during the burst, at least one live frame must carry
+	// several messages — proving the drain packed a queued burst rather than one-per-frame.
+	maxPerFrame := 0
+	for _, r := range resps {
+		if m := r.GetV1().GetMessages(); m != nil && m.GetMutateId() == 0 {
+			if k := len(m.GetGroupMessages()); k > maxPerFrame {
+				maxPerFrame = k
+			}
+		}
+	}
+	require.Greater(
+		t,
+		maxPerFrame,
+		1,
+		"a queued live burst must coalesce into at least one multi-message frame",
+	)
 
 	stream.closeSend()
 	require.NoError(t, <-errCh)
