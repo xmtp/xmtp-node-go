@@ -33,6 +33,12 @@ const (
 	// sendQueueDepth buffers frame batches between the writer and the sender goroutine, so the
 	// writer is not parked by a slow stream.Send. Small: it only smooths Send latency.
 	sendQueueDepth = 8
+	// liveCoalesceMax bounds how many already-queued live messages the writer drains into
+	// one send after receiving one, packing a burst of small per-message frames into fewer
+	// (byte-batched) frames without blocking. Purely a fairness cap so a hot producer cannot
+	// keep the writer in the live branch and starve ping/mutation handling; frame size is
+	// separately bounded by maxFrameBytes.
+	liveCoalesceMax = 256
 
 	// Wave-scan catch-up tuning (XIP-83 server requirement 4, amended for batch
 	// rotation). A wave prunes topics whose cursor already sits at the ceiling,
@@ -1239,36 +1245,65 @@ func (s *Service) Subscribe(stream mlsv1.MlsApi_SubscribeServer) error {
 			if !open {
 				return status.Errorf(codes.Aborted, "subscription closed: consumer too slow")
 			}
-			t := env.ContentTopic
-			if catchingUp[t] {
-				pending[t] = append(pending[t], env)
-				pendingBytes += len(env.Message)
-				if pendingBytes > s.maxPendingBytes {
-					return status.Errorf(
-						codes.ResourceExhausted,
-						"catch-up buffer exceeded; reconnect from cursor",
-					)
-				}
-				continue
-			}
 			// Live tail: tagged 0. The dispatcher delivers each kind in ascending id
 			// order and the writer sends in arrival order, so the live lane stays
 			// totally ordered per kind (XIP-83 server requirement 4).
-			var frames []*mlsv1.SubscribeResponse
-			if topic.IsMLSV1Welcome(t) {
-				if m, err := getWelcomeMessageFromEnvelope(env); err == nil {
-					frames = buildWelcomeFrames([]*mlsv1.WelcomeMessage{m}, 0)
-				} else {
-					log.Error("error parsing welcome message", zap.Error(err))
+			//
+			// Coalesce any messages already queued behind this one — without blocking, so
+			// no added latency — into as few frames as possible. buildWelcome/GroupFrames
+			// pack per kind up to maxFrameBytes, so a burst of small live messages that
+			// would otherwise stream as one tiny frame each (pressuring the h2 inbound
+			// data-frame guard on clients streaming many small welcomes/messages) goes out
+			// in a handful of full frames. Messages for still-catching-up topics keep
+			// buffering to the gated lane, exactly as before.
+			var liveWelcomes []*mlsv1.WelcomeMessage
+			var liveGroups []*mlsv1.GroupMessage
+			route := func(e *v1proto.Envelope) error {
+				t := e.ContentTopic
+				if catchingUp[t] {
+					pending[t] = append(pending[t], e)
+					pendingBytes += len(e.Message)
+					if pendingBytes > s.maxPendingBytes {
+						return status.Errorf(
+							codes.ResourceExhausted,
+							"catch-up buffer exceeded; reconnect from cursor",
+						)
+					}
+					return nil
 				}
-			} else {
-				if m, err := getGroupMessageFromEnvelope(env); err == nil {
-					frames = buildGroupFrames([]*mlsv1.GroupMessage{m}, 0)
+				if topic.IsMLSV1Welcome(t) {
+					if m, err := getWelcomeMessageFromEnvelope(e); err == nil {
+						liveWelcomes = append(liveWelcomes, m)
+					} else {
+						log.Error("error parsing welcome message", zap.Error(err))
+					}
 				} else {
-					log.Error("error parsing group message", zap.Error(err))
+					if m, err := getGroupMessageFromEnvelope(e); err == nil {
+						liveGroups = append(liveGroups, m)
+					} else {
+						log.Error("error parsing group message", zap.Error(err))
+					}
+				}
+				return nil
+			}
+			if err := route(env); err != nil {
+				return err
+			}
+		drainLive:
+			for i := 0; i < liveCoalesceMax; i++ {
+				select {
+				case next, ok := <-sub.MessagesCh:
+					if !ok {
+						return status.Errorf(codes.Aborted, "subscription closed: consumer too slow")
+					}
+					if err := route(next); err != nil {
+						return err
+					}
+				default:
+					break drainLive // channel momentarily empty: flush what we have
 				}
 			}
-			if err := send(frames); err != nil {
+			if err := send(buildWelcomeFrames(liveWelcomes, 0), buildGroupFrames(liveGroups, 0)); err != nil {
 				return err
 			}
 
